@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "AIOmni",
+    "slug": "AIOmni",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "aiomnifantasy",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.getaiomni.AIOmni",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-dev-client",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0a0a0a",
+          "dark": {
+            "backgroundColor": "#0a0a0a"
+          }
+        }
+      ],
+      [
+        "@sentry/react-native",
+        {
+          "organization": "aiomni",
+          "project": "aiomni",
+          "uploadSourceMaps": false,
+          "disableNativeFramesTracking": true
+        }
+      ],
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "splash": {
+      "backgroundColor": "#0a0a0a",
+      "resizeMode": "contain"
+    },
+    "backgroundColor": "#0a0a0a",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3e19f333-a3e6-4b11-b162-780ac8203b50"
+      }
+    },
+    "assetBundlePatterns": [
+      "assets/fonts/*",
+      "assets/images/*"
+    ],
+    "jsEngine": "hermes"
+  }
+}
