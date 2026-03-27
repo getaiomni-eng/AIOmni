@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
-import { BlurView } from 'expo-blur';
+
 import { C, R, shadow } from '../constants/tokens';
 
 interface Props {
@@ -28,7 +28,7 @@ export const GlassCard: React.FC<Props> = ({
   const v = VARIANTS[variant];
   return (
     <View style={[{ borderRadius: radius, borderWidth: 1, borderColor: v.border, overflow: 'hidden' }, shadow.glass, style]}>
-      <BlurView intensity={blur} tint="light" style={StyleSheet.absoluteFillObject} />
+      <View intensity={blur} tint="light" style={StyleSheet.absoluteFillObject} />
       {!noShine && <View style={[styles.shine, { borderRadius: radius }]} />}
       <View style={[{ padding, backgroundColor: v.bg }, Array.isArray(style) ? {} : (style as any)]}>
         {children}

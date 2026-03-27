@@ -209,7 +209,7 @@ export default function LeagueScreen() {
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': 'YOUR_CLAUDE_API_KEY', 'anthropic-version': '2023-06-01' },
+        headers: { 'Content-Type': 'application/json', 'x-api-key': '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', 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 300, messages: [{ role: 'user', content: `Fantasy football advice for ${leagueName} (${platform}, WK ${week}).\nPlayer: ${player.name} | ${player.pos} | ${player.team}${player.injured ? ' | INJURED' : ''}\nShould I start this player? Be direct, under 80 words.` }] }),
       });
       const data = await res.json();

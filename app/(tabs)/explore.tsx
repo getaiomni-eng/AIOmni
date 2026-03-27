@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-const API_KEY = 'YOUR_CLAUDE_API_KEY';
+const API_KEY = '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';
 const DYNASTY_KEYWORDS = ['pick', 'round', '2025', '2026', '2027', '2028', 'first', 'second', 'third', 'future', 'rookie'];
 const GRADE_COLORS: Record<string, string> = { 'A+': '#D4FF00', 'A': '#D4FF00', 'A-': '#D4FF00', 'B+': '#00ffaa', 'B': '#00ffaa', 'B-': '#00ffaa', 'C+': '#ffaa00', 'C': '#ffaa00', 'C-': '#ffaa00', 'D+': '#ff2255', 'D': '#ff2255', 'D-': '#ff2255', 'F': '#ff2255' };
 const EXAMPLE_TRADES = [

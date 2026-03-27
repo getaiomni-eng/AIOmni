@@ -10,7 +10,7 @@ import { C, F, SZ, SP, R, shadow } from '../constants/tokens';
 import { GlassCard, SurfaceCard } from '../components/GlassCard';
 
 // ── Claude API ─────────────────────────────────────────────────
-const API_KEY = 'YOUR_CLAUDE_API_KEY';
+const API_KEY = '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';
 
 type Format = 'redraft' | 'dynasty';
 type Grade  = 'A+' | 'A' | 'A-' | 'B+' | 'B' | 'B-' | 'C+' | 'C' | 'C-' | 'D+' | 'D' | 'F';
@@ -298,3 +298,5 @@ const styles = StyleSheet.create({
   cta:          { borderRadius:12, padding:14, alignItems:'center' },
   ctaTxt:       { fontSize:SZ.lg, fontWeight:'900', color:'#fff', letterSpacing:2, fontFamily:F.black },
 });
+
+export default TradeAnalyzerScreen;

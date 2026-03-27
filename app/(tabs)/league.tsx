@@ -23,7 +23,7 @@ const SLOT_LABELS: Record<number, string> = {
 };
 
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K'];
-const API_KEY = 'YOUR_CLAUDE_API_KEY';
+const API_KEY = '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';
 const TABS = ['roster', 'standings', 'matchup', 'waivers', 'activity'] as const;
 
 type Player = { id: string; name: string; position: string; team: string; injuryStatus?: string; isStarter: boolean; slotLabel?: string; };

@@ -11,18 +11,19 @@ import { C, F, SZ, SP, R } from '../constants/tokens';
 import { GlassCard } from '../components/GlassCard';
 import { OrbAvatar } from '../components/OrbAvatar';
 import { Badge, SectionHeader } from '../components/Atoms';
+import { loadESPNCredentials, getESPNLeague, findMyESPNTeam } from '../../services/espn';
 
 const LOGO = require('../../assets/images/logo.png');
 const { width: SCREEN_W } = Dimensions.get('window');
 
 // ── Types ──────────────────────────────────────────────────────
 type League = {
-  id: string; name: string; platform: string;
+  id: string; name: string; platform: 'sleeper' | 'espn';
   format?: string; rec?: string; rank?: string;
   pts?: number; opp?: number; week?: number;
 };
 
-// ── Static news (live RSS swapped in when available) ───────────
+// ── Static news ────────────────────────────────────────────────
 const FALLBACK_NEWS = [
   { source: 'ROTOWIRE', headline: 'Jaxon Smith-Njigba: 5th-year option picked up by SEA', color: '#4ab8a0' },
   { source: 'PFR',      headline: 'NFL Teams Higher On Their QBs Than Draft Pundits?',    color: '#e8a84b' },
@@ -36,6 +37,11 @@ const INSIGHTS = [
   { emoji: '🔥', title: 'Add Shaheed',    body: '3 TDs in last 4 games. 78% target share with Drake.',    tag: 'HOT',     color: C.gold },
 ];
 
+// ── ESPN colors ────────────────────────────────────────────────
+const ESPN_RED = '#d00';
+const ESPN_RED_DIM = 'rgba(221,0,0,0.18)';
+const ESPN_RED_BORDER = 'rgba(221,0,0,0.35)';
+
 // ── Component ──────────────────────────────────────────────────
 export default function HomeScreen() {
   const router = useRouter();
@@ -45,13 +51,12 @@ export default function HomeScreen() {
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [insightIdx, setInsightIdx] = useState(0);
-  const [aiInsight, setAiInsight] = useState<{title:string; body:string; tag:string; color:string; emoji:string} | null>(null);
+  const [aiInsight, setAiInsight]   = useState<{title:string;body:string;tag:string;color:string;emoji:string}|null>(null);
   const [insightLoading, setInsightLoading] = useState(false);
   const [scoreIdx, setScoreIdx]     = useState(0);
   const [news, setNews]             = useState(FALLBACK_NEWS);
 
-  // One animated value per league slot (up to 8)
-  const scoreAnims = useRef(Array.from({ length: 8 }, () => new Animated.Value(0))).current;
+  const scoreAnims = useRef(Array.from({ length: 12 }, () => new Animated.Value(0))).current;
   const CARD_W = SCREEN_W - SP[3] * 2;
 
   useEffect(() => {
@@ -61,84 +66,152 @@ export default function HomeScreen() {
     return () => clearInterval(t);
   }, []);
 
-  // ── Data fetching ────────────────────────────────────────────
-  const loadLeagues = async () => {
-    setLoading(true);
-    const all: League[] = [];
+  // ── Sleeper loader ───────────────────────────────────────────
+  const loadSleeperLeagues = async (): Promise<League[]> => {
     try {
       const u = await AsyncStorage.getItem('sleeper_username');
-      if (u) {
-        setUsername(u);
-        const user = await (await fetch(`https://api.sleeper.app/v1/user/${u}`)).json();
-        if (!user?.user_id) throw new Error('no user');
+      if (!u) return [];
+      const user = await (await fetch(`https://api.sleeper.app/v1/user/${u}`)).json();
+      if (!user?.user_id) return [];
 
-        const slRes  = await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/2025`);
-        const leagues = await slRes.json();
-        if (!Array.isArray(leagues)) throw new Error('no leagues');
+      const slRes  = await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/2025`);
+      const leagues = await slRes.json();
+      if (!Array.isArray(leagues)) return [];
 
-        const stateRes = await fetch('https://api.sleeper.app/v1/state/nfl');
-        const state    = await stateRes.json();
-        const week     = state.leg || state.display_week || state.week || 17;
+      const stateRes = await fetch('https://api.sleeper.app/v1/state/nfl');
+      const state    = await stateRes.json();
+      const week     = state.leg || state.display_week || state.week || 17;
 
-        // Fetch all leagues in parallel
-        const leagueData = await Promise.all(leagues.map(async (l: any) => {
-          const isPPR = l.scoring_settings?.rec > 0;
-          const isSF  = (l.roster_positions || []).includes('SUPER_FLEX');
-          const fmt   = `${isPPR ? (l.scoring_settings.rec >= 1 ? 'PPR' : '0.5 PPR') : 'STD'}${isSF ? ' · SF' : ''}`;
-          try {
-            const [rosters, matchups] = await Promise.all([
-              fetch(`https://api.sleeper.app/v1/league/${l.league_id}/rosters`).then(r => r.json()),
-              fetch(`https://api.sleeper.app/v1/league/${l.league_id}/matchups/${week}`).then(r => r.json()),
-            ]);
-            const myRoster   = Array.isArray(rosters)  ? rosters.find((r: any) => r.owner_id === user.user_id) : null;
-            const myMatchup  = Array.isArray(matchups) ? matchups.find((m: any) => m.roster_id === myRoster?.roster_id) : null;
-            const oppMatchup = myMatchup ? matchups.find((m: any) => m.matchup_id === myMatchup.matchup_id && m.roster_id !== myRoster?.roster_id) : null;
-            const wins   = myRoster?.settings?.wins   ?? 0;
-            const losses = myRoster?.settings?.losses ?? 0;
-            const sorted = Array.isArray(rosters) ? [...rosters].sort((a: any, b: any) => (b.settings?.wins ?? 0) - (a.settings?.wins ?? 0)) : [];
-            const rank   = sorted.findIndex((r: any) => r.roster_id === myRoster?.roster_id) + 1;
-            return {
-              id: l.league_id, name: l.name, platform: 'sleeper', format: fmt,
-              rec: `${wins}–${losses}`,
-              rank: rank > 0 ? `${rank}${ordinal(rank)} of ${rosters.length}` : undefined,
-              pts: myMatchup?.points ?? 0,
-              opp: oppMatchup?.points ?? 0,
-              week,
-            } as League;
-          } catch {
-            return { id: l.league_id, name: l.name, platform: 'sleeper', format: fmt } as League;
-          }
-        }));
-        all.push(...leagueData);
-      }
-    } catch (e) { console.log('HomeScreen loadLeagues:', e); }
+      return Promise.all(leagues.map(async (l: any): Promise<League> => {
+        const isPPR = l.scoring_settings?.rec > 0;
+        const isSF  = (l.roster_positions || []).includes('SUPER_FLEX');
+        const fmt   = `${isPPR ? (l.scoring_settings.rec >= 1 ? 'PPR' : '0.5 PPR') : 'STD'}${isSF ? ' · SF' : ''}`;
+        try {
+          const [rosters, matchups] = await Promise.all([
+            fetch(`https://api.sleeper.app/v1/league/${l.league_id}/rosters`).then(r => r.json()),
+            fetch(`https://api.sleeper.app/v1/league/${l.league_id}/matchups/${week}`).then(r => r.json()),
+          ]);
+          const myRoster   = Array.isArray(rosters)  ? rosters.find((r: any) => r.owner_id === user.user_id) : null;
+          const myMatchup  = Array.isArray(matchups) ? matchups.find((m: any) => m.roster_id === myRoster?.roster_id) : null;
+          const oppMatchup = myMatchup ? matchups.find((m: any) => m.matchup_id === myMatchup.matchup_id && m.roster_id !== myRoster?.roster_id) : null;
+          const wins   = myRoster?.settings?.wins   ?? 0;
+          const losses = myRoster?.settings?.losses ?? 0;
+          const sorted = Array.isArray(rosters) ? [...rosters].sort((a: any, b: any) => (b.settings?.wins ?? 0) - (a.settings?.wins ?? 0)) : [];
+          const rank   = sorted.findIndex((r: any) => r.roster_id === myRoster?.roster_id) + 1;
+          return {
+            id: l.league_id, name: l.name, platform: 'sleeper', format: fmt,
+            rec: `${wins}–${losses}`,
+            rank: rank > 0 ? `${rank}${ordinal(rank)} of ${rosters.length}` : undefined,
+            pts: myMatchup?.points ?? 0,
+            opp: oppMatchup?.points ?? 0,
+            week,
+          };
+        } catch {
+          return { id: l.league_id, name: l.name, platform: 'sleeper', format: fmt };
+        }
+      }));
+    } catch (e) {
+      console.log('loadSleeperLeagues:', e);
+      return [];
+    }
+  };
 
+  // ── ESPN loader ──────────────────────────────────────────────
+  const loadESPNLeagues = async (): Promise<League[]> => {
+    try {
+      const creds = await loadESPNCredentials();
+      if (!creds?.leagueId) return [];
+
+      const leagueData = await getESPNLeague(creds.leagueId, creds.espnS2, creds.swid);
+      if (!leagueData) return [];
+
+      const myTeam = findMyESPNTeam(leagueData, creds.teamName || '');
+
+      // Format detection
+      const settings = leagueData.settings?.scoringSettings;
+      const recPts   = settings?.REC ?? 0;
+      const fmt      = recPts >= 1 ? 'PPR' : recPts >= 0.5 ? '0.5 PPR' : 'STD';
+
+      // Record
+      const wins   = myTeam?.record?.overall?.wins   ?? 0;
+      const losses = myTeam?.record?.overall?.losses ?? 0;
+
+      // Rank
+      const teams      = leagueData.teams ?? [];
+      const sorted     = [...teams].sort((a: any, b: any) => (b.record?.overall?.wins ?? 0) - (a.record?.overall?.wins ?? 0));
+      const rankIdx    = sorted.findIndex((t: any) => t.id === myTeam?.id);
+      const rankStr    = rankIdx >= 0 ? `${rankIdx + 1}${ordinal(rankIdx + 1)} of ${teams.length}` : undefined;
+
+      // Current matchup scores
+      const week        = leagueData.scoringPeriodId ?? 17;
+      const matchupData = leagueData.schedule?.find(
+        (m: any) => m.matchupPeriodId === week &&
+          (m.home?.teamId === myTeam?.id || m.away?.teamId === myTeam?.id)
+      );
+      const myScore  = matchupData?.home?.teamId === myTeam?.id
+        ? matchupData?.home?.totalPoints
+        : matchupData?.away?.totalPoints;
+      const oppScore = matchupData?.home?.teamId === myTeam?.id
+        ? matchupData?.away?.totalPoints
+        : matchupData?.home?.totalPoints;
+
+      return [{
+        id: String(creds.leagueId),
+        name: leagueData.settings?.name ?? 'ESPN League',
+        platform: 'espn',
+        format: fmt,
+        rec: `${wins}–${losses}`,
+        rank: rankStr,
+        pts:  myScore  ?? 0,
+        opp:  oppScore ?? 0,
+        week,
+      }];
+    } catch (e) {
+      console.log('loadESPNLeagues:', e);
+      return [];
+    }
+  };
+
+  // ── Combined loader ──────────────────────────────────────────
+  const loadLeagues = async () => {
+    setLoading(true);
+
+    const u = await AsyncStorage.getItem('sleeper_username');
+    if (u) setUsername(u);
+
+    const [sleeperLeagues, espnLeagues] = await Promise.all([
+      loadSleeperLeagues(),
+      loadESPNLeagues(),
+    ]);
+
+    const all = [...sleeperLeagues, ...espnLeagues];
     setLeagues(all);
     setLoading(false);
 
-    // Fire AI insight across all leagues
     if (all.length > 0) fetchAIInsight(all);
 
-    // Animate scores
     all.forEach((lg, i) => {
       if (i < scoreAnims.length && lg.pts) {
-        Animated.timing(scoreAnims[i], { toValue: lg.pts, duration: 1400 + i * 120, useNativeDriver: false }).start();
+        Animated.timing(scoreAnims[i], {
+          toValue: lg.pts, duration: 1400 + i * 120, useNativeDriver: false,
+        }).start();
       }
     });
   };
 
+  // ── AI insight ───────────────────────────────────────────────
   const fetchAIInsight = async (leagueList: League[]) => {
     setInsightLoading(true);
     try {
       const leagueContext = leagueList.map(l =>
-        `${l.name} (${l.format}): Record ${l.rec ?? '?'}, Rank ${l.rank ?? '?'}, Score this week ${l.pts?.toFixed(1) ?? '?'} vs ${l.opp?.toFixed(1) ?? '?'} (${(l.pts ?? 0) > (l.opp ?? 0) ? 'WINNING' : 'LOSING'})`
+        `${l.name} (${l.platform.toUpperCase()} · ${l.format}): Record ${l.rec ?? '?'}, Rank ${l.rank ?? '?'}, Score ${l.pts?.toFixed(1) ?? '?'} vs ${l.opp?.toFixed(1) ?? '?'} (${(l.pts ?? 0) > (l.opp ?? 0) ? 'WINNING' : 'LOSING'})`
       ).join('\n');
 
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': 'YOUR_CLAUDE_API_KEY',
+          'x-api-key': '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',
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
@@ -152,28 +225,27 @@ export default function HomeScreen() {
       });
       const data = await res.json();
       const text = data.content?.[0]?.text ?? '';
-      const cleaned = text.replace(/\`\`\`json|\`\`\`/g, '').trim();
-      const parsed = JSON.parse(cleaned);
+      const cleaned = text.replace(/```json|```/g, '').trim();
+      const parsed  = JSON.parse(cleaned);
       const colorMap: Record<string, string> = { sage: '#2d7a5e', gold: '#c8a84b', red: '#c87878' };
       setAiInsight({
         emoji: parsed.emoji ?? '🎯',
         title: parsed.title ?? 'AI Insight',
-        body: parsed.body ?? '',
-        tag: parsed.tag ?? 'INSIGHT',
+        body:  parsed.body  ?? '',
+        tag:   parsed.tag   ?? 'INSIGHT',
         color: colorMap[parsed.color] ?? '#2d7a5e',
       });
     } catch (e) { console.log('AI insight error:', e); }
     setInsightLoading(false);
   };
 
+  // ── News ─────────────────────────────────────────────────────
   const fetchNews = async () => {
     const parseRSS = (xml: string, source: string, color: string) => {
       const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
       return items.slice(0, 6).flatMap(item => {
         const m = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) ?? item.match(/<title>(.*?)<\/title>/);
-        const raw = (m?.[1] ?? '')
-          .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')
-          .replace(/&apos;/g,"'").replace(/&quot;/g,'"').replace(/<[^>]+>/g,'').trim();
+        const raw = (m?.[1] ?? '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&apos;/g,"'").replace(/&quot;/g,'"').replace(/<[^>]+>/g,'').trim();
         return raw ? [{ source, headline: raw, color }] : [];
       });
     };
@@ -248,7 +320,7 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
 
-        {/* Swipeable score cards */}
+        {/* Score cards */}
         {loading ? (
           <View style={styles.loadingCard}>
             <ActivityIndicator color={C.gold} size="large" />
@@ -264,16 +336,19 @@ export default function HomeScreen() {
               onMomentumScrollEnd={e => setScoreIdx(Math.round(e.nativeEvent.contentOffset.x / (CARD_W + 10)))}
             >
               {leagues.map((lg, i) => {
-                const winning = (lg.pts ?? 0) > (lg.opp ?? 0);
-                const scoreStr = scoreAnims[i].interpolate({
+                const winning    = (lg.pts ?? 0) > (lg.opp ?? 0);
+                const isESPN     = lg.platform === 'espn';
+                const platColor  = isESPN ? ESPN_RED : C.gold;
+                const platLabel  = isESPN ? 'ESPN' : 'SLEEPER';
+                const scoreStr   = scoreAnims[i].interpolate({
                   inputRange:  [0, Math.max(lg.pts ?? 1, 1)],
                   outputRange: ['0.0', (lg.pts ?? 0).toFixed(1)],
                 });
                 return (
-                  <GlassCard key={lg.id} style={[styles.scoreCard, { width: CARD_W }]}>
+                  <GlassCard key={lg.id} style={[styles.scoreCard, { width: CARD_W }, isESPN && styles.espnCard]}>
                     <Text style={styles.scoreEye}>
                       {'⚡  LIVE · WK '}{lg.week}{'  '}
-                      <Text style={{ color: C.gold }}>SLEEPER</Text>
+                      <Text style={{ color: platColor }}>{platLabel}</Text>
                       {'  ·  '}{lg.format}
                     </Text>
                     <View style={styles.matchRow}>
@@ -299,6 +374,12 @@ export default function HomeScreen() {
                         backgroundColor: winning ? C.sage : 'rgba(200,120,120,0.7)',
                       }]} />
                     </View>
+                    {/* ESPN badge */}
+                    {isESPN && (
+                      <View style={styles.espnBadge}>
+                        <Text style={styles.espnBadgeTxt}>ESPN</Text>
+                      </View>
+                    )}
                   </GlassCard>
                 );
               })}
@@ -339,9 +420,7 @@ export default function HomeScreen() {
             </View>
           ) : (
             <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
+              horizontal pagingEnabled showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={e => {
                 const allItems = aiInsight ? [aiInsight, ...INSIGHTS] : INSIGHTS;
                 const w = e.nativeEvent.layoutMeasurement.width;
@@ -368,14 +447,18 @@ export default function HomeScreen() {
         <SectionHeader label="MY LEAGUES" barColor={C.gold} />
         {loading ? null : leagues.map(lg => {
           const [w, l] = (lg.rec ?? '0–0').split('–').map(Number);
+          const isESPN    = lg.platform === 'espn';
+          const platColor = isESPN ? ESPN_RED : C.gold;
           return (
             <TouchableOpacity key={lg.id} onPress={() => goToLeague(lg)} activeOpacity={0.8}>
-              <GlassCard style={styles.leagueRow}>
+              <GlassCard style={[styles.leagueRow, isESPN && { borderColor: ESPN_RED_BORDER }]}>
                 <OrbAvatar size={38} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.leagueName}>{lg.name}</Text>
                   <Text style={styles.leagueSub}>
-                    <Text style={{ color: C.gold }}>SLEEPER</Text>
+                    <Text style={{ color: platColor, fontWeight: '700' }}>
+                      {isESPN ? 'ESPN' : 'SLEEPER'}
+                    </Text>
                     {lg.format ? ` · ${lg.format}` : ''}
                   </Text>
                 </View>
@@ -392,7 +475,7 @@ export default function HomeScreen() {
       </ScrollView>
     </LinearGradient>
   );
-};
+}
 
 const styles = StyleSheet.create({
   scroll:         { paddingHorizontal: SP[3], paddingBottom: 110 },
@@ -413,15 +496,19 @@ const styles = StyleSheet.create({
   loadingTxt:     { color: C.dim, fontFamily: F.mono, fontSize: SZ.sm },
 
   scoreCard:      { padding: 14 },
+  espnCard:       { borderColor: ESPN_RED_BORDER },
   scoreEye:       { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 1.2, marginBottom: 8 },
   matchRow:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   teamLbl:        { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 2 },
   scoreWin:       { fontSize: SZ['4xl'], fontWeight: '900', color: C.sage, letterSpacing: -1.5, lineHeight: 40, fontFamily: F.bold },
-  winPill:        { backgroundColor: 'rgba(45,122,94,0.18)', borderRadius: R.full, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1.5, borderColor: 'rgba(45,122,94,0.40)', shadowColor: '#2d7a5e', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } },
-  losePill:       { backgroundColor: 'rgba(200,120,120,0.15)', borderColor: 'rgba(200,120,120,0.35)', shadowColor: '#c87878' },
+  winPill:        { backgroundColor: 'rgba(45,122,94,0.18)', borderRadius: R.full, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1.5, borderColor: 'rgba(45,122,94,0.40)' },
+  losePill:       { backgroundColor: 'rgba(200,120,120,0.15)', borderColor: 'rgba(200,120,120,0.35)' },
   winTxt:         { fontSize: SZ.sm, fontWeight: '700', color: C.sage, fontFamily: F.bold, letterSpacing: 0.5 },
   progBg:         { height: 3, backgroundColor: '#7a1f2e', borderRadius: 2, overflow: 'hidden', marginTop: 10 },
   progFill:       { height: 3, borderRadius: 2 },
+
+  espnBadge:      { position: 'absolute', top: 10, right: 10, backgroundColor: ESPN_RED, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  espnBadgeTxt:   { fontSize: 9, fontWeight: '900', color: '#fff', fontFamily: F.mono, letterSpacing: 1 },
 
   dotsRow:        { flexDirection: 'row', justifyContent: 'center', gap: 5, marginBottom: 10 },
   dot:            { width: 5, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,0.18)' },
