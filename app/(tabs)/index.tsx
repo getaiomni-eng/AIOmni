@@ -452,7 +452,7 @@ export default function HomeScreen() {
           return (
             <TouchableOpacity key={lg.id} onPress={() => goToLeague(lg)} activeOpacity={0.8}>
               <GlassCard style={[styles.leagueRow, isESPN && { borderColor: ESPN_RED_BORDER }]}>
-                <OrbAvatar size={38} />
+                <OrbAvatar size={28} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.leagueName}>{lg.name}</Text>
                   <Text style={styles.leagueSub}>
