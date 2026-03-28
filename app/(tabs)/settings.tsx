@@ -77,35 +77,46 @@ export default function MoreScreen() {
     finally { setLoading(false); }
   };
 
-  const handleConnectYahoo = async () => {
-    setLoading(true);
-    try {
-      const authUrl = await getYahooAuthURL();
-      console.log('Yahoo auth URL:', authUrl.slice(0, 100));
-      const result = await WebBrowser.openAuthSessionAsync(
-        authUrl,
-        'aiomnifantasy://oauth/yahoo',
-        { showInRecents: true }
-      );
-      console.log('Yahoo result:', result.type);
-      if (result.type === 'success' && result.url) {
-        const urlObj = new URL(result.url);
-        const code = urlObj.searchParams.get('code');
-        if (code) {
-          await exchangeYahooCode(code);
-          setYahooConnected(true);
-          Alert.alert('✓ Yahoo Connected', 'Your Yahoo leagues will now appear on Home.');
-        } else {
-          Alert.alert('Yahoo Error', 'No auth code received. Try again.');
+const handleConnectYahoo = async () => {
+  setLoading(true);
+  try {
+    const authUrl = await getYahooAuthURL();
+    console.log('Yahoo auth URL:', authUrl.slice(0, 100));
+
+    // Listen for the deep link callback BEFORE opening browser
+    const { Linking } = require('react-native');
+    
+    const codePromise = new Promise<string | null>((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 120000); // 2 min timeout
+      const sub = Linking.addEventListener('url', ({ url }: { url: string }) => {
+        if (url.startsWith('aiomnifantasy://oauth/yahoo')) {
+          clearTimeout(timeout);
+          sub.remove();
+          const urlObj = new URL(url);
+          resolve(urlObj.searchParams.get('code'));
         }
-      } else if (result.type !== 'cancel' && result.type !== 'dismiss') {
-        Alert.alert('Yahoo Note', 'Yahoo OAuth requires a development build (not Expo Go).\n\nRun: npx expo run:ios');
-      }
-    } catch (e: any) {
-      console.log('Yahoo error:', e);
-      Alert.alert('Yahoo Error', e.message || 'Could not connect Yahoo.');
-    } finally { setLoading(false); }
-  };
+      });
+    });
+
+    // Open browser (don't await result — Yahoo breaks openAuthSessionAsync)
+    WebBrowser.openBrowserAsync(authUrl);
+
+    const code = await codePromise;
+
+    WebBrowser.dismissBrowser();
+
+    if (code) {
+      await exchangeYahooCode(code);
+      setYahooConnected(true);
+      Alert.alert('✓ Yahoo Connected', 'Your Yahoo leagues will now appear on Home.');
+    } else {
+      Alert.alert('Yahoo Error', 'No auth code received. Try again.');
+    }
+  } catch (e: any) {
+    console.log('Yahoo error:', e);
+    Alert.alert('Yahoo Error', e.message || 'Could not connect Yahoo.');
+  } finally { setLoading(false); }
+};
 
   const handleDisconnectESPN = () => {
     Alert.alert('Disconnect ESPN?', '', [
