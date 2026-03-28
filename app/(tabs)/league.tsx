@@ -1,20 +1,22 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadESPNCredentials, getESPNLeague, findMyESPNTeam, isESPNStarter, formatESPNPosition, getESPNStandings, getESPNMatchups, getESPNTransactions, getESPNAllRosters } from '../../services/espn';
 import { getValidYahooToken, getMyYahooTeam, getYahooStandings, getYahooMatchups, getYahooTransactions, getYahooAllRosters } from '../../services/yahoo';
+import { C, F, SZ, R, SP } from '../constants/tokens';
 
-// ── Colors ───────────────────────────────────────────────────────────────────
-const BG = '#080d08';
-const LIME = '#D4FF00';
-const SURFACE = 'rgba(15,22,15,0.95)';
-const BORDER = 'rgba(212,255,0,0.1)';
+// ── Theme ─────────────────────────────────────────────────────────────────────
+const SURFACE  = 'rgba(255,255,255,0.12)';
+const BORDER   = 'rgba(255,255,255,0.18)';
+const DIM_BORDER = 'rgba(255,255,255,0.10)';
 
 const POS_COLORS: Record<string, string> = {
-  QB: '#cc77ff', RB: '#00ffaa', WR: '#33ddff', TE: '#D4FF00',
-  K: '#ff88bb', DEF: '#aabbcc', DST: '#aabbcc', FLEX: '#D4FF00',
+  QB: '#b8a8e8', RB: '#82c494', WR: '#7ec8e8', TE: '#e8b078',
+  K: 'rgba(255,255,255,0.55)', DEF: '#a090d0', DST: '#a090d0', FLEX: '#b8891a',
 };
+
 const SLOT_LABELS: Record<number, string> = {
   0:'QB', 1:'TQB', 2:'RB', 3:'RB/WR', 4:'WR', 5:'WR/TE',
   6:'TE', 7:'OP', 8:'DT', 9:'DE', 10:'LB', 11:'DL', 12:'CB',
@@ -24,16 +26,15 @@ const SLOT_LABELS: Record<number, string> = {
 
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K'];
 const API_KEY = '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';
-const TABS = ['roster', 'standings', 'matchup', 'waivers', 'activity'] as const;
 
 type Player = { id: string; name: string; position: string; team: string; injuryStatus?: string; isStarter: boolean; slotLabel?: string; };
 type TeamStanding = { rosterId: any; username: string; wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number; streak: string; };
 type OtherRoster = { rosterId: any; username: string; players: Player[]; };
 type Transaction = { type: string; adds: string[]; drops: string[]; trader: string; time: number; };
 
-// ── Radar Logo Component ──────────────────────────────────────────────────────
-function RadarLogo({ size = 48 }: { size?: number }) {
-  const rot = useRef(new Animated.Value(0)).current;
+// ── Radar Logo (gold theme) ───────────────────────────────────────────────────
+function RadarLogo({ size = 48, color = C.gold }: { size?: number; color?: string }) {
+  const rot   = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0.6)).current;
   useEffect(() => {
     Animated.loop(Animated.timing(rot, { toValue: 1, duration: 4000, useNativeDriver: true })).start();
@@ -45,60 +46,57 @@ function RadarLogo({ size = 48 }: { size?: number }) {
   const spin = rot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   const r = size / 2;
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(212,255,0,0.06)', borderWidth: 1, borderColor: 'rgba(212,255,0,0.2)', borderRadius: 4 }}>
-      {/* Rings */}
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center', backgroundColor: C.goldS, borderWidth: 1, borderColor: C.goldBorder, borderRadius: R.sm }}>
       {[0.85, 0.6, 0.35].map((scale, i) => (
-        <View key={i} style={{ position: 'absolute', width: size * scale, height: size * scale, borderRadius: size * scale / 2, borderWidth: 1, borderColor: `rgba(212,255,0,${0.15 - i * 0.04})` }} />
+        <View key={i} style={{ position: 'absolute', width: size * scale, height: size * scale, borderRadius: size * scale / 2, borderWidth: 1, borderColor: `rgba(184,137,26,${0.18 - i * 0.04})` }} />
       ))}
-      {/* Crosshairs */}
-      <View style={{ position: 'absolute', width: size * 0.7, height: 1, backgroundColor: 'rgba(212,255,0,0.15)' }} />
-      <View style={{ position: 'absolute', width: 1, height: size * 0.7, backgroundColor: 'rgba(212,255,0,0.15)' }} />
-      {/* Spinning sweep arm */}
-      <Animated.View style={{ position: 'absolute', width: r * 0.8, height: 1, backgroundColor: LIME, left: r, top: r - 0.5, transformOrigin: 'left center', transform: [{ rotate: spin }], opacity: 0.7 }} />
-      {/* Center dot */}
-      <Animated.View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: LIME, opacity: pulse }} />
+      <View style={{ position: 'absolute', width: size * 0.7, height: 1, backgroundColor: C.goldBorder }} />
+      <View style={{ position: 'absolute', width: 1, height: size * 0.7, backgroundColor: C.goldBorder }} />
+      <Animated.View style={{ position: 'absolute', width: r * 0.8, height: 1, backgroundColor: C.gold, left: r, top: r - 0.5, transformOrigin: 'left center', transform: [{ rotate: spin }], opacity: 0.8 }} />
+      <Animated.View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: C.gold, opacity: pulse }} />
     </View>
   );
 }
 
+// ── Screen ────────────────────────────────────────────────────────────────────
 export default function LeagueScreen() {
   const { leagueId, leagueName, platform } = useLocalSearchParams();
   const platformStr = (platform as string) || 'sleeper';
   const router = useRouter();
 
-  const [starters, setStarters] = useState<Player[]>([]);
-  const [bench, setBench] = useState<Player[]>([]);
-  const [leagueSettings, setLeagueSettings] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
-  const [advice, setAdvice] = useState('');
-  const [adviceLoading, setAdviceLoading] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [activeTab, setActiveTab] = useState<'roster' | 'waivers' | 'matchup' | 'standings' | 'activity'>('roster');
-  const [waiverPlayers, setWaiverPlayers] = useState<Player[]>([]);
-  const [waiverLoading, setWaiverLoading] = useState(false);
-  const [selectedPosition, setSelectedPosition] = useState('ALL');
-  const [matchup, setMatchup] = useState<any>(null);
-  const [standings, setStandings] = useState<TeamStanding[]>([]);
-  const [standingsLoading, setStandingsLoading] = useState(false);
-  const [otherRosters, setOtherRosters] = useState<OtherRoster[]>([]);
-  const [selectedRoster, setSelectedRoster] = useState<OtherRoster | null>(null);
-  const [rosterModalVisible, setRosterModalVisible] = useState(false);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [activityLoading, setActivityLoading] = useState(false);
-  const [playersDb, setPlayersDb] = useState<any>({});
+  const [starters,          setStarters]          = useState<Player[]>([]);
+  const [bench,             setBench]             = useState<Player[]>([]);
+  const [leagueSettings,    setLeagueSettings]    = useState<any>(null);
+  const [loading,           setLoading]           = useState(true);
+  const [selectedPlayer,    setSelectedPlayer]    = useState<Player | null>(null);
+  const [advice,            setAdvice]            = useState('');
+  const [adviceLoading,     setAdviceLoading]     = useState(false);
+  const [modalVisible,      setModalVisible]      = useState(false);
+  const [activeTab,         setActiveTab]         = useState<'roster' | 'waivers' | 'matchup' | 'standings' | 'activity'>('roster');
+  const [waiverPlayers,     setWaiverPlayers]     = useState<Player[]>([]);
+  const [waiverLoading,     setWaiverLoading]     = useState(false);
+  const [selectedPosition,  setSelectedPosition]  = useState('ALL');
+  const [matchup,           setMatchup]           = useState<any>(null);
+  const [standings,         setStandings]         = useState<TeamStanding[]>([]);
+  const [standingsLoading,  setStandingsLoading]  = useState(false);
+  const [otherRosters,      setOtherRosters]      = useState<OtherRoster[]>([]);
+  const [selectedRoster,    setSelectedRoster]    = useState<OtherRoster | null>(null);
+  const [rosterModalVisible,setRosterModalVisible]= useState(false);
+  const [transactions,      setTransactions]      = useState<Transaction[]>([]);
+  const [activityLoading,   setActivityLoading]   = useState(false);
+  const [playersDb,         setPlayersDb]         = useState<any>({});
 
-  const PLATFORM_COLOR = platformStr === 'espn' ? '#FF4444' : platformStr === 'yahoo' ? '#6001D2' : LIME;
+  const PLATFORM_COLOR = platformStr === 'espn' ? '#FF4444' : platformStr === 'yahoo' ? '#6001D2' : C.gold;
 
   useEffect(() => {
     if (leagueId) { setStandings([]); setOtherRosters([]); setMatchup(null); setWaiverPlayers([]); setTransactions([]); setActiveTab('roster'); fetchRoster(); }
   }, [leagueId]);
 
   useEffect(() => {
-    if (activeTab === 'waivers' && waiverPlayers.length === 0) fetchWaivers();
-    if (activeTab === 'matchup' && !matchup) fetchMatchup();
-    if (activeTab === 'standings' && standings.length === 0) fetchStandings();
-    if (activeTab === 'activity' && transactions.length === 0) fetchActivity();
+    if (activeTab === 'waivers'   && waiverPlayers.length === 0)  fetchWaivers();
+    if (activeTab === 'matchup'   && !matchup)                     fetchMatchup();
+    if (activeTab === 'standings' && standings.length === 0)       fetchStandings();
+    if (activeTab === 'activity'  && transactions.length === 0)    fetchActivity();
   }, [activeTab]);
 
   const getPlayersDb = async () => {
@@ -109,21 +107,18 @@ export default function LeagueScreen() {
   };
 
   const fetchSleeperRoster = async () => {
-    const username = await AsyncStorage.getItem('sleeper_username');
-    if (!username) return;
-    const user = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
+    const username = await AsyncStorage.getItem('sleeper_username'); if (!username) return;
+    const user     = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
     const settings = await (await fetch(`https://api.sleeper.app/v1/league/${leagueId}`)).json();
     setLeagueSettings(settings);
-    const rosters = await (await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`)).json();
-    const myRoster = rosters.find((r: any) => r.owner_id === user.user_id);
-    if (!myRoster) return;
+    const rosters  = await (await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`)).json();
+    const myRoster = rosters.find((r: any) => r.owner_id === user.user_id); if (!myRoster) return;
     const pDb = await getPlayersDb();
     const starterIds = new Set(myRoster.starters || []);
     const rosterPositions: string[] = settings.roster_positions || [];
     const toPlayer = (id: string, isStarter: boolean, idx?: number): Player => {
       const p = pDb[id];
-      const slotLabel = (isStarter && idx !== undefined) ? (rosterPositions[idx] || '') : 'BN';
-      return { id, name: p ? `${p.first_name} ${p.last_name}` : id, position: p?.position || '?', team: p?.team || 'FA', injuryStatus: p?.injury_status, isStarter, slotLabel };
+      return { id, name: p ? `${p.first_name} ${p.last_name}` : id, position: p?.position || '?', team: p?.team || 'FA', injuryStatus: p?.injury_status, isStarter, slotLabel: isStarter && idx !== undefined ? (rosterPositions[idx] || '') : 'BN' };
     };
     setStarters((myRoster.starters || []).map((id: string, i: number) => toPlayer(id, true, i)));
     setBench((myRoster.players || []).filter((id: string) => !starterIds.has(id)).map((id: string) => toPlayer(id, false)));
@@ -131,7 +126,7 @@ export default function LeagueScreen() {
 
   const fetchESPNRoster = async () => {
     const creds = await loadESPNCredentials(); if (!creds) return;
-    const data = await getESPNLeague(parseInt(leagueId as string), creds);
+    const data  = await getESPNLeague(parseInt(leagueId as string), creds);
     setLeagueSettings(data);
     const myTeam = findMyESPNTeam(data, creds.swid); if (!myTeam) return;
     const roster = myTeam.roster?.entries || [];
@@ -139,8 +134,8 @@ export default function LeagueScreen() {
       const p = entry.playerPoolEntry?.player;
       return { id: String(p?.id || ''), name: p?.fullName || 'Unknown', position: formatESPNPosition(p?.defaultPositionId) || '?', team: String(p?.proTeamId || 'FA'), injuryStatus: p?.injuryStatus, isStarter, slotLabel: SLOT_LABELS[entry.lineupSlotId] || '' };
     };
-    setStarters(roster.filter((e: any) => isESPNStarter(e.lineupSlotId)).map((e: any) => toPlayer(e, true)));
-    setBench(roster.filter((e: any) => !isESPNStarter(e.lineupSlotId)).map((e: any) => toPlayer(e, false)));
+    setStarters(roster.filter((e: any) =>  isESPNStarter(e.lineupSlotId)).map((e: any) => toPlayer(e, true)));
+    setBench   (roster.filter((e: any) => !isESPNStarter(e.lineupSlotId)).map((e: any) => toPlayer(e, false)));
   };
 
   const fetchYahooRoster = async () => {
@@ -149,7 +144,7 @@ export default function LeagueScreen() {
     setLeagueSettings({ name: leagueId, team: result.team });
     const toPlayer = (p: any, isStarter: boolean): Player => ({ id: p.player_key, name: p.name?.full || 'Unknown', position: p.display_position || '?', team: p.editorial_team_abbr || 'FA', injuryStatus: p.status, isStarter, slotLabel: p.selected_position?.position || '' });
     setStarters(result.roster.starters.map((p: any) => toPlayer(p, true)));
-    setBench(result.roster.bench.map((p: any) => toPlayer(p, false)));
+    setBench   (result.roster.bench.map   ((p: any) => toPlayer(p, false)));
   };
 
   const fetchRoster = async () => {
@@ -187,14 +182,14 @@ export default function LeagueScreen() {
       else if (platformStr === 'yahoo') { const token = await getValidYahooToken(); if (!token) return; setMatchup(await getYahooMatchups(leagueId as string, token)); }
       else {
         const username = await AsyncStorage.getItem('sleeper_username'); if (!username) return;
-        const user = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
+        const user  = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
         const state = await (await fetch('https://api.sleeper.app/v1/state/nfl')).json();
-        const week = state.display_week || 1;
+        const week  = state.display_week || 1;
         const [matchupsRes, rostersRes, usersRes] = await Promise.all([fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`), fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`), fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`)]);
         const matchups = await matchupsRes.json(); const rosters = await rostersRes.json(); const users = await usersRes.json();
         const myRoster = rosters.find((r: any) => r.owner_id === user.user_id); if (!myRoster) return;
-        const myMatchup = matchups.find((m: any) => m.roster_id === myRoster.roster_id);
-        const opponent = matchups.find((m: any) => m.matchup_id === myMatchup?.matchup_id && m.roster_id !== myRoster.roster_id);
+        const myMatchup  = matchups.find((m: any) => m.roster_id === myRoster.roster_id);
+        const opponent   = matchups.find((m: any) => m.matchup_id === myMatchup?.matchup_id && m.roster_id !== myRoster.roster_id);
         const getUsername = (rid: number) => { const r = rosters.find((r: any) => r.roster_id === rid); const u = users.find((u: any) => u.user_id === r?.owner_id); return u?.display_name || u?.username || 'Opponent'; };
         const allMatchups: any[] = []; const seen = new Set();
         matchups.forEach((m: any) => { if (seen.has(m.matchup_id)) return; seen.add(m.matchup_id); const opp = matchups.find((x: any) => x.matchup_id === m.matchup_id && x.roster_id !== m.roster_id); allMatchups.push({ team1: getUsername(m.roster_id), team1Points: m.points || 0, team2: opp ? getUsername(opp.roster_id) : 'BYE', team2Points: opp?.points || 0, isMyMatchup: m.roster_id === myRoster.roster_id || opp?.roster_id === myRoster.roster_id }); });
@@ -224,18 +219,18 @@ export default function LeagueScreen() {
     try {
       if (platformStr === 'sleeper') {
         const rosters = await (await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`)).json();
-        const taken = new Set(rosters.flatMap((r: any) => r.players || []));
-        const pDb = await getPlayersDb();
+        const taken   = new Set(rosters.flatMap((r: any) => r.players || []));
+        const pDb     = await getPlayersDb();
         setWaiverPlayers(Object.values(pDb).filter((p: any) => ['QB','RB','WR','TE','K'].includes(p.position) && p.team && !taken.has(p.player_id)).slice(0,150).map((p: any) => ({ id: p.player_id, name: `${p.first_name} ${p.last_name}`, position: p.position, team: p.team, injuryStatus: p.injury_status, isStarter: false })));
       } else if (platformStr === 'espn') {
         const creds = await loadESPNCredentials(); if (!creds) return;
-        const data = await getESPNLeague(parseInt(leagueId as string), creds);
+        const data  = await getESPNLeague(parseInt(leagueId as string), creds);
         const filter = JSON.stringify({ players: { filterStatus: { value: ['FREEAGENT','WAIVERS'] }, filterSlotIds: { value: [0,2,4,6,16,17,23] }, limit: 100 } });
         const res = await fetch(`https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2025/segments/0/leagues/${leagueId}?view=kona_player_info&scoringPeriodId=${data.scoringPeriodId||1}`, { headers: { 'Content-Type': 'application/json', 'X-Fantasy-Filter': filter, Cookie: `espn_s2=${creds.espnS2}; SWID=${creds.swid}` } });
         setWaiverPlayers(((await res.json()).players||[]).map((p: any) => { const pl=p.playerPoolEntry?.player; return { id: String(pl?.id||''), name: pl?.fullName||'Unknown', position: formatESPNPosition(pl?.defaultPositionId), team: String(pl?.proTeamId||'FA'), injuryStatus: pl?.injuryStatus, isStarter: false }; }));
       } else if (platformStr === 'yahoo') {
         const token = await getValidYahooToken(); if (!token) return;
-        const data = await (await fetch(`https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueId}/players;status=FA;sort=OR;count=50?format=json`, { headers: { Authorization: `Bearer ${token}` } })).json();
+        const data  = await (await fetch(`https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueId}/players;status=FA;sort=OR;count=50?format=json`, { headers: { Authorization: `Bearer ${token}` } })).json();
         setWaiverPlayers(Object.values(data?.fantasy_content?.league?.[1]?.players || {}).filter((v: any) => typeof v==='object'&&v.player).map((v: any) => { const p=v.player[0]; return { id: p.player_key, name: p.name?.full||'Unknown', position: p.display_position||'?', team: p.editorial_team_abbr||'FA', injuryStatus: p.status, isStarter: false }; }));
       }
     } catch (err) { console.error(err); } finally { setWaiverLoading(false); }
@@ -252,40 +247,31 @@ export default function LeagueScreen() {
 
   const filteredWaivers = waiverPlayers.filter(p => selectedPosition === 'ALL' || p.position === selectedPosition);
 
-  // ── Player Card ─────────────────────────────────────────────────────────────
+  // ── Player Card ───────────────────────────────────────────────────────────────
   const renderPlayer = (player: Player, isWaiver = false, index = 0) => {
-    const posColor = POS_COLORS[player.position] || '#888';
+    const posColor  = POS_COLORS[player.position] || C.dim2;
     const isInjured = !!player.injuryStatus;
     const slotLabel = player.slotLabel || player.position;
+    const active    = player.isStarter || isWaiver;
     return (
-      <TouchableOpacity key={`${player.id}-${index}`} style={[styles.playerCard, !player.isStarter && !isWaiver && styles.benchCard]} onPress={() => handleAdvice(player, isWaiver)} activeOpacity={0.8}>
-        {/* Left accent bar */}
-        <View style={[styles.playerAccentBar, { backgroundColor: player.isStarter || isWaiver ? posColor : '#333' }]} />
-
-        {/* Slot label */}
+      <TouchableOpacity key={`${player.id}-${index}`} style={[styles.playerCard, !active && styles.benchCard]} onPress={() => handleAdvice(player, isWaiver)} activeOpacity={0.8}>
+        <View style={[styles.playerAccentBar, { backgroundColor: active ? posColor : 'rgba(255,255,255,0.15)' }]} />
         <Text style={styles.slotLabel}>{slotLabel}</Text>
-
-        {/* Diamond position tag */}
         <View style={styles.diamondWrap}>
-          <View style={[styles.diamond, { backgroundColor: player.isStarter || isWaiver ? posColor : '#1a2a1a', borderColor: posColor, borderWidth: player.isStarter || isWaiver ? 0 : 1 }]}>
-            <Text style={[styles.diamondText, { color: player.isStarter || isWaiver ? '#000' : posColor }]}>{player.position}</Text>
+          <View style={[styles.diamond, { backgroundColor: active ? posColor : 'rgba(255,255,255,0.08)', borderColor: posColor, borderWidth: active ? 0 : 1 }]}>
+            <Text style={[styles.diamondText, { color: active ? '#1a1a1a' : posColor }]}>{player.position}</Text>
           </View>
         </View>
-
-        {/* Player info */}
         <View style={styles.playerInfoCol}>
-          <Text style={[styles.playerName, !player.isStarter && !isWaiver && { color: '#aabbaa' }]} numberOfLines={1}>{player.name}</Text>
+          <Text style={[styles.playerName, !active && { color: C.dim2 }]} numberOfLines={1}>{player.name}</Text>
           <View style={styles.playerMeta}>
             <Text style={styles.playerTeam}>{player.team}</Text>
             {isInjured && <><Text style={styles.metaDot}>·</Text><Text style={styles.injuryText}>{player.injuryStatus}</Text></>}
           </View>
-          {/* Progress bar placeholder */}
           <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${Math.random() * 60 + 20}%`, backgroundColor: posColor }]} />
+            <View style={[styles.progressFill, { width: `${Math.random() * 60 + 20}%`, backgroundColor: active ? posColor : 'rgba(255,255,255,0.2)' }]} />
           </View>
         </View>
-
-        {/* AI button */}
         <View style={styles.aiTag}>
           <Text style={styles.aiTagText}>AI</Text>
         </View>
@@ -294,15 +280,15 @@ export default function LeagueScreen() {
   };
 
   const TAB_DATA = [
-    { key: 'roster', label: 'ROSTER' },
+    { key: 'roster',    label: 'ROSTER'    },
     { key: 'standings', label: 'STANDINGS' },
-    { key: 'matchup', label: 'MATCHUP' },
-    { key: 'waivers', label: 'WAIVERS' },
-    { key: 'activity', label: 'ACTIVITY' },
+    { key: 'matchup',   label: 'MATCHUP'   },
+    { key: 'waivers',   label: 'WAIVERS'   },
+    { key: 'activity',  label: 'ACTIVITY'  },
   ] as const;
 
   return (
-    <View style={styles.container}>
+    <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -316,7 +302,7 @@ export default function LeagueScreen() {
           </View>
         </View>
         <View style={[styles.platformBadge, { backgroundColor: PLATFORM_COLOR }]}>
-          <Text style={[styles.platformBadgeText, { color: platformStr === 'sleeper' ? '#000' : '#fff' }]}>{platformStr.toUpperCase()}</Text>
+          <Text style={[styles.platformBadgeText, { color: platformStr === 'sleeper' ? '#1a1a1a' : '#fff' }]}>{platformStr.toUpperCase()}</Text>
         </View>
       </View>
 
@@ -331,49 +317,51 @@ export default function LeagueScreen() {
 
       {/* Content */}
       {loading ? (
-        <View style={styles.loadingBox}><ActivityIndicator color={LIME} size="large" /><Text style={styles.loadingText}>LOADING ROSTER</Text></View>
+        <View style={styles.loadingBox}>
+          <ActivityIndicator color={C.gold} size="large" />
+          <Text style={styles.loadingText}>LOADING ROSTER</Text>
+        </View>
 
       ) : activeTab === 'roster' ? (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
-          {/* Starters section */}
           <View style={styles.sectionHeader}>
             <View style={styles.sectionAccent} />
             <Text style={styles.sectionLabel}>STARTERS</Text>
             <View style={styles.sectionCount}><Text style={styles.sectionCountText}>{starters.length}</Text></View>
           </View>
           {starters.map((p, i) => renderPlayer(p, false, i))}
-
-          {/* Bench section */}
           <View style={[styles.sectionHeader, { marginTop: 20 }]}>
-            <View style={[styles.sectionAccent, { backgroundColor: '#444' }]} />
-            <Text style={[styles.sectionLabel, { color: '#aabbaa' }]}>BENCH</Text>
-            <View style={[styles.sectionCount, { backgroundColor: '#1a2a1a' }]}><Text style={[styles.sectionCountText, { color: '#aabbaa' }]}>{bench.length}</Text></View>
+            <View style={[styles.sectionAccent, { backgroundColor: C.dim2 }]} />
+            <Text style={[styles.sectionLabel, { color: C.dim2 }]}>BENCH</Text>
+            <View style={[styles.sectionCount, { backgroundColor: 'rgba(255,255,255,0.08)' }]}><Text style={[styles.sectionCountText, { color: C.dim2 }]}>{bench.length}</Text></View>
           </View>
           {bench.map((p, i) => renderPlayer(p, false, i))}
           <View style={{ height: 40 }} />
         </ScrollView>
 
       ) : activeTab === 'standings' ? (
-        standingsLoading ? <View style={styles.loadingBox}><ActivityIndicator color={LIME} /><Text style={styles.loadingText}>LOADING</Text></View> : (
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
-            <Text style={styles.sectionLabel}>STANDINGS · TAP TO SPY ROSTER</Text>
-            {standings.map((team, i) => (
-              <TouchableOpacity key={String(team.rosterId)} style={styles.standingRow} onPress={() => { const r = otherRosters.find(r => r.rosterId === team.rosterId); if (r) { setSelectedRoster(r); setRosterModalVisible(true); } }}>
-                <Text style={[styles.standingRank, i < 3 && { color: LIME }]}>{i + 1}</Text>
-                <View style={styles.standingInfo}>
-                  <Text style={styles.standingName}>{team.username}</Text>
-                  <Text style={styles.standingPts}>{team.pointsFor.toFixed(1)} PF · {team.pointsAgainst.toFixed(1)} PA</Text>
-                </View>
-                <View style={styles.standingRecord}>
-                  <Text style={styles.standingRecordText}>{team.wins}–{team.losses}{team.ties > 0 ? `–${team.ties}` : ''}</Text>
-                  {team.streak ? <Text style={[styles.standingStreak, { color: team.streak.startsWith('W') ? '#00ffaa' : '#ff2255' }]}>{team.streak}</Text> : null}
-                </View>
-                <Text style={styles.standingArrow}>›</Text>
-              </TouchableOpacity>
-            ))}
-            <View style={{ height: 40 }} />
-          </ScrollView>
-        )
+        standingsLoading
+          ? <View style={styles.loadingBox}><ActivityIndicator color={C.gold} /><Text style={styles.loadingText}>LOADING</Text></View>
+          : (
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+              <Text style={styles.sectionLabel}>STANDINGS · TAP TO SPY ROSTER</Text>
+              {standings.map((team, i) => (
+                <TouchableOpacity key={String(team.rosterId)} style={styles.standingRow} onPress={() => { const r = otherRosters.find(r => r.rosterId === team.rosterId); if (r) { setSelectedRoster(r); setRosterModalVisible(true); } }}>
+                  <Text style={[styles.standingRank, i < 3 && { color: C.gold }]}>{i + 1}</Text>
+                  <View style={styles.standingInfo}>
+                    <Text style={styles.standingName}>{team.username}</Text>
+                    <Text style={styles.standingPts}>{team.pointsFor.toFixed(1)} PF · {team.pointsAgainst.toFixed(1)} PA</Text>
+                  </View>
+                  <View style={styles.standingRecord}>
+                    <Text style={styles.standingRecordText}>{team.wins}–{team.losses}{team.ties > 0 ? `–${team.ties}` : ''}</Text>
+                    {team.streak ? <Text style={[styles.standingStreak, { color: team.streak.startsWith('W') ? C.sage : '#c87878' }]}>{team.streak}</Text> : null}
+                  </View>
+                  <Text style={styles.standingArrow}>›</Text>
+                </TouchableOpacity>
+              ))}
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          )
 
       ) : activeTab === 'matchup' ? (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
@@ -384,18 +372,18 @@ export default function LeagueScreen() {
                 <View style={styles.matchupScoreRow}>
                   <View style={styles.matchupTeamCol}>
                     <Text style={styles.matchupTeamName} numberOfLines={1}>{matchup.myTeam}</Text>
-                    <Text style={[styles.matchupScore, { color: matchup.myPoints >= matchup.opponentPoints ? LIME : '#fff' }]}>{matchup.myPoints?.toFixed(2)}</Text>
+                    <Text style={[styles.matchupScore, { color: matchup.myPoints >= matchup.opponentPoints ? C.sage : C.ink }]}>{matchup.myPoints?.toFixed(2)}</Text>
                     <Text style={styles.matchupLabel}>YOU</Text>
                   </View>
                   <Text style={styles.matchupVs}>VS</Text>
                   <View style={[styles.matchupTeamCol, { alignItems: 'flex-end' }]}>
                     <Text style={styles.matchupTeamName} numberOfLines={1}>{matchup.opponentTeam}</Text>
-                    <Text style={[styles.matchupScore, { color: matchup.opponentPoints > matchup.myPoints ? '#ff2255' : '#888' }]}>{matchup.opponentPoints?.toFixed(2)}</Text>
+                    <Text style={[styles.matchupScore, { color: matchup.opponentPoints > matchup.myPoints ? '#c87878' : C.dim2 }]}>{matchup.opponentPoints?.toFixed(2)}</Text>
                     <Text style={styles.matchupLabel}>OPP</Text>
                   </View>
                 </View>
-                <View style={[styles.matchupStatus, { borderColor: matchup.myPoints >= matchup.opponentPoints ? LIME : '#ff2255', backgroundColor: matchup.myPoints >= matchup.opponentPoints ? 'rgba(212,255,0,0.06)' : 'rgba(255,34,85,0.06)' }]}>
-                  <Text style={[styles.matchupStatusText, { color: matchup.myPoints >= matchup.opponentPoints ? LIME : '#ff2255' }]}>{matchup.myPoints > matchup.opponentPoints ? 'WINNING ✓' : matchup.myPoints < matchup.opponentPoints ? 'LOSING ✗' : 'TIED'}</Text>
+                <View style={[styles.matchupStatus, { borderColor: matchup.myPoints >= matchup.opponentPoints ? C.sageBorder : 'rgba(200,120,120,0.35)', backgroundColor: matchup.myPoints >= matchup.opponentPoints ? C.sageS : 'rgba(200,120,120,0.12)' }]}>
+                  <Text style={[styles.matchupStatusText, { color: matchup.myPoints >= matchup.opponentPoints ? C.sage : '#c87878' }]}>{matchup.myPoints > matchup.opponentPoints ? 'WINNING ✓' : matchup.myPoints < matchup.opponentPoints ? 'LOSING ✗' : 'TIED'}</Text>
                 </View>
               </View>
               {matchup.allMatchups?.length > 0 && (
@@ -403,70 +391,74 @@ export default function LeagueScreen() {
                   <Text style={[styles.sectionLabel, { marginTop: 24 }]}>ALL MATCHUPS</Text>
                   {matchup.allMatchups.map((m: any, i: number) => (
                     <View key={i} style={[styles.allMatchupRow, m.isMyMatchup && { borderColor: PLATFORM_COLOR }]}>
-                      <View style={{ flex: 1 }}><Text style={[styles.allMatchupTeam, m.isMyMatchup && { color: '#fff' }]} numberOfLines={1}>{m.team1}</Text><Text style={styles.allMatchupScore}>{m.team1Points?.toFixed(2)}</Text></View>
+                      <View style={{ flex: 1 }}><Text style={[styles.allMatchupTeam, m.isMyMatchup && { color: C.ink }]} numberOfLines={1}>{m.team1}</Text><Text style={styles.allMatchupScore}>{m.team1Points?.toFixed(2)}</Text></View>
                       <Text style={styles.allMatchupVs}>vs</Text>
-                      <View style={{ flex: 1, alignItems: 'flex-end' }}><Text style={[styles.allMatchupTeam, m.isMyMatchup && { color: '#fff' }]} numberOfLines={1}>{m.team2}</Text><Text style={styles.allMatchupScore}>{m.team2Points?.toFixed(2)}</Text></View>
+                      <View style={{ flex: 1, alignItems: 'flex-end' }}><Text style={[styles.allMatchupTeam, m.isMyMatchup && { color: C.ink }]} numberOfLines={1}>{m.team2}</Text><Text style={styles.allMatchupScore}>{m.team2Points?.toFixed(2)}</Text></View>
                     </View>
                   ))}
                 </>
               )}
               <View style={{ height: 40 }} />
             </>
-          ) : <View style={styles.loadingBox}><ActivityIndicator color={LIME} /><Text style={styles.loadingText}>LOADING</Text></View>}
+          ) : <View style={styles.loadingBox}><ActivityIndicator color={C.gold} /><Text style={styles.loadingText}>LOADING</Text></View>}
         </ScrollView>
 
       ) : activeTab === 'waivers' ? (
         <View style={{ flex: 1 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={{ paddingHorizontal: 20 }}>
             {POSITIONS.map(pos => (
-              <TouchableOpacity key={pos} style={[styles.filterBtn, selectedPosition === pos && { borderColor: LIME, backgroundColor: 'rgba(212,255,0,0.08)' }]} onPress={() => setSelectedPosition(pos)}>
-                <Text style={[styles.filterText, selectedPosition === pos && { color: LIME }]}>{pos}</Text>
+              <TouchableOpacity key={pos} style={[styles.filterBtn, selectedPosition === pos && { borderColor: C.goldBorder, backgroundColor: C.goldS }]} onPress={() => setSelectedPosition(pos)}>
+                <Text style={[styles.filterText, selectedPosition === pos && { color: C.gold }]}>{pos}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
-          {waiverLoading ? <View style={styles.loadingBox}><ActivityIndicator color={LIME} /><Text style={styles.loadingText}>LOADING</Text></View>
+          {waiverLoading
+            ? <View style={styles.loadingBox}><ActivityIndicator color={C.gold} /><Text style={styles.loadingText}>LOADING</Text></View>
             : <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>{filteredWaivers.map((p, i) => renderPlayer(p, true, i))}<View style={{ height: 40 }} /></ScrollView>}
         </View>
 
       ) : activeTab === 'activity' ? (
-        activityLoading ? <View style={styles.loadingBox}><ActivityIndicator color={LIME} /><Text style={styles.loadingText}>LOADING</Text></View> : (
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
-            <Text style={styles.sectionLabel}>RECENT TRANSACTIONS</Text>
-            {transactions.length === 0 && <Text style={styles.emptyText}>No recent transactions found.</Text>}
-            {transactions.map((tx, i) => (
-              <View key={i} style={styles.txCard}>
-                <View style={[styles.txAccent, { backgroundColor: tx.type === 'trade' ? '#ffaa00' : tx.type === 'waiver' ? LIME : '#00ffaa' }]} />
-                <View style={styles.txHeader}>
-                  <Text style={[styles.txType, { color: tx.type === 'trade' ? '#ffaa00' : PLATFORM_COLOR }]}>{tx.type === 'trade' ? '⇄ TRADE' : tx.type === 'waiver' ? '◎ WAIVER' : '+ FREE AGENT'}</Text>
-                  <Text style={styles.txTrader}>{tx.trader}</Text>
+        activityLoading
+          ? <View style={styles.loadingBox}><ActivityIndicator color={C.gold} /><Text style={styles.loadingText}>LOADING</Text></View>
+          : (
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+              <Text style={styles.sectionLabel}>RECENT TRANSACTIONS</Text>
+              {transactions.length === 0 && <Text style={styles.emptyText}>No recent transactions found.</Text>}
+              {transactions.map((tx, i) => (
+                <View key={i} style={styles.txCard}>
+                  <View style={[styles.txAccent, { backgroundColor: tx.type === 'trade' ? C.gold : tx.type === 'waiver' ? C.sage : C.mint }]} />
+                  <View style={styles.txHeader}>
+                    <Text style={[styles.txType, { color: tx.type === 'trade' ? C.gold : PLATFORM_COLOR }]}>{tx.type === 'trade' ? '⇄ TRADE' : tx.type === 'waiver' ? '◎ WAIVER' : '+ FREE AGENT'}</Text>
+                    <Text style={styles.txTrader}>{tx.trader}</Text>
+                  </View>
+                  {tx.adds.length  > 0 && <Text style={styles.txAdds}>+ {tx.adds.join(', ')}</Text>}
+                  {tx.drops.length > 0 && <Text style={styles.txDrops}>– {tx.drops.join(', ')}</Text>}
+                  <Text style={styles.txTime}>{new Date(tx.time).toLocaleDateString()}</Text>
                 </View>
-                {tx.adds.length > 0 && <Text style={styles.txAdds}>+ {tx.adds.join(', ')}</Text>}
-                {tx.drops.length > 0 && <Text style={styles.txDrops}>– {tx.drops.join(', ')}</Text>}
-                <Text style={styles.txTime}>{new Date(tx.time).toLocaleDateString()}</Text>
-              </View>
-            ))}
-            <View style={{ height: 40 }} />
-          </ScrollView>
-        )
+              ))}
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          )
       ) : null}
 
       {/* Advice Modal */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <View style={[styles.modalTopAccent, { backgroundColor: POS_COLORS[selectedPlayer?.position || ''] || LIME }]} />
+            <View style={[styles.modalTopAccent, { backgroundColor: POS_COLORS[selectedPlayer?.position || ''] || C.gold }]} />
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalPlayerName}>{selectedPlayer?.name}</Text>
-                <View style={[styles.modalPosBadge, { backgroundColor: POS_COLORS[selectedPlayer?.position || ''] || '#444' }]}>
+                <View style={[styles.modalPosBadge, { backgroundColor: POS_COLORS[selectedPlayer?.position || ''] || C.glass }]}>
                   <Text style={styles.modalPosBadgeText}>{selectedPlayer?.position} · {selectedPlayer?.team}</Text>
                 </View>
               </View>
               <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}><Text style={styles.closeBtnText}>✕</Text></TouchableOpacity>
             </View>
-            {adviceLoading ? <View style={styles.loadingAdvice}><ActivityIndicator color={LIME} size="large" /><Text style={styles.loadingAdviceText}>ANALYZING...</Text></View>
+            {adviceLoading
+              ? <View style={styles.loadingAdvice}><ActivityIndicator color={C.gold} size="large" /><Text style={styles.loadingAdviceText}>ANALYZING...</Text></View>
               : <Text style={styles.adviceText}>{advice}</Text>}
-            <TouchableOpacity style={[styles.gotItBtn, { backgroundColor: POS_COLORS[selectedPlayer?.position || ''] || LIME }]} onPress={() => setModalVisible(false)}>
+            <TouchableOpacity style={[styles.gotItBtn, { backgroundColor: C.gold }]} onPress={() => setModalVisible(false)}>
               <Text style={styles.gotItText}>GOT IT</Text>
             </TouchableOpacity>
           </View>
@@ -484,130 +476,128 @@ export default function LeagueScreen() {
             </View>
             <ScrollView>
               <Text style={styles.sectionLabel}>STARTERS</Text>
-              {selectedRoster?.players.filter(p => p.isStarter).map((p, i) => renderPlayer(p, false, i))}
+              {selectedRoster?.players.filter(p => p.isStarter).map ((p, i) => renderPlayer(p, false, i))}
               <Text style={[styles.sectionLabel, { marginTop: 16 }]}>BENCH</Text>
               {selectedRoster?.players.filter(p => !p.isStarter).map((p, i) => renderPlayer(p, false, i))}
               <View style={{ height: 20 }} />
             </ScrollView>
             <TouchableOpacity style={[styles.gotItBtn, { backgroundColor: PLATFORM_COLOR }]} onPress={() => setRosterModalVisible(false)}>
-              <Text style={[styles.gotItText, { color: platformStr === 'sleeper' ? '#000' : '#fff' }]}>CLOSE</Text>
+              <Text style={[styles.gotItText, { color: platformStr === 'sleeper' ? '#1a1a1a' : '#fff' }]}>CLOSE</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-
   // Header
-  header: { paddingTop: 56, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: BORDER, gap: 10 },
-  backBtn: { paddingRight: 4 },
-  backText: { fontFamily: 'SpaceMono_400Regular', color: LIME, fontSize: 10, letterSpacing: 1.5 },
-  headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  leagueName: { fontFamily: 'BebasNeue_400Regular', color: '#fff', fontSize: 18, letterSpacing: 2, maxWidth: 180 },
-  leagueSub: { fontFamily: 'SpaceMono_400Regular', color: '#aabbaa', fontSize: 9, letterSpacing: 1.5, marginTop: 1 },
-  platformBadge: { borderRadius: 2, paddingHorizontal: 8, paddingVertical: 4 },
-  platformBadgeText: { fontFamily: 'SpaceMono_400Regular', fontSize: 9, letterSpacing: 1.5, fontWeight: '700' },
+  header:            { paddingTop: 56, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: DIM_BORDER, gap: 10 },
+  backBtn:           { paddingRight: 4 },
+  backText:          { fontFamily: F.mono, color: C.gold, fontSize: SZ.xs, letterSpacing: 1.5 },
+  headerCenter:      { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  leagueName:        { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg, maxWidth: 180 },
+  leagueSub:         { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 1.5, marginTop: 1 },
+  platformBadge:     { borderRadius: R.xs, paddingHorizontal: 8, paddingVertical: 4 },
+  platformBadgeText: { fontFamily: F.mono, fontSize: SZ.xs - 1, letterSpacing: 1.5, fontWeight: '700' },
 
   // Tabs
-  tabScroll: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: BORDER },
-  tabRow: { paddingHorizontal: 8 },
-  tabBtn: { paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabText: { fontFamily: 'SpaceMono_400Regular', color: '#667766', fontSize: 9, letterSpacing: 1.5 },
+  tabScroll: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: DIM_BORDER },
+  tabRow:    { paddingHorizontal: 8 },
+  tabBtn:    { paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabText:   { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 1.5 },
 
   // Loading
-  loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  loadingText: { fontFamily: 'SpaceMono_400Regular', color: LIME, fontSize: 10, letterSpacing: 3, opacity: 0.6 },
+  loadingBox:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
+  loadingText: { fontFamily: F.mono, color: C.gold, fontSize: SZ.xs, letterSpacing: 3, opacity: 0.7 },
 
   // Scroll
-  scroll: { flex: 1 },
+  scroll:    { flex: 1 },
   scrollPad: { paddingHorizontal: 16, paddingTop: 4 },
 
   // Section header
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16, marginBottom: 8 },
-  sectionAccent: { width: 3, height: 18, backgroundColor: LIME, borderRadius: 2 },
-  sectionLabel: { fontFamily: 'BebasNeue_400Regular', color: LIME, fontSize: 16, letterSpacing: 3, flex: 1 },
-  sectionCount: { backgroundColor: 'rgba(212,255,0,0.12)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 2 },
-  sectionCountText: { fontFamily: 'SpaceMono_400Regular', color: LIME, fontSize: 10, letterSpacing: 1 },
-  emptyText: { fontFamily: 'Barlow_400Regular', color: '#aabbaa', fontSize: 14 },
+  sectionHeader:    { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16, marginBottom: 8 },
+  sectionAccent:    { width: 3, height: 18, backgroundColor: C.gold, borderRadius: 2 },
+  sectionLabel:     { fontFamily: F.bold, color: C.gold, fontSize: SZ.base, letterSpacing: 2, flex: 1 },
+  sectionCount:     { backgroundColor: C.goldS, paddingHorizontal: 8, paddingVertical: 2, borderRadius: R.xs },
+  sectionCountText: { fontFamily: F.mono, color: C.gold, fontSize: SZ.xs, letterSpacing: 1 },
+  emptyText:        { fontFamily: F.outfit, color: C.dim2, fontSize: SZ.md },
 
-  // Player card — matches the mockup exactly
-  playerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER, borderRadius: 4, marginBottom: 6, overflow: 'hidden', minHeight: 64 },
-  benchCard: { opacity: 0.5 },
+  // Player card
+  playerCard:      { flexDirection: 'row', alignItems: 'center', backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER, borderRadius: R.sm, marginBottom: 6, overflow: 'hidden', minHeight: 64 },
+  benchCard:       { opacity: 0.6 },
   playerAccentBar: { width: 3, alignSelf: 'stretch' },
-  slotLabel: { fontFamily: 'SpaceMono_400Regular', color: '#667766', fontSize: 8, letterSpacing: 1, width: 28, textAlign: 'center' },
-  diamondWrap: { width: 40, alignItems: 'center', justifyContent: 'center' },
-  diamond: { width: 30, height: 30, borderRadius: 4, transform: [{ rotate: '45deg' }], alignItems: 'center', justifyContent: 'center' },
-  diamondText: { fontFamily: 'SpaceMono_400Regular', fontSize: 7, fontWeight: '700', transform: [{ rotate: '-45deg' }], letterSpacing: 0.3 },
-  playerInfoCol: { flex: 1, paddingVertical: 10, paddingRight: 8 },
-  playerName: { fontFamily: 'BebasNeue_400Regular', color: LIME, fontSize: 18, letterSpacing: 1, lineHeight: 20 },
-  playerMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
-  playerTeam: { fontFamily: 'SpaceMono_400Regular', color: '#aabbaa', fontSize: 9, letterSpacing: 0.5 },
-  metaDot: { color: '#667766', fontSize: 9 },
-  injuryText: { fontFamily: 'SpaceMono_400Regular', color: '#ffaa00', fontSize: 9, letterSpacing: 0.5 },
-  progressTrack: { height: 2, backgroundColor: 'rgba(212,255,0,0.1)', borderRadius: 1, marginTop: 6, overflow: 'hidden' },
-  progressFill: { height: 2, borderRadius: 1 },
-  aiTag: { width: 28, height: 28, borderRadius: 2, borderWidth: 1, borderColor: 'rgba(212,255,0,0.25)', alignItems: 'center', justifyContent: 'center', marginRight: 10, backgroundColor: 'rgba(212,255,0,0.05)' },
-  aiTagText: { fontFamily: 'SpaceMono_400Regular', color: LIME, fontSize: 8, letterSpacing: 1 },
+  slotLabel:       { fontFamily: F.mono, color: C.dim2, fontSize: 8, letterSpacing: 1, width: 28, textAlign: 'center' },
+  diamondWrap:     { width: 40, alignItems: 'center', justifyContent: 'center' },
+  diamond:         { width: 30, height: 30, borderRadius: 4, transform: [{ rotate: '45deg' }], alignItems: 'center', justifyContent: 'center' },
+  diamondText:     { fontFamily: F.mono, fontSize: 7, fontWeight: '700', transform: [{ rotate: '-45deg' }], letterSpacing: 0.3 },
+  playerInfoCol:   { flex: 1, paddingVertical: 10, paddingRight: 8 },
+  playerName:      { fontFamily: F.bold, color: C.ink, fontSize: SZ.base, letterSpacing: 0.5, lineHeight: 20 },
+  playerMeta:      { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
+  playerTeam:      { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
+  metaDot:         { color: C.dim2, fontSize: SZ.xs },
+  injuryText:      { fontFamily: F.mono, color: C.amber, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
+  progressTrack:   { height: 2, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 1, marginTop: 6, overflow: 'hidden' },
+  progressFill:    { height: 2, borderRadius: 1 },
+  aiTag:           { width: 28, height: 28, borderRadius: R.xs, borderWidth: 1, borderColor: C.goldBorder, alignItems: 'center', justifyContent: 'center', marginRight: 10, backgroundColor: C.goldS },
+  aiTagText:       { fontFamily: F.mono, color: C.gold, fontSize: 8, letterSpacing: 1 },
 
   // Standings
-  standingRow: { backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 14, marginBottom: 6, flexDirection: 'row', alignItems: 'center' },
-  standingRank: { fontFamily: 'BebasNeue_400Regular', color: '#667766', fontSize: 22, width: 32, letterSpacing: 1 },
-  standingInfo: { flex: 1 },
-  standingName: { fontFamily: 'Barlow_600SemiBold', color: '#ccc', fontSize: 15, marginBottom: 2 },
-  standingPts: { fontFamily: 'SpaceMono_400Regular', color: '#667766', fontSize: 9, letterSpacing: 0.5 },
-  standingRecord: { alignItems: 'flex-end', marginRight: 8 },
-  standingRecordText: { fontFamily: 'BebasNeue_400Regular', color: '#fff', fontSize: 18, letterSpacing: 1 },
-  standingStreak: { fontFamily: 'SpaceMono_400Regular', fontSize: 9, fontWeight: '700', marginTop: 2 },
-  standingArrow: { color: '#667766', fontSize: 20 },
+  standingRow:        { backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER, borderRadius: R.sm, padding: 14, marginBottom: 6, flexDirection: 'row', alignItems: 'center' },
+  standingRank:       { fontFamily: F.bold, color: C.dim2, fontSize: SZ['2xl'], width: 32 },
+  standingInfo:       { flex: 1 },
+  standingName:       { fontFamily: F.semibold, color: C.ink, fontSize: SZ.md, marginBottom: 2 },
+  standingPts:        { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
+  standingRecord:     { alignItems: 'flex-end', marginRight: 8 },
+  standingRecordText: { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg },
+  standingStreak:     { fontFamily: F.mono, fontSize: SZ.xs - 1, fontWeight: '700', marginTop: 2 },
+  standingArrow:      { color: C.dim2, fontSize: SZ.xl },
 
   // Matchup
-  matchupCard: { backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 20, marginTop: 16 },
-  matchupWeekLabel: { fontFamily: 'SpaceMono_400Regular', color: '#667766', fontSize: 9, letterSpacing: 2, marginBottom: 16, textAlign: 'center' },
-  matchupScoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  matchupTeamCol: { flex: 1 },
-  matchupTeamName: { fontFamily: 'Barlow_400Regular', color: '#aabbaa', fontSize: 12, marginBottom: 4 },
-  matchupScore: { fontFamily: 'BebasNeue_400Regular', fontSize: 44, letterSpacing: 2 },
-  matchupLabel: { fontFamily: 'SpaceMono_400Regular', color: '#667766', fontSize: 8, letterSpacing: 2, marginTop: 2 },
-  matchupVs: { fontFamily: 'BebasNeue_400Regular', color: '#2a3a2a', fontSize: 18, letterSpacing: 2, marginHorizontal: 10 },
-  matchupStatus: { borderRadius: 2, padding: 10, alignItems: 'center', marginTop: 16, borderWidth: 1 },
-  matchupStatusText: { fontFamily: 'BebasNeue_400Regular', fontSize: 16, letterSpacing: 3 },
-  allMatchupRow: { backgroundColor: SURFACE, borderRadius: 2, padding: 12, marginBottom: 6, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: BORDER },
-  allMatchupTeam: { fontFamily: 'Barlow_400Regular', color: '#aabbaa', fontSize: 13 },
-  allMatchupScore: { fontFamily: 'BebasNeue_400Regular', color: '#fff', fontSize: 18, letterSpacing: 1, marginTop: 2 },
-  allMatchupVs: { fontFamily: 'SpaceMono_400Regular', color: '#2a3a2a', fontSize: 10, marginHorizontal: 8 },
+  matchupCard:        { backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER, borderRadius: R.sm, padding: 20, marginTop: 16 },
+  matchupWeekLabel:   { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 2, marginBottom: 16, textAlign: 'center' },
+  matchupScoreRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  matchupTeamCol:     { flex: 1 },
+  matchupTeamName:    { fontFamily: F.outfit, color: C.dim, fontSize: SZ.sm, marginBottom: 4 },
+  matchupScore:       { fontFamily: F.bold, fontSize: SZ['5xl'], letterSpacing: -1.5, lineHeight: 44 },
+  matchupLabel:       { fontFamily: F.mono, color: C.dim2, fontSize: 8, letterSpacing: 2, marginTop: 2 },
+  matchupVs:          { fontFamily: F.bold, color: 'rgba(255,255,255,0.15)', fontSize: SZ.lg, marginHorizontal: 10 },
+  matchupStatus:      { borderRadius: R.xs, padding: 10, alignItems: 'center', marginTop: 16, borderWidth: 1 },
+  matchupStatusText:  { fontFamily: F.bold, fontSize: SZ.base, letterSpacing: 2 },
+  allMatchupRow:      { backgroundColor: SURFACE, borderRadius: R.xs, padding: 12, marginBottom: 6, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: BORDER },
+  allMatchupTeam:     { fontFamily: F.outfit, color: C.dim2, fontSize: SZ.md },
+  allMatchupScore:    { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg, marginTop: 2 },
+  allMatchupVs:       { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs, marginHorizontal: 8 },
 
   // Waivers
-  filterRow: { flexGrow: 0, marginVertical: 10 },
-  filterBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 2, borderWidth: 1, borderColor: '#1a2a1a', marginRight: 8 },
-  filterText: { fontFamily: 'SpaceMono_400Regular', color: '#667766', fontSize: 10, letterSpacing: 1 },
+  filterRow:  { flexGrow: 0, marginVertical: 10 },
+  filterBtn:  { paddingHorizontal: 14, paddingVertical: 7, borderRadius: R.xs, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', marginRight: 8 },
+  filterText: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs, letterSpacing: 1 },
 
   // Activity
-  txCard: { backgroundColor: SURFACE, borderRadius: 4, padding: 14, marginBottom: 6, borderWidth: 1, borderColor: BORDER, overflow: 'hidden' },
-  txAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
-  txHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  txType: { fontFamily: 'SpaceMono_400Regular', fontSize: 10, letterSpacing: 1 },
-  txTrader: { fontFamily: 'Barlow_400Regular', color: '#aabbaa', fontSize: 12 },
-  txAdds: { fontFamily: 'Barlow_600SemiBold', color: '#00ffaa', fontSize: 13, marginBottom: 2 },
-  txDrops: { fontFamily: 'Barlow_600SemiBold', color: '#ff2255', fontSize: 13, marginBottom: 4 },
-  txTime: { fontFamily: 'SpaceMono_400Regular', color: '#667766', fontSize: 9, marginTop: 4 },
+  txCard:    { backgroundColor: SURFACE, borderRadius: R.sm, padding: 14, marginBottom: 6, borderWidth: 1, borderColor: BORDER, overflow: 'hidden' },
+  txAccent:  { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
+  txHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  txType:    { fontFamily: F.mono, fontSize: SZ.xs, letterSpacing: 1 },
+  txTrader:  { fontFamily: F.outfit, color: C.dim2, fontSize: SZ.sm },
+  txAdds:    { fontFamily: F.semibold, color: C.sage, fontSize: SZ.md, marginBottom: 2 },
+  txDrops:   { fontFamily: F.semibold, color: '#c87878', fontSize: SZ.md, marginBottom: 4 },
+  txTime:    { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, marginTop: 4 },
 
   // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: '#060f06', borderTopLeftRadius: 4, borderTopRightRadius: 4, padding: 24, minHeight: 280, borderTopWidth: 1, borderColor: BORDER, overflow: 'hidden' },
-  modalTopAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 2 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  modalPlayerName: { fontFamily: 'BebasNeue_400Regular', color: '#fff', fontSize: 28, letterSpacing: 2 },
-  modalPosBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 2, alignSelf: 'flex-start', marginTop: 6 },
-  modalPosBadgeText: { fontFamily: 'SpaceMono_400Regular', fontSize: 9, color: '#000', letterSpacing: 1 },
-  closeBtn: { width: 32, height: 32, borderRadius: 2, borderWidth: 1, borderColor: '#1a2a1a', alignItems: 'center', justifyContent: 'center' },
-  closeBtnText: { color: '#aabbaa', fontSize: 14 },
-  loadingAdvice: { alignItems: 'center', padding: 24, gap: 14 },
-  loadingAdviceText: { fontFamily: 'SpaceMono_400Regular', color: LIME, fontSize: 10, letterSpacing: 3, opacity: 0.7 },
-  adviceText: { fontFamily: 'Barlow_400Regular', color: '#aabbaa', fontSize: 15, lineHeight: 24, marginBottom: 20 },
-  gotItBtn: { borderRadius: 2, padding: 16, alignItems: 'center', marginTop: 8 },
-  gotItText: { fontFamily: 'BebasNeue_400Regular', fontSize: 18, letterSpacing: 3, color: '#000' },
+  modalOverlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  modalCard:          { backgroundColor: '#2a3838', borderTopLeftRadius: R.lg, borderTopRightRadius: R.lg, padding: 24, minHeight: 280, borderTopWidth: 1, borderColor: BORDER, overflow: 'hidden' },
+  modalTopAccent:     { position: 'absolute', top: 0, left: 0, right: 0, height: 2 },
+  modalHeader:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  modalPlayerName:    { fontFamily: F.bold, color: C.ink, fontSize: SZ['2xl'], letterSpacing: 0.5 },
+  modalPosBadge:      { paddingHorizontal: 10, paddingVertical: 3, borderRadius: R.xs, alignSelf: 'flex-start', marginTop: 6 },
+  modalPosBadgeText:  { fontFamily: F.mono, fontSize: SZ.xs - 1, color: '#1a1a1a', letterSpacing: 1 },
+  closeBtn:           { width: 32, height: 32, borderRadius: R.xs, borderWidth: 1, borderColor: BORDER, alignItems: 'center', justifyContent: 'center' },
+  closeBtnText:       { color: C.dim2, fontSize: 14 },
+  loadingAdvice:      { alignItems: 'center', padding: 24, gap: 14 },
+  loadingAdviceText:  { fontFamily: F.mono, color: C.gold, fontSize: SZ.xs, letterSpacing: 3, opacity: 0.7 },
+  adviceText:         { fontFamily: F.outfit, color: C.ink2, fontSize: SZ.md, lineHeight: 24, marginBottom: 20 },
+  gotItBtn:           { borderRadius: R.sm, padding: 16, alignItems: 'center', marginTop: 8 },
+  gotItText:          { fontFamily: F.bold, fontSize: SZ.lg, letterSpacing: 2, color: '#1a1a1a' },
 });
