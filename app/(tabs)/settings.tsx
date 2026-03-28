@@ -1,52 +1,56 @@
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Alert, TextInput, Modal } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { C, F, SZ, SP, R } from '../constants/tokens';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { clearESPNCredentials, findMyESPNTeam, getESPNLeague, loadESPNCredentials, saveESPNCredentials } from '../../services/espn';
+import { clearYahooTokens, exchangeYahooCode, getValidYahooToken, getYahooAuthURL } from '../../services/yahoo';
+import { Badge } from '../components/Atoms';
 import { GlassCard, SurfaceCard } from '../components/GlassCard';
 import { OrbAvatar } from '../components/OrbAvatar';
-import { Badge } from '../components/Atoms';
-import { saveESPNCredentials, loadESPNCredentials, clearESPNCredentials, getESPNLeague, findMyESPNTeam } from '../../services/espn';
-import { getYahooAuthURL, exchangeYahooCode, getValidYahooToken, clearYahooTokens } from '../../services/yahoo';
+import { C, F, SP, SZ } from '../constants/tokens';
+import { getRemainingPrompts } from '../utils/promptCounter';
 
 const LOGO = require('../../assets/images/logo.png');
+const WEEKLY_LIMIT = 25;
 
 const TIERS = [
-  { name: 'Free',          price: '$0',     sub: '25 prompts/week',           color: C.dim,   active: true  },
-  { name: 'Rankings',      price: '$5.99',  sub: 'Live community rankings',   color: C.mint,  active: false },
-  { name: 'Pro',           price: '$9.99',  sub: 'Unlimited + Draft Copilot', color: C.gold,  active: false },
+  { name: 'Free',          price: '$0',     sub: '25 prompts/week',           color: C.dim,     active: true  },
+  { name: 'Rankings',      price: '$5.99',  sub: 'Live community rankings',   color: C.mint,    active: false },
+  { name: 'Pro',           price: '$9.99',  sub: 'Unlimited + Draft Copilot', color: C.gold,    active: false },
   { name: 'Premium',       price: '$14.99', sub: '2-season AI memory',        color: '#9b6dbd', active: false },
-  { name: 'Dynasty Elite', price: '$19.99', sub: 'College rankings + picks',  color: C.sage,  active: false },
+  { name: 'Dynasty Elite', price: '$19.99', sub: 'College rankings + picks',  color: C.sage,    active: false },
 ];
 
 export default function MoreScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const [username, setUsername]           = useState('');
-  const [newUsername, setNewUsername]     = useState('');
-  const [espnConnected, setEspnConnected] = useState(false);
-  const [yahooConnected, setYahooConnected] = useState(false);
-  const [showAccountModal, setShowAccountModal] = useState(false);
+  const router  = useRouter();
+  const insets  = useSafeAreaInsets();
+  const [username,          setUsername]          = useState('');
+  const [newUsername,       setNewUsername]       = useState('');
+  const [espnConnected,     setEspnConnected]     = useState(false);
+  const [yahooConnected,    setYahooConnected]    = useState(false);
+  const [showAccountModal,  setShowAccountModal]  = useState(false);
   const [showPlatformModal, setShowPlatformModal] = useState(false);
-  const [espnS2, setEspnS2]               = useState('');
-  const [espnSWID, setEspnSWID]           = useState('');
-  const [espnLeagueId, setEspnLeagueId]   = useState('');
-  const [loading, setLoading]             = useState(false);
+  const [espnS2,            setEspnS2]            = useState('');
+  const [espnSWID,          setEspnSWID]          = useState('');
+  const [espnLeagueId,      setEspnLeagueId]      = useState('');
+  const [loading,           setLoading]           = useState(false);
+  const [remaining,         setRemaining]         = useState(WEEKLY_LIMIT);
 
   useEffect(() => {
     AsyncStorage.getItem('sleeper_username').then(u => { if (u) setUsername(u); });
     loadESPNCredentials().then(c => setEspnConnected(!!c));
     getValidYahooToken().then(t => setYahooConnected(!!t));
+    getRemainingPrompts().then(r => setRemaining(r));
   }, []);
 
   const handleSaveUsername = async () => {
     if (!newUsername.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch(`https://api.sleeper.app/v1/user/${newUsername.trim()}`);
+      const res  = await fetch(`https://api.sleeper.app/v1/user/${newUsername.trim()}`);
       const user = await res.json();
       if (!user?.user_id) { Alert.alert('Not Found', 'Could not find that Sleeper account.'); return; }
       await AsyncStorage.setItem('sleeper_username', newUsername.trim());
@@ -64,8 +68,8 @@ export default function MoreScreen() {
     }
     setLoading(true);
     try {
-      const creds = { espnS2: espnS2.trim(), swid: espnSWID.trim() };
-      const data = await getESPNLeague(parseInt(espnLeagueId.trim()), creds);
+      const creds  = { espnS2: espnS2.trim(), swid: espnSWID.trim() };
+      const data   = await getESPNLeague(parseInt(espnLeagueId.trim()), creds);
       const myTeam = findMyESPNTeam(data, creds.swid);
       if (!myTeam) { Alert.alert('Not Found', 'Could not find your team. Check your SWID.'); return; }
       await saveESPNCredentials(creds);
@@ -77,46 +81,49 @@ export default function MoreScreen() {
     finally { setLoading(false); }
   };
 
-const handleConnectYahoo = async () => {
-  setLoading(true);
-  try {
-    const authUrl = await getYahooAuthURL();
-    console.log('Yahoo auth URL:', authUrl.slice(0, 100));
+  const handleConnectYahoo = async () => {
+    setLoading(true);
+    try {
+      const authUrl = await getYahooAuthURL();
 
-    // Listen for the deep link callback BEFORE opening browser
-    const { Linking } = require('react-native');
-    
-    const codePromise = new Promise<string | null>((resolve) => {
-      const timeout = setTimeout(() => resolve(null), 120000); // 2 min timeout
-      const sub = Linking.addEventListener('url', ({ url }: { url: string }) => {
-        if (url.startsWith('aiomnifantasy://oauth/yahoo')) {
-          clearTimeout(timeout);
+      // Listen for deep link BEFORE opening browser
+      const codePromise = new Promise<string | null>((resolve) => {
+        const timeout = setTimeout(() => {
           sub.remove();
-          const urlObj = new URL(url);
-          resolve(urlObj.searchParams.get('code'));
-        }
+          resolve(null);
+        }, 120000); // 2 min timeout
+
+        const sub = Linking.addEventListener('url', ({ url }: { url: string }) => {
+          if (url.startsWith('aiomnifantasy://oauth/yahoo')) {
+            clearTimeout(timeout);
+            sub.remove();
+            try {
+              const urlObj = new URL(url);
+              resolve(urlObj.searchParams.get('code'));
+            } catch { resolve(null); }
+          }
+        });
       });
-    });
 
-    // Open browser (don't await result — Yahoo breaks openAuthSessionAsync)
-    WebBrowser.openBrowserAsync(authUrl);
+      // Open browser — openBrowserAsync NOT openAuthSessionAsync
+      // Yahoo's intermediate redirect breaks openAuthSessionAsync
+      WebBrowser.openBrowserAsync(authUrl, { showInRecents: true });
 
-    const code = await codePromise;
+      const code = await codePromise;
+      WebBrowser.dismissBrowser();
 
-    WebBrowser.dismissBrowser();
-
-    if (code) {
-      await exchangeYahooCode(code);
-      setYahooConnected(true);
-      Alert.alert('✓ Yahoo Connected', 'Your Yahoo leagues will now appear on Home.');
-    } else {
-      Alert.alert('Yahoo Error', 'No auth code received. Try again.');
-    }
-  } catch (e: any) {
-    console.log('Yahoo error:', e);
-    Alert.alert('Yahoo Error', e.message || 'Could not connect Yahoo.');
-  } finally { setLoading(false); }
-};
+      if (code) {
+        await exchangeYahooCode(code);
+        setYahooConnected(true);
+        Alert.alert('✓ Yahoo Connected', 'Your Yahoo leagues will now appear on Home.');
+      } else {
+        Alert.alert('Yahoo Error', 'No auth code received. Try again.');
+      }
+    } catch (e: any) {
+      console.log('Yahoo error:', e);
+      Alert.alert('Yahoo Error', e.message || 'Could not connect Yahoo.');
+    } finally { setLoading(false); }
+  };
 
   const handleDisconnectESPN = () => {
     Alert.alert('Disconnect ESPN?', '', [
@@ -145,6 +152,9 @@ const handleConnectYahoo = async () => {
     yahooConnected ? 'Yahoo' : null,
   ].filter(Boolean).join(' · ') || 'Tap to connect';
 
+  const promptPct   = (remaining / WEEKLY_LIMIT) * 100;
+  const promptColor = remaining <= 5 ? '#c87878' : remaining <= 10 ? C.amber : C.gold;
+
   return (
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 12 }]} showsVerticalScrollIndicator={false}>
@@ -158,18 +168,18 @@ const handleConnectYahoo = async () => {
           <View style={styles.userRow}>
             <OrbAvatar size={44} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.userName}>Patrick Meyer</Text>
-              <Text style={styles.userHandle}>@{username || 'not connected'} · Free tier</Text>
+              <Text style={styles.userName}>@{username || 'not connected'}</Text>
+              <Text style={styles.userHandle}>Free tier</Text>
             </View>
             <Badge label="FREE" color={C.dim} />
           </View>
-          <View style={{ marginTop: 12 }}>
+          <View style={{ marginTop: 14 }}>
             <View style={styles.promptRow}>
               <Text style={styles.promptLbl}>WEEKLY PROMPTS</Text>
-              <Text style={styles.promptCount}><Text style={{ color: C.gold }}>18</Text> / 25</Text>
+              <Text style={[styles.promptCount, { color: promptColor }]}>{remaining}<Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.xs }}>/{WEEKLY_LIMIT}</Text></Text>
             </View>
             <View style={styles.promptBg}>
-              <View style={[styles.promptFill, { width: `${18/25*100}%` as any }]} />
+              <View style={[styles.promptFill, { width: `${promptPct}%` as any, backgroundColor: promptColor }]} />
             </View>
             <Text style={styles.promptSub}>Resets Sunday noon · Waivers run Wednesday</Text>
           </View>
@@ -226,7 +236,7 @@ const handleConnectYahoo = async () => {
             <Text style={styles.menuIcon}>📊</Text>
             <View style={{ flex: 1 }}>
               <Text style={styles.menuLabel}>Usage</Text>
-              <Text style={styles.menuSub}>18 of 25 prompts used</Text>
+              <Text style={styles.menuSub}>{remaining} of {WEEKLY_LIMIT} prompts remaining</Text>
             </View>
             <Text style={styles.menuChevron}>›</Text>
           </TouchableOpacity>
@@ -260,7 +270,15 @@ const handleConnectYahoo = async () => {
           <GlassCard style={styles.modalCard}>
             <Text style={styles.modalTitle}>Sleeper Account</Text>
             <Text style={styles.modalSub}>Enter your Sleeper username to load your leagues.</Text>
-            <TextInput style={styles.input} placeholder="Sleeper username" placeholderTextColor="rgba(255,255,255,0.35)" value={newUsername} onChangeText={setNewUsername} autoCapitalize="none" autoCorrect={false} />
+            <TextInput
+              style={styles.input}
+              placeholder="Sleeper username"
+              placeholderTextColor="rgba(255,255,255,0.35)"
+              value={newUsername}
+              onChangeText={setNewUsername}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
             <TouchableOpacity style={styles.modalBtn} onPress={handleSaveUsername} disabled={loading}>
               <Text style={styles.modalBtnTxt}>{loading ? 'Connecting...' : 'Connect Sleeper'}</Text>
             </TouchableOpacity>
@@ -277,15 +295,16 @@ const handleConnectYahoo = async () => {
           <GlassCard style={styles.modalCard}>
             <Text style={styles.modalTitle}>My Platforms</Text>
 
-            <Text style={[styles.modalSub, { color: '#cc4444', marginBottom: 6, marginTop: 8 }]}>ESPN</Text>
+            {/* ESPN */}
+            <Text style={[styles.platformLabel, { color: '#FF4444' }]}>ESPN</Text>
             {espnConnected ? (
               <TouchableOpacity style={[styles.modalBtn, { backgroundColor: 'rgba(122,31,46,0.4)', borderColor: '#7a1f2e' }]} onPress={handleDisconnectESPN}>
                 <Text style={[styles.modalBtnTxt, { color: '#ff8888' }]}>Disconnect ESPN</Text>
               </TouchableOpacity>
             ) : (
               <>
-                <Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.xs, marginBottom: 10, lineHeight: 18 }}>
-                  {'1. Log into espn.com in Safari\n2. DevTools → Cookies → copy espn_s2 + SWID\n3. Find League ID in ESPN URL'}
+                <Text style={styles.platformHint}>
+                  {'1. Log into espn.com in Safari\n2. Open DevTools → Application → Cookies\n3. Copy espn_s2 + SWID values\n4. Find League ID in your ESPN league URL'}
                 </Text>
                 <TextInput style={styles.input} placeholder="espn_s2 cookie" placeholderTextColor="rgba(255,255,255,0.35)" value={espnS2} onChangeText={setEspnS2} autoCapitalize="none" multiline />
                 <TextInput style={[styles.input, { marginTop: 8 }]} placeholder="SWID ({XXXX-XXXX})" placeholderTextColor="rgba(255,255,255,0.35)" value={espnSWID} onChangeText={setEspnSWID} autoCapitalize="none" />
@@ -296,7 +315,8 @@ const handleConnectYahoo = async () => {
               </>
             )}
 
-            <Text style={[styles.modalSub, { color: '#7a44cc', marginTop: 20, marginBottom: 6 }]}>Yahoo</Text>
+            {/* Yahoo */}
+            <Text style={[styles.platformLabel, { color: '#7a44cc', marginTop: 20 }]}>Yahoo</Text>
             {yahooConnected ? (
               <TouchableOpacity style={[styles.modalBtn, { backgroundColor: 'rgba(90,0,170,0.3)', borderColor: '#5a00aa' }]} onPress={handleDisconnectYahoo}>
                 <Text style={[styles.modalBtnTxt, { color: '#bb88ff' }]}>Disconnect Yahoo</Text>
@@ -315,44 +335,46 @@ const handleConnectYahoo = async () => {
       </Modal>
     </LinearGradient>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  scroll:       { paddingHorizontal: SP[3], paddingBottom: 110 },
-  logoWrap:     { alignItems: 'center', marginBottom: 20 },
-  logo:         { height: 32, width: 120 },
-  mb14:         { marginBottom: 14 },
-  userRow:      { flexDirection: 'row', alignItems: 'center', gap: 13 },
-  userName:     { fontSize: SZ.lg, fontWeight: '700', color: C.ink, fontFamily: F.bold },
-  userHandle:   { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginTop: 2 },
-  promptRow:    { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  promptLbl:    { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 1.5 },
-  promptCount:  { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim },
-  promptBg:     { height: 4, backgroundColor: '#7a1f2e', borderRadius: 3, overflow: 'hidden' },
-  promptFill:   { height: 4, backgroundColor: C.gold, borderRadius: 3 },
-  promptSub:    { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginTop: 5, opacity: 0.7 },
-  sectionLbl:   { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 3, marginBottom: 10 },
-  tierCard:     { width: 140 },
-  tierDot:      { width: 8, height: 8, borderRadius: 4, marginBottom: 8 },
-  tierName:     { fontSize: SZ.sm, fontWeight: '700', color: C.ink, fontFamily: F.bold, marginBottom: 3 },
-  tierPrice:    { fontSize: SZ.xl, fontWeight: '800', fontFamily: F.bold, marginBottom: 3 },
-  tierSub:      { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 9, lineHeight: 14 },
-  tierBtn:      { borderWidth: 1, borderRadius: 8, paddingVertical: 5, alignItems: 'center' },
-  tierBtnTxt:   { fontSize: SZ.sm, fontWeight: '700', fontFamily: F.bold },
-  menuRow:      { flexDirection: 'row', alignItems: 'center', gap: 12, padding: SP[3] },
-  menuBorder:   { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)' },
-  menuIcon:     { fontSize: 18, width: 28, textAlign: 'center' },
-  menuLabel:    { fontSize: SZ.base, fontWeight: '600', color: C.ink, fontFamily: F.bold },
-  menuSub:      { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginTop: 1 },
-  menuChevron:  { color: C.dim2, fontSize: SZ.xl },
-  footer:       { alignItems: 'center', marginTop: SP[8], gap: 5 },
-  footerTxt:    { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, letterSpacing: 1 },
-  footerSub:    { fontSize: SZ.xs, fontFamily: F.mono, color: 'rgba(255,255,255,0.2)', letterSpacing: 1.5 },
-  overlay:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', padding: SP[3], paddingBottom: 40 },
-  modalCard:    { padding: 24 },
-  modalTitle:   { fontSize: SZ.xl, fontWeight: '700', color: C.ink, fontFamily: F.bold, marginBottom: 4 },
-  modalSub:     { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginBottom: 14 },
-  input:        { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, color: C.ink, fontFamily: F.mono, fontSize: SZ.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
-  modalBtn:     { backgroundColor: C.sageS, borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: C.sageBorder, marginTop: 12 },
-  modalBtnTxt:  { color: C.sage, fontWeight: '700', fontFamily: F.bold, fontSize: SZ.base },
+  scroll:         { paddingHorizontal: SP[3], paddingBottom: 110 },
+  logoWrap:       { alignItems: 'center', marginBottom: 20 },
+  logo:           { height: 32, width: 120 },
+  mb14:           { marginBottom: 14 },
+  userRow:        { flexDirection: 'row', alignItems: 'center', gap: 13 },
+  userName:       { fontSize: SZ.lg, fontWeight: '700', color: C.ink, fontFamily: F.bold },
+  userHandle:     { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginTop: 2 },
+  promptRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  promptLbl:      { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 1.5 },
+  promptCount:    { fontSize: SZ.base, fontWeight: '700', fontFamily: F.bold },
+  promptBg:       { height: 4, backgroundColor: 'rgba(122,31,46,0.4)', borderRadius: 3, overflow: 'hidden' },
+  promptFill:     { height: 4, borderRadius: 3 },
+  promptSub:      { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim, marginTop: 5, opacity: 0.7 },
+  sectionLbl:     { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 3, marginBottom: 10 },
+  tierCard:       { width: 140 },
+  tierDot:        { width: 8, height: 8, borderRadius: 4, marginBottom: 8 },
+  tierName:       { fontSize: SZ.sm, fontWeight: '700', color: C.ink, fontFamily: F.bold, marginBottom: 3 },
+  tierPrice:      { fontSize: SZ.xl, fontWeight: '800', fontFamily: F.bold, marginBottom: 3 },
+  tierSub:        { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 9, lineHeight: 14 },
+  tierBtn:        { borderWidth: 1, borderRadius: 8, paddingVertical: 5, alignItems: 'center' },
+  tierBtnTxt:     { fontSize: SZ.sm, fontWeight: '700', fontFamily: F.bold },
+  menuRow:        { flexDirection: 'row', alignItems: 'center', gap: 12, padding: SP[3] },
+  menuBorder:     { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)' },
+  menuIcon:       { fontSize: 18, width: 28, textAlign: 'center' },
+  menuLabel:      { fontSize: SZ.base, fontWeight: '600', color: C.ink, fontFamily: F.bold },
+  menuSub:        { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginTop: 1 },
+  menuChevron:    { color: C.dim2, fontSize: SZ.xl },
+  footer:         { alignItems: 'center', marginTop: SP[8], gap: 5 },
+  footerTxt:      { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, letterSpacing: 1 },
+  footerSub:      { fontSize: SZ.xs, fontFamily: F.mono, color: 'rgba(255,255,255,0.2)', letterSpacing: 1.5 },
+  overlay:        { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', padding: SP[3], paddingBottom: 40 },
+  modalCard:      { padding: 24 },
+  modalTitle:     { fontSize: SZ.xl, fontWeight: '700', color: C.ink, fontFamily: F.bold, marginBottom: 4 },
+  modalSub:       { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginBottom: 14 },
+  platformLabel:  { fontSize: SZ.sm, fontFamily: F.bold, fontWeight: '700', letterSpacing: 1, marginBottom: 8, marginTop: 4 },
+  platformHint:   { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 10, lineHeight: 18 },
+  input:          { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, color: C.ink, fontFamily: F.mono, fontSize: SZ.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+  modalBtn:       { backgroundColor: C.sageS, borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: C.sageBorder, marginTop: 12 },
+  modalBtnTxt:    { color: C.sage, fontWeight: '700', fontFamily: F.bold, fontSize: SZ.base },
 });

@@ -3,13 +3,8 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  KeyboardAvoidingView, Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput, TouchableOpacity,
-  View,
+  ActivityIndicator, KeyboardAvoidingView, Platform,
+  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../services/espn';
@@ -18,9 +13,11 @@ import { PositionPill } from '../components/Atoms';
 import { GlassCard } from '../components/GlassCard';
 import { OrbAvatar } from '../components/OrbAvatar';
 import { C, F, SP, SZ } from '../constants/tokens';
+import { getRemainingPrompts, getResetTime, incrementPrompt } from '../utils/promptCounter';
 
 // ── Claude API ─────────────────────────────────────────────────
 const API_KEY = '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';
+const WEEKLY_LIMIT = 25;
 
 const FF_KNOWLEDGE = `
 FANTASY FOOTBALL FUNDAMENTALS (apply to every answer):
@@ -56,33 +53,36 @@ Never compare players across different leagues — each league is scored indepen
 
 // ── Types ──────────────────────────────────────────────────────
 type LeagueContext = {
-  name: string;
-  platform: string;
-  format: string;
-  record: string;
-  rank: string;
-  roster: string[];
-  week: number;
+  name: string; platform: string; format: string;
+  record: string; rank: string; roster: string[]; week: number;
 };
 
-// ── Load Sleeper context ────────────────────────────────────────
+// ── Paywall message ────────────────────────────────────────────
+function getPaywallMessage(resetStr: string): string {
+  const now  = new Date();
+  const day  = now.getDay();  // 0=Sun, 3=Wed
+  const hour = now.getHours();
+
+  if (day === 3) {
+    return `⚡ Waivers just ran — find out who to grab next with Pro.\n\nYou've used all ${WEEKLY_LIMIT} weekly prompts. Resets ${resetStr}.\n\n__verdict__Upgrade to Pro for unlimited prompts → getaiomni.com`;
+  }
+  if (day === 0 && hour >= 11) {
+    return `🏈 Late games starting soon — don't make your flex decision blind.\n\nYou've used all ${WEEKLY_LIMIT} weekly prompts. Resets ${resetStr}.\n\n__verdict__Upgrade to Pro for unlimited prompts → getaiomni.com`;
+  }
+  return `You've used all ${WEEKLY_LIMIT} weekly prompts. Resets ${resetStr}.\n\n__verdict__Upgrade to Pro for unlimited prompts → getaiomni.com`;
+}
+
+// ── Load Sleeper context ───────────────────────────────────────
 async function loadSleeperContext(): Promise<LeagueContext[]> {
   try {
     const username = await AsyncStorage.getItem('sleeper_username');
     if (!username) return [];
-
-    const userRes = await fetch(`https://api.sleeper.app/v1/user/${username}`);
-    const user    = await userRes.json();
+    const user = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
     if (!user?.user_id) return [];
-
-    const leaguesRes = await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/2025`);
-    const leagues    = await leaguesRes.json();
+    const leagues = await (await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/2025`)).json();
     if (!Array.isArray(leagues)) return [];
-
-    const stateRes = await fetch('https://api.sleeper.app/v1/state/nfl');
-    const state    = await stateRes.json();
-    const week     = state.leg || state.display_week || state.week || 17;
-
+    const state  = await (await fetch('https://api.sleeper.app/v1/state/nfl')).json();
+    const week   = state.leg || state.display_week || state.week || 17;
     const playerMapRaw = await AsyncStorage.getItem('sleeper_player_map');
     const playerMap    = playerMapRaw ? JSON.parse(playerMapRaw) : {};
 
@@ -90,92 +90,52 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
       const isPPR = l.scoring_settings?.rec > 0;
       const isSF  = (l.roster_positions || []).includes('SUPER_FLEX');
       const fmt   = `${isPPR ? (l.scoring_settings.rec >= 1 ? 'PPR' : '0.5 PPR') : 'STD'}${isSF ? ' · SuperFlex' : ''}`;
-
       try {
         const [rosters, matchups] = await Promise.all([
           fetch(`https://api.sleeper.app/v1/league/${l.league_id}/rosters`).then(r => r.json()),
           fetch(`https://api.sleeper.app/v1/league/${l.league_id}/matchups/${week}`).then(r => r.json()),
         ]);
-
-        const myRoster  = Array.isArray(rosters) ? rosters.find((r: any) => r.owner_id === user.user_id) : null;
-        const wins      = myRoster?.settings?.wins   ?? 0;
-        const losses    = myRoster?.settings?.losses ?? 0;
-        const sorted    = Array.isArray(rosters) ? [...rosters].sort((a: any, b: any) => (b.settings?.wins ?? 0) - (a.settings?.wins ?? 0)) : [];
-        const rankIdx   = sorted.findIndex((r: any) => r.roster_id === myRoster?.roster_id);
-        const rankStr   = rankIdx >= 0 ? `${rankIdx + 1} of ${rosters.length}` : 'unknown';
-
-        // Build roster names
-        const playerIds: string[] = myRoster?.players ?? [];
-        const rosterNames = playerIds.slice(0, 15).map((id: string) => {
+        const myRoster = Array.isArray(rosters) ? rosters.find((r: any) => r.owner_id === user.user_id) : null;
+        const wins     = myRoster?.settings?.wins   ?? 0;
+        const losses   = myRoster?.settings?.losses ?? 0;
+        const sorted   = Array.isArray(rosters) ? [...rosters].sort((a: any, b: any) => (b.settings?.wins ?? 0) - (a.settings?.wins ?? 0)) : [];
+        const rankIdx  = sorted.findIndex((r: any) => r.roster_id === myRoster?.roster_id);
+        const rosterNames = (myRoster?.players ?? []).slice(0, 15).map((id: string) => {
           const p = playerMap[id];
           return p ? `${p.first_name} ${p.last_name} (${p.position})` : id;
         });
-
-        return {
-          name: l.name,
-          platform: 'Sleeper',
-          format: fmt,
-          record: `${wins}–${losses}`,
-          rank: rankStr,
-          roster: rosterNames,
-          week,
-        };
+        return { name: l.name, platform: 'Sleeper', format: fmt, record: `${wins}–${losses}`, rank: rankIdx >= 0 ? `${rankIdx + 1} of ${rosters.length}` : 'unknown', roster: rosterNames, week };
       } catch {
         return { name: l.name, platform: 'Sleeper', format: fmt, record: '?', rank: '?', roster: [], week };
       }
     }));
-  } catch (e) {
-    console.log('loadSleeperContext error:', e);
-    return [];
-  }
+  } catch (e) { console.log('loadSleeperContext error:', e); return []; }
 }
 
-// ── Load ESPN context ───────────────────────────────────────────
+// ── Load ESPN context ──────────────────────────────────────────
 async function loadESPNContext(): Promise<LeagueContext[]> {
   try {
     const creds = await loadESPNCredentials();
     if (!creds?.leagueId) return [];
-
     const leagueData = await getESPNLeague(creds.leagueId, creds.espnS2, creds.swid);
     if (!leagueData) return [];
-
     const myTeam = findMyESPNTeam(leagueData, creds.teamName || '');
-
     const settings = leagueData.settings?.scoringSettings;
     const recPts   = settings?.REC ?? 0;
     const fmt      = recPts >= 1 ? 'PPR' : recPts >= 0.5 ? '0.5 PPR' : 'STD';
-
-    const wins   = myTeam?.record?.overall?.wins   ?? 0;
-    const losses = myTeam?.record?.overall?.losses ?? 0;
-    const teams  = leagueData.teams ?? [];
-    const sorted = [...teams].sort((a: any, b: any) => (b.record?.overall?.wins ?? 0) - (a.record?.overall?.wins ?? 0));
-    const rankIdx = sorted.findIndex((t: any) => t.id === myTeam?.id);
-    const rankStr = rankIdx >= 0 ? `${rankIdx + 1} of ${teams.length}` : 'unknown';
-    const week    = leagueData.scoringPeriodId ?? 17;
-
-    // Build roster from ESPN roster entries
-    const rosterEntries = myTeam?.roster?.entries ?? [];
-    const rosterNames: string[] = rosterEntries.slice(0, 15).map((entry: any) => {
-      const player = entry.playerPoolEntry?.playerPoolEntry?.player ?? entry.playerPoolEntry?.player;
-      const name   = player?.fullName ?? 'Unknown';
-      const pos    = player?.defaultPositionId;
+    const wins     = myTeam?.record?.overall?.wins   ?? 0;
+    const losses   = myTeam?.record?.overall?.losses ?? 0;
+    const teams    = leagueData.teams ?? [];
+    const sorted   = [...teams].sort((a: any, b: any) => (b.record?.overall?.wins ?? 0) - (a.record?.overall?.wins ?? 0));
+    const rankIdx  = sorted.findIndex((t: any) => t.id === myTeam?.id);
+    const week     = leagueData.scoringPeriodId ?? 17;
+    const rosterNames: string[] = (myTeam?.roster?.entries ?? []).slice(0, 15).map((entry: any) => {
+      const player = entry.playerPoolEntry?.player;
       const posMap: Record<number, string> = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DEF' };
-      return `${name} (${posMap[pos] ?? 'FLEX'})`;
+      return `${player?.fullName ?? 'Unknown'} (${posMap[player?.defaultPositionId] ?? 'FLEX'})`;
     });
-
-    return [{
-      name: leagueData.settings?.name ?? 'ESPN League',
-      platform: 'ESPN',
-      format: fmt,
-      record: `${wins}–${losses}`,
-      rank: rankStr,
-      roster: rosterNames,
-      week,
-    }];
-  } catch (e) {
-    console.log('loadESPNContext error:', e);
-    return [];
-  }
+    return [{ name: leagueData.settings?.name ?? 'ESPN League', platform: 'ESPN', format: fmt, record: `${wins}–${losses}`, rank: rankIdx >= 0 ? `${rankIdx + 1} of ${teams.length}` : 'unknown', roster: rosterNames, week }];
+  } catch (e) { console.log('loadESPNContext error:', e); return []; }
 }
 
 // ── Build dynamic system prompt ────────────────────────────────
@@ -183,49 +143,31 @@ function buildSystemPrompt(leagues: LeagueContext[]): string {
   if (leagues.length === 0) {
     return `${BASE_SYSTEM}\n\nNo leagues loaded yet. Ask the user to connect their Sleeper username or ESPN account in Settings.`;
   }
-
   const leagueBlocks = leagues.map(l => `
 League: ${l.name} (${l.platform} · ${l.format})
 Record: ${l.record} · Rank: ${l.rank} · Week: ${l.week}
 Roster: ${l.roster.length > 0 ? l.roster.join(', ') : 'Not loaded'}
 `).join('\n---\n');
-
   return `${BASE_SYSTEM}
 
 You have loaded ${leagues.length} league${leagues.length > 1 ? 's' : ''}:
-
 ${leagueBlocks}
-
 ${FF_KNOWLEDGE}
 
 When giving advice, ALWAYS specify which league you're referring to. Never give generic advice — reference the specific scoring format of the league in question.`;
 }
 
 // ── Claude API call ────────────────────────────────────────────
-async function askClaude(
-  messages: { role: string; content: string }[],
-  systemPrompt: string
-): Promise<string> {
+async function askClaude(messages: { role: string; content: string }[], systemPrompt: string): Promise<string> {
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model:      'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system:     systemPrompt,
-        messages,
-      }),
+      headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, system: systemPrompt, messages }),
     });
     const data = await res.json();
     return data.content?.[0]?.text ?? 'Sorry, I had trouble with that. Try again.';
-  } catch {
-    return 'Connection error. Check your network and try again.';
-  }
+  } catch { return 'Connection error. Check your network and try again.'; }
 }
 
 // ── Sub-components ─────────────────────────────────────────────
@@ -254,19 +196,13 @@ type Message = { role: 'ai' | 'user'; text: string; isLoading?: boolean };
 const QUICK_PROMPTS = ['🎯 Start/Sit', '📈 Best waiver', '⇄ Trade value', '📊 Matchup'];
 
 const renderAIText = (text: string) => {
-  const parts = text.split('\n');
-  return parts.map((line, i) => {
-    if (line.startsWith('__verdict__')) {
-      return <VerdictCard key={i} text={line.replace('__verdict__', '')} />;
-    }
+  return text.split('\n').map((line, i) => {
+    if (line.startsWith('__verdict__')) return <VerdictCard key={i} text={line.replace('__verdict__', '')} />;
     if (line.startsWith('__add__')) {
       const [, pos, name, team, detail] = line.split('|');
       return <AddCard key={i} pos={pos ?? 'WR'} name={name ?? ''} team={team ?? ''} detail={detail ?? ''} />;
     }
-    if (line.startsWith('__')) {
-      const cleaned = line.replace(/__[a-z]+__/g, '').replace(/__/g, '');
-      return <Text key={i} style={styles.aiBold}>{cleaned}</Text>;
-    }
+    if (line.startsWith('__')) return <Text key={i} style={styles.aiBold}>{line.replace(/__[a-z]+__/g, '').replace(/__/g, '')}</Text>;
     if (line === '') return <View key={i} style={{ height: 6 }} />;
     return <Text key={i} style={styles.aiTxt}>{line}</Text>;
   });
@@ -275,39 +211,56 @@ const renderAIText = (text: string) => {
 // ── Screen ─────────────────────────────────────────────────────
 export default function CoachScreen() {
   const insets = useSafeAreaInsets();
-  const [messages,     setMessages]     = useState<Message[]>([]);
-  const [input,        setInput]        = useState('');
-  const [loading,      setLoading]      = useState(false);
-  const [contextReady, setContextReady] = useState(false);
-  const [leagueCount,  setLeagueCount]  = useState(0);
+  const [messages,      setMessages]      = useState<Message[]>([]);
+  const [input,         setInput]         = useState('');
+  const [loading,       setLoading]       = useState(false);
+  const [contextReady,  setContextReady]  = useState(false);
+  const [leagueCount,   setLeagueCount]   = useState(0);
+  const [remaining,     setRemaining]     = useState(WEEKLY_LIMIT);
   const systemPromptRef = useRef<string>(BASE_SYSTEM);
   const scrollRef       = useRef<ScrollView>(null);
 
-  // ── Load all league context on mount ─────────────────────────
   useEffect(() => {
     (async () => {
-      const [sleeperLeagues, espnLeagues] = await Promise.all([
-        loadSleeperContext(),
-        loadESPNContext(),
-      ]);
+      // Load prompt count
+      const rem = await getRemainingPrompts();
+      setRemaining(rem);
+
+      // Load leagues + live data in parallel
+      const [sleeperLeagues, espnLeagues] = await Promise.all([loadSleeperContext(), loadESPNContext()]);
       const allLeagues = [...sleeperLeagues, ...espnLeagues];
-      const liveData = await fetchAllLiveData();
-systemPromptRef.current = buildSystemPrompt(allLeagues) + formatLiveDataForPrompt(liveData);
+      const liveData   = await fetchAllLiveData();
+      systemPromptRef.current = buildSystemPrompt(allLeagues) + formatLiveDataForPrompt(liveData);
       setLeagueCount(allLeagues.length);
       setContextReady(true);
 
       const platforms = [...new Set(allLeagues.map(l => l.platform))].join(' + ');
       const greeting  = allLeagues.length > 0
-        ? `Hey — ${allLeagues.length} league${allLeagues.length > 1 ? 's' : ''} loaded (${platforms}). What do you need?`
+        ? `Hey — ${allLeagues.length} league${allLeagues.length > 1 ? 's' : ''} loaded (${platforms}). ${rem} of ${WEEKLY_LIMIT} prompts remaining this week. What do you need?`
         : `Hey — connect your Sleeper username or ESPN account in Settings to get started.`;
-
       setMessages([{ role: 'ai', text: greeting }]);
     })();
   }, []);
 
   const send = async (text: string) => {
     if (!text.trim() || loading) return;
+
+    // Check prompt limit
+    const rem = await getRemainingPrompts();
+    if (rem <= 0) {
+      const resetTime = await getResetTime();
+      const resetStr  = resetTime
+        ? resetTime.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+        : 'Sunday noon';
+      setMessages(prev => [...prev, { role: 'ai', text: getPaywallMessage(resetStr) }]);
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await incrementPrompt();
+    setRemaining(r => Math.max(0, r - 1));
+
     const userMsg:    Message = { role: 'user', text };
     const loadingMsg: Message = { role: 'ai',   text: '', isLoading: true };
     setMessages(prev => [...prev, userMsg, loadingMsg]);
@@ -325,13 +278,11 @@ systemPromptRef.current = buildSystemPrompt(allLeagues) + formatLiveDataForPromp
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
+  const promptColor = remaining <= 5 ? '#c87878' : remaining <= 10 ? C.amber : C.sage;
+
   return (
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={90}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
         <View style={[styles.wrap, { paddingTop: insets.top + 8 }]}>
 
           {/* Header */}
@@ -345,11 +296,19 @@ systemPromptRef.current = buildSystemPrompt(allLeagues) + formatLiveDataForPromp
                   : 'LOADING LEAGUES...'}
               </Text>
             </View>
-            <View style={styles.liveDot}>
-              <View style={[styles.livePulse, !contextReady && { backgroundColor: C.gold }]} />
-              <Text style={[styles.liveTxt, !contextReady && { color: C.gold }]}>
-                {contextReady ? 'LIVE' : 'SYNC'}
-              </Text>
+            <View style={styles.rightHdr}>
+              {/* Prompt counter */}
+              <View style={[styles.promptCounter, { borderColor: promptColor + '40', backgroundColor: promptColor + '15' }]}>
+                <Text style={[styles.promptCountNum, { color: promptColor }]}>{remaining}</Text>
+                <Text style={[styles.promptCountLbl, { color: promptColor }]}>/{WEEKLY_LIMIT}</Text>
+              </View>
+              {/* Live indicator */}
+              <View style={styles.liveDot}>
+                <View style={[styles.livePulse, !contextReady && { backgroundColor: C.gold }]} />
+                <Text style={[styles.liveTxt, !contextReady && { color: C.gold }]}>
+                  {contextReady ? 'LIVE' : 'SYNC'}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -363,12 +322,7 @@ systemPromptRef.current = buildSystemPrompt(allLeagues) + formatLiveDataForPromp
           </ScrollView>
 
           {/* Messages */}
-          <ScrollView
-            ref={scrollRef}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: 8, gap: 9 }}
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 8, gap: 9 }} showsVerticalScrollIndicator={false}>
             {!contextReady && messages.length === 0 && (
               <View style={{ alignItems: 'center', paddingVertical: 40, gap: 10 }}>
                 <ActivityIndicator color={C.gold} size="large" />
@@ -401,21 +355,23 @@ systemPromptRef.current = buildSystemPrompt(allLeagues) + formatLiveDataForPromp
               <TextInput
                 value={input}
                 onChangeText={setInput}
-                placeholder="Ask about your leagues…"
+                placeholder={remaining > 0 ? 'Ask about your leagues…' : 'Upgrade to Pro for unlimited prompts'}
                 placeholderTextColor="rgba(255,255,255,0.35)"
                 style={styles.input}
                 onSubmitEditing={() => send(input)}
                 returnKeyType="send"
+                editable={remaining > 0}
               />
               <TouchableOpacity
-                style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnOff]}
+                style={[styles.sendBtn, (!input.trim() || loading || remaining <= 0) && styles.sendBtnOff]}
                 onPress={() => send(input)}
-                disabled={!input.trim() || loading}
+                disabled={!input.trim() || loading || remaining <= 0}
               >
                 <Text style={styles.sendArrow}>↑</Text>
               </TouchableOpacity>
             </View>
           </View>
+
         </View>
       </KeyboardAvoidingView>
     </LinearGradient>
@@ -423,34 +379,38 @@ systemPromptRef.current = buildSystemPrompt(allLeagues) + formatLiveDataForPromp
 }
 
 const styles = StyleSheet.create({
-  wrap:         { flex:1, paddingHorizontal:SP[3] },
-  hdr:          { flexDirection:'row', alignItems:'center', gap:9, marginBottom:10 },
-  title:        { fontSize:SZ.lg, fontWeight:'700', color:C.ink, fontFamily:F.bold },
-  subtitle:     { fontSize:SZ.xs-1, fontFamily:F.mono, color:C.dim, letterSpacing:0.8 },
-  liveDot:      { flexDirection:'row', alignItems:'center', gap:4, backgroundColor:'rgba(130,196,148,0.18)', borderWidth:1, borderColor:'rgba(130,196,148,0.30)', borderRadius:20, paddingHorizontal:8, paddingVertical:3 },
-  livePulse:    { width:5, height:5, borderRadius:3, backgroundColor:C.sage },
-  liveTxt:      { fontSize:SZ.xs-1, fontFamily:F.mono, color:C.sage, letterSpacing:1 },
-  promptScroll: { maxHeight:36, marginBottom:10 },
-  promptChip:   { paddingHorizontal:11, paddingVertical:5, borderRadius:20, backgroundColor:C.goldS, borderWidth:1, borderColor:C.goldBorder },
-  promptTxt:    { fontSize:SZ.sm, color:C.gold, fontFamily:F.mono },
-  aiRow:        { flexDirection:'row', gap:7, alignItems:'flex-start' },
-  userRow:      { flexDirection:'row', justifyContent:'flex-end' },
-  userBubble:   { backgroundColor:C.goldS, borderWidth:1, borderColor:C.goldBorder, borderRadius:14, borderTopRightRadius:3, padding:10, maxWidth:'80%' },
-  userTxt:      { fontSize:SZ.md, color:C.ink, lineHeight:16, fontFamily:F.outfit },
-  aiTxt:        { fontSize:SZ.md, color:C.ink, lineHeight:16, fontFamily:F.outfit },
-  aiBold:       { fontSize:SZ.md, fontWeight:'700', color:C.sage, lineHeight:16, fontFamily:F.bold },
-  verdict:      { borderLeftWidth:2, borderRadius:9, padding:8, marginTop:7 },
-  verdictEye:   { fontSize:SZ.xs-2, fontFamily:F.mono, letterSpacing:1, marginBottom:2 },
-  verdictTxt:   { fontSize:SZ.sm+1, fontWeight:'600', color:C.ink, fontFamily:F.semibold },
-  addCard:      { flexDirection:'row', alignItems:'center', gap:8, backgroundColor:'rgba(255,255,255,0.10)', borderWidth:1, borderColor:'rgba(255,255,255,0.15)', borderRadius:10, padding:8, marginTop:7 },
-  addName:      { fontSize:SZ.md, fontWeight:'600', color:C.ink, fontFamily:F.semibold },
-  addSub:       { fontSize:SZ.sm, fontFamily:F.mono, color:C.dim },
-  addBtn:       { backgroundColor:C.sageS, borderWidth:1, borderColor:'rgba(130,196,148,0.30)', borderRadius:7, paddingHorizontal:8, paddingVertical:4 },
-  addBtnTxt:    { fontSize:SZ.sm, fontWeight:'700', color:C.sage, fontFamily:F.mono },
-  inputWrap:    { backgroundColor:'transparent', paddingTop:8 },
-  inputRow:     { flexDirection:'row', alignItems:'center', gap:7, backgroundColor:'rgba(255,255,255,0.12)', borderWidth:1, borderColor:'rgba(255,255,255,0.20)', borderRadius:18, paddingLeft:13, paddingRight:4, paddingVertical:4 },
-  input:        { flex:1, fontSize:SZ.md, color:C.ink, paddingVertical:8, fontFamily:F.outfit },
-  sendBtn:      { width:34, height:34, backgroundColor:C.gold, borderRadius:10, alignItems:'center', justifyContent:'center' },
-  sendBtnOff:   { backgroundColor:'rgba(200,168,75,0.25)' },
-  sendArrow:    { fontSize:14, fontWeight:'700', color:'#2a2010', fontFamily:F.bold },
+  wrap:             { flex: 1, paddingHorizontal: SP[3] },
+  hdr:              { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 10 },
+  title:            { fontSize: SZ.lg, fontWeight: '700', color: C.ink, fontFamily: F.bold },
+  subtitle:         { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim, letterSpacing: 0.8 },
+  rightHdr:         { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  promptCounter:    { flexDirection: 'row', alignItems: 'baseline', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
+  promptCountNum:   { fontSize: SZ.sm, fontWeight: '700', fontFamily: F.bold },
+  promptCountLbl:   { fontSize: SZ.xs - 1, fontFamily: F.mono, opacity: 0.7 },
+  liveDot:          { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(130,196,148,0.18)', borderWidth: 1, borderColor: 'rgba(130,196,148,0.30)', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
+  livePulse:        { width: 5, height: 5, borderRadius: 3, backgroundColor: C.sage },
+  liveTxt:          { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.sage, letterSpacing: 1 },
+  promptScroll:     { maxHeight: 36, marginBottom: 10 },
+  promptChip:       { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 20, backgroundColor: C.goldS, borderWidth: 1, borderColor: C.goldBorder },
+  promptTxt:        { fontSize: SZ.sm, color: C.gold, fontFamily: F.mono },
+  aiRow:            { flexDirection: 'row', gap: 7, alignItems: 'flex-start' },
+  userRow:          { flexDirection: 'row', justifyContent: 'flex-end' },
+  userBubble:       { backgroundColor: C.goldS, borderWidth: 1, borderColor: C.goldBorder, borderRadius: 14, borderTopRightRadius: 3, padding: 10, maxWidth: '80%' },
+  userTxt:          { fontSize: SZ.md, color: C.ink, lineHeight: 20, fontFamily: F.outfit },
+  aiTxt:            { fontSize: SZ.md, color: C.ink, lineHeight: 20, fontFamily: F.outfit },
+  aiBold:           { fontSize: SZ.md, fontWeight: '700', color: C.sage, lineHeight: 20, fontFamily: F.bold },
+  verdict:          { borderLeftWidth: 2, borderRadius: 9, padding: 8, marginTop: 7 },
+  verdictEye:       { fontSize: SZ.xs - 2, fontFamily: F.mono, letterSpacing: 1, marginBottom: 2 },
+  verdictTxt:       { fontSize: SZ.sm + 1, fontWeight: '600', color: C.ink, fontFamily: F.semibold },
+  addCard:          { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 8, marginTop: 7 },
+  addName:          { fontSize: SZ.md, fontWeight: '600', color: C.ink, fontFamily: F.semibold },
+  addSub:           { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim },
+  addBtn:           { backgroundColor: C.sageS, borderWidth: 1, borderColor: 'rgba(130,196,148,0.30)', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4 },
+  addBtnTxt:        { fontSize: SZ.sm, fontWeight: '700', color: C.sage, fontFamily: F.mono },
+  inputWrap:        { backgroundColor: 'transparent', paddingTop: 8 },
+  inputRow:         { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 18, paddingLeft: 13, paddingRight: 4, paddingVertical: 4 },
+  input:            { flex: 1, fontSize: SZ.md, color: C.ink, paddingVertical: 8, fontFamily: F.outfit },
+  sendBtn:          { width: 34, height: 34, backgroundColor: C.gold, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  sendBtnOff:       { backgroundColor: 'rgba(200,168,75,0.25)' },
+  sendArrow:        { fontSize: 14, fontWeight: '700', color: '#2a2010', fontFamily: F.bold },
 });
