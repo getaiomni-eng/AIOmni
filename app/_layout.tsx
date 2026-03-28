@@ -7,6 +7,18 @@ import { View } from 'react-native';
 import { useFonts } from 'expo-font';
 import { exchangeYahooCode } from '../services/yahoo';
 
+import {
+  Outfit_400Regular,
+  Outfit_500Medium,
+  Outfit_600SemiBold,
+  Outfit_700Bold,
+} from '@expo-google-fonts/outfit';
+
+import {
+  DMMono_400Regular,
+  DMMono_500Medium,
+} from '@expo-google-fonts/dm-mono';
+
 Sentry.init({
   dsn: 'https://bff368e4055a1f51bda1b9464e0d2a39@o4511046397394944.ingest.us.sentry.io/4511046438158336',
   debug: false,
@@ -17,11 +29,12 @@ export default Sentry.wrap(function RootLayout() {
   const router = useRouter();
 
   const [fontsLoaded] = useFonts({
-    'Outfit-Bold': require('../assets/fonts/Outfit-Bold.ttf'),
-    'DMMono-Regular': require('../assets/fonts/DMMono-Regular.ttf'),
-    'DMMono-Medium':    require('../assets/fonts/DMMono-Medium.ttf'),
-    'Outfit':    require('../assets/fonts/Outfit.ttf'),
-    'Outfit-SemiBold':   require('../assets/fonts/Outfit-SemiBold.ttf'),
+    'Outfit': Outfit_400Regular,
+    'Outfit-Medium': Outfit_500Medium,
+    'Outfit-SemiBold': Outfit_600SemiBold,
+    'Outfit-Bold': Outfit_700Bold,
+    'DMMono-Regular': DMMono_400Regular,
+    'DMMono-Medium': DMMono_500Medium,
   });
 
   useEffect(() => {
