@@ -4,7 +4,7 @@ import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, Touc
 
 const API_KEY = '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';
 const DYNASTY_KEYWORDS = ['pick', 'round', '2025', '2026', '2027', '2028', 'first', 'second', 'third', 'future', 'rookie'];
-const GRADE_COLORS: Record<string, string> = { 'A+': ''#b8891a'', 'A': ''#b8891a'', 'A-': ''#b8891a'', 'B+': '#00ffaa', 'B': '#00ffaa', 'B-': '#00ffaa', 'C+': '#ffaa00', 'C': '#ffaa00', 'C-': '#ffaa00', 'D+': '#ff2255', 'D': '#ff2255', 'D-': '#ff2255', 'F': '#ff2255' };
+const GRADE_COLORS: Record<string, string> = { 'A+': '#b8891a', 'A': '#b8891a', 'A-': '#b8891a', 'B+': '#00ffaa', 'B': '#00ffaa', 'B-': '#00ffaa', 'C+': '#ffaa00', 'C': '#ffaa00', 'C-': '#ffaa00', 'D+': '#ff2255', 'D': '#ff2255', 'D-': '#ff2255', 'F': '#ff2255' };
 const EXAMPLE_TRADES = [
   { give: 'CeeDee Lamb', get: 'Saquon Barkley + Tyler Lockett' },
   { give: 'Josh Allen + flex', get: 'Lamar Jackson + WR2' },
@@ -39,7 +39,7 @@ export default function TradeAnalyzerScreen() {
     } finally { setLoading(false); }
   };
 
-  const recColor = result?.recommendation?.startsWith('ACCEPT') ? ''#b8891a'' : result?.recommendation?.startsWith('DECLINE') ? '#ff2255' : '#ffaa00';
+  const recColor = result?.recommendation?.startsWith('ACCEPT') ? '#b8891a' : result?.recommendation?.startsWith('DECLINE') ? '#ff2255' : '#ffaa00';
 
   return (
     <View style={styles.container}>
@@ -173,17 +173,17 @@ export default function TradeAnalyzerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: ''#2e4040'' },
+  container: { flex: 1, backgroundColor: '#2e4040' },
   scroll: { paddingHorizontal: 20, paddingBottom: 60 },
   header: { paddingTop: 56, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(212,255,0,0.08)', marginBottom: 20 },
-  title: { fontFamily: 'Outfit-Bold', fontSize: 36, color: ''#b8891a'', letterSpacing: 4, lineHeight: 38, textShadowColor: 'rgba(212,255,0,0.3)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
+  title: { fontFamily: 'Outfit-Bold', fontSize: 36, color: '#b8891a', letterSpacing: 4, lineHeight: 38, textShadowColor: 'rgba(212,255,0,0.3)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
   subtitle: { fontFamily: 'DMMono-Regular', fontSize: 9, color: '#444', letterSpacing: 2, marginTop: 4 },
 
   toggleRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   toggleBtn: { flex: 1, backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#1a1a2e' },
   toggleActive: { borderColor: 'rgba(212,255,0,0.4)', backgroundColor: 'rgba(212,255,0,0.06)' },
   toggleText: { fontFamily: 'DMMono-Regular', color: '#444', fontSize: 10, letterSpacing: 2 },
-  toggleTextActive: { color: ''#b8891a'' },
+  toggleTextActive: { color: '#b8891a' },
 
   inputBlock: { marginBottom: 8 },
   inputLabel: { fontFamily: 'DMMono-Regular', color: '#444', fontSize: 9, letterSpacing: 2, marginBottom: 8 },
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
   exampleChip: { backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#1a1a2e' },
   exampleText: { fontFamily: 'Outfit', color: '#555', fontSize: 12 },
 
-  analyzeBtn: { backgroundColor: ''#b8891a'', borderRadius: 2, padding: 18, alignItems: 'center', marginTop: 16, marginBottom: 8 },
+  analyzeBtn: { backgroundColor: '#b8891a', borderRadius: 2, padding: 18, alignItems: 'center', marginTop: 16, marginBottom: 8 },
   analyzeBtnDisabled: { opacity: 0.3 },
   analyzeBtnText: { fontFamily: 'Outfit-Bold', color: '#000', fontSize: 22, letterSpacing: 4 },
 
@@ -209,12 +209,12 @@ const styles = StyleSheet.create({
   gradeValue: { fontFamily: 'Outfit-Bold', fontSize: 52, letterSpacing: 2, lineHeight: 52 },
   gradeVs: { fontFamily: 'Outfit-Bold', color: '#222', fontSize: 18, letterSpacing: 3 },
 
-  verdictCard: { backgroundColor: 'rgba(212,255,0,0.05)', borderRadius: 2, padding: 16, marginBottom: 12, borderLeftWidth: 3, borderLeftColor: ''#b8891a'' },
-  verdictLabel: { fontFamily: 'DMMono-Regular', color: ''#b8891a'', fontSize: 8, letterSpacing: 2, marginBottom: 8 },
+  verdictCard: { backgroundColor: 'rgba(212,255,0,0.05)', borderRadius: 2, padding: 16, marginBottom: 12, borderLeftWidth: 3, borderLeftColor: '#b8891a' },
+  verdictLabel: { fontFamily: 'DMMono-Regular', color: '#b8891a', fontSize: 8, letterSpacing: 2, marginBottom: 8 },
   verdictText: { fontFamily: 'Outfit-SemiBold', color: '#fff', fontSize: 15, lineHeight: 22 },
 
   analysisCard: { backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: '#1a1a2e' },
-  analysisTitle: { fontFamily: 'DMMono-Regular', color: ''#b8891a'', fontSize: 9, letterSpacing: 1.5, marginBottom: 10 },
+  analysisTitle: { fontFamily: 'DMMono-Regular', color: '#b8891a', fontSize: 9, letterSpacing: 1.5, marginBottom: 10 },
   analysisText: { fontFamily: 'Outfit', color: '#888', fontSize: 14, lineHeight: 20 },
 
   recommendCard: { borderRadius: 2, padding: 16, marginBottom: 16, borderWidth: 2, alignItems: 'center', backgroundColor: 'rgba(8,8,22,0.9)' },

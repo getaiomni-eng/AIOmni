@@ -122,7 +122,7 @@ export default function HomeScreen() {
       const creds = await loadESPNCredentials();
       if (!creds?.leagueId) return [];
 
-      const leagueData = await getESPNLeague(creds.leagueId, creds.espnS2, creds.swid);
+      const leagueData = await getESPNLeague(creds.leagueId, creds);
       if (!leagueData) return [];
 
       const myTeam = findMyESPNTeam(leagueData, creds.teamName || '');

@@ -9,7 +9,6 @@ import { exchangeYahooCode } from '../services/yahoo';
 
 Sentry.init({
   dsn: 'https://bff368e4055a1f51bda1b9464e0d2a39@o4511046397394944.ingest.us.sentry.io/4511046438158336',
-  enableInExpoDevelopment: true,
   debug: false,
   tracesSampleRate: 1.0,
 });
@@ -18,11 +17,11 @@ export default Sentry.wrap(function RootLayout() {
   const router = useRouter();
 
   const [fontsLoaded] = useFonts({
-    Outfit-Bold: require('../assets/fonts/Outfit-Bold.ttf'),
-    DMMono-Regular: require('../assets/fonts/DMMono-Regular.ttf'),
-    DMMono-Medium:    require('../assets/fonts/DMMono-Medium.ttf'),
-    Outfit:    require('../assets/fonts/Outfit.ttf'),
-    Outfit-SemiBold:   require('../assets/fonts/Outfit-SemiBold.ttf'),
+    'Outfit-Bold': require('../assets/fonts/Outfit-Bold.ttf'),
+    'DMMono-Regular': require('../assets/fonts/DMMono-Regular.ttf'),
+    'DMMono-Medium':    require('../assets/fonts/DMMono-Medium.ttf'),
+    'Outfit':    require('../assets/fonts/Outfit.ttf'),
+    'Outfit-SemiBold':   require('../assets/fonts/Outfit-SemiBold.ttf'),
   });
 
   useEffect(() => {
@@ -58,7 +57,7 @@ export default Sentry.wrap(function RootLayout() {
     return () => subscription.remove();
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: ''#2e4040'' }} />;
+  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: '#2e4040' }} />;
 
   return (
     <Stack>

@@ -28,7 +28,7 @@ export const GlassCard: React.FC<Props> = ({
   const v = VARIANTS[variant];
   return (
     <View style={[{ borderRadius: radius, borderWidth: 1, borderColor: v.border, overflow: 'hidden' }, shadow.glass, style]}>
-      <View intensity={blur} tint="light" style={StyleSheet.absoluteFillObject} />
+      <View style={StyleSheet.absoluteFillObject} />
       {!noShine && <View style={[styles.shine, { borderRadius: radius }]} />}
       <View style={[{ padding, backgroundColor: v.bg }, Array.isArray(style) ? {} : (style as any)]}>
         {children}

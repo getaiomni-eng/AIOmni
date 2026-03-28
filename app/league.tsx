@@ -285,7 +285,7 @@ export default function LeagueScreen() {
                 <SectionHeader label="AVAILABLE" barColor={C.mint} />
                 {waivers.map((p, i) => (
                   <GlassCard key={i} style={{ marginBottom: 7 }} padding={11}>
-                    <PlayerRow player={p} showScore={false} showOwned showAdd lastWk={p.lastWk} />
+                    <PlayerRow player={p} showScore={false} showOwned showAdd />
                   </GlassCard>
                 ))}
               </View>

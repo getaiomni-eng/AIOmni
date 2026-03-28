@@ -216,9 +216,9 @@ export default function SettingsScreen() {
 
       {/* Usage */}
       <Section title="WEEKLY USAGE">
-        <Row label="Prompts remaining" value={`${remaining}/25`} valueColor="'#b8891a'" />
+        <Row label="Prompts remaining" value={`${remaining}/25`} valueColor="#b8891a" />
         <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${(remaining / 25) * 100}%`, backgroundColor: remaining <= 5 ? '#ff2255' : ''#b8891a'' }]} />
+          <View style={[styles.progressFill, { width: `${(remaining / 25) * 100}%`, backgroundColor: remaining <= 5 ? '#ff2255' : '#b8891a' }]} />
         </View>
         <TouchableOpacity style={styles.upgradeBtn} onPress={() => router.push('/paywall')}>
           <Text style={styles.upgradeBtnText}>UPGRADE TO PRO — $9.99/MO →</Text>
@@ -252,12 +252,12 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: ''#2e4040'' },
+  container: { flex: 1, backgroundColor: '#2e4040' },
   content: { paddingHorizontal: 24, paddingBottom: 60 },
 
   header: { paddingTop: 56, paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: 'rgba(212,255,0,0.08)', marginBottom: 24 },
   backBtn: { marginBottom: 14 },
-  backText: { fontFamily: 'DMMono-Regular', color: ''#b8891a'', fontSize: 10, letterSpacing: 2 },
+  backText: { fontFamily: 'DMMono-Regular', color: '#b8891a', fontSize: 10, letterSpacing: 2 },
   title: { fontFamily: 'Outfit-Bold', color: '#fff', fontSize: 42, letterSpacing: 4, lineHeight: 42 },
 
   section: { marginBottom: 24 },
@@ -270,20 +270,20 @@ const styles = StyleSheet.create({
 
   editRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   input: { flex: 1, backgroundColor: '#060610', borderRadius: 2, padding: 12, color: '#fff', fontFamily: 'Outfit', fontSize: 13, borderWidth: 1, borderColor: '#1a1a2e' },
-  saveBtn: { backgroundColor: ''#b8891a'', borderRadius: 2, paddingHorizontal: 16, justifyContent: 'center' },
+  saveBtn: { backgroundColor: '#b8891a', borderRadius: 2, paddingHorizontal: 16, justifyContent: 'center' },
   saveBtnText: { fontFamily: 'Outfit-Bold', color: '#000', fontSize: 16, letterSpacing: 2 },
 
-  actionLink: { fontFamily: 'Outfit-SemiBold', color: ''#b8891a'', fontSize: 14 },
+  actionLink: { fontFamily: 'Outfit-SemiBold', color: '#b8891a', fontSize: 14 },
   dangerLink: { fontFamily: 'Outfit', color: '#ff2255', fontSize: 14 },
   cancelLink: { fontFamily: 'Outfit', color: '#444', textAlign: 'center', fontSize: 13 },
 
   espnInstructions: { fontFamily: 'Outfit', color: '#555', fontSize: 12, lineHeight: 20, marginBottom: 14, backgroundColor: '#060610', borderRadius: 2, padding: 12, borderWidth: 1, borderColor: '#1a1a2e' },
-  connectBtn: { backgroundColor: ''#b8891a'', borderRadius: 2, padding: 14, alignItems: 'center' },
+  connectBtn: { backgroundColor: '#b8891a', borderRadius: 2, padding: 14, alignItems: 'center' },
   connectBtnText: { fontFamily: 'Outfit-Bold', color: '#000', fontSize: 16, letterSpacing: 2 },
 
   progressBar: { height: 3, backgroundColor: '#1a1a2e', borderRadius: 2, marginTop: 12, marginBottom: 16, overflow: 'hidden' },
   progressFill: { height: 3, borderRadius: 2 },
-  upgradeBtn: { backgroundColor: ''#b8891a'', borderRadius: 2, padding: 14, alignItems: 'center' },
+  upgradeBtn: { backgroundColor: '#b8891a', borderRadius: 2, padding: 14, alignItems: 'center' },
   upgradeBtnText: { fontFamily: 'Outfit-Bold', color: '#000', fontSize: 14, letterSpacing: 2 },
 
   signOutBtn: { borderWidth: 1, borderColor: 'rgba(255,34,85,0.4)', borderRadius: 2, padding: 16, alignItems: 'center', marginBottom: 24, backgroundColor: 'rgba(255,34,85,0.04)' },

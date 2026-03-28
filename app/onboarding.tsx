@@ -14,8 +14,8 @@ import {
 } from 'react-native';
 
 const C = {
-  void: ''#2e4040'',
-  y: ''#b8891a'',
+  void: '#2e4040',
+  y: '#b8891a',
   surface: 'rgba(8,8,22,0.92)',
   border: 'rgba(212,255,0,0.10)',
   borderHi: 'rgba(212,255,0,0.28)',
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
 
   inputWrap: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: ''#2e4040'', borderRadius: 10, borderWidth: 1,
+    backgroundColor: '#2e4040', borderRadius: 10, borderWidth: 1,
     borderColor: C.border, marginBottom: 12, paddingHorizontal: 14,
   },
   inputWrapError: { borderColor: C.red + '88' },

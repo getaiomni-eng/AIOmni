@@ -6,6 +6,8 @@ export const ESPN_SEASON = 2025;
 export interface ESPNCredentials {
   espnS2: string;
   swid: string;
+  leagueId?: number;
+  teamName?: string;
 }
 
 export async function saveESPNCredentials(creds: ESPNCredentials) {
@@ -109,3 +111,14 @@ export function formatESPNLeagueContext(data: any, myTeam: any): string {
     `Starters: ${starters}`,
   ].join('\n');
 }
+
+export async function getESPNStandings(leagueId: number, creds: any): Promise<any[]> {
+  const data = await getESPNLeague(leagueId, creds);
+  return (data?.teams ?? []).map((t: any) => ({ teamId: t.id, name: t.name ?? `Team ${t.id}`, wins: t.record?.overall?.wins ?? 0, losses: t.record?.overall?.losses ?? 0, ties: t.record?.overall?.ties ?? 0, pointsFor: t.record?.overall?.pointsFor ?? 0, pointsAgainst: t.record?.overall?.pointsAgainst ?? 0 }));
+}
+export async function getESPNMatchups(leagueId: number, creds: any): Promise<any> {
+  const data = await getESPNLeague(leagueId, creds);
+  return data?.schedule ?? null;
+}
+export async function getESPNTransactions(leagueId: number, creds: any): Promise<any[]> { return []; }
+export async function getESPNAllRosters(leagueId: number, creds: any): Promise<any[]> { return []; }
