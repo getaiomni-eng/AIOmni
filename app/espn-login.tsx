@@ -115,7 +115,7 @@ export function ESPNLoginScreen({ navigation }: any) {
       </View>
 
       <View style={styles.statusBar}>
-        {connecting && !connected && <ActivityIndicator color="#D4FF00" size="small" style={{ marginRight: 8 }} />}
+        {connecting && !connected && <ActivityIndicator color="'#b8891a'" size="small" style={{ marginRight: 8 }} />}
         {connected && <Text style={{ marginRight: 8 }}>✅</Text>}
         <Text style={[styles.statusText, connected && { color: '#00FF88' }]}>{status}</Text>
       </View>

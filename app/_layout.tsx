@@ -18,13 +18,11 @@ export default Sentry.wrap(function RootLayout() {
   const router = useRouter();
 
   const [fontsLoaded] = useFonts({
-    BebasNeue_400Regular: require('../assets/fonts/BebasNeue_400Regular.ttf'),
-    SpaceMono_400Regular: require('../assets/fonts/SpaceMono_400Regular.ttf'),
-    SpaceMono_700Bold:    require('../assets/fonts/SpaceMono_700Bold.ttf'),
-    Barlow_400Regular:    require('../assets/fonts/Barlow_400Regular.ttf'),
-    Barlow_500Medium:     require('../assets/fonts/Barlow_500Medium.ttf'),
-    Barlow_600SemiBold:   require('../assets/fonts/Barlow_600SemiBold.ttf'),
-    Barlow_700Bold:       require('../assets/fonts/Barlow_700Bold.ttf'),
+    Outfit-Bold: require('../assets/fonts/Outfit-Bold.ttf'),
+    DMMono-Regular: require('../assets/fonts/DMMono-Regular.ttf'),
+    DMMono-Medium:    require('../assets/fonts/DMMono-Medium.ttf'),
+    Outfit:    require('../assets/fonts/Outfit.ttf'),
+    Outfit-SemiBold:   require('../assets/fonts/Outfit-SemiBold.ttf'),
   });
 
   useEffect(() => {
@@ -60,7 +58,7 @@ export default Sentry.wrap(function RootLayout() {
     return () => subscription.remove();
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: '#03030a' }} />;
+  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: ''#2e4040'' }} />;
 
   return (
     <Stack>

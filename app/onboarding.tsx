@@ -14,8 +14,8 @@ import {
 } from 'react-native';
 
 const C = {
-  void: '#03030a',
-  y: '#D4FF00',
+  void: ''#2e4040'',
+  y: ''#b8891a'',
   surface: 'rgba(8,8,22,0.92)',
   border: 'rgba(212,255,0,0.10)',
   borderHi: 'rgba(212,255,0,0.28)',
@@ -121,10 +121,10 @@ const styles = StyleSheet.create({
 
   logoBlock: { alignItems: 'center', marginBottom: 48 },
   logoRow: { flexDirection: 'row', alignItems: 'flex-end' },
-  logoAIO: { fontFamily: 'BebasNeue_400Regular', fontSize: 80, color: C.y, letterSpacing: 6, lineHeight: 80 },
-  logoMni: { fontFamily: 'BebasNeue_400Regular', fontSize: 40, color: C.y, letterSpacing: 8, marginBottom: 10, opacity: 0.6 },
+  logoAIO: { fontFamily: 'Outfit-Bold', fontSize: 80, color: C.y, letterSpacing: 6, lineHeight: 80 },
+  logoMni: { fontFamily: 'Outfit-Bold', fontSize: 40, color: C.y, letterSpacing: 8, marginBottom: 10, opacity: 0.6 },
   logoDivider: { width: 40, height: 2, backgroundColor: C.y, marginVertical: 12, opacity: 0.4 },
-  tagline: { fontFamily: 'SpaceMono_400Regular', fontSize: 9, color: C.dim, letterSpacing: 2, textAlign: 'center' },
+  tagline: { fontFamily: 'DMMono-Regular', fontSize: 9, color: C.dim, letterSpacing: 2, textAlign: 'center' },
 
   card: {
     backgroundColor: C.surface,
@@ -134,27 +134,27 @@ const styles = StyleSheet.create({
     borderColor: C.borderHi,
     marginBottom: 24,
   },
-  cardTitle: { fontFamily: 'BebasNeue_400Regular', fontSize: 28, color: C.y, letterSpacing: 3, marginBottom: 6 },
-  cardSub: { fontFamily: 'Barlow_400Regular', color: C.dim, fontSize: 14, lineHeight: 20, marginBottom: 20 },
+  cardTitle: { fontFamily: 'Outfit-Bold', fontSize: 28, color: C.y, letterSpacing: 3, marginBottom: 6 },
+  cardSub: { fontFamily: 'Outfit', color: C.dim, fontSize: 14, lineHeight: 20, marginBottom: 20 },
 
   inputWrap: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#03030a', borderRadius: 10, borderWidth: 1,
+    backgroundColor: ''#2e4040'', borderRadius: 10, borderWidth: 1,
     borderColor: C.border, marginBottom: 12, paddingHorizontal: 14,
   },
   inputWrapError: { borderColor: C.red + '88' },
-  inputPrefix: { fontFamily: 'BebasNeue_400Regular', fontSize: 22, color: C.dim, marginRight: 6, lineHeight: 50 },
-  input: { flex: 1, color: C.white, fontFamily: 'Barlow_400Regular', fontSize: 16, paddingVertical: 14 },
-  errorText: { fontFamily: 'SpaceMono_400Regular', color: C.red, fontSize: 11, letterSpacing: 1, marginBottom: 12 },
+  inputPrefix: { fontFamily: 'Outfit-Bold', fontSize: 22, color: C.dim, marginRight: 6, lineHeight: 50 },
+  input: { flex: 1, color: C.white, fontFamily: 'Outfit', fontSize: 16, paddingVertical: 14 },
+  errorText: { fontFamily: 'DMMono-Regular', color: C.red, fontSize: 11, letterSpacing: 1, marginBottom: 12 },
 
   button: { backgroundColor: C.y, borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 4 },
   buttonLoading: { opacity: 0.7 },
-  buttonText: { fontFamily: 'BebasNeue_400Regular', color: '#000', fontSize: 20, letterSpacing: 3 },
+  buttonText: { fontFamily: 'Outfit-Bold', color: '#000', fontSize: 20, letterSpacing: 3 },
 
   platformStrip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 20 },
   platformDot: { width: 5, height: 5, borderRadius: 3 },
-  platformLabel: { fontFamily: 'SpaceMono_400Regular', fontSize: 10, color: C.dim, letterSpacing: 2 },
+  platformLabel: { fontFamily: 'DMMono-Regular', fontSize: 10, color: C.dim, letterSpacing: 2 },
   platformSep: { width: 1, height: 10, backgroundColor: C.border, marginHorizontal: 4 },
 
-  legalNote: { fontFamily: 'SpaceMono_400Regular', color: C.dim, fontSize: 10, letterSpacing: 1, textAlign: 'center' },
+  legalNote: { fontFamily: 'DMMono-Regular', color: C.dim, fontSize: 10, letterSpacing: 1, textAlign: 'center' },
 });

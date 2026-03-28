@@ -4,7 +4,7 @@ import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, Touc
 
 const API_KEY = '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';
 const DYNASTY_KEYWORDS = ['pick', 'round', '2025', '2026', '2027', '2028', 'first', 'second', 'third', 'future', 'rookie'];
-const GRADE_COLORS: Record<string, string> = { 'A+': '#D4FF00', 'A': '#D4FF00', 'A-': '#D4FF00', 'B+': '#00ffaa', 'B': '#00ffaa', 'B-': '#00ffaa', 'C+': '#ffaa00', 'C': '#ffaa00', 'C-': '#ffaa00', 'D+': '#ff2255', 'D': '#ff2255', 'D-': '#ff2255', 'F': '#ff2255' };
+const GRADE_COLORS: Record<string, string> = { 'A+': ''#b8891a'', 'A': ''#b8891a'', 'A-': ''#b8891a'', 'B+': '#00ffaa', 'B': '#00ffaa', 'B-': '#00ffaa', 'C+': '#ffaa00', 'C': '#ffaa00', 'C-': '#ffaa00', 'D+': '#ff2255', 'D': '#ff2255', 'D-': '#ff2255', 'F': '#ff2255' };
 const EXAMPLE_TRADES = [
   { give: 'CeeDee Lamb', get: 'Saquon Barkley + Tyler Lockett' },
   { give: 'Josh Allen + flex', get: 'Lamar Jackson + WR2' },
@@ -39,7 +39,7 @@ export default function TradeAnalyzerScreen() {
     } finally { setLoading(false); }
   };
 
-  const recColor = result?.recommendation?.startsWith('ACCEPT') ? '#D4FF00' : result?.recommendation?.startsWith('DECLINE') ? '#ff2255' : '#ffaa00';
+  const recColor = result?.recommendation?.startsWith('ACCEPT') ? ''#b8891a'' : result?.recommendation?.startsWith('DECLINE') ? '#ff2255' : '#ffaa00';
 
   return (
     <View style={styles.container}>
@@ -173,69 +173,69 @@ export default function TradeAnalyzerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#03030a' },
+  container: { flex: 1, backgroundColor: ''#2e4040'' },
   scroll: { paddingHorizontal: 20, paddingBottom: 60 },
   header: { paddingTop: 56, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(212,255,0,0.08)', marginBottom: 20 },
-  title: { fontFamily: 'BebasNeue_400Regular', fontSize: 36, color: '#D4FF00', letterSpacing: 4, lineHeight: 38, textShadowColor: 'rgba(212,255,0,0.3)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
-  subtitle: { fontFamily: 'SpaceMono_400Regular', fontSize: 9, color: '#444', letterSpacing: 2, marginTop: 4 },
+  title: { fontFamily: 'Outfit-Bold', fontSize: 36, color: ''#b8891a'', letterSpacing: 4, lineHeight: 38, textShadowColor: 'rgba(212,255,0,0.3)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
+  subtitle: { fontFamily: 'DMMono-Regular', fontSize: 9, color: '#444', letterSpacing: 2, marginTop: 4 },
 
   toggleRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   toggleBtn: { flex: 1, backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#1a1a2e' },
   toggleActive: { borderColor: 'rgba(212,255,0,0.4)', backgroundColor: 'rgba(212,255,0,0.06)' },
-  toggleText: { fontFamily: 'SpaceMono_400Regular', color: '#444', fontSize: 10, letterSpacing: 2 },
-  toggleTextActive: { color: '#D4FF00' },
+  toggleText: { fontFamily: 'DMMono-Regular', color: '#444', fontSize: 10, letterSpacing: 2 },
+  toggleTextActive: { color: ''#b8891a'' },
 
   inputBlock: { marginBottom: 8 },
-  inputLabel: { fontFamily: 'SpaceMono_400Regular', color: '#444', fontSize: 9, letterSpacing: 2, marginBottom: 8 },
-  tradeInput: { backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, padding: 16, color: '#fff', fontFamily: 'Barlow_400Regular', fontSize: 15, minHeight: 70, borderWidth: 1, borderColor: '#1a1a2e', textAlignVertical: 'top' },
+  inputLabel: { fontFamily: 'DMMono-Regular', color: '#444', fontSize: 9, letterSpacing: 2, marginBottom: 8 },
+  tradeInput: { backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, padding: 16, color: '#fff', fontFamily: 'Outfit', fontSize: 15, minHeight: 70, borderWidth: 1, borderColor: '#1a1a2e', textAlignVertical: 'top' },
 
   vsRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 14 },
   vsDivider: { flex: 1, height: 1, backgroundColor: '#1a1a2e' },
-  vsText: { fontFamily: 'BebasNeue_400Regular', color: '#333', fontSize: 18, letterSpacing: 3, marginHorizontal: 14 },
+  vsText: { fontFamily: 'Outfit-Bold', color: '#333', fontSize: 18, letterSpacing: 3, marginHorizontal: 14 },
 
   exampleSection: { marginTop: 12, marginBottom: 4 },
-  exampleLabel: { fontFamily: 'SpaceMono_400Regular', color: '#333', fontSize: 9, letterSpacing: 2, marginBottom: 10 },
+  exampleLabel: { fontFamily: 'DMMono-Regular', color: '#333', fontSize: 9, letterSpacing: 2, marginBottom: 10 },
   exampleChip: { backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#1a1a2e' },
-  exampleText: { fontFamily: 'Barlow_400Regular', color: '#555', fontSize: 12 },
+  exampleText: { fontFamily: 'Outfit', color: '#555', fontSize: 12 },
 
-  analyzeBtn: { backgroundColor: '#D4FF00', borderRadius: 2, padding: 18, alignItems: 'center', marginTop: 16, marginBottom: 8 },
+  analyzeBtn: { backgroundColor: ''#b8891a'', borderRadius: 2, padding: 18, alignItems: 'center', marginTop: 16, marginBottom: 8 },
   analyzeBtnDisabled: { opacity: 0.3 },
-  analyzeBtnText: { fontFamily: 'BebasNeue_400Regular', color: '#000', fontSize: 22, letterSpacing: 4 },
+  analyzeBtnText: { fontFamily: 'Outfit-Bold', color: '#000', fontSize: 22, letterSpacing: 4 },
 
   resultSection: { marginTop: 8 },
   gradeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
   gradeCard: { flex: 1, backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, padding: 16, alignItems: 'center', borderWidth: 1 },
-  gradeLabel: { fontFamily: 'SpaceMono_400Regular', color: '#444', fontSize: 8, letterSpacing: 1.5, marginBottom: 8 },
-  gradeValue: { fontFamily: 'BebasNeue_400Regular', fontSize: 52, letterSpacing: 2, lineHeight: 52 },
-  gradeVs: { fontFamily: 'BebasNeue_400Regular', color: '#222', fontSize: 18, letterSpacing: 3 },
+  gradeLabel: { fontFamily: 'DMMono-Regular', color: '#444', fontSize: 8, letterSpacing: 1.5, marginBottom: 8 },
+  gradeValue: { fontFamily: 'Outfit-Bold', fontSize: 52, letterSpacing: 2, lineHeight: 52 },
+  gradeVs: { fontFamily: 'Outfit-Bold', color: '#222', fontSize: 18, letterSpacing: 3 },
 
-  verdictCard: { backgroundColor: 'rgba(212,255,0,0.05)', borderRadius: 2, padding: 16, marginBottom: 12, borderLeftWidth: 3, borderLeftColor: '#D4FF00' },
-  verdictLabel: { fontFamily: 'SpaceMono_400Regular', color: '#D4FF00', fontSize: 8, letterSpacing: 2, marginBottom: 8 },
-  verdictText: { fontFamily: 'Barlow_600SemiBold', color: '#fff', fontSize: 15, lineHeight: 22 },
+  verdictCard: { backgroundColor: 'rgba(212,255,0,0.05)', borderRadius: 2, padding: 16, marginBottom: 12, borderLeftWidth: 3, borderLeftColor: ''#b8891a'' },
+  verdictLabel: { fontFamily: 'DMMono-Regular', color: ''#b8891a'', fontSize: 8, letterSpacing: 2, marginBottom: 8 },
+  verdictText: { fontFamily: 'Outfit-SemiBold', color: '#fff', fontSize: 15, lineHeight: 22 },
 
   analysisCard: { backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: '#1a1a2e' },
-  analysisTitle: { fontFamily: 'SpaceMono_400Regular', color: '#D4FF00', fontSize: 9, letterSpacing: 1.5, marginBottom: 10 },
-  analysisText: { fontFamily: 'Barlow_400Regular', color: '#888', fontSize: 14, lineHeight: 20 },
+  analysisTitle: { fontFamily: 'DMMono-Regular', color: ''#b8891a'', fontSize: 9, letterSpacing: 1.5, marginBottom: 10 },
+  analysisText: { fontFamily: 'Outfit', color: '#888', fontSize: 14, lineHeight: 20 },
 
   recommendCard: { borderRadius: 2, padding: 16, marginBottom: 16, borderWidth: 2, alignItems: 'center', backgroundColor: 'rgba(8,8,22,0.9)' },
-  recommendText: { fontFamily: 'BebasNeue_400Regular', fontSize: 18, letterSpacing: 3, textAlign: 'center' },
+  recommendText: { fontFamily: 'Outfit-Bold', fontSize: 18, letterSpacing: 3, textAlign: 'center' },
 
   resetBtn: { borderWidth: 1, borderColor: '#1a1a2e', borderRadius: 2, padding: 14, alignItems: 'center', marginBottom: 8 },
-  resetText: { fontFamily: 'SpaceMono_400Regular', color: '#444', fontSize: 10, letterSpacing: 2 },
+  resetText: { fontFamily: 'DMMono-Regular', color: '#444', fontSize: 10, letterSpacing: 2 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'flex-end' },
   modalCard: { backgroundColor: '#060610', borderTopLeftRadius: 2, borderTopRightRadius: 2, padding: 28, borderTopWidth: 1, borderColor: 'rgba(255,170,0,0.3)', overflow: 'hidden' },
   modalAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: '#ffaa00' },
   modalEmoji: { fontSize: 40, textAlign: 'center', marginBottom: 12 },
-  modalTitle: { fontFamily: 'BebasNeue_400Regular', color: '#fff', fontSize: 28, letterSpacing: 3, textAlign: 'center', marginBottom: 12 },
-  modalBody: { fontFamily: 'Barlow_400Regular', color: '#666', fontSize: 14, lineHeight: 22, textAlign: 'center', marginBottom: 20 },
+  modalTitle: { fontFamily: 'Outfit-Bold', color: '#fff', fontSize: 28, letterSpacing: 3, textAlign: 'center', marginBottom: 12 },
+  modalBody: { fontFamily: 'Outfit', color: '#666', fontSize: 14, lineHeight: 22, textAlign: 'center', marginBottom: 20 },
   modalFeatures: { backgroundColor: 'rgba(255,170,0,0.06)', borderRadius: 2, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,170,0,0.2)' },
   modalFeatureRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10 },
   modalFeatureCheck: { color: '#ffaa00', fontSize: 14, fontWeight: '700' },
-  modalFeatureText: { fontFamily: 'Barlow_600SemiBold', color: '#ffaa00', fontSize: 13 },
+  modalFeatureText: { fontFamily: 'Outfit-SemiBold', color: '#ffaa00', fontSize: 13 },
   modalUpgradeBtn: { backgroundColor: '#ffaa00', borderRadius: 2, padding: 16, alignItems: 'center', marginBottom: 10 },
-  modalUpgradeBtnText: { fontFamily: 'BebasNeue_400Regular', color: '#000', fontSize: 16, letterSpacing: 2 },
+  modalUpgradeBtnText: { fontFamily: 'Outfit-Bold', color: '#000', fontSize: 16, letterSpacing: 2 },
   modalSkipBtn: { borderWidth: 1, borderColor: '#1a1a2e', borderRadius: 2, padding: 14, alignItems: 'center', marginBottom: 10 },
-  modalSkipText: { fontFamily: 'Barlow_400Regular', color: '#555', fontSize: 13 },
-  modalDismiss: { fontFamily: 'Barlow_400Regular', color: '#333', textAlign: 'center', fontSize: 13, paddingVertical: 8 },
+  modalSkipText: { fontFamily: 'Outfit', color: '#555', fontSize: 13 },
+  modalDismiss: { fontFamily: 'Outfit', color: '#333', textAlign: 'center', fontSize: 13, paddingVertical: 8 },
 });

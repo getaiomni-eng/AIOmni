@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#D4FF00',
+    borderColor: ''#b8891a'',
     position: 'relative',
   },
   dismissBtn: {
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   ctaBtn: {
-    backgroundColor: '#D4FF00',
+    backgroundColor: ''#b8891a'',
     borderRadius: 10,
     padding: 12,
     alignItems: 'center',
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   trialBtn: {
-    backgroundColor: '#D4FF00',
+    backgroundColor: ''#b8891a'',
     borderRadius: 10,
     padding: 12,
     alignItems: 'center',
