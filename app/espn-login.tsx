@@ -1,9 +1,10 @@
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { saveESPNCredentials, getESPNLeague, findMyESPNTeam, ESPN_SEASON } from '../services/espn';
+import { ESPN_SEASON, saveESPNCredentials } from '../services/espn';
+import { C, F, SP, SZ } from './constants/tokens';
 
 const ESPN_LOGIN_URL = 'https://www.espn.com/fantasy/football/';
 
@@ -29,11 +30,11 @@ const INJECT_SCRIPT = `
 `;
 
 export function ESPNLoginScreen({ navigation }: any) {
-  
+  const insets     = useSafeAreaInsets();
   const webViewRef = useRef<any>(null);
-  const [status, setStatus] = useState('Log in to ESPN to connect your leagues');
+  const [status,     setStatus]     = useState('Log in to ESPN to connect your leagues');
   const [connecting, setConnecting] = useState(false);
-  const [connected, setConnected] = useState(false);
+  const [connected,  setConnected]  = useState(false);
 
   const handleMessage = async (event: any) => {
     try {
@@ -44,27 +45,21 @@ export function ESPNLoginScreen({ navigation }: any) {
       setStatus('Found your ESPN account — loading leagues...');
 
       const creds = { espnS2: data.espnS2, swid: data.swid };
-
-      // Fetch user's leagues via ESPN API
-      const BASE = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl';
-      const res = await fetch(`${BASE}/seasons/${ESPN_SEASON}/segments/0/leagues?view=mSettings`, {
-        headers: {
-          'Content-Type': 'application/json',
-          Cookie: `espn_s2=${creds.espnS2}; SWID=${creds.swid}`,
-        },
+      const BASE  = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl';
+      const res   = await fetch(`${BASE}/seasons/${ESPN_SEASON}/segments/0/leagues?view=mSettings`, {
+        headers: { 'Content-Type': 'application/json', Cookie: `espn_s2=${creds.espnS2}; SWID=${creds.swid}` },
       });
 
-      let leagueIds: number[] = [];
+      let leagueIds: number[]   = [];
       let leagueNames: string[] = [];
 
       if (res.ok) {
         const leaguesData = await res.json();
         const leagues = Array.isArray(leaguesData) ? leaguesData : [leaguesData].filter(Boolean);
-        leagueIds = leagues.map((l: any) => l.id).filter(Boolean);
+        leagueIds   = leagues.map((l: any) => l.id).filter(Boolean);
         leagueNames = leagues.map((l: any) => l.settings?.name || `ESPN League ${l.id}`);
       }
 
-      // If the bulk endpoint didn't work, try fetching known league IDs from storage
       if (leagueIds.length === 0) {
         const stored = await AsyncStorage.getItem('espn_league_ids');
         if (stored) leagueIds = JSON.parse(stored);
@@ -74,9 +69,7 @@ export function ESPNLoginScreen({ navigation }: any) {
 
       if (leagueIds.length > 0) {
         await AsyncStorage.setItem('espn_league_ids', JSON.stringify(leagueIds));
-        if (leagueNames.length > 0) {
-          await AsyncStorage.setItem('espn_league_name', leagueNames[0]);
-        }
+        if (leagueNames.length > 0) await AsyncStorage.setItem('espn_league_name', leagueNames[0]);
         setConnected(true);
         setStatus(`Connected! Found ${leagueIds.length} league${leagueIds.length !== 1 ? 's' : ''}.`);
         setTimeout(() => {
@@ -87,18 +80,17 @@ export function ESPNLoginScreen({ navigation }: any) {
           );
         }, 500);
       } else {
-        // Cookies saved but no leagues found via API — save creds and let user enter league ID
         setConnected(true);
-        setStatus('Logged in! If your leagues don\'t appear, add your League ID in Settings.');
+        setStatus("Logged in! If your leagues don't appear, add your League ID in Settings.");
         setTimeout(() => {
           Alert.alert(
             'ESPN Logged In',
-            'Your ESPN account is connected. If your leagues don\'t appear automatically, you can add your League ID in Settings.',
+            "Your ESPN account is connected. If your leagues don't appear automatically, you can add your League ID in Settings.",
             [{ text: 'Done', onPress: () => navigation.goBack() }]
           );
         }, 500);
       }
-    } catch (err: any) {
+    } catch {
       setConnecting(false);
       setStatus('Log in to ESPN to connect your leagues');
       Alert.alert('Error', 'Could not connect ESPN. Please try again.');
@@ -106,7 +98,7 @@ export function ESPNLoginScreen({ navigation }: any) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>← Cancel</Text>
@@ -115,9 +107,9 @@ export function ESPNLoginScreen({ navigation }: any) {
       </View>
 
       <View style={styles.statusBar}>
-        {connecting && !connected && <ActivityIndicator color="#b8891a" size="small" style={{ marginRight: 8 }} />}
+        {connecting && !connected && <ActivityIndicator color={C.gold} size="small" style={{ marginRight: 8 }} />}
         {connected && <Text style={{ marginRight: 8 }}>✅</Text>}
-        <Text style={[styles.statusText, connected && { color: '#00FF88' }]}>{status}</Text>
+        <Text style={[styles.statusText, connected && { color: C.sage }]}>{status}</Text>
       </View>
 
       <WebView
@@ -130,21 +122,19 @@ export function ESPNLoginScreen({ navigation }: any) {
         thirdPartyCookiesEnabled
         javaScriptEnabled
         domStorageEnabled
-        onNavigationStateChange={() => {
-          webViewRef.current?.injectJavaScript(INJECT_SCRIPT);
-        }}
+        onNavigationStateChange={() => { webViewRef.current?.injectJavaScript(INJECT_SCRIPT); }}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0a' },
-  header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, flexDirection: 'row', alignItems: 'center' },
-  backBtn: { marginRight: 16 },
-  backText: { color: '#ffffff', fontSize: 16 },
-  title: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
-  statusBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, backgroundColor: '#1a1a1a', borderBottomWidth: 1, borderBottomColor: '#222' },
-  statusText: { color: '#888', fontSize: 13, flex: 1 },
-  webview: { flex: 1 },
+  container:  { flex: 1, backgroundColor: C.bgBot },
+  header:     { paddingHorizontal: SP[3], paddingVertical: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
+  backBtn:    { marginRight: 16 },
+  backText:   { fontFamily: F.outfit, color: C.gold, fontSize: SZ.base },
+  title:      { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg },
+  statusBar:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SP[3], paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
+  statusText: { fontFamily: F.mono, color: C.dim, fontSize: SZ.sm, flex: 1 },
+  webview:    { flex: 1 },
 });
