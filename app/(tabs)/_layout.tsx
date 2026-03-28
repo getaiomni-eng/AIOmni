@@ -5,16 +5,18 @@ export default function TabLayout() {
   return (
     <Tabs screenOptions={{
       headerShown: false,
-      tabBarStyle: { backgroundColor: '#080d08', borderTopColor: 'rgba(212,255,0,0.1)', borderTopWidth: 1 },
-      tabBarActiveTintColor: '#D4FF00',
-      tabBarInactiveTintColor: '#3a4a3a',
-      tabBarLabelStyle: { fontFamily: 'SpaceMono_400Regular', fontSize: 9, letterSpacing: 1 },
+      tabBarStyle: { backgroundColor: '#2e4040', borderTopColor: 'rgba(184,137,26,0.2)', borderTopWidth: 1 },
+      tabBarActiveTintColor: '#b8891a',
+      tabBarInactiveTintColor: 'rgba(255,255,255,0.35)',
+      tabBarLabelStyle: { fontFamily: 'Outfit', fontSize: 10, letterSpacing: 0.5 },
     }}>
-      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 16 }}>⌂</Text> }} />
-      <Tabs.Screen name="explore" options={{ title: 'Trades', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 16 }}>⇄</Text> }} />
-      <Tabs.Screen name="coach" options={{ title: 'AI Coach', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 13, fontFamily: 'BebasNeue_400Regular', letterSpacing: 1 }}>AIO</Text> }} />
-      <Tabs.Screen name="league" options={{ href: null }} />
-      <Tabs.Screen name="waiver" options={{ href: null }} />
+      <Tabs.Screen name="index"    options={{ title: 'Home',     tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 16 }}>⌂</Text> }} />
+      <Tabs.Screen name="trade"    options={{ title: 'Trades',   tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 16 }}>⇄</Text> }} />
+      <Tabs.Screen name="coach"    options={{ title: 'AI Coach', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 13 }}>AIO</Text> }} />
+      <Tabs.Screen name="settings" options={{ title: 'settings', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 14 }}>▼</Text> }} />
+      <Tabs.Screen name="explore"  options={{ href: null }} />
+      <Tabs.Screen name="league"   options={{ href: null }} />
+      <Tabs.Screen name="waiver"   options={{ href: null }} />
     </Tabs>
   );
 }
