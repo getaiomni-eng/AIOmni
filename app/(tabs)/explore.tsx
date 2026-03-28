@@ -1,37 +1,56 @@
-import { useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GlassCard } from '../components/GlassCard';
+import { C, F, SP, SZ } from '../constants/tokens';
 
 const API_KEY = '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';
 const DYNASTY_KEYWORDS = ['pick', 'round', '2025', '2026', '2027', '2028', 'first', 'second', 'third', 'future', 'rookie'];
-const GRADE_COLORS: Record<string, string> = { 'A+': '#b8891a', 'A': '#b8891a', 'A-': '#b8891a', 'B+': '#00ffaa', 'B': '#00ffaa', 'B-': '#00ffaa', 'C+': '#ffaa00', 'C': '#ffaa00', 'C-': '#ffaa00', 'D+': '#ff2255', 'D': '#ff2255', 'D-': '#ff2255', 'F': '#ff2255' };
+const GRADE_COLORS: Record<string, string> = {
+  'A+': C.sage, 'A': C.sage, 'A-': C.sage,
+  'B+': '#7ec8e8', 'B': '#7ec8e8', 'B-': '#7ec8e8',
+  'C+': C.amber, 'C': C.amber, 'C-': C.amber,
+  'D+': '#c87878', 'D': '#c87878', 'D-': '#c87878', 'F': '#c87878',
+};
 const EXAMPLE_TRADES = [
   { give: 'CeeDee Lamb', get: 'Saquon Barkley + Tyler Lockett' },
   { give: 'Josh Allen + flex', get: 'Lamar Jackson + WR2' },
   { give: 'My 1st round pick', get: 'Davante Adams' },
 ];
 
-type TradeResult = { yourGrade: string; theirGrade: string; verdict: string; yourAnalysis: string; theirAnalysis: string; recommendation: string; };
+type TradeResult = {
+  yourGrade: string; theirGrade: string; verdict: string;
+  yourAnalysis: string; theirAnalysis: string; recommendation: string;
+};
 
 export default function TradeAnalyzerScreen() {
-  const [giving, setGiving] = useState('');
-  const [getting, setGetting] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<TradeResult | null>(null);
-  const [showDynastyModal, setShowDynastyModal] = useState(false);
-  const [leagueType, setLeagueType] = useState<'redraft' | 'dynasty'>('redraft');
+  const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [giving,           setGiving]           = useState('');
+  const [getting,          setGetting]          = useState('');
+  const [loading,          setLoading]          = useState(false);
+  const [result,           setResult]           = useState<TradeResult | null>(null);
+  const [showDynastyModal, setShowDynastyModal] = useState(false);
+  const [leagueType,       setLeagueType]       = useState<'redraft' | 'dynasty'>('redraft');
 
   const isDynastyTrade = (text: string) => DYNASTY_KEYWORDS.some(kw => text.toLowerCase().includes(kw));
 
   const handleAnalyze = async () => {
     if (!giving.trim() || !getting.trim()) return;
-    if ((isDynastyTrade(giving) || isDynastyTrade(getting)) && leagueType === 'redraft') { setShowDynastyModal(true); return; }
+    if ((isDynastyTrade(giving) || isDynastyTrade(getting)) && leagueType === 'redraft') {
+      setShowDynastyModal(true); return;
+    }
     setLoading(true); setResult(null);
     try {
       const prompt = `You are AIOmni, expert fantasy football trade analyst.\n\nAnalyze this trade and respond ONLY with a JSON object:\n{\n  "yourGrade": "B+",\n  "theirGrade": "C",\n  "verdict": "One sentence who wins",\n  "yourAnalysis": "2-3 sentences what user receives",\n  "theirAnalysis": "2-3 sentences what user gives",\n  "recommendation": "ACCEPT or DECLINE or COUNTER — one sentence why"\n}\n\nLeague Type: ${leagueType === 'dynasty' ? 'Dynasty' : 'Redraft'}\nYou are giving: ${giving}\nYou are getting: ${getting}\n\nGrade A+ through F. Return only valid JSON.`;
-      const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 600, messages: [{ role: 'user', content: prompt }] }) });
-      const data = await response.json();
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 600, messages: [{ role: 'user', content: prompt }] }),
+      });
+      const data  = await response.json();
       const clean = data.content[0].text.trim().replace(/```json|```/g, '').trim();
       setResult(JSON.parse(clean));
     } catch {
@@ -39,32 +58,47 @@ export default function TradeAnalyzerScreen() {
     } finally { setLoading(false); }
   };
 
-  const recColor = result?.recommendation?.startsWith('ACCEPT') ? '#b8891a' : result?.recommendation?.startsWith('DECLINE') ? '#ff2255' : '#ffaa00';
+  const recColor = result?.recommendation?.startsWith('ACCEPT') ? C.sage
+    : result?.recommendation?.startsWith('DECLINE') ? '#c87878' : C.amber;
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 12 }]} showsVerticalScrollIndicator={false}>
 
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>TRADE ANALYZER</Text>
+          <Text style={styles.title}>Trade Analyzer</Text>
           <Text style={styles.subtitle}>A–F GRADE ON ANY TRADE</Text>
         </View>
 
         {/* League type toggle */}
         <View style={styles.toggleRow}>
-          <TouchableOpacity style={[styles.toggleBtn, leagueType === 'redraft' && styles.toggleActive]} onPress={() => setLeagueType('redraft')}>
-            <Text style={[styles.toggleText, leagueType === 'redraft' && styles.toggleTextActive]}>REDRAFT</Text>
+          <TouchableOpacity
+            style={[styles.toggleBtn, leagueType === 'redraft' && { borderColor: C.gold, backgroundColor: C.goldS }]}
+            onPress={() => setLeagueType('redraft')}
+          >
+            <Text style={[styles.toggleText, leagueType === 'redraft' && { color: C.gold }]}>REDRAFT</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.toggleBtn, leagueType === 'dynasty' && { borderColor: '#ffaa00', backgroundColor: 'rgba(255,170,0,0.06)' }]} onPress={() => setLeagueType('dynasty')}>
-            <Text style={[styles.toggleText, leagueType === 'dynasty' && { color: '#ffaa00' }]}>DYNASTY</Text>
+          <TouchableOpacity
+            style={[styles.toggleBtn, leagueType === 'dynasty' && { borderColor: C.amber, backgroundColor: 'rgba(224,144,80,0.15)' }]}
+            onPress={() => setLeagueType('dynasty')}
+          >
+            <Text style={[styles.toggleText, leagueType === 'dynasty' && { color: C.amber }]}>DYNASTY</Text>
           </TouchableOpacity>
         </View>
 
         {/* Inputs */}
-        <View style={styles.inputBlock}>
+        <GlassCard style={styles.inputBlock} padding={16} radius={16}>
           <Text style={styles.inputLabel}>📤 YOU ARE GIVING</Text>
-          <TextInput style={styles.tradeInput} placeholder="e.g. CeeDee Lamb + flex" placeholderTextColor="#222" value={giving} onChangeText={setGiving} multiline />
-        </View>
+          <TextInput
+            style={styles.tradeInput}
+            placeholder="e.g. CeeDee Lamb + flex"
+            placeholderTextColor="rgba(255,255,255,0.3)"
+            value={giving}
+            onChangeText={setGiving}
+            multiline
+          />
+        </GlassCard>
 
         <View style={styles.vsRow}>
           <View style={styles.vsDivider} />
@@ -72,10 +106,17 @@ export default function TradeAnalyzerScreen() {
           <View style={styles.vsDivider} />
         </View>
 
-        <View style={styles.inputBlock}>
+        <GlassCard style={styles.inputBlock} padding={16} radius={16}>
           <Text style={styles.inputLabel}>📥 YOU ARE GETTING</Text>
-          <TextInput style={styles.tradeInput} placeholder="e.g. Saquon Barkley + WR2" placeholderTextColor="#222" value={getting} onChangeText={setGetting} multiline />
-        </View>
+          <TextInput
+            style={styles.tradeInput}
+            placeholder="e.g. Saquon Barkley + WR2"
+            placeholderTextColor="rgba(255,255,255,0.3)"
+            value={getting}
+            onChangeText={setGetting}
+            multiline
+          />
+        </GlassCard>
 
         {/* Example trades */}
         {!result && !loading && (
@@ -92,8 +133,14 @@ export default function TradeAnalyzerScreen() {
         )}
 
         {/* Analyze button */}
-        <TouchableOpacity style={[styles.analyzeBtn, (!giving.trim() || !getting.trim()) && styles.analyzeBtnDisabled]} onPress={handleAnalyze} disabled={loading || !giving.trim() || !getting.trim()}>
-          {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.analyzeBtnText}>ANALYZE THIS TRADE</Text>}
+        <TouchableOpacity
+          style={[styles.analyzeBtn, (!giving.trim() || !getting.trim()) && { opacity: 0.4 }]}
+          onPress={handleAnalyze}
+          disabled={loading || !giving.trim() || !getting.trim()}
+        >
+          {loading
+            ? <ActivityIndicator color="#1a1208" />
+            : <Text style={styles.analyzeBtnText}>ANALYZE THIS TRADE</Text>}
         </TouchableOpacity>
 
         {/* Result */}
@@ -101,37 +148,37 @@ export default function TradeAnalyzerScreen() {
           <View style={styles.resultSection}>
             {/* Grades */}
             <View style={styles.gradeRow}>
-              <View style={[styles.gradeCard, { borderColor: `${GRADE_COLORS[result.yourGrade] || '#fff'}40` }]}>
+              <GlassCard style={[styles.gradeCard, { borderColor: `${GRADE_COLORS[result.yourGrade] || '#fff'}40` }]} padding={16} radius={16}>
                 <Text style={styles.gradeLabel}>YOU RECEIVE</Text>
-                <Text style={[styles.gradeValue, { color: GRADE_COLORS[result.yourGrade] || '#fff' }]}>{result.yourGrade}</Text>
-              </View>
+                <Text style={[styles.gradeValue, { color: GRADE_COLORS[result.yourGrade] || C.ink }]}>{result.yourGrade}</Text>
+              </GlassCard>
               <Text style={styles.gradeVs}>VS</Text>
-              <View style={[styles.gradeCard, { borderColor: `${GRADE_COLORS[result.theirGrade] || '#fff'}40` }]}>
+              <GlassCard style={[styles.gradeCard, { borderColor: `${GRADE_COLORS[result.theirGrade] || '#fff'}40` }]} padding={16} radius={16}>
                 <Text style={styles.gradeLabel}>YOU GIVE UP</Text>
-                <Text style={[styles.gradeValue, { color: GRADE_COLORS[result.theirGrade] || '#fff' }]}>{result.theirGrade}</Text>
-              </View>
+                <Text style={[styles.gradeValue, { color: GRADE_COLORS[result.theirGrade] || C.ink }]}>{result.theirGrade}</Text>
+              </GlassCard>
             </View>
 
             {/* Verdict */}
-            <View style={styles.verdictCard}>
+            <GlassCard style={{ borderLeftWidth: 3, borderLeftColor: C.gold, marginBottom: 12 }} padding={16} radius={14}>
               <Text style={styles.verdictLabel}>◈ VERDICT</Text>
               <Text style={styles.verdictText}>{result.verdict}</Text>
-            </View>
+            </GlassCard>
 
             {/* Analysis */}
-            <View style={styles.analysisCard}>
+            <GlassCard style={{ marginBottom: 8 }} padding={16} radius={14}>
               <Text style={styles.analysisTitle}>📥 WHAT YOU'RE GETTING</Text>
               <Text style={styles.analysisText}>{result.yourAnalysis}</Text>
-            </View>
-            <View style={styles.analysisCard}>
+            </GlassCard>
+            <GlassCard style={{ marginBottom: 12 }} padding={16} radius={14}>
               <Text style={styles.analysisTitle}>📤 WHAT YOU'RE GIVING UP</Text>
               <Text style={styles.analysisText}>{result.theirAnalysis}</Text>
-            </View>
+            </GlassCard>
 
             {/* Recommendation */}
-            <View style={[styles.recommendCard, { borderColor: recColor }]}>
+            <GlassCard style={{ borderWidth: 2, borderColor: recColor, marginBottom: 16, alignItems: 'center' }} padding={16} radius={14}>
               <Text style={[styles.recommendText, { color: recColor }]}>{result.recommendation}</Text>
-            </View>
+            </GlassCard>
 
             <TouchableOpacity style={styles.resetBtn} onPress={() => { setGiving(''); setGetting(''); setResult(null); }}>
               <Text style={styles.resetText}>ANALYZE ANOTHER TRADE</Text>
@@ -143,99 +190,89 @@ export default function TradeAnalyzerScreen() {
       {/* Dynasty Elite modal */}
       <Modal visible={showDynastyModal} transparent animationType="slide" onRequestClose={() => setShowDynastyModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalAccent} />
+          <GlassCard style={styles.modalCard} padding={28} radius={20}>
             <Text style={styles.modalEmoji}>👑</Text>
-            <Text style={styles.modalTitle}>DYNASTY TRADE DETECTED</Text>
+            <Text style={styles.modalTitle}>Dynasty Trade Detected</Text>
             <Text style={styles.modalBody}>Future pick valuation requires Dynasty Elite — AI weighs live college rankings and multi-year roster impact.</Text>
             <View style={styles.modalFeatures}>
               {['Live college football rankings', 'Future pick grade engine', 'Rookie draft board', 'Dynasty AI memory'].map(f => (
                 <View key={f} style={styles.modalFeatureRow}>
-                  <Text style={styles.modalFeatureCheck}>✓</Text>
-                  <Text style={styles.modalFeatureText}>{f}</Text>
+                  <Text style={[styles.modalFeatureCheck, { color: C.amber }]}>✓</Text>
+                  <Text style={[styles.modalFeatureText, { color: C.amber }]}>{f}</Text>
                 </View>
               ))}
             </View>
-            <TouchableOpacity style={styles.modalUpgradeBtn} onPress={() => { setShowDynastyModal(false); router.push('/paywall'); }}>
+            <TouchableOpacity style={[styles.modalUpgradeBtn, { backgroundColor: C.amber }]} onPress={() => { setShowDynastyModal(false); router.push('/paywall'); }}>
               <Text style={styles.modalUpgradeBtnText}>UPGRADE TO DYNASTY ELITE — $19.99/MO →</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.modalSkipBtn} onPress={() => { setShowDynastyModal(false); setLeagueType('dynasty'); handleAnalyze(); }}>
               <Text style={styles.modalSkipText}>Analyze anyway (redraft values only)</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowDynastyModal(false)}>
-              <Text style={styles.modalDismiss}>Maybe later</Text>
+            <TouchableOpacity onPress={() => setShowDynastyModal(false)} style={{ alignItems: 'center', marginTop: 8 }}>
+              <Text style={{ fontFamily: F.outfit, color: C.dim, fontSize: SZ.sm }}>Maybe later</Text>
             </TouchableOpacity>
-          </View>
+          </GlassCard>
         </View>
       </Modal>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#2e4040' },
-  scroll: { paddingHorizontal: 20, paddingBottom: 60 },
-  header: { paddingTop: 56, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(212,255,0,0.08)', marginBottom: 20 },
-  title: { fontFamily: 'Outfit-Bold', fontSize: 36, color: '#b8891a', letterSpacing: 4, lineHeight: 38, textShadowColor: 'rgba(212,255,0,0.3)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
-  subtitle: { fontFamily: 'DMMono-Regular', fontSize: 9, color: '#444', letterSpacing: 2, marginTop: 4 },
+  scroll:           { paddingHorizontal: SP[3], paddingBottom: 80 },
+  header:           { paddingBottom: 16, marginBottom: 16 },
+  title:            { fontSize: SZ['2xl'], fontWeight: '700', color: C.ink, fontFamily: F.bold },
+  subtitle:         { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim, letterSpacing: 2, marginTop: 3 },
 
-  toggleRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  toggleBtn: { flex: 1, backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#1a1a2e' },
-  toggleActive: { borderColor: 'rgba(212,255,0,0.4)', backgroundColor: 'rgba(212,255,0,0.06)' },
-  toggleText: { fontFamily: 'DMMono-Regular', color: '#444', fontSize: 10, letterSpacing: 2 },
-  toggleTextActive: { color: '#b8891a' },
+  toggleRow:        { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  toggleBtn:        { flex: 1, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', backgroundColor: 'rgba(255,255,255,0.08)' },
+  toggleText:       { fontFamily: F.mono, color: C.dim, fontSize: SZ.xs, letterSpacing: 2 },
 
-  inputBlock: { marginBottom: 8 },
-  inputLabel: { fontFamily: 'DMMono-Regular', color: '#444', fontSize: 9, letterSpacing: 2, marginBottom: 8 },
-  tradeInput: { backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, padding: 16, color: '#fff', fontFamily: 'Outfit', fontSize: 15, minHeight: 70, borderWidth: 1, borderColor: '#1a1a2e', textAlignVertical: 'top' },
+  inputBlock:       { marginBottom: 4 },
+  inputLabel:       { fontFamily: F.mono, color: C.dim, fontSize: SZ.xs - 1, letterSpacing: 2, marginBottom: 10 },
+  tradeInput:       { color: C.ink, fontFamily: F.outfit, fontSize: SZ.base, minHeight: 60, textAlignVertical: 'top' },
 
-  vsRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 14 },
-  vsDivider: { flex: 1, height: 1, backgroundColor: '#1a1a2e' },
-  vsText: { fontFamily: 'Outfit-Bold', color: '#333', fontSize: 18, letterSpacing: 3, marginHorizontal: 14 },
+  vsRow:            { flexDirection: 'row', alignItems: 'center', marginVertical: 12 },
+  vsDivider:        { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
+  vsText:           { fontFamily: F.bold, color: C.dim, fontSize: SZ.lg, letterSpacing: 3, marginHorizontal: 14 },
 
-  exampleSection: { marginTop: 12, marginBottom: 4 },
-  exampleLabel: { fontFamily: 'DMMono-Regular', color: '#333', fontSize: 9, letterSpacing: 2, marginBottom: 10 },
-  exampleChip: { backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#1a1a2e' },
-  exampleText: { fontFamily: 'Outfit', color: '#555', fontSize: 12 },
+  exampleSection:   { marginTop: 12, marginBottom: 4 },
+  exampleLabel:     { fontFamily: F.mono, color: C.dim, fontSize: SZ.xs - 1, letterSpacing: 2, marginBottom: 10 },
+  exampleChip:      { backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+  exampleText:      { fontFamily: F.outfit, color: C.dim, fontSize: SZ.sm },
 
-  analyzeBtn: { backgroundColor: '#b8891a', borderRadius: 2, padding: 18, alignItems: 'center', marginTop: 16, marginBottom: 8 },
-  analyzeBtnDisabled: { opacity: 0.3 },
-  analyzeBtnText: { fontFamily: 'Outfit-Bold', color: '#000', fontSize: 22, letterSpacing: 4 },
+  analyzeBtn:       { backgroundColor: C.gold, borderRadius: 14, padding: 18, alignItems: 'center', marginTop: 16, marginBottom: 8 },
+  analyzeBtnText:   { fontFamily: F.bold, color: '#1a1208', fontSize: SZ.lg, letterSpacing: 3 },
 
-  resultSection: { marginTop: 8 },
-  gradeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
-  gradeCard: { flex: 1, backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, padding: 16, alignItems: 'center', borderWidth: 1 },
-  gradeLabel: { fontFamily: 'DMMono-Regular', color: '#444', fontSize: 8, letterSpacing: 1.5, marginBottom: 8 },
-  gradeValue: { fontFamily: 'Outfit-Bold', fontSize: 52, letterSpacing: 2, lineHeight: 52 },
-  gradeVs: { fontFamily: 'Outfit-Bold', color: '#222', fontSize: 18, letterSpacing: 3 },
+  resultSection:    { marginTop: 8 },
+  gradeRow:         { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
+  gradeCard:        { flex: 1, alignItems: 'center' },
+  gradeLabel:       { fontFamily: F.mono, color: C.dim, fontSize: SZ.xs - 2, letterSpacing: 1.5, marginBottom: 8 },
+  gradeValue:       { fontFamily: F.bold, fontSize: 52, letterSpacing: 2, lineHeight: 52 },
+  gradeVs:          { fontFamily: F.bold, color: C.dim, fontSize: SZ.lg, letterSpacing: 3 },
 
-  verdictCard: { backgroundColor: 'rgba(212,255,0,0.05)', borderRadius: 2, padding: 16, marginBottom: 12, borderLeftWidth: 3, borderLeftColor: '#b8891a' },
-  verdictLabel: { fontFamily: 'DMMono-Regular', color: '#b8891a', fontSize: 8, letterSpacing: 2, marginBottom: 8 },
-  verdictText: { fontFamily: 'Outfit-SemiBold', color: '#fff', fontSize: 15, lineHeight: 22 },
+  verdictLabel:     { fontFamily: F.mono, color: C.gold, fontSize: SZ.xs - 2, letterSpacing: 2, marginBottom: 8 },
+  verdictText:      { fontFamily: F.semibold, color: C.ink, fontSize: SZ.md, lineHeight: 22 },
 
-  analysisCard: { backgroundColor: 'rgba(8,8,22,0.9)', borderRadius: 2, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: '#1a1a2e' },
-  analysisTitle: { fontFamily: 'DMMono-Regular', color: '#b8891a', fontSize: 9, letterSpacing: 1.5, marginBottom: 10 },
-  analysisText: { fontFamily: 'Outfit', color: '#888', fontSize: 14, lineHeight: 20 },
+  analysisTitle:    { fontFamily: F.mono, color: C.gold, fontSize: SZ.xs - 1, letterSpacing: 1.5, marginBottom: 10 },
+  analysisText:     { fontFamily: F.outfit, color: C.dim, fontSize: SZ.md, lineHeight: 20 },
 
-  recommendCard: { borderRadius: 2, padding: 16, marginBottom: 16, borderWidth: 2, alignItems: 'center', backgroundColor: 'rgba(8,8,22,0.9)' },
-  recommendText: { fontFamily: 'Outfit-Bold', fontSize: 18, letterSpacing: 3, textAlign: 'center' },
+  recommendText:    { fontFamily: F.bold, fontSize: SZ.lg, letterSpacing: 2, textAlign: 'center' },
 
-  resetBtn: { borderWidth: 1, borderColor: '#1a1a2e', borderRadius: 2, padding: 14, alignItems: 'center', marginBottom: 8 },
-  resetText: { fontFamily: 'DMMono-Regular', color: '#444', fontSize: 10, letterSpacing: 2 },
+  resetBtn:         { borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', borderRadius: 12, padding: 14, alignItems: 'center', marginBottom: 8 },
+  resetText:        { fontFamily: F.mono, color: C.dim, fontSize: SZ.xs, letterSpacing: 2 },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: '#060610', borderTopLeftRadius: 2, borderTopRightRadius: 2, padding: 28, borderTopWidth: 1, borderColor: 'rgba(255,170,0,0.3)', overflow: 'hidden' },
-  modalAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: '#ffaa00' },
-  modalEmoji: { fontSize: 40, textAlign: 'center', marginBottom: 12 },
-  modalTitle: { fontFamily: 'Outfit-Bold', color: '#fff', fontSize: 28, letterSpacing: 3, textAlign: 'center', marginBottom: 12 },
-  modalBody: { fontFamily: 'Outfit', color: '#666', fontSize: 14, lineHeight: 22, textAlign: 'center', marginBottom: 20 },
-  modalFeatures: { backgroundColor: 'rgba(255,170,0,0.06)', borderRadius: 2, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,170,0,0.2)' },
-  modalFeatureRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10 },
-  modalFeatureCheck: { color: '#ffaa00', fontSize: 14, fontWeight: '700' },
-  modalFeatureText: { fontFamily: 'Outfit-SemiBold', color: '#ffaa00', fontSize: 13 },
-  modalUpgradeBtn: { backgroundColor: '#ffaa00', borderRadius: 2, padding: 16, alignItems: 'center', marginBottom: 10 },
-  modalUpgradeBtnText: { fontFamily: 'Outfit-Bold', color: '#000', fontSize: 16, letterSpacing: 2 },
-  modalSkipBtn: { borderWidth: 1, borderColor: '#1a1a2e', borderRadius: 2, padding: 14, alignItems: 'center', marginBottom: 10 },
-  modalSkipText: { fontFamily: 'Outfit', color: '#555', fontSize: 13 },
-  modalDismiss: { fontFamily: 'Outfit', color: '#333', textAlign: 'center', fontSize: 13, paddingVertical: 8 },
+  modalOverlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end', padding: SP[3], paddingBottom: 40 },
+  modalCard:        {},
+  modalEmoji:       { fontSize: 40, textAlign: 'center', marginBottom: 12 },
+  modalTitle:       { fontFamily: F.bold, color: C.ink, fontSize: SZ['2xl'], textAlign: 'center', marginBottom: 12 },
+  modalBody:        { fontFamily: F.outfit, color: C.dim, fontSize: SZ.md, lineHeight: 22, textAlign: 'center', marginBottom: 20 },
+  modalFeatures:    { backgroundColor: 'rgba(224,144,80,0.10)', borderRadius: 14, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(224,144,80,0.25)' },
+  modalFeatureRow:  { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10 },
+  modalFeatureCheck:{ fontSize: SZ.md, fontWeight: '700' },
+  modalFeatureText: { fontFamily: F.semibold, fontSize: SZ.sm },
+  modalUpgradeBtn:  { borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 10 },
+  modalUpgradeBtnText: { fontFamily: F.bold, color: '#1a1208', fontSize: SZ.base, letterSpacing: 2 },
+  modalSkipBtn:     { borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', borderRadius: 14, padding: 14, alignItems: 'center', marginBottom: 8 },
+  modalSkipText:    { fontFamily: F.outfit, color: C.dim, fontSize: SZ.sm },
 });
