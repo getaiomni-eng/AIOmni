@@ -1,11 +1,12 @@
-import { Image } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
-export default function TabIcon({ focused }: { focused: boolean }) {
-  return (
-    <Image
-      source={require('../../assets/images/logo.png')}
-      style={{ width: 26, height: 26, opacity: focused ? 1 : 0.5 }}
-      resizeMode="contain"
-    />
-  );
+const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  home: 'home',
+  trade: 'swap-horizontal',
+  coach: 'chatbubble-ellipses',
+  settings: 'settings-sharp',
+};
+
+export default function TabIcon({ name, color }: { name: string; color: string }) {
+  return <Ionicons name={ICONS[name] || 'ellipse'} size={22} color={color} />;
 }
