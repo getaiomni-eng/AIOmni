@@ -42,6 +42,13 @@
     }
   },
   "submit": {
+    "testflight": {
+      "ios": {
+        "appleId": "pmeyer2184@icloud.com",
+        "ascAppId": "6760617627",
+        "appleTeamId": "9AK8M8Q4N6"
+      }
+    },
     "production": {
       "ios": {
         "appleId": "pmeyer2184@icloud.com",
