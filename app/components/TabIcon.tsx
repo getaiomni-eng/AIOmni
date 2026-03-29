@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   home: 'home',
+  rankings: 'trophy',
   trade: 'swap-horizontal',
   coach: 'chatbubble-ellipses',
   settings: 'settings-sharp',
