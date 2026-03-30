@@ -1,29 +1,35 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, Image, TouchableOpacity,
-  StyleSheet, Animated, Dimensions, ActivityIndicator, RefreshControl,
+  ActivityIndicator,
+  Animated, Dimensions,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { C, F, SZ, SP, R } from '../constants/tokens';
+import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../services/espn';
+import { Badge, SectionHeader } from '../components/Atoms';
 import { GlassCard } from '../components/GlassCard';
 import { OrbAvatar } from '../components/OrbAvatar';
-import { Badge, SectionHeader } from '../components/Atoms';
-import { loadESPNCredentials, getESPNLeague, findMyESPNTeam } from '../../services/espn';
+import { C, F, R, SP, SZ, textShadow } from '../constants/tokens';
 
 const LOGO = require('../../assets/images/logo.png');
 const { width: SCREEN_W } = Dimensions.get('window');
 
-// ── Types ──────────────────────────────────────────────────────
 type League = {
   id: string; name: string; platform: 'sleeper' | 'espn';
   format?: string; rec?: string; rank?: string;
   pts?: number; opp?: number; week?: number;
 };
 
-// ── Static news ────────────────────────────────────────────────
 const FALLBACK_NEWS = [
   { source: 'ROTOWIRE', headline: 'Jaxon Smith-Njigba: 5th-year option picked up by SEA', color: '#4ab8a0' },
   { source: 'PFR',      headline: 'NFL Teams Higher On Their QBs Than Draft Pundits?',    color: '#e8a84b' },
@@ -37,12 +43,9 @@ const INSIGHTS = [
   { emoji: '🔥', title: 'Add Shaheed',    body: '3 TDs in last 4 games. 78% target share with Drake.',    tag: 'HOT',     color: C.gold },
 ];
 
-// ── ESPN colors ────────────────────────────────────────────────
 const ESPN_RED = '#d00';
-const ESPN_RED_DIM = 'rgba(221,0,0,0.18)';
 const ESPN_RED_BORDER = 'rgba(221,0,0,0.35)';
 
-// ── Component ──────────────────────────────────────────────────
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -66,18 +69,15 @@ export default function HomeScreen() {
     return () => clearInterval(t);
   }, []);
 
-  // ── Sleeper loader ───────────────────────────────────────────
   const loadSleeperLeagues = async (): Promise<League[]> => {
     try {
       const u = await AsyncStorage.getItem('sleeper_username');
       if (!u) return [];
       const user = await (await fetch(`https://api.sleeper.app/v1/user/${u}`)).json();
       if (!user?.user_id) return [];
-
       const slRes  = await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/2025`);
       const leagues = await slRes.json();
       if (!Array.isArray(leagues)) return [];
-
       const stateRes = await fetch('https://api.sleeper.app/v1/state/nfl');
       const state    = await stateRes.json();
       const week     = state.leg || state.display_week || state.week || 17;
@@ -102,125 +102,70 @@ export default function HomeScreen() {
             id: l.league_id, name: l.name, platform: 'sleeper', format: fmt,
             rec: `${wins}–${losses}`,
             rank: rank > 0 ? `${rank}${ordinal(rank)} of ${rosters.length}` : undefined,
-            pts: myMatchup?.points ?? 0,
-            opp: oppMatchup?.points ?? 0,
-            week,
+            pts: myMatchup?.points ?? 0, opp: oppMatchup?.points ?? 0, week,
           };
         } catch {
           return { id: l.league_id, name: l.name, platform: 'sleeper', format: fmt };
         }
       }));
-    } catch (e) {
-      console.log('loadSleeperLeagues:', e);
-      return [];
-    }
+    } catch (e) { console.log('loadSleeperLeagues:', e); return []; }
   };
 
-  // ── ESPN loader ──────────────────────────────────────────────
   const loadESPNLeagues = async (): Promise<League[]> => {
     try {
       const creds = await loadESPNCredentials();
       if (!creds?.leagueId) return [];
-
       const leagueData = await getESPNLeague(creds.leagueId, creds);
       if (!leagueData) return [];
-
       const myTeam = findMyESPNTeam(leagueData, creds.teamName || '');
-
-      // Format detection
       const settings = leagueData.settings?.scoringSettings;
       const recPts   = settings?.REC ?? 0;
       const fmt      = recPts >= 1 ? 'PPR' : recPts >= 0.5 ? '0.5 PPR' : 'STD';
-
-      // Record
       const wins   = myTeam?.record?.overall?.wins   ?? 0;
       const losses = myTeam?.record?.overall?.losses ?? 0;
-
-      // Rank
       const teams      = leagueData.teams ?? [];
       const sorted     = [...teams].sort((a: any, b: any) => (b.record?.overall?.wins ?? 0) - (a.record?.overall?.wins ?? 0));
       const rankIdx    = sorted.findIndex((t: any) => t.id === myTeam?.id);
       const rankStr    = rankIdx >= 0 ? `${rankIdx + 1}${ordinal(rankIdx + 1)} of ${teams.length}` : undefined;
-
-      // Current matchup scores
       const week        = leagueData.scoringPeriodId ?? 17;
       const matchupData = leagueData.schedule?.find(
         (m: any) => m.matchupPeriodId === week &&
           (m.home?.teamId === myTeam?.id || m.away?.teamId === myTeam?.id)
       );
-      const myScore  = matchupData?.home?.teamId === myTeam?.id
-        ? matchupData?.home?.totalPoints
-        : matchupData?.away?.totalPoints;
-      const oppScore = matchupData?.home?.teamId === myTeam?.id
-        ? matchupData?.away?.totalPoints
-        : matchupData?.home?.totalPoints;
-
-      return [{
-        id: String(creds.leagueId),
-        name: leagueData.settings?.name ?? 'ESPN League',
-        platform: 'espn',
-        format: fmt,
-        rec: `${wins}–${losses}`,
-        rank: rankStr,
-        pts:  myScore  ?? 0,
-        opp:  oppScore ?? 0,
-        week,
-      }];
-    } catch (e) {
-      console.log('loadESPNLeagues:', e);
-      return [];
-    }
+      const myScore  = matchupData?.home?.teamId === myTeam?.id ? matchupData?.home?.totalPoints : matchupData?.away?.totalPoints;
+      const oppScore = matchupData?.home?.teamId === myTeam?.id ? matchupData?.away?.totalPoints : matchupData?.home?.totalPoints;
+      return [{ id: String(creds.leagueId), name: leagueData.settings?.name ?? 'ESPN League', platform: 'espn', format: fmt, rec: `${wins}–${losses}`, rank: rankStr, pts: myScore ?? 0, opp: oppScore ?? 0, week }];
+    } catch (e) { console.log('loadESPNLeagues:', e); return []; }
   };
 
-  // ── Combined loader ──────────────────────────────────────────
   const loadLeagues = async () => {
     setLoading(true);
-
     const u = await AsyncStorage.getItem('sleeper_username');
     if (u) setUsername(u);
-
-    const [sleeperLeagues, espnLeagues] = await Promise.all([
-      loadSleeperLeagues(),
-      loadESPNLeagues(),
-    ]);
-
+    const [sleeperLeagues, espnLeagues] = await Promise.all([loadSleeperLeagues(), loadESPNLeagues()]);
     const all = [...sleeperLeagues, ...espnLeagues];
     setLeagues(all);
     setLoading(false);
-
     if (all.length > 0) fetchAIInsight(all);
-
     all.forEach((lg, i) => {
       if (i < scoreAnims.length && lg.pts) {
-        Animated.timing(scoreAnims[i], {
-          toValue: lg.pts, duration: 1400 + i * 120, useNativeDriver: false,
-        }).start();
+        Animated.timing(scoreAnims[i], { toValue: lg.pts, duration: 1400 + i * 120, useNativeDriver: false }).start();
       }
     });
   };
 
-  // ── AI insight ───────────────────────────────────────────────
   const fetchAIInsight = async (leagueList: League[]) => {
     setInsightLoading(true);
     try {
       const leagueContext = leagueList.map(l =>
         `${l.name} (${l.platform.toUpperCase()} · ${l.format}): Record ${l.rec ?? '?'}, Rank ${l.rank ?? '?'}, Score ${l.pts?.toFixed(1) ?? '?'} vs ${l.opp?.toFixed(1) ?? '?'} (${(l.pts ?? 0) > (l.opp ?? 0) ? 'WINNING' : 'LOSING'})`
       ).join('\n');
-
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': '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',
-          'anthropic-version': '2023-06-01',
-        },
+        headers: { 'Content-Type': 'application/json', 'x-api-key': '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', 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 120,
-          messages: [{
-            role: 'user',
-            content: `You are AIOmni. A manager has ${leagueList.length} fantasy football leagues this week:\n${leagueContext}\n\nGive ONE cross-league insight that is ONLY relevant if it affects multiple leagues simultaneously. Good examples: same injured player owned in multiple leagues, losing in multiple leagues needing upside, a waiver target that helps several rosters. BAD examples: comparing QBs across leagues (each league is independent). Focus on portfolio-level risk or opportunity. Under 20 words. JSON only, no markdown:\n{"emoji":"🎯","title":"Short title (5 words max)","body":"Under 20 words","tag":"RISK|WAIVER|URGENT|TRADE","color":"sage|gold|red"}`,
-          }],
+          model: 'claude-sonnet-4-20250514', max_tokens: 120,
+          messages: [{ role: 'user', content: `You are AIOmni. A manager has ${leagueList.length} fantasy football leagues this week:\n${leagueContext}\n\nGive ONE cross-league insight that is ONLY relevant if it affects multiple leagues simultaneously. Good examples: same injured player owned in multiple leagues, losing in multiple leagues needing upside, a waiver target that helps several rosters. BAD examples: comparing QBs across leagues (each league is independent). Focus on portfolio-level risk or opportunity. Under 20 words. JSON only, no markdown:\n{"emoji":"🎯","title":"Short title (5 words max)","body":"Under 20 words","tag":"RISK|WAIVER|URGENT|TRADE","color":"sage|gold|red"}` }],
         }),
       });
       const data = await res.json();
@@ -228,18 +173,11 @@ export default function HomeScreen() {
       const cleaned = text.replace(/```json|```/g, '').trim();
       const parsed  = JSON.parse(cleaned);
       const colorMap: Record<string, string> = { sage: '#2d7a5e', gold: '#c8a84b', red: '#c87878' };
-      setAiInsight({
-        emoji: parsed.emoji ?? '🎯',
-        title: parsed.title ?? 'AI Insight',
-        body:  parsed.body  ?? '',
-        tag:   parsed.tag   ?? 'INSIGHT',
-        color: colorMap[parsed.color] ?? '#2d7a5e',
-      });
+      setAiInsight({ emoji: parsed.emoji ?? '🎯', title: parsed.title ?? 'AI Insight', body: parsed.body ?? '', tag: parsed.tag ?? 'INSIGHT', color: colorMap[parsed.color] ?? '#2d7a5e' });
     } catch (e) { console.log('AI insight error:', e); }
     setInsightLoading(false);
   };
 
-  // ── News ─────────────────────────────────────────────────────
   const fetchNews = async () => {
     const parseRSS = (xml: string, source: string, color: string) => {
       const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
@@ -283,9 +221,6 @@ export default function HomeScreen() {
   const goToLeague = (l: League) =>
     router.push({ pathname: '/league', params: { leagueId: l.id, leagueName: l.name, platform: l.platform } });
 
-  const ins = INSIGHTS[insightIdx];
-
-  // ── Render ───────────────────────────────────────────────────
   return (
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
       <ScrollView
@@ -293,14 +228,19 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.gold} />}
       >
-        {/* Header */}
+        {/* Header — 3x bigger logo + settings gear */}
         <View style={styles.header}>
           <Image source={LOGO} style={styles.logo} resizeMode="contain" />
-          {username ? (
-            <View style={styles.handlePill}>
-              <Text style={styles.handleTxt}>@{username}</Text>
-            </View>
-          ) : null}
+          <View style={styles.headerRight}>
+            {username ? (
+              <View style={styles.handlePill}>
+                <Text style={styles.handleTxt}>@{username}</Text>
+              </View>
+            ) : null}
+            <TouchableOpacity onPress={() => router.push('/settings')} style={styles.gearBtn}>
+              <Ionicons name="settings-sharp" size={22} color={C.dim2} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* News feed */}
@@ -331,8 +271,7 @@ export default function HomeScreen() {
             <ScrollView
               horizontal pagingEnabled showsHorizontalScrollIndicator={false}
               snapToInterval={CARD_W + 10} decelerationRate="fast"
-              contentContainerStyle={{ gap: 10 }}
-              style={{ marginBottom: 4 }}
+              contentContainerStyle={{ gap: 10 }} style={{ marginBottom: 4 }}
               onMomentumScrollEnd={e => setScoreIdx(Math.round(e.nativeEvent.contentOffset.x / (CARD_W + 10)))}
             >
               {leagues.map((lg, i) => {
@@ -363,9 +302,7 @@ export default function HomeScreen() {
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.teamLbl}>OPPONENT</Text>
-                        <Text style={[styles.scoreWin, { color: '#7a3040' }]}>
-                          {(lg.opp ?? 0).toFixed(1)}
-                        </Text>
+                        <Text style={[styles.scoreWin, { color: '#7a3040' }]}>{(lg.opp ?? 0).toFixed(1)}</Text>
                       </View>
                     </View>
                     <View style={styles.progBg}>
@@ -374,7 +311,6 @@ export default function HomeScreen() {
                         backgroundColor: winning ? C.sage : 'rgba(200,120,120,0.7)',
                       }]} />
                     </View>
-                    {/* ESPN badge */}
                     {isESPN && (
                       <View style={styles.espnBadge}>
                         <Text style={styles.espnBadgeTxt}>ESPN</Text>
@@ -384,8 +320,6 @@ export default function HomeScreen() {
                 );
               })}
             </ScrollView>
-
-            {/* Pagination dots */}
             <View style={styles.dotsRow}>
               {leagues.map((_, i) => (
                 <View key={i} style={[styles.dot, i === scoreIdx && styles.dotActive]} />
@@ -414,9 +348,7 @@ export default function HomeScreen() {
           {insightLoading ? (
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 4 }}>
               <ActivityIndicator size="small" color={C.gold} />
-              <Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.sm }}>
-                Scanning {leagues.length} leagues...
-              </Text>
+              <Text style={[styles.loadingSub, textShadow.subtle]}>Scanning {leagues.length} leagues...</Text>
             </View>
           ) : (
             <ScrollView
@@ -456,9 +388,7 @@ export default function HomeScreen() {
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.leagueName}>{lg.name}</Text>
                   <Text style={styles.leagueSub}>
-                    <Text style={{ color: platColor, fontWeight: '700' }}>
-                      {isESPN ? 'ESPN' : 'SLEEPER'}
-                    </Text>
+                    <Text style={{ color: platColor, fontWeight: '700' }}>{isESPN ? 'ESPN' : 'SLEEPER'}</Text>
                     {lg.format ? ` · ${lg.format}` : ''}
                   </Text>
                 </View>
@@ -479,31 +409,34 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   scroll:         { paddingHorizontal: SP[3], paddingBottom: 110 },
-  header:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  logo:           { height: 36, width: 130 },
+  header:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  logo:           { height: 100, width: 340 },
+  headerRight:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
   handlePill:     { backgroundColor: C.glass, borderRadius: R.full, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: C.glassBorder },
-  handleTxt:      { fontSize: SZ.sm, color: C.dim, fontFamily: F.mono },
+  handleTxt:      { fontSize: SZ.sm, color: C.dim, fontFamily: F.mono, ...textShadow.subtle },
+  gearBtn:        { padding: 6 },
 
   newsHeaderRow:  { flexDirection: 'row', alignItems: 'center', marginBottom: 7 },
-  newsEye:        { fontSize: SZ.xs, fontFamily: F.mono, color: C.gold, letterSpacing: 1.4 },
-  newsHint:       { marginLeft: 'auto' as any, fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, opacity: 0.5 },
+  newsEye:        { fontSize: SZ.xs, fontFamily: F.mono, color: C.gold, letterSpacing: 1.4, ...textShadow.gold },
+  newsHint:       { marginLeft: 'auto' as any, fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, opacity: 0.5, ...textShadow.subtle },
   newsChip:       { width: 240, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 14, borderWidth: 1, padding: 12, flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   newsDot:        { width: 6, height: 6, borderRadius: 3, marginTop: 3, flexShrink: 0 },
-  newsSource:     { fontSize: SZ.xs, fontFamily: F.mono, letterSpacing: 1, marginBottom: 3, fontWeight: '700' },
-  newsText:       { fontSize: SZ.sm, fontFamily: F.outfit, color: '#ffffff', lineHeight: 18 },
+  newsSource:     { fontSize: SZ.xs, fontFamily: F.mono, letterSpacing: 1, marginBottom: 3, fontWeight: '700', ...textShadow.subtle },
+  newsText:       { fontSize: SZ.sm, fontFamily: F.outfit, color: '#ffffff', lineHeight: 18, ...textShadow.body },
 
   loadingCard:    { alignItems: 'center', padding: 40, gap: 12 },
-  loadingTxt:     { color: C.dim, fontFamily: F.mono, fontSize: SZ.sm },
+  loadingTxt:     { color: C.dim, fontFamily: F.mono, fontSize: SZ.sm, ...textShadow.subtle },
+  loadingSub:     { color: C.dim, fontFamily: F.mono, fontSize: SZ.sm },
 
   scoreCard:      { padding: 14 },
   espnCard:       { borderColor: ESPN_RED_BORDER },
-  scoreEye:       { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 1.2, marginBottom: 8 },
+  scoreEye:       { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 1.2, marginBottom: 8, ...textShadow.subtle },
   matchRow:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  teamLbl:        { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 2 },
-  scoreWin:       { fontSize: SZ['4xl'], fontWeight: '900', color: C.sage, letterSpacing: -1.5, lineHeight: 40, fontFamily: F.bold },
+  teamLbl:        { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 2, ...textShadow.subtle },
+  scoreWin:       { fontSize: SZ['4xl'], fontWeight: '900', color: C.sage, letterSpacing: -1.5, lineHeight: 40, fontFamily: F.bold, ...textShadow.hero },
   winPill:        { backgroundColor: 'rgba(45,122,94,0.18)', borderRadius: R.full, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1.5, borderColor: 'rgba(45,122,94,0.40)' },
   losePill:       { backgroundColor: 'rgba(200,120,120,0.15)', borderColor: 'rgba(200,120,120,0.35)' },
-  winTxt:         { fontSize: SZ.sm, fontWeight: '700', color: C.sage, fontFamily: F.bold, letterSpacing: 0.5 },
+  winTxt:         { fontSize: SZ.sm, fontWeight: '700', color: C.sage, fontFamily: F.bold, letterSpacing: 0.5, ...textShadow.body },
   progBg:         { height: 3, backgroundColor: '#7a1f2e', borderRadius: 2, overflow: 'hidden', marginTop: 10 },
   progFill:       { height: 3, borderRadius: 2 },
 
@@ -515,16 +448,16 @@ const styles = StyleSheet.create({
   dotActive:      { backgroundColor: C.gold, width: 14, borderRadius: 3 },
 
   insightHdr:     { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 9 },
-  insightEye:     { fontSize: SZ.xs, fontFamily: F.mono, color: C.gold, letterSpacing: 1.4, flex: 1 },
+  insightEye:     { fontSize: SZ.xs, fontFamily: F.mono, color: C.gold, letterSpacing: 1.4, flex: 1, ...textShadow.gold },
   dotInsight:     { width: 4, height: 3, borderRadius: 2, backgroundColor: 'rgba(200,168,75,0.25)' },
   dotInsightActive: { width: 12, backgroundColor: C.gold },
-  insightTitle:   { fontSize: SZ.base, fontWeight: '700', color: C.ink, fontFamily: F.bold },
-  insightText:    { fontSize: SZ.md, color: C.ink2, lineHeight: 18, fontFamily: F.outfit },
+  insightTitle:   { fontSize: SZ.base, fontWeight: '700', color: C.ink, fontFamily: F.bold, ...textShadow.body },
+  insightText:    { fontSize: SZ.md, color: C.ink2, lineHeight: 18, fontFamily: F.outfit, ...textShadow.body },
 
   leagueRow:      { flexDirection: 'row', alignItems: 'center', marginBottom: 8, padding: 14 },
-  leagueName:     { fontSize: SZ.base, fontWeight: '700', color: C.ink, fontFamily: F.bold },
-  leagueSub:      { fontSize: SZ.sm, fontFamily: F.mono, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
-  leagueRec:      { fontSize: SZ.base, fontWeight: '700', fontFamily: F.bold },
-  leagueRank:     { fontSize: SZ.xs, fontFamily: F.mono, color: 'rgba(200,168,75,0.9)', marginTop: 3 },
-  chevron:        { color: C.dim2, fontSize: SZ.xl },
+  leagueName:     { fontSize: SZ.base, fontWeight: '700', color: C.ink, fontFamily: F.bold, ...textShadow.body },
+  leagueSub:      { fontSize: SZ.sm, fontFamily: F.mono, color: 'rgba(255,255,255,0.75)', marginTop: 2, ...textShadow.subtle },
+  leagueRec:      { fontSize: SZ.base, fontWeight: '700', fontFamily: F.bold, ...textShadow.body },
+  leagueRank:     { fontSize: SZ.xs, fontFamily: F.mono, color: 'rgba(200,168,75,0.9)', marginTop: 3, ...textShadow.gold },
+  chevron:        { color: C.dim2, fontSize: SZ.xl, ...textShadow.body },
 });

@@ -1,14 +1,15 @@
 // ─────────────────────────────────────────────────
-//  AIOmni Design Tokens v2
+//  AIOmni Design Tokens v2.1
 //  Sage-Slate × Frosted Glass × Gold
+//  + Text depth shadows for readability
 // ─────────────────────────────────────────────────
 
 export const C = {
   // ── Backgrounds ──────────────────────────────
-  bgTop:       '#8fa8a8',   // page gradient top
-  bgBot:       '#4e6868',   // page gradient bottom
-  phone:       '#5c7878',   // phone/screen bg
-  phone2:      '#4e6868',   // darker phone bg
+  bgTop:       '#8fa8a8',
+  bgBot:       '#4e6868',
+  phone:       '#5c7878',
+  phone2:      '#4e6868',
 
   // ── Glass surfaces ────────────────────────────
   glass:       'rgba(255,255,255,0.14)',
@@ -21,11 +22,12 @@ export const C = {
   // ── Type ──────────────────────────────────────
   ink:         '#ffffff',
   ink2:        '#e8f0ec',
-  dim:         'rgba(255,255,255,0.80)',
+  dim:         'rgba(255,255,255,0.85)',
   dim2:        'rgba(255,255,255,0.65)',
 
   // ── Gold (primary accent) ─────────────────────
-  gold:        '#b8891a',
+  gold:        '#c8a84b',
+  goldBright:  '#dfc06a',
   goldS:       'rgba(184,137,26,0.20)',
   goldG:       'rgba(184,137,26,0.45)',
   goldBorder:  'rgba(184,137,26,0.35)',
@@ -101,6 +103,34 @@ export const shadow = {
     shadowRadius: radius,
     elevation: 8,
   }),
+} as const;
+
+// ── TEXT DEPTH — apply to all visible text for readability ──────────────
+export const textShadow = {
+  // Hero titles (screen headers, big numbers)
+  hero: {
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 8,
+  },
+  // Standard body text, labels, player names
+  body: {
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 5,
+  },
+  // Small mono labels, badges, subtle text
+  subtle: {
+    textShadowColor: 'rgba(0,0,0,0.30)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  // Gold accent text — gold glow + dark shadow
+  gold: {
+    textShadowColor: 'rgba(200,168,75,0.4)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
 } as const;
 
 // Position config lookup

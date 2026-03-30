@@ -1,6 +1,8 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -12,10 +14,9 @@ import { fetchAllLiveData, formatLiveDataForPrompt } from '../../services/liveDa
 import { PositionPill } from '../components/Atoms';
 import { GlassCard } from '../components/GlassCard';
 import { OrbAvatar } from '../components/OrbAvatar';
-import { C, F, SP, SZ } from '../constants/tokens';
+import { C, F, SP, SZ, textShadow } from '../constants/tokens';
 import { getRemainingPrompts, getResetTime, incrementPrompt } from '../utils/promptCounter';
 
-// ── Claude API ─────────────────────────────────────────────────
 const API_KEY = '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';
 const WEEKLY_LIMIT = 25;
 
@@ -51,28 +52,20 @@ You ALWAYS read league settings first before giving any advice. Be direct, confi
 Format responses concisely — this is a mobile chat interface.
 Never compare players across different leagues — each league is scored independently.`;
 
-// ── Types ──────────────────────────────────────────────────────
 type LeagueContext = {
   name: string; platform: string; format: string;
   record: string; rank: string; roster: string[]; week: number;
 };
 
-// ── Paywall message ────────────────────────────────────────────
 function getPaywallMessage(resetStr: string): string {
   const now  = new Date();
-  const day  = now.getDay();  // 0=Sun, 3=Wed
+  const day  = now.getDay();
   const hour = now.getHours();
-
-  if (day === 3) {
-    return `⚡ Waivers just ran — find out who to grab next with Pro.\n\nYou've used all ${WEEKLY_LIMIT} weekly prompts. Resets ${resetStr}.\n\n__verdict__Upgrade to Pro for unlimited prompts → getaiomni.com`;
-  }
-  if (day === 0 && hour >= 11) {
-    return `🏈 Late games starting soon — don't make your flex decision blind.\n\nYou've used all ${WEEKLY_LIMIT} weekly prompts. Resets ${resetStr}.\n\n__verdict__Upgrade to Pro for unlimited prompts → getaiomni.com`;
-  }
+  if (day === 3) return `⚡ Waivers just ran — find out who to grab next with Pro.\n\nYou've used all ${WEEKLY_LIMIT} weekly prompts. Resets ${resetStr}.\n\n__verdict__Upgrade to Pro for unlimited prompts → getaiomni.com`;
+  if (day === 0 && hour >= 11) return `🏈 Late games starting soon — don't make your flex decision blind.\n\nYou've used all ${WEEKLY_LIMIT} weekly prompts. Resets ${resetStr}.\n\n__verdict__Upgrade to Pro for unlimited prompts → getaiomni.com`;
   return `You've used all ${WEEKLY_LIMIT} weekly prompts. Resets ${resetStr}.\n\n__verdict__Upgrade to Pro for unlimited prompts → getaiomni.com`;
 }
 
-// ── Load Sleeper context ───────────────────────────────────────
 async function loadSleeperContext(): Promise<LeagueContext[]> {
   try {
     const username = await AsyncStorage.getItem('sleeper_username');
@@ -85,7 +78,6 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
     const week   = state.leg || state.display_week || state.week || 17;
     const playerMapRaw = await AsyncStorage.getItem('sleeper_player_map');
     const playerMap    = playerMapRaw ? JSON.parse(playerMapRaw) : {};
-
     return Promise.all(leagues.slice(0, 6).map(async (l: any): Promise<LeagueContext> => {
       const isPPR = l.scoring_settings?.rec > 0;
       const isSF  = (l.roster_positions || []).includes('SUPER_FLEX');
@@ -112,7 +104,6 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
   } catch (e) { console.log('loadSleeperContext error:', e); return []; }
 }
 
-// ── Load ESPN context ──────────────────────────────────────────
 async function loadESPNContext(): Promise<LeagueContext[]> {
   try {
     const creds = await loadESPNCredentials();
@@ -138,26 +129,16 @@ async function loadESPNContext(): Promise<LeagueContext[]> {
   } catch (e) { console.log('loadESPNContext error:', e); return []; }
 }
 
-// ── Build dynamic system prompt ────────────────────────────────
 function buildSystemPrompt(leagues: LeagueContext[]): string {
-  if (leagues.length === 0) {
-    return `${BASE_SYSTEM}\n\nNo leagues loaded yet. Ask the user to connect their Sleeper username or ESPN account in Settings.`;
-  }
+  if (leagues.length === 0) return `${BASE_SYSTEM}\n\nNo leagues loaded yet. Ask the user to connect their Sleeper username or ESPN account in Settings.`;
   const leagueBlocks = leagues.map(l => `
 League: ${l.name} (${l.platform} · ${l.format})
 Record: ${l.record} · Rank: ${l.rank} · Week: ${l.week}
 Roster: ${l.roster.length > 0 ? l.roster.join(', ') : 'Not loaded'}
 `).join('\n---\n');
-  return `${BASE_SYSTEM}
-
-You have loaded ${leagues.length} league${leagues.length > 1 ? 's' : ''}:
-${leagueBlocks}
-${FF_KNOWLEDGE}
-
-When giving advice, ALWAYS specify which league you're referring to. Never give generic advice — reference the specific scoring format of the league in question.`;
+  return `${BASE_SYSTEM}\n\nYou have loaded ${leagues.length} league${leagues.length > 1 ? 's' : ''}:\n${leagueBlocks}\n${FF_KNOWLEDGE}\n\nWhen giving advice, ALWAYS specify which league you're referring to. Never give generic advice — reference the specific scoring format of the league in question.`;
 }
 
-// ── Claude API call ────────────────────────────────────────────
 async function askClaude(messages: { role: string; content: string }[], systemPrompt: string): Promise<string> {
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -170,7 +151,6 @@ async function askClaude(messages: { role: string; content: string }[], systemPr
   } catch { return 'Connection error. Check your network and try again.'; }
 }
 
-// ── Sub-components ─────────────────────────────────────────────
 const VerdictCard: React.FC<{ text: string; color?: string }> = ({ text, color = C.sage }) => (
   <View style={[styles.verdict, { borderLeftColor: color, backgroundColor: color + '18' }]}>
     <Text style={[styles.verdictEye, { color }]}>VERDICT</Text>
@@ -192,7 +172,6 @@ const AddCard: React.FC<{ pos: string; name: string; team: string; detail: strin
 );
 
 type Message = { role: 'ai' | 'user'; text: string; isLoading?: boolean };
-
 const QUICK_PROMPTS = ['🎯 Start/Sit', '📈 Best waiver', '⇄ Trade value', '📊 Matchup'];
 
 const renderAIText = (text: string) => {
@@ -208,8 +187,8 @@ const renderAIText = (text: string) => {
   });
 };
 
-// ── Screen ─────────────────────────────────────────────────────
 export default function CoachScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [messages,      setMessages]      = useState<Message[]>([]);
   const [input,         setInput]         = useState('');
@@ -222,18 +201,14 @@ export default function CoachScreen() {
 
   useEffect(() => {
     (async () => {
-      // Load prompt count
       const rem = await getRemainingPrompts();
       setRemaining(rem);
-
-      // Load leagues + live data in parallel
       const [sleeperLeagues, espnLeagues] = await Promise.all([loadSleeperContext(), loadESPNContext()]);
       const allLeagues = [...sleeperLeagues, ...espnLeagues];
       const liveData   = await fetchAllLiveData();
       systemPromptRef.current = buildSystemPrompt(allLeagues) + formatLiveDataForPrompt(liveData);
       setLeagueCount(allLeagues.length);
       setContextReady(true);
-
       const platforms = [...new Set(allLeagues.map(l => l.platform))].join(' + ');
       const greeting  = allLeagues.length > 0
         ? `Hey — ${allLeagues.length} league${allLeagues.length > 1 ? 's' : ''} loaded (${platforms}). ${rem} of ${WEEKLY_LIMIT} prompts remaining this week. What do you need?`
@@ -244,34 +219,24 @@ export default function CoachScreen() {
 
   const send = async (text: string) => {
     if (!text.trim() || loading) return;
-
-    // Check prompt limit
     const rem = await getRemainingPrompts();
     if (rem <= 0) {
       const resetTime = await getResetTime();
-      const resetStr  = resetTime
-        ? resetTime.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
-        : 'Sunday noon';
+      const resetStr  = resetTime ? resetTime.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'Sunday noon';
       setMessages(prev => [...prev, { role: 'ai', text: getPaywallMessage(resetStr) }]);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
       return;
     }
-
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await incrementPrompt();
     setRemaining(r => Math.max(0, r - 1));
-
     const userMsg:    Message = { role: 'user', text };
     const loadingMsg: Message = { role: 'ai',   text: '', isLoading: true };
     setMessages(prev => [...prev, userMsg, loadingMsg]);
     setInput('');
     setLoading(true);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-
-    const history = [...messages, userMsg]
-      .filter(m => !m.isLoading)
-      .map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
-
+    const history = [...messages, userMsg].filter(m => !m.isLoading).map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
     const reply = await askClaude(history, systemPromptRef.current);
     setMessages(prev => [...prev.slice(0, -1), { role: 'ai', text: reply }]);
     setLoading(false);
@@ -291,24 +256,21 @@ export default function CoachScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>AI Coach</Text>
               <Text style={styles.subtitle}>
-                {contextReady
-                  ? `${leagueCount} LEAGUE${leagueCount !== 1 ? 'S' : ''} · PERSONALIZED`
-                  : 'LOADING LEAGUES...'}
+                {contextReady ? `${leagueCount} LEAGUE${leagueCount !== 1 ? 'S' : ''} · PERSONALIZED` : 'LOADING LEAGUES...'}
               </Text>
             </View>
             <View style={styles.rightHdr}>
-              {/* Prompt counter */}
               <View style={[styles.promptCounter, { borderColor: promptColor + '40', backgroundColor: promptColor + '15' }]}>
                 <Text style={[styles.promptCountNum, { color: promptColor }]}>{remaining}</Text>
                 <Text style={[styles.promptCountLbl, { color: promptColor }]}>/{WEEKLY_LIMIT}</Text>
               </View>
-              {/* Live indicator */}
               <View style={styles.liveDot}>
                 <View style={[styles.livePulse, !contextReady && { backgroundColor: C.gold }]} />
-                <Text style={[styles.liveTxt, !contextReady && { color: C.gold }]}>
-                  {contextReady ? 'LIVE' : 'SYNC'}
-                </Text>
+                <Text style={[styles.liveTxt, !contextReady && { color: C.gold }]}>{contextReady ? 'LIVE' : 'SYNC'}</Text>
               </View>
+              <TouchableOpacity onPress={() => router.push('/settings')} style={styles.gearBtn}>
+                <Ionicons name="settings-sharp" size={20} color={C.dim2} />
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -326,7 +288,7 @@ export default function CoachScreen() {
             {!contextReady && messages.length === 0 && (
               <View style={{ alignItems: 'center', paddingVertical: 40, gap: 10 }}>
                 <ActivityIndicator color={C.gold} size="large" />
-                <Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.sm }}>Loading your leagues...</Text>
+                <Text style={styles.loadingSub}>Loading your leagues...</Text>
               </View>
             )}
             {messages.map((m, i) => (
@@ -340,9 +302,7 @@ export default function CoachScreen() {
                 <View key={i} style={styles.aiRow}>
                   <OrbAvatar size={22} mode="pulse" glow="rgba(200,168,75,0.6)" style={{ flexShrink: 0 }} />
                   <GlassCard style={{ maxWidth: '85%', flex: 1 }} padding={10} radius={14}>
-                    {m.isLoading
-                      ? <ActivityIndicator color={C.gold} size="small" />
-                      : renderAIText(m.text)}
+                    {m.isLoading ? <ActivityIndicator color={C.gold} size="small" /> : renderAIText(m.text)}
                   </GlassCard>
                 </View>
               )
@@ -381,35 +341,37 @@ export default function CoachScreen() {
 const styles = StyleSheet.create({
   wrap:             { flex: 1, paddingHorizontal: SP[3] },
   hdr:              { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 10 },
-  title:            { fontSize: SZ.lg, fontWeight: '700', color: C.ink, fontFamily: F.bold },
-  subtitle:         { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim, letterSpacing: 0.8 },
+  title:            { fontSize: SZ.xl, fontWeight: '700', color: C.ink, fontFamily: F.bold, ...textShadow.hero },
+  subtitle:         { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim, letterSpacing: 0.8, ...textShadow.subtle },
   rightHdr:         { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  gearBtn:          { padding: 4 },
   promptCounter:    { flexDirection: 'row', alignItems: 'baseline', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
-  promptCountNum:   { fontSize: SZ.sm, fontWeight: '700', fontFamily: F.bold },
-  promptCountLbl:   { fontSize: SZ.xs - 1, fontFamily: F.mono, opacity: 0.7 },
+  promptCountNum:   { fontSize: SZ.sm, fontWeight: '700', fontFamily: F.bold, ...textShadow.body },
+  promptCountLbl:   { fontSize: SZ.xs - 1, fontFamily: F.mono, opacity: 0.7, ...textShadow.subtle },
   liveDot:          { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(130,196,148,0.18)', borderWidth: 1, borderColor: 'rgba(130,196,148,0.30)', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
   livePulse:        { width: 5, height: 5, borderRadius: 3, backgroundColor: C.sage },
-  liveTxt:          { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.sage, letterSpacing: 1 },
+  liveTxt:          { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.sage, letterSpacing: 1, ...textShadow.subtle },
   promptScroll:     { maxHeight: 36, marginBottom: 10 },
   promptChip:       { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 20, backgroundColor: C.goldS, borderWidth: 1, borderColor: C.goldBorder },
-  promptTxt:        { fontSize: SZ.sm, color: C.gold, fontFamily: F.mono },
+  promptTxt:        { fontSize: SZ.sm, color: C.gold, fontFamily: F.mono, ...textShadow.gold },
+  loadingSub:       { color: C.dim, fontFamily: F.mono, fontSize: SZ.sm, ...textShadow.subtle },
   aiRow:            { flexDirection: 'row', gap: 7, alignItems: 'flex-start' },
   userRow:          { flexDirection: 'row', justifyContent: 'flex-end' },
   userBubble:       { backgroundColor: C.goldS, borderWidth: 1, borderColor: C.goldBorder, borderRadius: 14, borderTopRightRadius: 3, padding: 10, maxWidth: '80%' },
-  userTxt:          { fontSize: SZ.md, color: C.ink, lineHeight: 20, fontFamily: F.outfit },
-  aiTxt:            { fontSize: SZ.md, color: C.ink, lineHeight: 20, fontFamily: F.outfit },
-  aiBold:           { fontSize: SZ.md, fontWeight: '700', color: C.sage, lineHeight: 20, fontFamily: F.bold },
+  userTxt:          { fontSize: SZ.md, color: C.ink, lineHeight: 20, fontFamily: F.outfit, ...textShadow.body },
+  aiTxt:            { fontSize: SZ.md, color: C.ink, lineHeight: 20, fontFamily: F.outfit, ...textShadow.body },
+  aiBold:           { fontSize: SZ.md, fontWeight: '700', color: C.sage, lineHeight: 20, fontFamily: F.bold, ...textShadow.body },
   verdict:          { borderLeftWidth: 2, borderRadius: 9, padding: 8, marginTop: 7 },
-  verdictEye:       { fontSize: SZ.xs - 2, fontFamily: F.mono, letterSpacing: 1, marginBottom: 2 },
-  verdictTxt:       { fontSize: SZ.sm + 1, fontWeight: '600', color: C.ink, fontFamily: F.semibold },
+  verdictEye:       { fontSize: SZ.xs - 2, fontFamily: F.mono, letterSpacing: 1, marginBottom: 2, ...textShadow.subtle },
+  verdictTxt:       { fontSize: SZ.sm + 1, fontWeight: '600', color: C.ink, fontFamily: F.semibold, ...textShadow.body },
   addCard:          { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 8, marginTop: 7 },
-  addName:          { fontSize: SZ.md, fontWeight: '600', color: C.ink, fontFamily: F.semibold },
-  addSub:           { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim },
+  addName:          { fontSize: SZ.md, fontWeight: '600', color: C.ink, fontFamily: F.semibold, ...textShadow.body },
+  addSub:           { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, ...textShadow.subtle },
   addBtn:           { backgroundColor: C.sageS, borderWidth: 1, borderColor: 'rgba(130,196,148,0.30)', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 4 },
-  addBtnTxt:        { fontSize: SZ.sm, fontWeight: '700', color: C.sage, fontFamily: F.mono },
+  addBtnTxt:        { fontSize: SZ.sm, fontWeight: '700', color: C.sage, fontFamily: F.mono, ...textShadow.subtle },
   inputWrap:        { backgroundColor: 'transparent', paddingTop: 8 },
   inputRow:         { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 18, paddingLeft: 13, paddingRight: 4, paddingVertical: 4 },
-  input:            { flex: 1, fontSize: SZ.md, color: C.ink, paddingVertical: 8, fontFamily: F.outfit },
+  input:            { flex: 1, fontSize: SZ.md, color: C.ink, paddingVertical: 8, fontFamily: F.outfit, ...textShadow.body },
   sendBtn:          { width: 34, height: 34, backgroundColor: C.gold, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   sendBtnOff:       { backgroundColor: 'rgba(200,168,75,0.25)' },
   sendArrow:        { fontSize: 14, fontWeight: '700', color: '#2a2010', fontFamily: F.bold },

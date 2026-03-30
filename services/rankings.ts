@@ -1,6 +1,6 @@
 // services/rankings.ts
 // Rankings data aggregator — pulls real data from every wired source
-// Sleeper players DB + trending, ESPN injuries + stats, nflverse snaps, RotoWire news, Vegas lines
+// Sleeper search_rank as baseline + trending, ESPN injuries + stats, nflverse snaps, RotoWire news, Vegas
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchNFLInjuries, fetchVegasLines, InjuryReport, VegasLine } from './liveData';
@@ -14,24 +14,24 @@ export interface RankedPlayer {
   position:      string;
   rank:          number;
   posRank:       number;
-  statLine:      string;        // e.g. "1,247 yds · 9 TD"
-  statValue:     number;        // raw sort value (yards, points, etc.)
-  injuryStatus:  string | null; // Out, Doubtful, Questionable, IR, null
+  statLine:      string;
+  statValue:     number;
+  injuryStatus:  string | null;
   injuryDetail:  string | null;
-  trendingAdds:  number;        // Sleeper trending add count (0 = not trending)
-  trendingDrops: number;        // Sleeper trending drop count
-  snapPct:       number | null; // nflverse snap share 0-100
+  trendingAdds:  number;
+  trendingDrops: number;
+  snapPct:       number | null;
   newsHeadline:  string | null;
-  newsAge:       string | null; // "2h ago", "1d ago"
-  impliedTeamScore: number | null; // Vegas
-  isDrafted:     boolean;       // local draft mode state
+  newsAge:       string | null;
+  impliedTeamScore: number | null;
+  isDrafted:     boolean;
 }
 
 export type ScoringFormat = 'ppr' | 'half' | 'standard';
 
 // ─── Sleeper Players DB (cached 24h) ──────────────────────────────────────────
 const SLEEPER_CACHE_KEY = 'sleeper_players_db';
-const SLEEPER_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
+const SLEEPER_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 interface SleeperPlayer {
   player_id: string;
@@ -51,10 +51,8 @@ interface SleeperPlayer {
 let sleeperPlayersCache: Record<string, SleeperPlayer> | null = null;
 
 export async function fetchSleeperPlayers(): Promise<Record<string, SleeperPlayer>> {
-  // Check memory cache
   if (sleeperPlayersCache) return sleeperPlayersCache;
 
-  // Check AsyncStorage cache
   try {
     const cached = await AsyncStorage.getItem(SLEEPER_CACHE_KEY);
     if (cached) {
@@ -66,12 +64,9 @@ export async function fetchSleeperPlayers(): Promise<Record<string, SleeperPlaye
     }
   } catch (e) { /* cache miss */ }
 
-  // Fetch fresh
   try {
     const res = await fetch('https://api.sleeper.app/v1/players/nfl');
     const data = await res.json();
-    sleeperPlayersCache = data;
-    // Cache in AsyncStorage (store only active NFL players to save space)
     const slim: Record<string, SleeperPlayer> = {};
     for (const [id, p] of Object.entries(data as Record<string, any>)) {
       if (p.active && p.team && ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(p.position)) {
@@ -86,7 +81,7 @@ export async function fetchSleeperPlayers(): Promise<Record<string, SleeperPlaye
           active: true,
           age: p.age,
           years_exp: p.years_exp,
-          search_rank: p.search_rank,
+          search_rank: p.search_rank ?? 9999,
           fantasy_positions: p.fantasy_positions,
         };
       }
@@ -147,10 +142,8 @@ export async function fetchESPNLeaders(): Promise<ESPNLeader[]> {
     for (let i = 0; i < categories.length; i++) {
       const data = responses[i];
       if (!data?.leaders) continue;
-      const cat = categories[i];
-
       for (const group of data.leaders) {
-        const statName = group.name || cat;
+        const statName = group.name || categories[i];
         for (const l of (group.leaders || [])) {
           const athlete = l.athlete;
           if (!athlete) continue;
@@ -172,7 +165,7 @@ export async function fetchESPNLeaders(): Promise<ESPNLeader[]> {
   return leaders;
 }
 
-// ─── nflverse Snap Counts (latest week) ───────────────────────────────────────
+// ─── nflverse Snap Counts ─────────────────────────────────────────────────────
 interface SnapData { player: string; team: string; position: string; snapPct: number; }
 
 export async function fetchLatestSnaps(season = 2024): Promise<SnapData[]> {
@@ -194,7 +187,6 @@ export async function fetchLatestSnaps(season = 2024): Promise<SnapData[]> {
 
     if (weekIdx === -1 || playerIdx === -1) return [];
 
-    // Find the latest week in the data
     const weeks = lines.slice(1).map(l => parseInt(l.split(',')[weekIdx])).filter(w => !isNaN(w));
     const latestWeek = Math.max(...weeks);
 
@@ -216,7 +208,6 @@ export async function fetchLatestSnaps(season = 2024): Promise<SnapData[]> {
 
 // ─── Build unified rankings ───────────────────────────────────────────────────
 export async function buildRankings(format: ScoringFormat = 'ppr'): Promise<RankedPlayer[]> {
-  // Fetch all sources in parallel
   const [sleeperPlayers, trending, espnLeaders, injuries, snaps, news, vegas] = await Promise.all([
     fetchSleeperPlayers(),
     fetchSleeperTrending(),
@@ -245,158 +236,108 @@ export async function buildRankings(format: ScoringFormat = 'ppr'): Promise<Rank
     vegasTeamMap.set(v.awayTeam.toLowerCase(), v.awayImpliedScore);
   }
 
-  // Merge ESPN leaders into a player map (deduped by name)
-  const playerMap = new Map<string, RankedPlayer>();
-
-  // Primary stat for each position
-  const primaryStat: Record<string, string[]> = {
-    QB:  ['passingYards', 'passingTouchdowns'],
-    RB:  ['rushingYards', 'rushingTouchdowns'],
-    WR:  ['receivingYards', 'receivingTouchdowns', 'receptions'],
-    TE:  ['receivingYards', 'receivingTouchdowns', 'receptions'],
-    K:   ['scoring'],
-    DEF: [],
-  };
-
+  // ESPN stats by player name
+  const espnStatMap = new Map<string, { stats: string[]; value: number }>();
   for (const l of espnLeaders) {
     const key = l.name.toLowerCase();
-    const existing = playerMap.get(key);
-
+    const existing = espnStatMap.get(key);
+    const label = formatStatLabel(l.statType, l.value);
     if (existing) {
-      // Append stat info
-      if (l.value > 0) {
-        const parts = existing.statLine ? existing.statLine.split(' · ') : [];
-        const newStat = formatStatLabel(l.statType, l.value);
-        if (newStat && !parts.includes(newStat)) parts.push(newStat);
-        existing.statLine = parts.join(' · ');
-        // Use the highest stat value for sorting
-        if (l.value > existing.statValue) existing.statValue = l.value;
-      }
+      if (label && !existing.stats.includes(label)) existing.stats.push(label);
+      if (l.value > existing.value) existing.value = l.value;
     } else {
-      playerMap.set(key, {
-        id:           l.espnId,
-        name:         l.name,
-        team:         l.team,
-        position:     l.position || guessPosition(l.statType),
-        rank:         0,
-        posRank:      0,
-        statLine:     formatStatLabel(l.statType, l.value) || '',
-        statValue:    l.value,
-        injuryStatus: null,
-        injuryDetail: null,
-        trendingAdds: 0,
-        trendingDrops:0,
-        snapPct:      null,
-        newsHeadline: null,
-        newsAge:      null,
-        impliedTeamScore: null,
-        isDrafted:    false,
-      });
+      espnStatMap.set(key, { stats: label ? [label] : [], value: l.value });
     }
   }
 
-  // Enrich with Sleeper data — add trending players not already in ESPN leaders
-  for (const [playerId, count] of trendingAddMap) {
-    const sp = sleeperPlayers[playerId];
-    if (!sp || !sp.team) continue;
-    const key = sp.full_name.toLowerCase();
-    const existing = playerMap.get(key);
-    if (existing) {
-      existing.trendingAdds = count;
-      if (!existing.id) existing.id = playerId;
-    } else {
-      playerMap.set(key, {
-        id:           playerId,
-        name:         sp.full_name,
-        team:         sp.team,
-        position:     sp.position,
-        rank:         0,
-        posRank:      0,
-        statLine:     `🔥 ${count.toLocaleString()} adds`,
-        statValue:    0,
-        injuryStatus: null,
-        injuryDetail: null,
-        trendingAdds: count,
-        trendingDrops:0,
-        snapPct:      null,
-        newsHeadline: null,
-        newsAge:      null,
-        impliedTeamScore: null,
-        isDrafted:    false,
-      });
-    }
-  }
+  // ── BASE RANKINGS: Sleeper search_rank (works year-round) ──────────────
+  // search_rank is Sleeper's fantasy consensus rank for every active player
+  // This ensures we always have proper rankings even in offseason
 
-  // Apply drops
-  for (const [playerId, count] of trendingDropMap) {
-    const sp = sleeperPlayers[playerId];
-    if (!sp) continue;
-    const key = sp.full_name.toLowerCase();
-    const existing = playerMap.get(key);
-    if (existing) existing.trendingDrops = count;
-  }
-
-  // Enrich all players with injury, snaps, news, vegas
-  for (const [, player] of playerMap) {
-    // Injury
-    const inj = injuryMap.get(player.name.toLowerCase());
-    if (inj) {
-      player.injuryStatus = inj.status;
-      player.injuryDetail = inj.injury;
-    }
-
-    // Snap %
-    const snap = snapMap.get(player.name.toLowerCase());
-    if (snap !== undefined) player.snapPct = snap;
-
-    // News
-    const playerNews = findNewsForPlayer(news, player.name, 1);
-    if (playerNews.length > 0) {
-      player.newsHeadline = playerNews[0].title;
-      player.newsAge = formatNewsAge(playerNews[0].pubDate);
-    }
-
-    // Vegas implied score
-    const teamKey = player.team?.toLowerCase();
-    if (teamKey) {
-      // Try common abbreviation mappings
-      const implied = vegasTeamMap.get(teamKey) ??
-        findVegasForTeam(vegas, player.team);
-      if (implied) player.impliedTeamScore = implied;
-    }
-  }
-
-  // Convert to array and apply format-based scoring adjustments
-  let players = Array.from(playerMap.values());
-
-  // Format weight multipliers
   const formatWeights: Record<ScoringFormat, Record<string, number>> = {
-    ppr:      { QB: 1.0, RB: 0.95, WR: 1.15, TE: 1.2, K: 1.0, DEF: 1.0 },
-    half:     { QB: 1.0, RB: 1.0,  WR: 1.05, TE: 1.1, K: 1.0, DEF: 1.0 },
-    standard: { QB: 1.0, RB: 1.1,  WR: 0.95, TE: 0.9, K: 1.0, DEF: 1.0 },
+    ppr:      { QB: 1.0, RB: 0.95, WR: 1.1, TE: 1.15, K: 1.0, DEF: 1.0 },
+    half:     { QB: 1.0, RB: 1.0,  WR: 1.05, TE: 1.05, K: 1.0, DEF: 1.0 },
+    standard: { QB: 1.0, RB: 1.1,  WR: 0.95, TE: 0.85, K: 1.0, DEF: 1.0 },
   };
-
   const weights = formatWeights[format];
 
-  // Compute composite score: stat value × format weight + trending bonus
-  for (const p of players) {
-    const w = weights[p.position] ?? 1.0;
-    const trendBonus = (p.trendingAdds > 0 ? Math.log10(p.trendingAdds + 1) * 50 : 0)
-                     - (p.trendingDrops > 0 ? Math.log10(p.trendingDrops + 1) * 30 : 0);
-    const snapBonus  = p.snapPct ? (p.snapPct / 100) * 20 : 0;
-    p.statValue = (p.statValue * w) + trendBonus + snapBonus;
+  // Convert all Sleeper players with a valid search_rank into ranked players
+  let players: RankedPlayer[] = [];
 
-    // Penalize injured players slightly in rankings
-    if (p.injuryStatus === 'Out' || p.injuryStatus === 'Injured Reserve') {
-      p.statValue *= 0.3;
-    } else if (p.injuryStatus === 'Doubtful') {
-      p.statValue *= 0.6;
-    } else if (p.injuryStatus === 'Questionable') {
-      p.statValue *= 0.9;
+  for (const [id, sp] of Object.entries(sleeperPlayers)) {
+    if (!sp.team || !sp.active) continue;
+    const searchRank = sp.search_rank ?? 9999;
+    if (searchRank > 500) continue; // Only top 500 fantasy-relevant players
+
+    const nameKey = sp.full_name.toLowerCase();
+    const espnStats = espnStatMap.get(nameKey);
+    const inj = injuryMap.get(nameKey);
+    const snap = snapMap.get(nameKey);
+    const playerNews = findNewsForPlayer(news, sp.full_name, 1);
+    const trendAdds = trendingAddMap.get(id) ?? 0;
+    const trendDrops = trendingDropMap.get(id) ?? 0;
+
+    // Vegas implied score for team
+    const teamKey = sp.team?.toLowerCase();
+    let implied: number | null = null;
+    if (teamKey) {
+      implied = vegasTeamMap.get(teamKey) ?? findVegasForTeam(vegas, sp.team) ?? null;
     }
+
+    // Composite score: lower search_rank = better player
+    // Invert so higher score = better rank
+    const posWeight = weights[sp.position] ?? 1.0;
+    let score = (600 - Math.min(searchRank, 500)) * posWeight;
+
+    // Boost from ESPN stats (season leaders get a bump)
+    if (espnStats && espnStats.value > 0) {
+      score += Math.min(espnStats.value * 0.1, 100);
+    }
+
+    // Trending momentum
+    if (trendAdds > 0)  score += Math.log10(trendAdds + 1) * 15;
+    if (trendDrops > 0) score -= Math.log10(trendDrops + 1) * 10;
+
+    // Snap share bonus
+    if (snap && snap > 50) score += (snap - 50) * 0.3;
+
+    // Injury penalty
+    if (inj) {
+      if (inj.status === 'Out' || inj.status === 'Injured Reserve') score *= 0.3;
+      else if (inj.status === 'Doubtful') score *= 0.6;
+      else if (inj.status === 'Questionable') score *= 0.9;
+    }
+
+    // Build stat line
+    let statLine = '';
+    if (espnStats && espnStats.stats.length > 0) {
+      statLine = espnStats.stats.join(' · ');
+    } else if (trendAdds > 0) {
+      statLine = `🔥 ${trendAdds.toLocaleString()} adds`;
+    }
+
+    players.push({
+      id,
+      name:         sp.full_name,
+      team:         sp.team,
+      position:     sp.position,
+      rank:         0,
+      posRank:      0,
+      statLine,
+      statValue:    score,
+      injuryStatus: inj?.status ?? null,
+      injuryDetail: inj?.injury ?? null,
+      trendingAdds: trendAdds,
+      trendingDrops: trendDrops,
+      snapPct:      snap ?? null,
+      newsHeadline: playerNews.length > 0 ? playerNews[0].title : null,
+      newsAge:      playerNews.length > 0 ? formatNewsAge(playerNews[0].pubDate) : null,
+      impliedTeamScore: implied,
+      isDrafted:    false,
+    });
   }
 
-  // Sort by composite score
+  // Sort by composite score descending
   players.sort((a, b) => b.statValue - a.statValue);
 
   // Assign overall rank and position rank
@@ -422,15 +363,6 @@ function formatStatLabel(statType: string, value: number): string {
   if (type.includes('rushing'))    return `${value.toLocaleString()} yds`;
   if (type.includes('receiving'))  return `${value.toLocaleString()} yds`;
   return `${value}`;
-}
-
-function guessPosition(statType: string): string {
-  const t = statType.toLowerCase();
-  if (t.includes('passing'))   return 'QB';
-  if (t.includes('rushing'))   return 'RB';
-  if (t.includes('receiving')) return 'WR';
-  if (t.includes('scoring'))   return 'K';
-  return 'WR';
 }
 
 function findVegasForTeam(vegas: VegasLine[], teamAbbr: string): number | null {
