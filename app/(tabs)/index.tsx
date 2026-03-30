@@ -76,13 +76,13 @@ export default function HomeScreen() {
       const user = await (await fetch(`https://api.sleeper.app/v1/user/${u}`)).json();
       if (!user?.user_id) return [];
       const slRes  = await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/2025`);
-      const leagues = await slRes.json();
-      if (!Array.isArray(leagues)) return [];
+      const leaguesList = await slRes.json();
+      if (!Array.isArray(leaguesList)) return [];
       const stateRes = await fetch('https://api.sleeper.app/v1/state/nfl');
       const state    = await stateRes.json();
       const week     = state.leg || state.display_week || state.week || 17;
 
-      return Promise.all(leagues.map(async (l: any): Promise<League> => {
+      return Promise.all(leaguesList.map(async (l: any): Promise<League> => {
         const isPPR = l.scoring_settings?.rec > 0;
         const isSF  = (l.roster_positions || []).includes('SUPER_FLEX');
         const fmt   = `${isPPR ? (l.scoring_settings.rec >= 1 ? 'PPR' : '0.5 PPR') : 'STD'}${isSF ? ' · SF' : ''}`;
@@ -165,7 +165,7 @@ export default function HomeScreen() {
         headers: { 'Content-Type': 'application/json', 'x-api-key': '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', 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514', max_tokens: 120,
-          messages: [{ role: 'user', content: `You are AIOmni. A manager has ${leagueList.length} fantasy football leagues this week:\n${leagueContext}\n\nGive ONE cross-league insight that is ONLY relevant if it affects multiple leagues simultaneously. Good examples: same injured player owned in multiple leagues, losing in multiple leagues needing upside, a waiver target that helps several rosters. BAD examples: comparing QBs across leagues (each league is independent). Focus on portfolio-level risk or opportunity. Under 20 words. JSON only, no markdown:\n{"emoji":"🎯","title":"Short title (5 words max)","body":"Under 20 words","tag":"RISK|WAIVER|URGENT|TRADE","color":"sage|gold|red"}` }],
+          messages: [{ role: 'user', content: `You are AIOmni. A manager has ${leagueList.length} fantasy football leagues this week:\n${leagueContext}\n\nGive ONE cross-league insight that is ONLY relevant if it affects multiple leagues simultaneously. Under 20 words. JSON only, no markdown:\n{"emoji":"🎯","title":"Short title (5 words max)","body":"Under 20 words","tag":"RISK|WAIVER|URGENT|TRADE","color":"sage|gold|red"}` }],
         }),
       });
       const data = await res.json();
@@ -228,19 +228,22 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.gold} />}
       >
-        {/* Header — 3x bigger logo + settings gear */}
-        <View style={styles.header}>
+        {/* Logo — centered, big */}
+        <View style={styles.logoRow}>
           <Image source={LOGO} style={styles.logo} resizeMode="contain" />
-          <View style={styles.headerRight}>
-            {username ? (
-              <View style={styles.handlePill}>
-                <Text style={styles.handleTxt}>@{username}</Text>
-              </View>
-            ) : null}
-            <TouchableOpacity onPress={() => router.push('/settings')} style={styles.gearBtn}>
-              <Ionicons name="settings-sharp" size={22} color={C.dim2} />
-            </TouchableOpacity>
-          </View>
+        </View>
+
+        {/* Handle + gear row */}
+        <View style={styles.headerBar}>
+          <View style={{ flex: 1 }} />
+          {username ? (
+            <View style={styles.handlePill}>
+              <Text style={styles.handleTxt}>@{username}</Text>
+            </View>
+          ) : null}
+          <TouchableOpacity onPress={() => router.push('/settings')} style={styles.gearBtn}>
+            <Ionicons name="settings-sharp" size={22} color={C.dim2} />
+          </TouchableOpacity>
         </View>
 
         {/* News feed */}
@@ -293,7 +296,7 @@ export default function HomeScreen() {
                     <View style={styles.matchRow}>
                       <View>
                         <Text style={styles.teamLbl}>{lg.name.toUpperCase().slice(0, 12)}</Text>
-                        <Animated.Text style={[styles.scoreWin, !winning && { color: C.ink }]}>{scoreStr}</Animated.Text>
+                        <Animated.Text style={[styles.scoreNum, winning && { color: C.sage }]}>{scoreStr}</Animated.Text>
                       </View>
                       <View style={[styles.winPill, !winning && styles.losePill]}>
                         <Text style={[styles.winTxt, !winning && { color: '#e87878' }]}>
@@ -302,7 +305,7 @@ export default function HomeScreen() {
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.teamLbl}>OPPONENT</Text>
-                        <Text style={[styles.scoreWin, { color: '#7a3040' }]}>{(lg.opp ?? 0).toFixed(1)}</Text>
+                        <Text style={[styles.scoreNum, { color: '#c87878' }]}>{(lg.opp ?? 0).toFixed(1)}</Text>
                       </View>
                     </View>
                     <View style={styles.progBg}>
@@ -348,7 +351,7 @@ export default function HomeScreen() {
           {insightLoading ? (
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 4 }}>
               <ActivityIndicator size="small" color={C.gold} />
-              <Text style={[styles.loadingSub, textShadow.subtle]}>Scanning {leagues.length} leagues...</Text>
+              <Text style={styles.loadingTxt}>Scanning {leagues.length} leagues...</Text>
             </View>
           ) : (
             <ScrollView
@@ -409,9 +412,13 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   scroll:         { paddingHorizontal: SP[3], paddingBottom: 110 },
-  header:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  logo:           { height: 100, width: 340 },
-  headerRight:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
+
+  // Logo row — centered
+  logoRow:        { alignItems: 'center', marginBottom: 4 },
+  logo:           { height: 80, width: 280 },
+
+  // Handle + gear — right aligned
+  headerBar:      { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 12 },
   handlePill:     { backgroundColor: C.glass, borderRadius: R.full, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: C.glassBorder },
   handleTxt:      { fontSize: SZ.sm, color: C.dim, fontFamily: F.mono, ...textShadow.subtle },
   gearBtn:        { padding: 6 },
@@ -426,14 +433,13 @@ const styles = StyleSheet.create({
 
   loadingCard:    { alignItems: 'center', padding: 40, gap: 12 },
   loadingTxt:     { color: C.dim, fontFamily: F.mono, fontSize: SZ.sm, ...textShadow.subtle },
-  loadingSub:     { color: C.dim, fontFamily: F.mono, fontSize: SZ.sm },
 
   scoreCard:      { padding: 14 },
   espnCard:       { borderColor: ESPN_RED_BORDER },
   scoreEye:       { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 1.2, marginBottom: 8, ...textShadow.subtle },
   matchRow:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   teamLbl:        { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 2, ...textShadow.subtle },
-  scoreWin:       { fontSize: SZ['4xl'], fontWeight: '900', color: C.sage, letterSpacing: -1.5, lineHeight: 40, fontFamily: F.bold, ...textShadow.hero },
+  scoreNum:       { fontSize: SZ['4xl'], fontWeight: '900', color: C.ink, letterSpacing: -1.5, lineHeight: 40, fontFamily: F.bold, ...textShadow.hero },
   winPill:        { backgroundColor: 'rgba(45,122,94,0.18)', borderRadius: R.full, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1.5, borderColor: 'rgba(45,122,94,0.40)' },
   losePill:       { backgroundColor: 'rgba(200,120,120,0.15)', borderColor: 'rgba(200,120,120,0.35)' },
   winTxt:         { fontSize: SZ.sm, fontWeight: '700', color: C.sage, fontFamily: F.bold, letterSpacing: 0.5, ...textShadow.body },

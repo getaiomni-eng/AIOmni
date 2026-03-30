@@ -1,4 +1,4 @@
-import { View, Image } from 'react-native';
+import { Image, View } from 'react-native';
 
 interface OrbAvatarProps {
   size?: number;
@@ -9,7 +9,7 @@ interface OrbAvatarProps {
 
 export function OrbAvatar({ size = 60, style }: OrbAvatarProps) {
   return (
-    <View style={[{ width: size, height: size, backgroundColor: 'transparent' }, style]}>
+    <View style={[{ width: size, height: size }, style]}>
       <Image
         source={require('../../assets/images/orb.png')}
         style={{ width: size, height: size }}
