@@ -296,7 +296,7 @@ export default function HomeScreen() {
                     <View style={styles.matchRow}>
                       <View>
                         <Text style={styles.teamLbl}>{lg.name.toUpperCase().slice(0, 12)}</Text>
-                        <Animated.Text style={[styles.scoreNum, winning && { color: C.sage }]}>{scoreStr}</Animated.Text>
+                        <Animated.Text numberOfLines={1} adjustsFontSizeToFit style={[styles.scoreNum, winning && { color: C.sage }]}>{scoreStr}</Animated.Text>
                       </View>
                       <View style={[styles.winPill, !winning && styles.losePill]}>
                         <Text style={[styles.winTxt, !winning && { color: '#e87878' }]}>
@@ -305,7 +305,7 @@ export default function HomeScreen() {
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.teamLbl}>OPPONENT</Text>
-                        <Text style={[styles.scoreNum, { color: '#c87878' }]}>{(lg.opp ?? 0).toFixed(1)}</Text>
+                        <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.scoreNum, { color: '#c87878' }]}>{(lg.opp ?? 0).toFixed(1)}</Text>
                       </View>
                     </View>
                     <View style={styles.progBg}>
@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
   scoreEye:       { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 1.2, marginBottom: 8, ...textShadow.subtle },
   matchRow:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   teamLbl:        { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 2, ...textShadow.subtle },
-  scoreNum:       { fontSize: SZ['4xl'], fontWeight: '900', color: C.ink, letterSpacing: -1.5, lineHeight: 40, fontFamily: F.bold, ...textShadow.hero },
+  scoreNum:       { fontSize: SZ['2xl'], fontWeight: '900', color: C.ink, letterSpacing: -1, lineHeight: 32, fontFamily: F.bold, ...textShadow.hero },
   winPill:        { backgroundColor: 'rgba(45,122,94,0.18)', borderRadius: R.full, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1.5, borderColor: 'rgba(45,122,94,0.40)' },
   losePill:       { backgroundColor: 'rgba(200,120,120,0.15)', borderColor: 'rgba(200,120,120,0.35)' },
   winTxt:         { fontSize: SZ.sm, fontWeight: '700', color: C.sage, fontFamily: F.bold, letterSpacing: 0.5, ...textShadow.body },

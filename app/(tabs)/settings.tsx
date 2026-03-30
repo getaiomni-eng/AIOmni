@@ -10,7 +10,7 @@ import { clearYahooTokens, exchangeYahooCode, getValidYahooToken, getYahooAuthUR
 import { Badge } from '../components/Atoms';
 import { GlassCard, SurfaceCard } from '../components/GlassCard';
 import { OrbAvatar } from '../components/OrbAvatar';
-import { C, F, SP, SZ } from '../constants/tokens';
+import { C, F, SP, SZ, textShadow } from '../constants/tokens';
 import { getRemainingPrompts } from '../utils/promptCounter';
 
 const LOGO = require('../../assets/images/logo.png');
@@ -85,44 +85,27 @@ export default function MoreScreen() {
     setLoading(true);
     try {
       const authUrl = await getYahooAuthURL();
-
-      // Listen for deep link BEFORE opening browser
       const codePromise = new Promise<string | null>((resolve) => {
-        const timeout = setTimeout(() => {
-          sub.remove();
-          resolve(null);
-        }, 120000); // 2 min timeout
-
+        const timeout = setTimeout(() => { sub.remove(); resolve(null); }, 120000);
         const sub = Linking.addEventListener('url', ({ url }: { url: string }) => {
           if (url.startsWith('aiomnifantasy://oauth/yahoo')) {
             clearTimeout(timeout);
             sub.remove();
-            try {
-              const urlObj = new URL(url);
-              resolve(urlObj.searchParams.get('code'));
-            } catch { resolve(null); }
+            try { const urlObj = new URL(url); resolve(urlObj.searchParams.get('code')); }
+            catch { resolve(null); }
           }
         });
       });
-
-      // Open browser — openBrowserAsync NOT openAuthSessionAsync
-      // Yahoo's intermediate redirect breaks openAuthSessionAsync
       WebBrowser.openBrowserAsync(authUrl, { showInRecents: true });
-
       const code = await codePromise;
       WebBrowser.dismissBrowser();
-
       if (code) {
         await exchangeYahooCode(code);
         setYahooConnected(true);
         Alert.alert('✓ Yahoo Connected', 'Your Yahoo leagues will now appear on Home.');
-      } else {
-        Alert.alert('Yahoo Error', 'No auth code received. Try again.');
-      }
-    } catch (e: any) {
-      console.log('Yahoo error:', e);
-      Alert.alert('Yahoo Error', e.message || 'Could not connect Yahoo.');
-    } finally { setLoading(false); }
+      } else { Alert.alert('Yahoo Error', 'No auth code received. Try again.'); }
+    } catch (e: any) { console.log('Yahoo error:', e); Alert.alert('Yahoo Error', e.message || 'Could not connect Yahoo.'); }
+    finally { setLoading(false); }
   };
 
   const handleDisconnectESPN = () => {
@@ -159,6 +142,7 @@ export default function MoreScreen() {
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 12 }]} showsVerticalScrollIndicator={false}>
 
+        {/* Logo — big, centered, matches Home */}
         <View style={styles.logoWrap}>
           <Image source={LOGO} style={styles.logo} resizeMode="contain" />
         </View>
@@ -270,20 +254,12 @@ export default function MoreScreen() {
           <GlassCard style={styles.modalCard}>
             <Text style={styles.modalTitle}>Sleeper Account</Text>
             <Text style={styles.modalSub}>Enter your Sleeper username to load your leagues.</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Sleeper username"
-              placeholderTextColor="rgba(255,255,255,0.35)"
-              value={newUsername}
-              onChangeText={setNewUsername}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+            <TextInput style={styles.input} placeholder="Sleeper username" placeholderTextColor="rgba(255,255,255,0.35)" value={newUsername} onChangeText={setNewUsername} autoCapitalize="none" autoCorrect={false} />
             <TouchableOpacity style={styles.modalBtn} onPress={handleSaveUsername} disabled={loading}>
               <Text style={styles.modalBtnTxt}>{loading ? 'Connecting...' : 'Connect Sleeper'}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowAccountModal(false)} style={{ marginTop: 12, alignItems: 'center' }}>
-              <Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.sm }}>Cancel</Text>
+              <Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.sm, ...textShadow.subtle }}>Cancel</Text>
             </TouchableOpacity>
           </GlassCard>
         </View>
@@ -294,8 +270,6 @@ export default function MoreScreen() {
         <View style={styles.overlay}>
           <GlassCard style={styles.modalCard}>
             <Text style={styles.modalTitle}>My Platforms</Text>
-
-            {/* ESPN */}
             <Text style={[styles.platformLabel, { color: '#FF4444' }]}>ESPN</Text>
             {espnConnected ? (
               <TouchableOpacity style={[styles.modalBtn, { backgroundColor: 'rgba(122,31,46,0.4)', borderColor: '#7a1f2e' }]} onPress={handleDisconnectESPN}>
@@ -303,9 +277,7 @@ export default function MoreScreen() {
               </TouchableOpacity>
             ) : (
               <>
-                <Text style={styles.platformHint}>
-                  {'1. Log into espn.com in Safari\n2. Open DevTools → Application → Cookies\n3. Copy espn_s2 + SWID values\n4. Find League ID in your ESPN league URL'}
-                </Text>
+                <Text style={styles.platformHint}>{'1. Log into espn.com in Safari\n2. Open DevTools → Application → Cookies\n3. Copy espn_s2 + SWID values\n4. Find League ID in your ESPN league URL'}</Text>
                 <TextInput style={styles.input} placeholder="espn_s2 cookie" placeholderTextColor="rgba(255,255,255,0.35)" value={espnS2} onChangeText={setEspnS2} autoCapitalize="none" multiline />
                 <TextInput style={[styles.input, { marginTop: 8 }]} placeholder="SWID ({XXXX-XXXX})" placeholderTextColor="rgba(255,255,255,0.35)" value={espnSWID} onChangeText={setEspnSWID} autoCapitalize="none" />
                 <TextInput style={[styles.input, { marginTop: 8 }]} placeholder="League ID (numbers only)" placeholderTextColor="rgba(255,255,255,0.35)" value={espnLeagueId} onChangeText={setEspnLeagueId} keyboardType="numeric" />
@@ -314,8 +286,6 @@ export default function MoreScreen() {
                 </TouchableOpacity>
               </>
             )}
-
-            {/* Yahoo */}
             <Text style={[styles.platformLabel, { color: '#7a44cc', marginTop: 20 }]}>Yahoo</Text>
             {yahooConnected ? (
               <TouchableOpacity style={[styles.modalBtn, { backgroundColor: 'rgba(90,0,170,0.3)', borderColor: '#5a00aa' }]} onPress={handleDisconnectYahoo}>
@@ -326,9 +296,8 @@ export default function MoreScreen() {
                 <Text style={[styles.modalBtnTxt, { color: '#bb88ff' }]}>{loading ? 'Opening Yahoo...' : 'Connect Yahoo'}</Text>
               </TouchableOpacity>
             )}
-
             <TouchableOpacity onPress={() => setShowPlatformModal(false)} style={{ marginTop: 20, alignItems: 'center' }}>
-              <Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.sm }}>Done</Text>
+              <Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.sm, ...textShadow.subtle }}>Done</Text>
             </TouchableOpacity>
           </GlassCard>
         </View>
@@ -340,41 +309,41 @@ export default function MoreScreen() {
 const styles = StyleSheet.create({
   scroll:         { paddingHorizontal: SP[3], paddingBottom: 110 },
   logoWrap:       { alignItems: 'center', marginBottom: 20 },
-  logo:           { height: 32, width: 120 },
+  logo:           { height: 80, width: 280 },
   mb14:           { marginBottom: 14 },
   userRow:        { flexDirection: 'row', alignItems: 'center', gap: 13 },
-  userName:       { fontSize: SZ.lg, fontWeight: '700', color: C.ink, fontFamily: F.bold },
-  userHandle:     { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginTop: 2 },
+  userName:       { fontSize: SZ.lg, fontWeight: '700', color: C.ink, fontFamily: F.bold, ...textShadow.body },
+  userHandle:     { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginTop: 2, ...textShadow.subtle },
   promptRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  promptLbl:      { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 1.5 },
-  promptCount:    { fontSize: SZ.base, fontWeight: '700', fontFamily: F.bold },
+  promptLbl:      { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 1.5, ...textShadow.subtle },
+  promptCount:    { fontSize: SZ.base, fontWeight: '700', fontFamily: F.bold, ...textShadow.body },
   promptBg:       { height: 4, backgroundColor: 'rgba(122,31,46,0.4)', borderRadius: 3, overflow: 'hidden' },
   promptFill:     { height: 4, borderRadius: 3 },
-  promptSub:      { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim, marginTop: 5, opacity: 0.7 },
-  sectionLbl:     { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 3, marginBottom: 10 },
+  promptSub:      { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim, marginTop: 5, opacity: 0.7, ...textShadow.subtle },
+  sectionLbl:     { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 3, marginBottom: 10, ...textShadow.subtle },
   tierCard:       { width: 140 },
   tierDot:        { width: 8, height: 8, borderRadius: 4, marginBottom: 8 },
-  tierName:       { fontSize: SZ.sm, fontWeight: '700', color: C.ink, fontFamily: F.bold, marginBottom: 3 },
-  tierPrice:      { fontSize: SZ.xl, fontWeight: '800', fontFamily: F.bold, marginBottom: 3 },
-  tierSub:        { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 9, lineHeight: 14 },
+  tierName:       { fontSize: SZ.sm, fontWeight: '700', color: C.ink, fontFamily: F.bold, marginBottom: 3, ...textShadow.body },
+  tierPrice:      { fontSize: SZ.xl, fontWeight: '800', fontFamily: F.bold, marginBottom: 3, ...textShadow.body },
+  tierSub:        { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 9, lineHeight: 14, ...textShadow.subtle },
   tierBtn:        { borderWidth: 1, borderRadius: 8, paddingVertical: 5, alignItems: 'center' },
-  tierBtnTxt:     { fontSize: SZ.sm, fontWeight: '700', fontFamily: F.bold },
+  tierBtnTxt:     { fontSize: SZ.sm, fontWeight: '700', fontFamily: F.bold, ...textShadow.body },
   menuRow:        { flexDirection: 'row', alignItems: 'center', gap: 12, padding: SP[3] },
   menuBorder:     { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)' },
   menuIcon:       { fontSize: 18, width: 28, textAlign: 'center' },
-  menuLabel:      { fontSize: SZ.base, fontWeight: '600', color: C.ink, fontFamily: F.bold },
-  menuSub:        { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginTop: 1 },
-  menuChevron:    { color: C.dim2, fontSize: SZ.xl },
+  menuLabel:      { fontSize: SZ.base, fontWeight: '600', color: C.ink, fontFamily: F.bold, ...textShadow.body },
+  menuSub:        { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginTop: 1, ...textShadow.subtle },
+  menuChevron:    { color: C.dim2, fontSize: SZ.xl, ...textShadow.body },
   footer:         { alignItems: 'center', marginTop: SP[8], gap: 5 },
-  footerTxt:      { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, letterSpacing: 1 },
-  footerSub:      { fontSize: SZ.xs, fontFamily: F.mono, color: 'rgba(255,255,255,0.2)', letterSpacing: 1.5 },
+  footerTxt:      { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, letterSpacing: 1, ...textShadow.subtle },
+  footerSub:      { fontSize: SZ.xs, fontFamily: F.mono, color: 'rgba(255,255,255,0.2)', letterSpacing: 1.5, ...textShadow.subtle },
   overlay:        { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', padding: SP[3], paddingBottom: 40 },
   modalCard:      { padding: 24 },
-  modalTitle:     { fontSize: SZ.xl, fontWeight: '700', color: C.ink, fontFamily: F.bold, marginBottom: 4 },
-  modalSub:       { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginBottom: 14 },
-  platformLabel:  { fontSize: SZ.sm, fontFamily: F.bold, fontWeight: '700', letterSpacing: 1, marginBottom: 8, marginTop: 4 },
-  platformHint:   { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 10, lineHeight: 18 },
+  modalTitle:     { fontSize: SZ.xl, fontWeight: '700', color: C.ink, fontFamily: F.bold, marginBottom: 4, ...textShadow.hero },
+  modalSub:       { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginBottom: 14, ...textShadow.subtle },
+  platformLabel:  { fontSize: SZ.sm, fontFamily: F.bold, fontWeight: '700', letterSpacing: 1, marginBottom: 8, marginTop: 4, ...textShadow.body },
+  platformHint:   { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 10, lineHeight: 18, ...textShadow.subtle },
   input:          { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, color: C.ink, fontFamily: F.mono, fontSize: SZ.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
   modalBtn:       { backgroundColor: C.sageS, borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: C.sageBorder, marginTop: 12 },
-  modalBtnTxt:    { color: C.sage, fontWeight: '700', fontFamily: F.bold, fontSize: SZ.base },
+  modalBtnTxt:    { color: C.sage, fontWeight: '700', fontFamily: F.bold, fontSize: SZ.base, ...textShadow.body },
 });
