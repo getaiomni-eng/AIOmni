@@ -27,7 +27,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 type League = {
   id: string; name: string; platform: 'sleeper' | 'espn';
   format?: string; rec?: string; rank?: string;
-  pts?: number; opp?: number; week?: number;
+  pts?: number; opp?: number; week?: number; avatar?: string;
 };
 
 const FALLBACK_NEWS = [
@@ -99,13 +99,13 @@ export default function HomeScreen() {
           const sorted = Array.isArray(rosters) ? [...rosters].sort((a: any, b: any) => (b.settings?.wins ?? 0) - (a.settings?.wins ?? 0)) : [];
           const rank   = sorted.findIndex((r: any) => r.roster_id === myRoster?.roster_id) + 1;
           return {
-            id: l.league_id, name: l.name, platform: 'sleeper', format: fmt,
+            id: l.league_id, name: l.name, platform: 'sleeper', format: fmt, avatar: l.avatar,
             rec: `${wins}–${losses}`,
             rank: rank > 0 ? `${rank}${ordinal(rank)} of ${rosters.length}` : undefined,
             pts: myMatchup?.points ?? 0, opp: oppMatchup?.points ?? 0, week,
           };
         } catch {
-          return { id: l.league_id, name: l.name, platform: 'sleeper', format: fmt };
+          return { id: l.league_id, name: l.name, platform: 'sleeper', format: fmt, avatar: l.avatar };
         }
       }));
     } catch (e) { console.log('loadSleeperLeagues:', e); return []; }
@@ -219,7 +219,7 @@ export default function HomeScreen() {
   }, []);
 
   const goToLeague = (l: League) =>
-    router.push({ pathname: '/league', params: { leagueId: l.id, leagueName: l.name, platform: l.platform } });
+    router.push({ pathname: '/league', params: { leagueId: l.id, leagueName: l.name, platform: l.platform, avatar: l.avatar ?? '' } });
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
@@ -296,7 +296,7 @@ export default function HomeScreen() {
                     <View style={styles.matchRow}>
                       <View>
                         <Text style={styles.teamLbl} numberOfLines={1}>{lg.name.toUpperCase()}</Text>
-                        <Animated.Text numberOfLines={1} adjustsFontSizeToFit style={[styles.scoreNum, winning && { color: C.sage }]}>{scoreStr}</Animated.Text>
+                        <Animated.Text numberOfLines={1} adjustsFontSizeToFit style={[styles.scoreNum, winning && { color: '#82c494' }]}>{scoreStr}</Animated.Text>
                       </View>
                       <View style={[styles.winPill, !winning && styles.losePill]}>
                         <Text style={[styles.winTxt, !winning && { color: '#e87878' }]}>
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
 
   // Logo row — centered
   logoRow:        { alignItems: 'center', marginBottom: 4 },
-  logo:           { height: 80, width: 280 },
+  logo:           { height: 110, width: 360 },
 
   // Handle + gear — right aligned
   headerBar:      { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 12 },

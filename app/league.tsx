@@ -1,20 +1,49 @@
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Modal,
+  ActivityIndicator,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { C, F, SZ, SP } from './constants/tokens';
-import { GlassCard, SurfaceCard } from './components/GlassCard';
-import { OrbAvatar } from './components/OrbAvatar';
-import { PlayerRow, Player } from './components/PlayerRow';
 import { Badge, SectionHeader } from './components/Atoms';
+import { GlassCard, SurfaceCard } from './components/GlassCard';
+import { Player, PlayerRow } from './components/PlayerRow';
+import { C, F, SP, SZ } from './constants/tokens';
 
-const TABS = ['ROSTER','WAIVERS','STANDINGS','ACTIVITY'] as const;
+const TABS = ['ROSTER','STANDINGS','MATCHUP','WAIVERS','ACTIVITY'] as const;
 type Tab = typeof TABS[number];
 const SLOT_MAP: Record<string,string> = { QB:'QB', RB:'RB', WR:'WR', TE:'TE', FLEX:'FLX', SUPER_FLEX:'SF', K:'K', DEF:'DEF', BN:'BN', IR:'IR' };
+
+const SLEEPER_AVATAR = (id: string) => `https://sleepercdn.com/avatars/thumbs/${id}`;
+
+const PlatformBadge = ({ platform }: { platform: string }) => {
+  const isESPN = platform === 'espn';
+  const isYahoo = platform === 'yahoo';
+  return (
+    <View style={{
+      width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: isESPN ? 'rgba(221,0,0,0.2)' : isYahoo ? 'rgba(90,50,180,0.2)' : 'rgba(254,226,41,0.15)',
+      borderWidth: 1,
+      borderColor: isESPN ? 'rgba(221,0,0,0.4)' : isYahoo ? 'rgba(90,50,180,0.4)' : 'rgba(254,226,41,0.3)',
+    }}>
+      <Text style={{
+        fontSize: isESPN || isYahoo ? 16 : 12, fontWeight: '900',
+        color: isESPN ? '#dd0000' : isYahoo ? '#5a32b4' : C.gold,
+        fontFamily: F.bold,
+      }}>
+        {isESPN ? 'E' : isYahoo ? 'Y' : 'S'}
+      </Text>
+    </View>
+  );
+};
 
 export default function LeagueScreen() {
   const router = useRouter();
@@ -26,8 +55,10 @@ export default function LeagueScreen() {
   const [bench, setBench] = useState<Player[]>([]);
   const [waivers, setWaivers] = useState<Player[]>([]);
   const [standings, setStandings] = useState<any[]>([]);
+  const [matchups, setMatchups] = useState<any[]>([]);
   const [myRec, setMyRec] = useState('');
   const [myScore, setMyScore] = useState(0);
+  const [oppScore, setOppScore] = useState(0);
   const [week, setWeek] = useState(14);
   const [advicePlayer, setAdvicePlayer] = useState<Player | null>(null);
   const [advice, setAdvice] = useState('');
@@ -36,6 +67,7 @@ export default function LeagueScreen() {
   const leagueName = (params.leagueName as string) ?? 'My League';
   const leagueId   = params.leagueId as string;
   const platform   = (params.platform as string) ?? 'sleeper';
+  const avatarId   = (params.avatar as string) ?? '';
 
   useEffect(() => { if (leagueId) loadData(); }, [leagueId]);
 
@@ -45,11 +77,9 @@ export default function LeagueScreen() {
     try {
       if (platform === 'sleeper') {
         realDataLoaded = await loadSleeper();
-        console.log('loadSleeper result:', realDataLoaded, 'leagueId:', leagueId);
       }
     }
     catch (e) { console.log('LeagueScreen error:', e); }
-    // Only show demo if real data failed
     if (!realDataLoaded) {
       const seed = leagueId ? parseInt(leagueId.toString().slice(-1)) || 0 : 0;
       const ROSTERS: Player[][] = [
@@ -116,13 +146,11 @@ export default function LeagueScreen() {
           { slot:'BN', pos:'WR', name:'Diontae Johnson', team:'PIT', proj:9.0  },
         ],
       ];
-      const idx = seed % 4;
+      const idx = (leagueId ? parseInt(leagueId.toString().slice(-1)) || 0 : 0) % 4;
       setStarters(ROSTERS[idx]);
       setBench(BENCHES[idx]);
-      const recArr = ['8–5','6–7','9–4','5–8'];
-      const scoreArr = [157.4, 102.1, 144.8, 98.3];
-      setMyRec(recArr[idx]);
-      setMyScore(scoreArr[idx]);
+      setMyRec(['8–5','6–7','9–4','5–8'][idx]);
+      setMyScore([157.4, 102.1, 144.8, 98.3][idx]);
     }
     setLoading(false);
   };
@@ -151,18 +179,19 @@ export default function LeagueScreen() {
       }
     } catch {}
 
-    const [matchups, weekStats, users] = await Promise.all([
+    const [matchupsData, weekStats, users] = await Promise.all([
       fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${currentWeek}`).then(r => r.json()),
       fetch(`https://api.sleeper.app/v1/stats/nfl/regular/2025/${currentWeek}`).then(r => r.json()),
       fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`).then(r => r.json()),
     ]);
 
-    if (!Array.isArray(matchups)) return false;
-    const myMatchup    = matchups.find((m: any) => m.roster_id === myRoster?.roster_id);
+    if (!Array.isArray(matchupsData)) return false;
+    const myMatchup    = matchupsData.find((m: any) => m.roster_id === myRoster?.roster_id);
+    const oppMatchup   = myMatchup ? matchupsData.find((m: any) => m.matchup_id === myMatchup.matchup_id && m.roster_id !== myRoster?.roster_id) : null;
+    setOppScore(oppMatchup?.points ?? 0);
     const playerPoints = myMatchup?.players_points ?? {};
     const rosterPos    = leagueInfo.roster_positions ?? ['QB','RB','RB','WR','WR','TE','FLEX','K','BN','BN','BN','BN','BN','BN'];
     const starterSlots = rosterPos.filter((p: string) => p !== 'BN' && p !== 'IR');
-    // Offseason fallback: if no starters, sort all players by position
     const rawStarters = myMatchup?.starters ?? myRoster.starters ?? [];
     const allPlayerIds: string[] = myRoster.players ?? [];
     const POS_ORDER: Record<string,number> = { QB:0, RB:1, WR:2, TE:3, K:4, DEF:5 };
@@ -188,6 +217,31 @@ export default function LeagueScreen() {
     setBench(benchPlayers);
     setMyScore(myMatchup?.points ?? starterPlayers.reduce((s: number, p: Player) => s + (p.pts ?? 0), 0));
 
+    // Build matchup pairs for MATCHUP tab
+    const userMap: any = {};
+    (Array.isArray(users) ? users : []).forEach((u: any) => { userMap[u.user_id] = u.display_name; });
+    const rosterOwnerMap: any = {};
+    rosters.forEach((r: any) => { rosterOwnerMap[r.roster_id] = userMap[r.owner_id] ?? `Team ${r.roster_id}`; });
+
+    const matchupPairs: any[] = [];
+    const seen = new Set<number>();
+    matchupsData.forEach((m: any) => {
+      if (seen.has(m.matchup_id)) return;
+      seen.add(m.matchup_id);
+      const pair = matchupsData.filter((x: any) => x.matchup_id === m.matchup_id);
+      if (pair.length === 2) {
+        matchupPairs.push({
+          home: rosterOwnerMap[pair[0].roster_id] ?? `Team ${pair[0].roster_id}`,
+          homeScore: pair[0].points ?? 0,
+          homeIsMe: pair[0].roster_id === myRoster.roster_id,
+          away: rosterOwnerMap[pair[1].roster_id] ?? `Team ${pair[1].roster_id}`,
+          awayScore: pair[1].points ?? 0,
+          awayIsMe: pair[1].roster_id === myRoster.roster_id,
+        });
+      }
+    });
+    setMatchups(matchupPairs);
+
     const ownedIds = new Set(rosters.flatMap((r: any) => r.players ?? []));
     setWaivers(Object.entries(weekStats)
       .filter(([id, s]: any) => !ownedIds.has(id) && (s.pts_ppr ?? 0) > 0)
@@ -195,8 +249,6 @@ export default function LeagueScreen() {
       .sort((a: Player, b: Player) => (b.lastWk ?? 0) - (a.lastWk ?? 0))
       .slice(0, 30));
 
-    const userMap: any = {};
-    users.forEach((u: any) => { userMap[u.user_id] = u.display_name; });
     setStandings(rosters
       .map((r: any) => ({ name: userMap[r.owner_id] ?? `Team ${r.roster_id}`, rec: `${r.settings?.wins ?? 0}–${r.settings?.losses ?? 0}`, pts: (r.settings?.fpts ?? 0) + (r.settings?.fpts_decimal ?? 0) / 100, me: r.owner_id === user.user_id, wins: r.settings?.wins ?? 0 }))
       .sort((a: any, b: any) => b.wins - a.wins || b.pts - a.pts)
@@ -218,40 +270,32 @@ export default function LeagueScreen() {
     setAdviceLoading(false);
   };
 
+  const winning = myScore > oppScore;
   const total = myScore;
+
+  const LeagueAvatar = () => {
+    if (platform === 'sleeper' && avatarId) {
+      return <Image source={{ uri: SLEEPER_AVATAR(avatarId) }} style={styles.avatar} />;
+    }
+    return <PlatformBadge platform={platform} />;
+  };
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
       <View style={[styles.wrap, { paddingTop: insets.top + 8 }]}>
         <View style={styles.hdr}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Text style={styles.back}>←</Text>
+            <Text style={styles.back}>← BACK</Text>
           </TouchableOpacity>
-          <OrbAvatar size={24} />
+          <LeagueAvatar />
           <View style={{ flex: 1 }}>
-            <Text style={styles.lName}>{leagueName}</Text>
-            <Text style={styles.lSub}>{platform.toUpperCase()} · WK {week}</Text>
+            <Text style={styles.lName} numberOfLines={1}>{leagueName}</Text>
+            <Text style={styles.lSub}>{platform.toUpperCase()}</Text>
           </View>
-          <Text style={styles.record}>{myRec}</Text>
+          <View style={styles.platBadge}>
+            <Text style={styles.platBadgeTxt}>{platform.toUpperCase()}</Text>
+          </View>
         </View>
-
-        <GlassCard style={styles.mb8} padding={11}>
-          <Text style={styles.wkLbl}>WEEK {week} · LIVE</Text>
-          <View style={styles.scoreRow}>
-            <View>
-              <Text style={styles.teamLbl}>{leagueName.toUpperCase().slice(0,10)}</Text>
-              <Text style={styles.scoreWin}>{total.toFixed(1)}</Text>
-            </View>
-            <View style={{ backgroundColor: 'rgba(45,122,94,0.20)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(45,122,94,0.35)' }}>
-              <Text style={styles.winBadge}>↑ WINNING</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.teamLbl}>OPP</Text>
-              <Text style={styles.scoreLose}>—</Text>
-            </View>
-          </View>
-          <View style={styles.prog}><View style={[styles.progFill, { width: '60%' as any }]} /></View>
-        </GlassCard>
 
         <View style={styles.tabRow}>
           {TABS.map(t => (
@@ -263,31 +307,17 @@ export default function LeagueScreen() {
 
         {loading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator color={C.sage} size="large" />
+            <ActivityIndicator color={C.gold} size="large" />
             <Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.sm, marginTop: 12 }}>Loading roster...</Text>
           </View>
         ) : (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
             {tab === 'ROSTER' && (
               <View style={{ gap: 6 }}>
-                <SurfaceCard radius={16}>
-                  <SectionHeader label="STARTERS" barColor={C.sage} right={<Text style={{ fontSize: SZ.sm, fontWeight:'700', color:C.sage, fontFamily:F.bold }}>{total.toFixed(1)}</Text>} />
-                  {starters.map((p, i) => <PlayerRow key={i} player={p} showScore showBar onPress={() => handleAdvice(p)} />)}
-                </SurfaceCard>
-                <SurfaceCard radius={16} style={{ opacity: 0.7 }}>
-                  <SectionHeader label="BENCH" barColor={C.dim} />
-                  {bench.map((p, i) => <PlayerRow key={i} player={p} showScore={false} showBar={false} dimmed onPress={() => handleAdvice(p)} />)}
-                </SurfaceCard>
-              </View>
-            )}
-            {tab === 'WAIVERS' && (
-              <View>
-                <SectionHeader label="AVAILABLE" barColor={C.mint} />
-                {waivers.map((p, i) => (
-                  <GlassCard key={i} style={{ marginBottom: 7 }} padding={11}>
-                    <PlayerRow player={p} showScore={false} showOwned showAdd />
-                  </GlassCard>
-                ))}
+                <SectionHeader label="STARTERS" barColor={C.gold} right={<Text style={{ fontSize: SZ.sm, fontWeight:'700', color:'#82c494', fontFamily:F.bold }}>{starters.length}</Text>} />
+                {starters.map((p, i) => <PlayerRow key={i} player={p} showScore showBar onPress={() => handleAdvice(p)} />)}
+                <SectionHeader label="BENCH" barColor={C.dim} right={<Text style={{ fontSize: SZ.sm, fontWeight:'700', color:C.dim, fontFamily:F.bold }}>{bench.length}</Text>} />
+                {bench.map((p, i) => <PlayerRow key={i} player={p} showScore={false} showBar={false} dimmed onPress={() => handleAdvice(p)} />)}
               </View>
             )}
             {tab === 'STANDINGS' && (
@@ -297,18 +327,70 @@ export default function LeagueScreen() {
                   <SurfaceCard key={i} style={[{ marginBottom: 5 }, t.me && styles.meCard]}>
                     <View style={styles.standRow}>
                       <View style={{ width: 26, alignItems: 'center' }}>
-                        {i < 3 ? <OrbAvatar size={22} /> : <Text style={styles.rankNum}>{t.rank}</Text>}
+                        <Text style={[styles.rankNum, i < 3 && { color: C.gold }]}>{t.rank}</Text>
                       </View>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection:'row', alignItems:'center', gap:5 }}>
-                          <Text style={[styles.standName, t.me && { color: C.sage }]}>{t.name}</Text>
-                          {t.me && <Badge label="YOU" color={C.sage} />}
+                          <Text style={[styles.standName, t.me && { color: '#82c494' }]}>{t.name}</Text>
+                          {t.me && <Badge label="YOU" color={'#82c494'} />}
                         </View>
                         <Text style={styles.standPts}>{t.pts.toFixed(1)} pts</Text>
                       </View>
                       <Text style={styles.standRec}>{t.rec}</Text>
                     </View>
                   </SurfaceCard>
+                ))}
+              </View>
+            )}
+            {tab === 'MATCHUP' && (
+              <View>
+                <GlassCard style={{ marginBottom: 12 }} padding={16}>
+                  <Text style={styles.wkLbl}>WEEK {week} · YOUR MATCHUP</Text>
+                  <View style={styles.scoreRow}>
+                    <View>
+                      <Text style={styles.teamLbl}>{leagueName.toUpperCase().slice(0, 12)}</Text>
+                      <Text style={[styles.scoreWin, { color: winning ? '#82c494' : '#c87878' }]}>{total.toFixed(2)}</Text>
+                      <Text style={styles.youOpp}>YOU</Text>
+                    </View>
+                    <Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.lg }}>VS</Text>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.teamLbl}>Opponent</Text>
+                      <Text style={styles.scoreLose}>{oppScore.toFixed(2)}</Text>
+                      <Text style={styles.youOpp}>OPP</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.winFullPill, { backgroundColor: winning ? 'rgba(45,122,94,0.15)' : 'rgba(200,120,120,0.15)', borderColor: winning ? 'rgba(45,122,94,0.35)' : 'rgba(200,120,120,0.35)' }]}>
+                    <Text style={{ color: winning ? '#82c494' : '#c87878', fontWeight: '700', fontFamily: F.bold, fontSize: SZ.base }}>
+                      {winning ? 'WINNING ✓' : 'LOSING'}
+                    </Text>
+                  </View>
+                </GlassCard>
+
+                <SectionHeader label="ALL MATCHUPS" barColor={C.gold} />
+                {matchups.map((m, i) => (
+                  <GlassCard key={i} style={[{ marginBottom: 6 }, (m.homeIsMe || m.awayIsMe) && { borderColor: C.goldBorder, borderWidth: 1.5 }]} padding={12}>
+                    <View style={styles.matchupRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.matchupName, m.homeIsMe && { color: '#82c494' }]}>{m.home}</Text>
+                        <Text style={styles.matchupScore}>{m.homeScore.toFixed(2)}</Text>
+                      </View>
+                      <Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.sm }}>vs</Text>
+                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                        <Text style={[styles.matchupName, m.awayIsMe && { color: '#82c494' }]}>{m.away}</Text>
+                        <Text style={styles.matchupScore}>{m.awayScore.toFixed(2)}</Text>
+                      </View>
+                    </View>
+                  </GlassCard>
+                ))}
+              </View>
+            )}
+            {tab === 'WAIVERS' && (
+              <View>
+                <SectionHeader label="AVAILABLE" barColor={C.mint} />
+                {waivers.map((p, i) => (
+                  <GlassCard key={i} style={{ marginBottom: 7 }} padding={11}>
+                    <PlayerRow player={p} showScore={false} showOwned showAdd />
+                  </GlassCard>
                 ))}
               </View>
             )}
@@ -326,20 +408,20 @@ export default function LeagueScreen() {
         <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.7)', justifyContent:'flex-end' }}>
           <View style={{ backgroundColor:'#111', borderTopLeftRadius:24, borderTopRightRadius:24, padding:24, minHeight:260 }}>
             <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
-              <Text style={{ color:'#fff', fontSize:18, fontWeight:'700', fontFamily:'Outfit-Bold' }}>{advicePlayer?.name}</Text>
+              <Text style={{ color:'#fff', fontSize:18, fontWeight:'700', fontFamily:F.bold }}>{advicePlayer?.name}</Text>
               <TouchableOpacity onPress={() => setAdvicePlayer(null)}><Text style={{ color:'#888', fontSize:20 }}>✕</Text></TouchableOpacity>
             </View>
-            <Text style={{ color:'#888', fontFamily:'DMMono-Medium', fontSize:12, marginBottom:16 }}>{advicePlayer?.pos} · {advicePlayer?.team}{advicePlayer?.injured ? ' · ⚠️ INJURED' : ''}</Text>
+            <Text style={{ color:'#888', fontFamily:F.mono, fontSize:12, marginBottom:16 }}>{advicePlayer?.pos} · {advicePlayer?.team}{advicePlayer?.injured ? ' · ⚠️ INJURED' : ''}</Text>
             {adviceLoading ? (
               <View style={{ alignItems:'center', padding:20 }}>
-                <ActivityIndicator color={C.sage} size="large" />
-                <Text style={{ color:C.gold, fontFamily:'DMMono-Medium', fontSize:13, marginTop:12 }}>AIOmni analyzing...</Text>
+                <ActivityIndicator color={C.gold} size="large" />
+                <Text style={{ color:C.gold, fontFamily:F.mono, fontSize:13, marginTop:12 }}>AIOmni analyzing...</Text>
               </View>
             ) : (
               <Text style={{ color:'#ccc', fontSize:15, lineHeight:24, marginBottom:20 }}>{advice}</Text>
             )}
-            <TouchableOpacity style={{ backgroundColor:C.sage, borderRadius:12, padding:14, alignItems:'center' }} onPress={() => setAdvicePlayer(null)}>
-              <Text style={{ color:'#fff', fontWeight:'700', fontFamily:'Outfit-Bold', fontSize:16 }}>Got it</Text>
+            <TouchableOpacity style={{ backgroundColor:'#82c494', borderRadius:12, padding:14, alignItems:'center' }} onPress={() => setAdvicePlayer(null)}>
+              <Text style={{ color:'#fff', fontWeight:'700', fontFamily:F.bold, fontSize:16 }}>Got it</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -350,29 +432,36 @@ export default function LeagueScreen() {
 
 const styles = StyleSheet.create({
   wrap:      { flex: 1, paddingHorizontal: SP[3] },
-  hdr:       { flexDirection:'row', alignItems:'center', gap:8, marginBottom:9 },
-  back:      { fontSize:18, color:C.gold, fontFamily:F.bold },
+  hdr:       { flexDirection:'row', alignItems:'center', gap:10, marginBottom:9 },
+  back:      { fontSize:SZ.sm, color:C.gold, fontFamily:F.mono, letterSpacing: 1 },
+  avatar:    { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)' },
   lName:     { fontSize:SZ.base, fontWeight:'700', color:C.ink, fontFamily:F.bold },
   lSub:      { fontSize:SZ.xs, fontFamily:F.mono, color:C.dim },
-  record:    { fontSize:SZ.base, fontWeight:'700', color:C.sage, fontFamily:F.bold },
+  platBadge: { backgroundColor: 'rgba(254,226,41,0.12)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(254,226,41,0.25)' },
+  platBadgeTxt: { fontSize: SZ.xs, fontWeight: '700', color: C.gold, fontFamily: F.mono, letterSpacing: 1 },
   mb8:       { marginBottom: 8 },
-  wkLbl:     { fontSize:SZ.xs, fontFamily:F.mono, color:C.dim, textAlign:'center', marginBottom:8 },
+  wkLbl:     { fontSize:SZ.xs, fontFamily:F.mono, color:C.dim, textAlign:'center', marginBottom:12, letterSpacing: 1 },
   scoreRow:  { flexDirection:'row', justifyContent:'space-between', alignItems:'center' },
-  teamLbl:   { fontSize:SZ.xs, fontFamily:F.mono, color:'#ffffff', fontWeight:'700', marginBottom:2 },
-  scoreWin:  { fontSize:SZ['3xl']+4, fontWeight:'900', color:'#2d7a5e', letterSpacing:-1.5, fontFamily:F.bold },
-  scoreLose: { fontSize:SZ['3xl']+4, fontWeight:'900', color:'#7a1f2e', letterSpacing:-1.5, fontFamily:F.bold },
-  winBadge:  { fontSize:SZ.sm, fontWeight:'700', color:C.sage, fontFamily:F.bold },
+  teamLbl:   { fontSize:SZ.xs, fontFamily:F.mono, color:C.dim, marginBottom:2 },
+  scoreWin:  { fontSize:SZ['3xl']+4, fontWeight:'900', color:'#82c494', letterSpacing:-1.5, fontFamily:F.bold },
+  scoreLose: { fontSize:SZ['3xl']+4, fontWeight:'900', color:'#c87878', letterSpacing:-1.5, fontFamily:F.bold },
+  youOpp:    { fontSize:SZ.xxs, fontFamily:F.mono, color:C.dim, marginTop: 2, letterSpacing: 1 },
+  winBadge:  { fontSize:SZ.sm, fontWeight:'700', color:'#82c494', fontFamily:F.bold },
+  winFullPill: { borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 16, borderWidth: 1 },
   prog:      { height:3, backgroundColor:'#7a1f2e', borderRadius:2, overflow:'hidden', marginTop:9 },
-  progFill:  { height:3, backgroundColor:C.sage, borderRadius:2 },
+  progFill:  { height:3, backgroundColor:'#82c494', borderRadius:2 },
   tabRow:    { flexDirection:'row', padding:3, borderRadius:13, backgroundColor:'rgba(255,255,255,0.10)', borderWidth:1, borderColor:'rgba(255,255,255,0.15)', marginBottom:8 },
   tab:       { flex:1, paddingVertical:6, borderRadius:10, alignItems:'center' },
   tabOn:     { backgroundColor:'rgba(255,255,255,0.18)' },
-  tabTxt:    { fontSize:SZ.xs, fontFamily:F.mono, color:C.dim },
-  tabTxtOn:  { color:C.ink, fontWeight:'700' },
-  meCard:    { borderWidth:1, borderColor:'rgba(45,122,94,0.30)' },
+  tabTxt:    { fontSize:SZ.xxs, fontFamily:F.mono, color:C.dim, letterSpacing: 0.5 },
+  tabTxtOn:  { color:C.gold, fontWeight:'700' },
+  meCard:    { borderWidth:1, borderColor:'rgba(130,196,148,0.30)' },
   standRow:  { flexDirection:'row', alignItems:'center', gap:9 },
   rankNum:   { fontSize:SZ.lg, fontWeight:'700', color:C.dim, fontFamily:F.bold },
   standName: { fontSize:SZ.base, fontWeight:'600', color:C.ink, fontFamily:F.bold },
   standPts:  { fontSize:SZ.sm, fontFamily:F.mono, color:C.dim, marginTop:1 },
   standRec:  { fontSize:SZ.base, fontWeight:'700', color:C.ink, fontFamily:F.bold },
+  matchupRow:{ flexDirection: 'row', alignItems: 'center', gap: 8 },
+  matchupName:{ fontSize: SZ.sm, fontWeight: '600', color: C.ink, fontFamily: F.bold },
+  matchupScore:{ fontSize: SZ.lg, fontWeight: '900', color: C.ink, fontFamily: F.bold },
 });

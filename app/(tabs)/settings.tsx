@@ -309,7 +309,7 @@ export default function MoreScreen() {
 const styles = StyleSheet.create({
   scroll:         { paddingHorizontal: SP[3], paddingBottom: 110 },
   logoWrap:       { alignItems: 'center', marginBottom: 20 },
-  logo:           { height: 80, width: 280 },
+  logo:           { height: 110, width: 360 },
   mb14:           { marginBottom: 14 },
   userRow:        { flexDirection: 'row', alignItems: 'center', gap: 13 },
   userName:       { fontSize: SZ.lg, fontWeight: '700', color: C.ink, fontFamily: F.bold, ...textShadow.body },
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   promptFill:     { height: 4, borderRadius: 3 },
   promptSub:      { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim, marginTop: 5, opacity: 0.7, ...textShadow.subtle },
   sectionLbl:     { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 3, marginBottom: 10, ...textShadow.subtle },
-  tierCard:       { width: 140 },
+  tierCard:       { width: 160 },
   tierDot:        { width: 8, height: 8, borderRadius: 4, marginBottom: 8 },
   tierName:       { fontSize: SZ.sm, fontWeight: '700', color: C.ink, fontFamily: F.bold, marginBottom: 3, ...textShadow.body },
   tierPrice:      { fontSize: SZ.xl, fontWeight: '800', fontFamily: F.bold, marginBottom: 3, ...textShadow.body },
