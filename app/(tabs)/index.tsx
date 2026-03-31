@@ -172,7 +172,7 @@ export default function HomeScreen() {
       const text = data.content?.[0]?.text ?? '';
       const cleaned = text.replace(/```json|```/g, '').trim();
       const parsed  = JSON.parse(cleaned);
-      const colorMap: Record<string, string> = { sage: '#2d7a5e', gold: '#c8a84b', red: '#c87878' };
+      const colorMap: Record<string, string> = { sage: '#2d7a5e', gold: '#FEE229', red: '#c87878' };
       setAiInsight({ emoji: parsed.emoji ?? '🎯', title: parsed.title ?? 'AI Insight', body: parsed.body ?? '', tag: parsed.tag ?? 'INSIGHT', color: colorMap[parsed.color] ?? '#2d7a5e' });
     } catch (e) { console.log('AI insight error:', e); }
     setInsightLoading(false);
@@ -295,7 +295,7 @@ export default function HomeScreen() {
                     </Text>
                     <View style={styles.matchRow}>
                       <View>
-                        <Text style={styles.teamLbl}>{lg.name.toUpperCase().slice(0, 12)}</Text>
+                        <Text style={styles.teamLbl} numberOfLines={1}>{lg.name.toUpperCase()}</Text>
                         <Animated.Text numberOfLines={1} adjustsFontSizeToFit style={[styles.scoreNum, winning && { color: C.sage }]}>{scoreStr}</Animated.Text>
                       </View>
                       <View style={[styles.winPill, !winning && styles.losePill]}>
@@ -386,20 +386,22 @@ export default function HomeScreen() {
           const platColor = isESPN ? ESPN_RED : C.gold;
           return (
             <TouchableOpacity key={lg.id} onPress={() => goToLeague(lg)} activeOpacity={0.8}>
-              <GlassCard style={[styles.leagueRow, isESPN && { borderColor: ESPN_RED_BORDER }]}>
-                <OrbAvatar size={28} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.leagueName}>{lg.name}</Text>
-                  <Text style={styles.leagueSub}>
-                    <Text style={{ color: platColor, fontWeight: '700' }}>{isESPN ? 'ESPN' : 'SLEEPER'}</Text>
-                    {lg.format ? ` · ${lg.format}` : ''}
-                  </Text>
+              <GlassCard style={[{ marginBottom: 8 }, isESPN && { borderColor: ESPN_RED_BORDER }]} padding={0}>
+                <View style={styles.leagueRow}>
+                  <OrbAvatar size={28} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.leagueName}>{lg.name}</Text>
+                    <Text style={styles.leagueSub}>
+                      <Text style={{ color: platColor, fontWeight: '700' }}>{isESPN ? 'ESPN' : 'SLEEPER'}</Text>
+                      {lg.format ? ` · ${lg.format}` : ''}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', marginRight: 6 }}>
+                    {lg.rec && <Text style={[styles.leagueRec, { color: w >= l ? C.sage : '#c87878' }]}>{lg.rec}</Text>}
+                    {lg.rank && <Text style={styles.leagueRank}>{lg.rank}</Text>}
+                  </View>
+                  <Text style={styles.chevron}>›</Text>
                 </View>
-                <View style={{ alignItems: 'flex-end', marginRight: 6 }}>
-                  {lg.rec && <Text style={[styles.leagueRec, { color: w >= l ? C.sage : '#c87878' }]}>{lg.rec}</Text>}
-                  {lg.rank && <Text style={styles.leagueRank}>{lg.rank}</Text>}
-                </View>
-                <Text style={styles.chevron}>›</Text>
               </GlassCard>
             </TouchableOpacity>
           );
@@ -455,7 +457,7 @@ const styles = StyleSheet.create({
 
   insightHdr:     { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 9 },
   insightEye:     { fontSize: SZ.xs, fontFamily: F.mono, color: C.gold, letterSpacing: 1.4, flex: 1, ...textShadow.gold },
-  dotInsight:     { width: 4, height: 3, borderRadius: 2, backgroundColor: 'rgba(200,168,75,0.25)' },
+  dotInsight:     { width: 4, height: 3, borderRadius: 2, backgroundColor: 'rgba(254,226,41,0.25)' },
   dotInsightActive: { width: 12, backgroundColor: C.gold },
   insightTitle:   { fontSize: SZ.base, fontWeight: '700', color: C.ink, fontFamily: F.bold, ...textShadow.body },
   insightText:    { fontSize: SZ.md, color: C.ink2, lineHeight: 18, fontFamily: F.outfit, ...textShadow.body },
@@ -464,6 +466,6 @@ const styles = StyleSheet.create({
   leagueName:     { fontSize: SZ.base, fontWeight: '700', color: C.ink, fontFamily: F.bold, ...textShadow.body },
   leagueSub:      { fontSize: SZ.sm, fontFamily: F.mono, color: 'rgba(255,255,255,0.75)', marginTop: 2, ...textShadow.subtle },
   leagueRec:      { fontSize: SZ.base, fontWeight: '700', fontFamily: F.bold, ...textShadow.body },
-  leagueRank:     { fontSize: SZ.xs, fontFamily: F.mono, color: 'rgba(200,168,75,0.9)', marginTop: 3, ...textShadow.gold },
+  leagueRank:     { fontSize: SZ.xs, fontFamily: F.mono, color: 'rgba(254,226,41,0.9)', marginTop: 3, ...textShadow.gold },
   chevron:        { color: C.dim2, fontSize: SZ.xl, ...textShadow.body },
 });

@@ -1,23 +1,22 @@
 // ─────────────────────────────────────────────────
-//  AIOmni Design Tokens v2.1
-//  Sage-Slate × Frosted Glass × Gold
-//  + Text depth shadows for readability
+//  AIOmni Design Tokens v3
+//  Darker Sage-Slate × Frosted Glass × #FEE229 Gold
 // ─────────────────────────────────────────────────
 
 export const C = {
-  // ── Backgrounds ──────────────────────────────
-  bgTop:       '#8fa8a8',
-  bgBot:       '#4e6868',
-  phone:       '#5c7878',
-  phone2:      '#4e6868',
+  // ── Backgrounds (darker for contrast) ────────
+  bgTop:       '#5f7878',
+  bgBot:       '#354848',
+  phone:       '#4a6464',
+  phone2:      '#354848',
 
-  // ── Glass surfaces ────────────────────────────
-  glass:       'rgba(255,255,255,0.14)',
-  glassBorder: 'rgba(255,255,255,0.22)',
-  glassShine:  'rgba(255,255,255,0.30)',
-  surface:     'rgba(255,255,255,0.12)',
-  surfBorder:  'rgba(255,255,255,0.15)',
-  surfShine:   'rgba(255,255,255,0.20)',
+  // ── Glass surfaces (slightly more opaque) ─────
+  glass:       'rgba(255,255,255,0.18)',
+  glassBorder: 'rgba(255,255,255,0.24)',
+  glassShine:  'rgba(255,255,255,0.32)',
+  surface:     'rgba(255,255,255,0.14)',
+  surfBorder:  'rgba(255,255,255,0.18)',
+  surfShine:   'rgba(255,255,255,0.22)',
 
   // ── Type ──────────────────────────────────────
   ink:         '#ffffff',
@@ -25,12 +24,12 @@ export const C = {
   dim:         'rgba(255,255,255,0.85)',
   dim2:        'rgba(255,255,255,0.65)',
 
-  // ── Gold (primary accent) ─────────────────────
-  gold:        '#c8a84b',
-  goldBright:  '#dfc06a',
-  goldS:       'rgba(184,137,26,0.20)',
-  goldG:       'rgba(184,137,26,0.45)',
-  goldBorder:  'rgba(184,137,26,0.35)',
+  // ── Gold (primary accent — #FEE229) ───────────
+  gold:        '#FEE229',
+  goldBright:  '#FEE229',
+  goldS:       'rgba(254,226,41,0.18)',
+  goldG:       'rgba(254,226,41,0.40)',
+  goldBorder:  'rgba(254,226,41,0.30)',
 
   // ── Sage (wins / positive) ────────────────────
   sage:        '#2d7a5e',
@@ -80,19 +79,18 @@ export const SP = {
   1:4, 2:8, 3:12, 4:16, 5:20, 6:24, 8:32, 10:40, 12:48,
 } as const;
 
-// Shadow helpers
 export const shadow = {
   glass: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.15,
     shadowRadius: 20,
     elevation: 6,
   },
   card: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.10,
+    shadowOpacity: 0.12,
     shadowRadius: 12,
     elevation: 3,
   },
@@ -105,35 +103,30 @@ export const shadow = {
   }),
 } as const;
 
-// ── TEXT DEPTH — apply to all visible text for readability ──────────────
+// ── TEXT DEPTH ──────────────────────────────────
 export const textShadow = {
-  // Hero titles (screen headers, big numbers)
   hero: {
-    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 3 },
     textShadowRadius: 8,
   },
-  // Standard body text, labels, player names
   body: {
-    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 5,
   },
-  // Small mono labels, badges, subtle text
   subtle: {
-    textShadowColor: 'rgba(0,0,0,0.30)',
+    textShadowColor: 'rgba(0,0,0,0.35)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  // Gold accent text — gold glow + dark shadow
   gold: {
-    textShadowColor: 'rgba(200,168,75,0.4)',
+    textShadowColor: 'rgba(254,226,41,0.35)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8,
   },
 } as const;
 
-// Position config lookup
 export const POS: Record<string, { color: string; bg: string }> = {
   QB:  { color: C.qb,   bg: C.qbBg  },
   RB:  { color: C.rb,   bg: C.rbBg  },

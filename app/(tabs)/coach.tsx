@@ -252,7 +252,7 @@ export default function CoachScreen() {
 
           {/* Header */}
           <View style={styles.hdr}>
-            <OrbAvatar size={36} mode="breathe" glow="rgba(200,168,75,0.6)" />
+            <OrbAvatar size={36} mode="breathe" glow="rgba(254,226,41,0.6)" />
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>AI Coach</Text>
               <Text style={styles.subtitle}>
@@ -300,7 +300,7 @@ export default function CoachScreen() {
                 </View>
               ) : (
                 <View key={i} style={styles.aiRow}>
-                  <OrbAvatar size={22} mode="pulse" glow="rgba(200,168,75,0.6)" style={{ flexShrink: 0 }} />
+                  <OrbAvatar size={22} mode="pulse" glow="rgba(254,226,41,0.6)" style={{ flexShrink: 0 }} />
                   <GlassCard style={{ maxWidth: '85%', flex: 1 }} padding={10} radius={14}>
                     {m.isLoading ? <ActivityIndicator color={C.gold} size="small" /> : renderAIText(m.text)}
                   </GlassCard>
@@ -373,6 +373,6 @@ const styles = StyleSheet.create({
   inputRow:         { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 18, paddingLeft: 13, paddingRight: 4, paddingVertical: 4 },
   input:            { flex: 1, fontSize: SZ.md, color: C.ink, paddingVertical: 8, fontFamily: F.outfit, ...textShadow.body },
   sendBtn:          { width: 34, height: 34, backgroundColor: C.gold, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  sendBtnOff:       { backgroundColor: 'rgba(200,168,75,0.25)' },
+  sendBtnOff:       { backgroundColor: 'rgba(254,226,41,0.25)' },
   sendArrow:        { fontSize: 14, fontWeight: '700', color: '#2a2010', fontFamily: F.bold },
 });
