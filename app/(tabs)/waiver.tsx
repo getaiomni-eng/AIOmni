@@ -1,3 +1,4 @@
+import { askAI } from "../../services/ai";
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -6,7 +7,6 @@ import { PositionPill } from '../components/Atoms';
 import { GlassCard } from '../components/GlassCard';
 import { C, F, SP, SZ } from '../constants/tokens';
 
-const API_KEY = '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';
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K'];
 
 export default function WaiverScreen() {
@@ -40,13 +40,8 @@ export default function WaiverScreen() {
     setSelectedPlayer(player); setAdvice(''); setModalVisible(true); setAdviceLoading(true);
     const prompt = `You are AIOmni, expert fantasy football waiver wire analyst.\nPlayer: ${player.first_name} ${player.last_name} | ${player.position} | ${player.team}${player.injury_status ? ` | Injury: ${player.injury_status}` : ''}\nShould I add off waivers? What's their upside? Be sharp, direct, under 80 words.`;
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 200, messages: [{ role: 'user', content: prompt }] }),
-      });
-      const data = await response.json();
-      setAdvice(data.content[0].text);
+      const text = await askAI(prompt);
+      setAdvice(text || 'Could not load advice.');
     } catch { setAdvice('Could not load advice. Try again.'); }
     finally { setAdviceLoading(false); }
   };

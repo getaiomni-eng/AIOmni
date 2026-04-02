@@ -1,13 +1,11 @@
 // services/liveData.ts
-// Live data layer — NFL injuries, weather, Vegas lines, advanced stats, college prospects
+// Live data layer — NFL injuries, weather, Vegas lines, advanced stats, college prospects, news
 // Injected into every AI Coach prompt before Claude responds
 
-// ─── API KEYS ─────────────────────────────────────────────────────────────────
 const ODDS_API_KEY    = '1dc3181b24294523fb9a75fda64bd6b6';
 const WEATHER_API_KEY = '33088c749184a0c3277f533351c3b649';
 const CFBD_API_KEY    = 'FXYJqCTsSGNxj67UAcWxd6pDdgYZ15hvXE/WscfGOnUW09lvRDEvZe/xngs/bMuo';
 
-// ─── NFL Stadium Locations ────────────────────────────────────────────────────
 const NFL_STADIUMS: Record<string, { city: string; lat: number; lon: number; dome: boolean }> = {
   ARI: { city: 'Glendale, AZ',       lat: 33.5277, lon: -112.2626, dome: true  },
   ATL: { city: 'Atlanta, GA',         lat: 33.7553, lon: -84.4006,  dome: true  },
@@ -43,35 +41,24 @@ const NFL_STADIUMS: Record<string, { city: string; lat: number; lon: number; dom
   WAS: { city: 'Landover, MD',        lat: 38.9076, lon: -76.8645,  dome: false },
 };
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 export interface InjuryReport {
-  playerId:   string;
-  playerName: string;
-  team:       string;
-  position:   string;
-  status:     string;
-  injury:     string;
-  updatedAt:  string;
+  playerId: string; playerName: string; team: string;
+  position: string; status: string; injury: string; updatedAt: string;
 }
 
 export interface WeatherReport {
-  team:          string;
-  city:          string;
-  tempF:         number;
-  windMph:       number;
-  condition:     string;
-  isDome:        boolean;
-  fantasyImpact: string;
+  team: string; city: string; tempF: number; windMph: number;
+  condition: string; isDome: boolean; fantasyImpact: string;
 }
 
 export interface VegasLine {
-  homeTeam:         string;
-  awayTeam:         string;
-  homeImpliedScore: number;
-  awayImpliedScore: number;
-  total:            number;
-  spread:           number;
-  gameTime:         string;
+  homeTeam: string; awayTeam: string;
+  homeImpliedScore: number; awayImpliedScore: number;
+  total: number; spread: number; gameTime: string;
+}
+
+export interface NewsItem {
+  source: string; headline: string;
 }
 
 export interface LiveGameContext {
@@ -81,11 +68,11 @@ export interface LiveGameContext {
   advancedStats: string;
   snapCounts:    string;
   prospects:     string;
+  news:          NewsItem[];      // ← new
   fetchedAt:     string;
   sources:       string[];
 }
 
-// ─── NFL Injuries via ESPN (free, no key) ─────────────────────────────────────
 export async function fetchNFLInjuries(): Promise<InjuryReport[]> {
   try {
     const res  = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries');
@@ -98,7 +85,7 @@ export async function fetchNFLInjuries(): Promise<InjuryReport[]> {
         const details = entry?.injuries?.[0];
         if (!athlete || !details) continue;
         const status = details?.status ?? '';
-        if (!['Out', 'Doubtful', 'Questionable', 'Injured Reserve', 'Day-To-Day'].includes(status)) continue;
+        if (!['Out','Doubtful','Questionable','Injured Reserve','Day-To-Day'].includes(status)) continue;
         injuries.push({
           playerId:   athlete.id ?? '',
           playerName: athlete.displayName ?? '',
@@ -111,13 +98,9 @@ export async function fetchNFLInjuries(): Promise<InjuryReport[]> {
       }
     }
     return injuries;
-  } catch (e) {
-    console.log('fetchNFLInjuries error:', e);
-    return [];
-  }
+  } catch (e) { console.log('fetchNFLInjuries error:', e); return []; }
 }
 
-// ─── Weather at outdoor NFL stadiums ─────────────────────────────────────────
 export async function fetchGameWeather(teams: string[]): Promise<WeatherReport[]> {
   if (!WEATHER_API_KEY) return [];
   const reports: WeatherReport[] = [];
@@ -126,9 +109,7 @@ export async function fetchGameWeather(teams: string[]): Promise<WeatherReport[]
     const stadium = NFL_STADIUMS[team];
     if (!stadium) return;
     try {
-      const res  = await fetch(
-        `https://api.openweathermap.org/data/2.5/weather?lat=${stadium.lat}&lon=${stadium.lon}&appid=${WEATHER_API_KEY}&units=imperial`
-      );
+      const res  = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${stadium.lat}&lon=${stadium.lon}&appid=${WEATHER_API_KEY}&units=imperial`);
       const data = await res.json();
       const tempF     = Math.round(data.main?.temp ?? 65);
       const windMph   = Math.round((data.wind?.speed ?? 0) * 1.15);
@@ -139,22 +120,16 @@ export async function fetchGameWeather(teams: string[]): Promise<WeatherReport[]
       if (condition === 'Snow') fantasyImpact += ' | ❄️ SNOW — run-heavy script likely';
       if (condition === 'Rain') fantasyImpact += ' | 🌧️ Rain — ball security concern, RBs up';
       if (tempF <= 20)          fantasyImpact += ` | 🥶 Extreme cold (${tempF}°F)`;
-      reports.push({
-        team, city: stadium.city, tempF, windMph, condition, isDome: false,
-        fantasyImpact: fantasyImpact || `✅ Good conditions (${tempF}°F, ${windMph}mph)`,
-      });
+      reports.push({ team, city: stadium.city, tempF, windMph, condition, isDome: false, fantasyImpact: fantasyImpact || `✅ Good conditions (${tempF}°F, ${windMph}mph)` });
     } catch (e) { console.log(`Weather error ${team}:`, e); }
   }));
   return reports;
 }
 
-// ─── Vegas Lines via The Odds API ─────────────────────────────────────────────
 export async function fetchVegasLines(): Promise<VegasLine[]> {
   if (!ODDS_API_KEY) return [];
   try {
-    const res  = await fetch(
-      `https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/?apiKey=${ODDS_API_KEY}&regions=us&markets=spreads,totals&oddsFormat=american`
-    );
+    const res  = await fetch(`https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/?apiKey=${ODDS_API_KEY}&regions=us&markets=spreads,totals&oddsFormat=american`);
     const data = await res.json();
     if (!Array.isArray(data)) return [];
     return data.map((game: any) => {
@@ -163,185 +138,132 @@ export async function fetchVegasLines(): Promise<VegasLine[]> {
       const totalMkt  = bookmaker?.markets?.find((m: any) => m.key === 'totals');
       const total  = totalMkt?.outcomes?.[0]?.point  ?? 44;
       const spread = spreadMkt?.outcomes?.[0]?.point ?? 0;
-      return {
-        homeTeam:         game.home_team ?? '',
-        awayTeam:         game.away_team ?? '',
-        homeImpliedScore: Math.round(((total / 2) - (spread / 2)) * 10) / 10,
-        awayImpliedScore: Math.round(((total / 2) + (spread / 2)) * 10) / 10,
-        total, spread,
-        gameTime: game.commence_time ?? '',
-      };
+      return { homeTeam: game.home_team ?? '', awayTeam: game.away_team ?? '', homeImpliedScore: Math.round(((total / 2) - (spread / 2)) * 10) / 10, awayImpliedScore: Math.round(((total / 2) + (spread / 2)) * 10) / 10, total, spread, gameTime: game.commence_time ?? '' };
     });
-  } catch (e) {
-    console.log('fetchVegasLines error:', e);
-    return [];
-  }
+  } catch (e) { console.log('fetchVegasLines error:', e); return []; }
 }
 
-// ─── Advanced Stats via ESPN (target share, snap counts, receiving) ───────────
 export async function fetchAdvancedStats(): Promise<string> {
   try {
-    // ESPN player stats — season leaders
     const [receivingRes, rushingRes] = await Promise.all([
       fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/leaders?limit=20&stat=receiving'),
       fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/leaders?limit=20&stat=rushing'),
     ]);
-
     const receivingData = await receivingRes.json();
     const rushingData   = await rushingRes.json();
-
     const lines: string[] = ['--- NFL SEASON LEADERS ---'];
-
-    // Receiving leaders
-    const recLeaders = receivingData?.leaders?.find((l: any) => l.name === 'receivingYards')?.leaders ?? [];
+    const recLeaders  = receivingData?.leaders?.find((l: any) => l.name === 'receivingYards')?.leaders ?? [];
     if (recLeaders.length > 0) {
       lines.push('TOP RECEIVERS (yards):');
-      recLeaders.slice(0, 10).forEach((l: any) => {
-        const name  = l.athlete?.displayName ?? 'Unknown';
-        const team  = l.team?.abbreviation ?? '';
-        const value = l.value ?? 0;
-        lines.push(`  ${name} (${team}): ${value} yds`);
-      });
+      recLeaders.slice(0, 10).forEach((l: any) => lines.push(`  ${l.athlete?.displayName ?? 'Unknown'} (${l.team?.abbreviation ?? ''}): ${l.value ?? 0} yds`));
     }
-
-    // Rushing leaders
     const rushLeaders = rushingData?.leaders?.find((l: any) => l.name === 'rushingYards')?.leaders ?? [];
     if (rushLeaders.length > 0) {
       lines.push('TOP RUSHERS (yards):');
-      rushLeaders.slice(0, 10).forEach((l: any) => {
-        const name  = l.athlete?.displayName ?? 'Unknown';
-        const team  = l.team?.abbreviation ?? '';
-        const value = l.value ?? 0;
-        lines.push(`  ${name} (${team}): ${value} yds`);
-      });
+      rushLeaders.slice(0, 10).forEach((l: any) => lines.push(`  ${l.athlete?.displayName ?? 'Unknown'} (${l.team?.abbreviation ?? ''}): ${l.value ?? 0} yds`));
     }
-
     return lines.join('\n') + '\n';
-  } catch (e) {
-    console.log('fetchAdvancedStats error:', e);
-    return '';
-  }
+  } catch (e) { console.log('fetchAdvancedStats error:', e); return ''; }
 }
 
-// ─── Snap Counts + Target Share via nflverse (open source) ───────────────────
 export async function fetchSnapCounts(week: number, season = 2024): Promise<string> {
   try {
-    // nflverse publishes weekly snap counts as CSV on GitHub
     const url = `https://github.com/nflverse/nflverse-data/releases/download/snap_counts/snap_counts_${season}.csv`;
-    const res  = await fetch(url);
+    const res = await fetch(url);
     if (!res.ok) return '';
-
-    const text = await res.text();
-    const lines = text.split('\n');
+    const text    = await res.text();
+    const lines   = text.split('\n');
     if (lines.length < 2) return '';
-
-    const headers = lines[0].split(',');
+    const headers    = lines[0].split(',');
     const weekIdx    = headers.indexOf('week');
     const playerIdx  = headers.indexOf('player');
     const teamIdx    = headers.indexOf('team');
     const posIdx     = headers.indexOf('position');
     const offSnapIdx = headers.indexOf('offense_snaps');
     const offPctIdx  = headers.indexOf('offense_pct');
-
     if (weekIdx === -1 || playerIdx === -1) return '';
-
-    // Filter to current week, relevant positions, >50% snap share
-    const weekData = lines.slice(1)
-      .map(l => l.split(','))
-      .filter(row => row[weekIdx] === String(week) && ['WR', 'RB', 'TE'].includes(row[posIdx]))
-      .filter(row => parseFloat(row[offPctIdx]) >= 0.5)
-      .sort((a, b) => parseFloat(b[offPctIdx]) - parseFloat(a[offPctIdx]))
-      .slice(0, 30);
-
+    const weekData = lines.slice(1).map(l => l.split(',')).filter(row => row[weekIdx] === String(week) && ['WR','RB','TE'].includes(row[posIdx])).filter(row => parseFloat(row[offPctIdx]) >= 0.5).sort((a, b) => parseFloat(b[offPctIdx]) - parseFloat(a[offPctIdx])).slice(0, 30);
     if (weekData.length === 0) return '';
-
-    const snapLines = weekData.map(row =>
-      `${row[playerIdx]} (${row[teamIdx]} ${row[posIdx]}): ${Math.round(parseFloat(row[offPctIdx]) * 100)}% snap share, ${row[offSnapIdx]} snaps`
-    );
-
+    const snapLines = weekData.map(row => `${row[playerIdx]} (${row[teamIdx]} ${row[posIdx]}): ${Math.round(parseFloat(row[offPctIdx]) * 100)}% snap share, ${row[offSnapIdx]} snaps`);
     return `\n--- SNAP COUNTS WK ${week} (${season}) — players >50% snap share ---\n${snapLines.join('\n')}\n`;
-  } catch (e) {
-    console.log('fetchSnapCounts error:', e);
-    return '';
-  }
+  } catch (e) { console.log('fetchSnapCounts error:', e); return ''; }
 }
 
-// ─── Next Gen Stats via ESPN hidden API ───────────────────────────────────────
 export async function fetchNextGenStats(): Promise<string> {
   try {
-    // ESPN scoreboard gives us current week matchups + team stats
     const res  = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard');
     const data = await res.json();
     const events = data?.events ?? [];
     if (events.length === 0) return '';
-
     const lines: string[] = [`--- THIS WEEK'S MATCHUPS & GAME NOTES ---`];
     for (const event of events.slice(0, 16)) {
       const comp = event.competitions?.[0];
       const home = comp?.competitors?.find((c: any) => c.homeAway === 'home');
       const away = comp?.competitors?.find((c: any) => c.homeAway === 'away');
       if (!home || !away) continue;
-
       const homeName = home.team?.abbreviation ?? '';
       const awayName = away.team?.abbreviation ?? '';
       const gameTime = new Date(event.date ?? '').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
       const odds     = comp?.odds?.[0];
       const line     = odds ? ` | Line: ${odds.details ?? 'N/A'} | O/U: ${odds.overUnder ?? 'N/A'}` : '';
       const status   = event.status?.type?.description ?? '';
-
       lines.push(`${awayName} @ ${homeName} (${gameTime}${status ? ', ' + status : ''})${line}`);
     }
-
     return lines.join('\n') + '\n';
-  } catch (e) {
-    console.log('fetchNextGenStats error:', e);
-    return '';
-  }
+  } catch (e) { console.log('fetchNextGenStats error:', e); return ''; }
 }
 
-// ─── College Football Prospects (Dynasty Elite) ───────────────────────────────
+export async function fetchNFLNews(): Promise<NewsItem[]> {
+  const parseRSS = (xml: string, source: string): NewsItem[] => {
+    const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
+    return items.slice(0, 8).flatMap(item => {
+      const m   = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) ?? item.match(/<title>(.*?)<\/title>/);
+      const raw = (m?.[1] ?? '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").replace(/&quot;/g, '"').replace(/<[^>]+>/g, '').trim();
+      return raw ? [{ source, headline: raw }] : [];
+    });
+  };
+
+  const results: NewsItem[] = [];
+  const feeds = [
+    { url: 'https://www.rotowire.com/rss/news.php?sport=NFL',      source: 'Rotowire'  },
+    { url: 'https://www.profootballrumors.com/feed',               source: 'PFR'       },
+    { url: 'https://www.cbssports.com/rss/headlines/nfl/',         source: 'CBS Sports' },
+  ];
+
+  await Promise.allSettled(feeds.map(async ({ url, source }) => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const xml = await res.text();
+      results.push(...parseRSS(xml, source));
+    } catch (e) { console.log(`fetchNFLNews ${source} error:`, e); }
+  }));
+
+  return results;
+}
+
 export async function fetchCollegeProspects(year = 2025): Promise<string> {
   if (!CFBD_API_KEY) return '';
   try {
-    const res  = await fetch(
-      `https://api.collegefootballdata.com/draft/prospects?year=${year}`,
-      { headers: { Authorization: `Bearer ${CFBD_API_KEY}` } }
-    );
+    const res  = await fetch(`https://api.collegefootballdata.com/draft/prospects?year=${year}`, { headers: { Authorization: `Bearer ${CFBD_API_KEY}` } });
     const data = await res.json();
     if (!Array.isArray(data) || data.length === 0) return '';
-    const top = data.slice(0, 30).map((p: any) =>
-      `${p.name} (${p.position}, ${p.school}) — Grade: ${p.grade ?? 'N/A'}, Round: ${p.projectedRound ?? 'N/A'}`
-    ).join('\n');
+    const top = data.slice(0, 30).map((p: any) => `${p.name} (${p.position}, ${p.school}) — Grade: ${p.grade ?? 'N/A'}, Round: ${p.projectedRound ?? 'N/A'}`).join('\n');
     return `\n--- ${year} NFL DRAFT PROSPECTS ---\n${top}\n`;
-  } catch (e) {
-    console.log('fetchCollegeProspects error:', e);
-    return '';
-  }
+  } catch (e) { console.log('fetchCollegeProspects error:', e); return ''; }
 }
 
-// ─── Top College Receivers ────────────────────────────────────────────────────
 export async function fetchTopCollegeReceivers(year = 2024): Promise<string> {
   if (!CFBD_API_KEY) return '';
   try {
-    const res  = await fetch(
-      `https://api.collegefootballdata.com/stats/player/season?year=${year}&category=receiving`,
-      { headers: { Authorization: `Bearer ${CFBD_API_KEY}` } }
-    );
+    const res  = await fetch(`https://api.collegefootballdata.com/stats/player/season?year=${year}&category=receiving`, { headers: { Authorization: `Bearer ${CFBD_API_KEY}` } });
     const data = await res.json();
     if (!Array.isArray(data) || data.length === 0) return '';
-    const top = data
-      .sort((a: any, b: any) => (b.stat ?? 0) - (a.stat ?? 0))
-      .slice(0, 20)
-      .map((p: any) => `${p.player} (${p.team}) — ${p.statType}: ${p.stat}`)
-      .join('\n');
+    const top = data.sort((a: any, b: any) => (b.stat ?? 0) - (a.stat ?? 0)).slice(0, 20).map((p: any) => `${p.player} (${p.team}) — ${p.statType}: ${p.stat}`).join('\n');
     return `\n--- TOP ${year} COLLEGE RECEIVERS ---\n${top}\n`;
-  } catch (e) {
-    console.log('fetchTopCollegeReceivers error:', e);
-    return '';
-  }
+  } catch (e) { console.log('fetchTopCollegeReceivers error:', e); return ''; }
 }
 
-// ─── Master fetch ─────────────────────────────────────────────────────────────
 export async function fetchAllLiveData(
   rosterTeams: string[] = [],
   includeDynasty = false,
@@ -349,7 +271,7 @@ export async function fetchAllLiveData(
 ): Promise<LiveGameContext> {
   const teamList = rosterTeams.length > 0 ? rosterTeams : Object.keys(NFL_STADIUMS);
 
-  const [injuries, weather, vegasLines, advancedStats, nextGenMatchups, snapCounts, prospects] = await Promise.all([
+  const [injuries, weather, vegasLines, advancedStats, nextGenMatchups, snapCounts, prospects, news] = await Promise.all([
     fetchNFLInjuries(),
     fetchGameWeather(teamList),
     fetchVegasLines(),
@@ -357,27 +279,25 @@ export async function fetchAllLiveData(
     fetchNextGenStats(),
     fetchSnapCounts(currentWeek),
     includeDynasty ? fetchCollegeProspects() : Promise.resolve(''),
+    fetchNFLNews(),
   ]);
 
-  const sources: string[] = ['ESPN Injury API', 'ESPN Stats API', 'ESPN Scoreboard'];
+  const sources: string[] = ['ESPN Injury API', 'ESPN Stats API', 'ESPN Scoreboard', 'Rotowire RSS', 'CBS Sports RSS'];
   if (weather.length    > 0) sources.push('OpenWeatherMap');
   if (vegasLines.length > 0) sources.push('The Odds API');
   if (snapCounts)            sources.push('nflverse Snap Counts');
   if (prospects)             sources.push('College Football Data API');
+  if (news.some(n => n.source === 'PFR')) sources.push('Pro Football Rumors');
 
   return {
-    injuries,
-    weather,
-    vegasLines,
+    injuries, weather, vegasLines,
     advancedStats: advancedStats + '\n' + nextGenMatchups,
-    snapCounts,
-    prospects,
+    snapCounts, prospects, news,
     fetchedAt: new Date().toISOString(),
     sources,
   };
 }
 
-// ─── Format for AI prompt injection ──────────────────────────────────────────
 export function formatLiveDataForPrompt(data: LiveGameContext): string {
   const lines: string[] = [
     `\n=== LIVE DATA (${new Date(data.fetchedAt).toLocaleTimeString()}) ===`,
@@ -387,9 +307,7 @@ export function formatLiveDataForPrompt(data: LiveGameContext): string {
   if (data.injuries.length > 0) {
     lines.push('--- NFL INJURY REPORT ---');
     const grouped = data.injuries.reduce((acc, inj) => {
-      (acc[inj.status] = acc[inj.status] || []).push(
-        `${inj.playerName} (${inj.team} ${inj.position}) — ${inj.injury}`
-      );
+      (acc[inj.status] = acc[inj.status] || []).push(`${inj.playerName} (${inj.team} ${inj.position}) — ${inj.injury}`);
       return acc;
     }, {} as Record<string, string[]>);
     for (const [status, players] of Object.entries(grouped)) {
@@ -410,10 +328,21 @@ export function formatLiveDataForPrompt(data: LiveGameContext): string {
   if (data.vegasLines.length > 0) {
     lines.push('--- VEGAS IMPLIED SCORES ---');
     for (const v of data.vegasLines) {
-      lines.push(
-        `${v.awayTeam} @ ${v.homeTeam}: Total ${v.total} | ` +
-        `${v.awayTeam} implied ${v.awayImpliedScore} | ${v.homeTeam} implied ${v.homeImpliedScore}`
-      );
+      lines.push(`${v.awayTeam} @ ${v.homeTeam}: Total ${v.total} | ${v.awayTeam} implied ${v.awayImpliedScore} | ${v.homeTeam} implied ${v.homeImpliedScore}`);
+    }
+    lines.push('');
+  }
+
+  if (data.news.length > 0) {
+    lines.push('--- NFL NEWS HEADLINES ---');
+    // Group by source
+    const bySource: Record<string, string[]> = {};
+    for (const item of data.news) {
+      (bySource[item.source] = bySource[item.source] || []).push(item.headline);
+    }
+    for (const [source, headlines] of Object.entries(bySource)) {
+      lines.push(`${source}:`);
+      headlines.slice(0, 6).forEach(h => lines.push(`  • ${h}`));
     }
     lines.push('');
   }
@@ -426,7 +355,6 @@ export function formatLiveDataForPrompt(data: LiveGameContext): string {
   return lines.join('\n');
 }
 
-// ─── Quick injury lookup ──────────────────────────────────────────────────────
 export function findPlayerInjury(injuries: InjuryReport[], playerName: string): InjuryReport | null {
   const name = playerName.toLowerCase();
   return injuries.find(inj =>

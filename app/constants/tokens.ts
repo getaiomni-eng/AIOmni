@@ -1,16 +1,12 @@
-// ─────────────────────────────────────────────────
 //  AIOmni Design Tokens v3
 //  Darker Sage-Slate × Frosted Glass × #FEE229 Gold
-// ─────────────────────────────────────────────────
 
 export const C = {
-  // ── Backgrounds (darker for contrast) ────────
   bgTop:       '#5f7878',
   bgBot:       '#354848',
   phone:       '#4a6464',
   phone2:      '#354848',
 
-  // ── Glass surfaces (slightly more opaque) ─────
   glass:       'rgba(255,255,255,0.18)',
   glassBorder: 'rgba(255,255,255,0.24)',
   glassShine:  'rgba(255,255,255,0.32)',
@@ -18,37 +14,31 @@ export const C = {
   surfBorder:  'rgba(255,255,255,0.18)',
   surfShine:   'rgba(255,255,255,0.22)',
 
-  // ── Type ──────────────────────────────────────
   ink:         '#ffffff',
   ink2:        '#e8f0ec',
   dim:         'rgba(255,255,255,0.85)',
   dim2:        'rgba(255,255,255,0.65)',
 
-  // ── Gold (primary accent — #FEE229) ───────────
   gold:        '#FEE229',
   goldBright:  '#FEE229',
   goldS:       'rgba(254,226,41,0.18)',
   goldG:       'rgba(254,226,41,0.40)',
   goldBorder:  'rgba(254,226,41,0.30)',
 
-  // ── Sage (wins / positive) ────────────────────
   sage:        '#2d7a5e',
   sageS:       'rgba(45,122,94,0.20)',
   sageG:       'rgba(45,122,94,0.40)',
   sageBorder:  'rgba(45,122,94,0.30)',
 
-  // ── Mint (secondary) ──────────────────────────
   mint:        '#7ec8b8',
   mintS:       'rgba(126,200,184,0.18)',
 
-  // ── Position pills ────────────────────────────
   qb:          '#b8a8e8',   qbBg: 'rgba(184,168,232,0.20)',
   rb:          '#2d7a5e',   rbBg: 'rgba(130,196,148,0.18)',
   wr:          '#7ec8e8',   wrBg: 'rgba(126,200,232,0.18)',
   te:          '#e8b078',   teBg: 'rgba(232,176,120,0.18)',
   k:           'rgba(255,255,255,0.55)', kBg: 'rgba(255,255,255,0.10)',
 
-  // ── Semantic ──────────────────────────────────
   amber:       '#e09050',   amberS: 'rgba(224,144,80,0.18)',
   mauve:       '#a090d0',   mauveS: 'rgba(160,144,208,0.18)',
   ocean:       '#5898c8',   oceanS: 'rgba(88,152,200,0.18)',
@@ -103,7 +93,6 @@ export const shadow = {
   }),
 } as const;
 
-// ── TEXT DEPTH ──────────────────────────────────
 export const textShadow = {
   hero: {
     textShadowColor: 'rgba(0,0,0,0.5)',

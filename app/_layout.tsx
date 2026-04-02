@@ -7,6 +7,7 @@ import * as Linking from 'expo-linking';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { exchangeYahooCode } from '../services/yahoo';
 
 Sentry.init({
@@ -43,7 +44,7 @@ export default Sentry.wrap(function RootLayout() {
       const url = event.url;
       if (!url.includes('oauth/yahoo')) return;
       const parsed = Linking.parse(url);
-      const code = parsed.queryParams?.code as string;
+      const code   = parsed.queryParams?.code as string;
       if (!code) return;
       try {
         await exchangeYahooCode(code);
@@ -55,18 +56,22 @@ export default Sentry.wrap(function RootLayout() {
 
     const subscription = Linking.addEventListener('url', handleDeepLink);
     Linking.getInitialURL().then(url => { if (url) handleDeepLink({ url }); });
-    return () => subscription.remove();
+    return (
+) => subscription.remove();
   }, [fontsLoaded]);
 
   if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: '#2e4040' }} />;
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <Stack>
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)"     options={{ headerShown: false }} />
+      <Stack.Screen name="auth"       options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="paywall"    options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="settings"   options={{ headerShown: false }} />
       <Stack.Screen name="espn-login" options={{ headerShown: false }} />
     </Stack>
+    </GestureHandlerRootView>
   );
 });

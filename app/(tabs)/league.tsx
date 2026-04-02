@@ -1,15 +1,15 @@
+import { askAI } from "../../services/ai";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loadESPNCredentials, getESPNLeague, findMyESPNTeam, isESPNStarter, formatESPNPosition, getESPNStandings, getESPNMatchups, getESPNTransactions, getESPNAllRosters } from '../../services/espn';
-import { getValidYahooToken, getMyYahooTeam, getYahooStandings, getYahooMatchups, getYahooTransactions, getYahooAllRosters } from '../../services/yahoo';
-import { C, F, SZ, R, SP } from '../constants/tokens';
+import { ActivityIndicator, Animated, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { findMyESPNTeam, formatESPNPosition, getESPNAllRosters, getESPNLeague, getESPNMatchups, getESPNStandings, getESPNTransactions, isESPNStarter, loadESPNCredentials } from '../../services/espn';
+import { getMyYahooTeam, getValidYahooToken, getYahooAllRosters, getYahooMatchups, getYahooStandings, getYahooTransactions } from '../../services/yahoo';
+import { C, F, R, SZ } from '../constants/tokens';
 
-// ── Theme ─────────────────────────────────────────────────────────────────────
-const SURFACE  = 'rgba(255,255,255,0.12)';
-const BORDER   = 'rgba(255,255,255,0.18)';
+const SURFACE    = 'rgba(255,255,255,0.12)';
+const BORDER     = 'rgba(255,255,255,0.18)';
 const DIM_BORDER = 'rgba(255,255,255,0.10)';
 
 const POS_COLORS: Record<string, string> = {
@@ -25,78 +25,126 @@ const SLOT_LABELS: Record<number, string> = {
 };
 
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K'];
-const API_KEY = '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';
 
-type Player = { id: string; name: string; position: string; team: string; injuryStatus?: string; isStarter: boolean; slotLabel?: string; };
-type TeamStanding = { rosterId: any; username: string; wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number; streak: string; };
-type OtherRoster = { rosterId: any; username: string; players: Player[]; };
-type Transaction = { type: string; adds: string[]; drops: string[]; trader: string; time: number; };
+type Player = {
+  id: string; name: string; position: string; team: string;
+  injuryStatus?: string; isStarter: boolean; slotLabel?: string;
+};
+type TeamStanding  = { rosterId: any; username: string; wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number; streak: string; };
+type OtherRoster   = { rosterId: any; username: string; players: Player[]; };
+type Transaction   = { type: string; adds: string[]; drops: string[]; trader: string; time: number; };
 
-// ── Radar Logo (gold theme) ───────────────────────────────────────────────────
-function RadarLogo({ size = 48, color = C.gold }: { size?: number; color?: string }) {
+function PlayerAvatar({ player, posColor, active }: { player: Player; posColor: string; active: boolean }) {
+  const [err, setErr] = useState(false);
+  const uri = `https://sleepercdn.com/content/nfl/players/thumb/${player.id}.jpg`;
+  if (!err) {
+    return (
+      <View style={{ width: 44, height: 44, marginHorizontal: 6 }}>
+        <Image
+          source={{ uri }}
+          style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: active ? posColor : 'rgba(255,255,255,0.15)' }}
+          onError={() => setErr(true)}
+        />
+        {/* Position badge overlay */}
+        <View style={[styles.posBadge, { backgroundColor: posColor }]}>
+          <Text style={styles.posBadgeText}>{player.position}</Text>
+        </View>
+      </View>
+    );
+  }
+  // Fallback diamond
+  return (
+    <View style={styles.diamondWrap}>
+      <View style={[styles.diamond, { backgroundColor: active ? posColor : 'rgba(255,255,255,0.08)', borderColor: posColor, borderWidth: active ? 0 : 1 }]}>
+        <Text style={[styles.diamondText, { color: active ? '#1a1a1a' : posColor }]}>{player.position}</Text>
+      </View>
+    </View>
+  );
+}
+
+function LeagueAvatar({ avatarId, size = 36 }: { avatarId: string; size?: number }) {
+  const [err, setErr] = useState(false);
   const rot   = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0.6)).current;
+
   useEffect(() => {
-    Animated.loop(Animated.timing(rot, { toValue: 1, duration: 4000, useNativeDriver: true })).start();
-    Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 1, duration: 1500, useNativeDriver: true }),
-      Animated.timing(pulse, { toValue: 0.6, duration: 1500, useNativeDriver: true }),
-    ])).start();
-  }, []);
+    if (err || !avatarId) {
+      Animated.loop(Animated.timing(rot,   { toValue: 1, duration: 4000, useNativeDriver: true })).start();
+      Animated.loop(Animated.sequence([
+        Animated.timing(pulse, { toValue: 1,   duration: 1500, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.6, duration: 1500, useNativeDriver: true }),
+      ])).start();
+    }
+  }, [err, avatarId]);
+
+  if (avatarId && !err) {
+    return (
+      <Image
+        source={{ uri: `https://sleepercdn.com/avatars/thumbs/${avatarId}` }}
+        style={{ width: size, height: size, borderRadius: R.xs, borderWidth: 1, borderColor: C.goldBorder }}
+        onError={() => setErr(true)}
+      />
+    );
+  }
+
+  // Radar fallback
   const spin = rot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  const r = size / 2;
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center', backgroundColor: C.goldS, borderWidth: 1, borderColor: C.goldBorder, borderRadius: R.sm }}>
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center', backgroundColor: C.goldS, borderWidth: 1, borderColor: C.goldBorder, borderRadius: R.xs }}>
       {[0.85, 0.6, 0.35].map((scale, i) => (
         <View key={i} style={{ position: 'absolute', width: size * scale, height: size * scale, borderRadius: size * scale / 2, borderWidth: 1, borderColor: `rgba(184,137,26,${0.18 - i * 0.04})` }} />
       ))}
       <View style={{ position: 'absolute', width: size * 0.7, height: 1, backgroundColor: C.goldBorder }} />
       <View style={{ position: 'absolute', width: 1, height: size * 0.7, backgroundColor: C.goldBorder }} />
-      <Animated.View style={{ position: 'absolute', width: r * 0.8, height: 1, backgroundColor: C.gold, left: r, top: r - 0.5, transformOrigin: 'left center', transform: [{ rotate: spin }], opacity: 0.8 }} />
+      <Animated.View style={{ position: 'absolute', width: (size / 2) * 0.8, height: 1, backgroundColor: C.gold, left: size / 2, top: size / 2 - 0.5, transformOrigin: 'left center', transform: [{ rotate: spin }], opacity: 0.8 }} />
       <Animated.View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: C.gold, opacity: pulse }} />
     </View>
   );
 }
 
-// ── Screen ────────────────────────────────────────────────────────────────────
 export default function LeagueScreen() {
-  const { leagueId, leagueName, platform } = useLocalSearchParams();
+  const { leagueId, leagueName, platform, avatar } = useLocalSearchParams();
   const platformStr = (platform as string) || 'sleeper';
-  const router = useRouter();
+  const avatarId    = (avatar as string) || '';
+  const router      = useRouter();
 
-  const [starters,          setStarters]          = useState<Player[]>([]);
-  const [bench,             setBench]             = useState<Player[]>([]);
-  const [leagueSettings,    setLeagueSettings]    = useState<any>(null);
-  const [loading,           setLoading]           = useState(true);
-  const [selectedPlayer,    setSelectedPlayer]    = useState<Player | null>(null);
-  const [advice,            setAdvice]            = useState('');
-  const [adviceLoading,     setAdviceLoading]     = useState(false);
-  const [modalVisible,      setModalVisible]      = useState(false);
-  const [activeTab,         setActiveTab]         = useState<'roster' | 'waivers' | 'matchup' | 'standings' | 'activity'>('roster');
-  const [waiverPlayers,     setWaiverPlayers]     = useState<Player[]>([]);
-  const [waiverLoading,     setWaiverLoading]     = useState(false);
-  const [selectedPosition,  setSelectedPosition]  = useState('ALL');
-  const [matchup,           setMatchup]           = useState<any>(null);
-  const [standings,         setStandings]         = useState<TeamStanding[]>([]);
-  const [standingsLoading,  setStandingsLoading]  = useState(false);
-  const [otherRosters,      setOtherRosters]      = useState<OtherRoster[]>([]);
-  const [selectedRoster,    setSelectedRoster]    = useState<OtherRoster | null>(null);
-  const [rosterModalVisible,setRosterModalVisible]= useState(false);
-  const [transactions,      setTransactions]      = useState<Transaction[]>([]);
-  const [activityLoading,   setActivityLoading]   = useState(false);
-  const [playersDb,         setPlayersDb]         = useState<any>({});
+  const [starters,           setStarters]           = useState<Player[]>([]);
+  const [bench,              setBench]              = useState<Player[]>([]);
+  const [leagueSettings,     setLeagueSettings]     = useState<any>(null);
+  const [loading,            setLoading]            = useState(true);
+  const [selectedPlayer,     setSelectedPlayer]     = useState<Player | null>(null);
+  const [advice,             setAdvice]             = useState('');
+  const [adviceLoading,      setAdviceLoading]      = useState(false);
+  const [modalVisible,       setModalVisible]       = useState(false);
+  const [activeTab,          setActiveTab]          = useState<'roster'|'waivers'|'matchup'|'standings'|'activity'>('roster');
+  const [waiverPlayers,      setWaiverPlayers]      = useState<Player[]>([]);
+  const [waiverLoading,      setWaiverLoading]      = useState(false);
+  const [selectedPosition,   setSelectedPosition]   = useState('ALL');
+  const [matchup,            setMatchup]            = useState<any>(null);
+  const [standings,          setStandings]          = useState<TeamStanding[]>([]);
+  const [standingsLoading,   setStandingsLoading]   = useState(false);
+  const [otherRosters,       setOtherRosters]       = useState<OtherRoster[]>([]);
+  const [selectedRoster,     setSelectedRoster]     = useState<OtherRoster | null>(null);
+  const [rosterModalVisible, setRosterModalVisible] = useState(false);
+  const [transactions,       setTransactions]       = useState<Transaction[]>([]);
+  const [activityLoading,    setActivityLoading]    = useState(false);
+  const [playersDb,          setPlayersDb]          = useState<any>({});
 
   const PLATFORM_COLOR = platformStr === 'espn' ? '#FF4444' : platformStr === 'yahoo' ? '#6001D2' : C.gold;
 
   useEffect(() => {
-    if (leagueId) { setStandings([]); setOtherRosters([]); setMatchup(null); setWaiverPlayers([]); setTransactions([]); setActiveTab('roster'); fetchRoster(); }
+    if (leagueId) {
+      setStandings([]); setOtherRosters([]); setMatchup(null);
+      setWaiverPlayers([]); setTransactions([]); setActiveTab('roster');
+      fetchRoster();
+    }
   }, [leagueId]);
 
   useEffect(() => {
-    if (activeTab === 'waivers'   && waiverPlayers.length === 0)  fetchWaivers();
-    if (activeTab === 'matchup'   && !matchup)                     fetchMatchup();
-    if (activeTab === 'standings' && standings.length === 0)       fetchStandings();
-    if (activeTab === 'activity'  && transactions.length === 0)    fetchActivity();
+    if (activeTab === 'waivers'   && waiverPlayers.length === 0) fetchWaivers();
+    if (activeTab === 'matchup'   && !matchup)                   fetchMatchup();
+    if (activeTab === 'standings' && standings.length === 0)     fetchStandings();
+    if (activeTab === 'activity'  && transactions.length === 0)  fetchActivity();
   }, [activeTab]);
 
   const getPlayersDb = async () => {
@@ -113,8 +161,8 @@ export default function LeagueScreen() {
     setLeagueSettings(settings);
     const rosters  = await (await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`)).json();
     const myRoster = rosters.find((r: any) => r.owner_id === user.user_id); if (!myRoster) return;
-    const pDb = await getPlayersDb();
-    const starterIds = new Set(myRoster.starters || []);
+    const pDb      = await getPlayersDb();
+    const starterIds       = new Set(myRoster.starters || []);
     const rosterPositions: string[] = settings.roster_positions || [];
     const toPlayer = (id: string, isStarter: boolean, idx?: number): Player => {
       const p = pDb[id];
@@ -139,7 +187,7 @@ export default function LeagueScreen() {
   };
 
   const fetchYahooRoster = async () => {
-    const token = await getValidYahooToken(); if (!token) return;
+    const token  = await getValidYahooToken(); if (!token) return;
     const result = await getMyYahooTeam(leagueId as string, token); if (!result) return;
     setLeagueSettings({ name: leagueId, team: result.team });
     const toPlayer = (p: any, isStarter: boolean): Player => ({ id: p.player_key, name: p.name?.full || 'Unknown', position: p.display_position || '?', team: p.editorial_team_abbr || 'FA', injuryStatus: p.status, isStarter, slotLabel: p.selected_position?.position || '' });
@@ -148,8 +196,13 @@ export default function LeagueScreen() {
   };
 
   const fetchRoster = async () => {
-    try { setLoading(true); if (platformStr === 'espn') await fetchESPNRoster(); else if (platformStr === 'yahoo') await fetchYahooRoster(); else await fetchSleeperRoster(); }
-    catch (err) { console.error('fetchRoster:', err); } finally { setLoading(false); }
+    try {
+      setLoading(true);
+      if      (platformStr === 'espn')  await fetchESPNRoster();
+      else if (platformStr === 'yahoo') await fetchYahooRoster();
+      else                              await fetchSleeperRoster();
+    } catch (err) { console.error('fetchRoster:', err); }
+    finally { setLoading(false); }
   };
 
   const fetchStandings = async () => {
@@ -164,35 +217,63 @@ export default function LeagueScreen() {
         setStandings((await getYahooStandings(leagueId as string, token)).map((t: any) => ({ rosterId: t.teamKey, username: t.name, wins: t.wins, losses: t.losses, ties: t.ties, pointsFor: t.pointsFor, pointsAgainst: t.pointsAgainst, streak: t.streak || '' })));
         setOtherRosters(await getYahooAllRosters(leagueId as string, token));
       } else {
-        const [rostersRes, usersRes] = await Promise.all([fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`), fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`)]);
-        const rosters = await rostersRes.json(); const users = await usersRes.json();
-        const userMap: Record<string, any> = {}; users.forEach((u: any) => { userMap[u.user_id] = u; });
-        setStandings([...rosters].sort((a, b) => (b.settings?.wins || 0) - (a.settings?.wins || 0) || (b.settings?.fpts || 0) - (a.settings?.fpts || 0)).map((r: any) => { const u = userMap[r.owner_id]; return { rosterId: r.roster_id, username: u?.display_name || u?.username || `Team ${r.roster_id}`, wins: r.settings?.wins || 0, losses: r.settings?.losses || 0, ties: r.settings?.ties || 0, pointsFor: parseFloat(r.settings?.fpts || 0), pointsAgainst: parseFloat(r.settings?.fpts_against || 0), streak: r.metadata?.streak || '' }; }));
-        const pDb = await getPlayersDb();
+        const [rostersRes, usersRes] = await Promise.all([
+          fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`),
+          fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`),
+        ]);
+        const rosters = await rostersRes.json();
+        const users   = await usersRes.json();
+        const userMap: Record<string, any> = {};
+        users.forEach((u: any) => { userMap[u.user_id] = u; });
+        setStandings([...rosters].sort((a, b) => (b.settings?.wins || 0) - (a.settings?.wins || 0) || (b.settings?.fpts || 0) - (a.settings?.fpts || 0)).map((r: any) => {
+          const u = userMap[r.owner_id];
+          return { rosterId: r.roster_id, username: u?.display_name || u?.username || `Team ${r.roster_id}`, wins: r.settings?.wins || 0, losses: r.settings?.losses || 0, ties: r.settings?.ties || 0, pointsFor: parseFloat(r.settings?.fpts || 0), pointsAgainst: parseFloat(r.settings?.fpts_against || 0), streak: r.metadata?.streak || '' };
+        }));
+        const pDb      = await getPlayersDb();
         const username = await AsyncStorage.getItem('sleeper_username');
-        const me = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
-        setOtherRosters(rosters.filter((r: any) => r.owner_id !== me.user_id).map((r: any) => { const u = userMap[r.owner_id]; return { rosterId: r.roster_id, username: u?.display_name || u?.username || `Team ${r.roster_id}`, players: (r.players || []).map((id: string) => { const p = pDb[id]; return { id, name: p ? `${p.first_name} ${p.last_name}` : id, position: p?.position || '?', team: p?.team || 'FA', injuryStatus: p?.injury_status, isStarter: (r.starters || []).includes(id) }; }) }; }));
+        const me       = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
+        setOtherRosters(rosters.filter((r: any) => r.owner_id !== me.user_id).map((r: any) => {
+          const u = userMap[r.owner_id];
+          return { rosterId: r.roster_id, username: u?.display_name || u?.username || `Team ${r.roster_id}`, players: (r.players || []).map((id: string) => { const p = pDb[id]; return { id, name: p ? `${p.first_name} ${p.last_name}` : id, position: p?.position || '?', team: p?.team || 'FA', injuryStatus: p?.injury_status, isStarter: (r.starters || []).includes(id) }; }) };
+        }));
       }
-    } catch (err) { console.error(err); } finally { setStandingsLoading(false); }
+    } catch (err) { console.error(err); }
+    finally { setStandingsLoading(false); }
   };
 
   const fetchMatchup = async () => {
     try {
-      if (platformStr === 'espn') { const creds = await loadESPNCredentials(); if (!creds) return; setMatchup(await getESPNMatchups(parseInt(leagueId as string), creds)); }
-      else if (platformStr === 'yahoo') { const token = await getValidYahooToken(); if (!token) return; setMatchup(await getYahooMatchups(leagueId as string, token)); }
-      else {
+      if (platformStr === 'espn') {
+        const creds = await loadESPNCredentials(); if (!creds) return;
+        setMatchup(await getESPNMatchups(parseInt(leagueId as string), creds));
+      } else if (platformStr === 'yahoo') {
+        const token = await getValidYahooToken(); if (!token) return;
+        setMatchup(await getYahooMatchups(leagueId as string, token));
+      } else {
         const username = await AsyncStorage.getItem('sleeper_username'); if (!username) return;
         const user  = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
         const state = await (await fetch('https://api.sleeper.app/v1/state/nfl')).json();
         const week  = state.display_week || 1;
-        const [matchupsRes, rostersRes, usersRes] = await Promise.all([fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`), fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`), fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`)]);
-        const matchups = await matchupsRes.json(); const rosters = await rostersRes.json(); const users = await usersRes.json();
-        const myRoster = rosters.find((r: any) => r.owner_id === user.user_id); if (!myRoster) return;
+        const [matchupsRes, rostersRes, usersRes] = await Promise.all([
+          fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`),
+          fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`),
+          fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`),
+        ]);
+        const matchups = await matchupsRes.json();
+        const rosters  = await rostersRes.json();
+        const users    = await usersRes.json();
+        const myRoster   = rosters.find((r: any) => r.owner_id === user.user_id); if (!myRoster) return;
         const myMatchup  = matchups.find((m: any) => m.roster_id === myRoster.roster_id);
         const opponent   = matchups.find((m: any) => m.matchup_id === myMatchup?.matchup_id && m.roster_id !== myRoster.roster_id);
         const getUsername = (rid: number) => { const r = rosters.find((r: any) => r.roster_id === rid); const u = users.find((u: any) => u.user_id === r?.owner_id); return u?.display_name || u?.username || 'Opponent'; };
-        const allMatchups: any[] = []; const seen = new Set();
-        matchups.forEach((m: any) => { if (seen.has(m.matchup_id)) return; seen.add(m.matchup_id); const opp = matchups.find((x: any) => x.matchup_id === m.matchup_id && x.roster_id !== m.roster_id); allMatchups.push({ team1: getUsername(m.roster_id), team1Points: m.points || 0, team2: opp ? getUsername(opp.roster_id) : 'BYE', team2Points: opp?.points || 0, isMyMatchup: m.roster_id === myRoster.roster_id || opp?.roster_id === myRoster.roster_id }); });
+        const allMatchups: any[] = [];
+        const seen = new Set();
+        matchups.forEach((m: any) => {
+          if (seen.has(m.matchup_id)) return;
+          seen.add(m.matchup_id);
+          const opp = matchups.find((x: any) => x.matchup_id === m.matchup_id && x.roster_id !== m.roster_id);
+          allMatchups.push({ team1: getUsername(m.roster_id), team1Points: m.points || 0, team2: opp ? getUsername(opp.roster_id) : 'BYE', team2Points: opp?.points || 0, isMyMatchup: m.roster_id === myRoster.roster_id || opp?.roster_id === myRoster.roster_id });
+        });
         setMatchup({ myTeam: getUsername(myRoster.roster_id), myPoints: myMatchup?.points || 0, opponentTeam: opponent ? getUsername(opponent.roster_id) : 'TBD', opponentPoints: opponent?.points || 0, week, allMatchups });
       }
     } catch (err) { console.error(err); }
@@ -201,17 +282,33 @@ export default function LeagueScreen() {
   const fetchActivity = async () => {
     setActivityLoading(true);
     try {
-      if (platformStr === 'espn') { const creds = await loadESPNCredentials(); if (!creds) return; setTransactions(await getESPNTransactions(parseInt(leagueId as string), creds)); }
-      else if (platformStr === 'yahoo') { const token = await getValidYahooToken(); if (!token) return; setTransactions(await getYahooTransactions(leagueId as string, token)); }
-      else {
-        const pDb = await getPlayersDb();
+      if (platformStr === 'espn') {
+        const creds = await loadESPNCredentials(); if (!creds) return;
+        setTransactions(await getESPNTransactions(parseInt(leagueId as string), creds));
+      } else if (platformStr === 'yahoo') {
+        const token = await getValidYahooToken(); if (!token) return;
+        setTransactions(await getYahooTransactions(leagueId as string, token));
+      } else {
+        const pDb   = await getPlayersDb();
         const users = await (await fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`)).json();
-        const userMap: Record<string, string> = {}; users.forEach((u: any) => { userMap[u.user_id] = u.display_name || u.username || 'Unknown'; });
+        const userMap: Record<string, string> = {};
+        users.forEach((u: any) => { userMap[u.user_id] = u.display_name || u.username || 'Unknown'; });
         const allTx: Transaction[] = [];
-        for (let round = 1; round <= 5; round++) { try { const txData = await (await fetch(`https://api.sleeper.app/v1/league/${leagueId}/transactions/${round}`)).json(); if (!Array.isArray(txData)) continue; txData.forEach((tx: any) => { if (['free_agent','waiver','trade'].includes(tx.type)) { allTx.push({ type: tx.type, adds: Object.keys(tx.adds||{}).map(id=>{const p=pDb[id];return p?`${p.first_name} ${p.last_name}`:id;}), drops: Object.keys(tx.drops||{}).map(id=>{const p=pDb[id];return p?`${p.first_name} ${p.last_name}`:id;}), trader: userMap[tx.creator]||'Unknown', time: tx.created }); } }); } catch {} }
-        setTransactions(allTx.sort((a,b)=>b.time-a.time).slice(0,50));
+        for (let round = 1; round <= 5; round++) {
+          try {
+            const txData = await (await fetch(`https://api.sleeper.app/v1/league/${leagueId}/transactions/${round}`)).json();
+            if (!Array.isArray(txData)) continue;
+            txData.forEach((tx: any) => {
+              if (['free_agent','waiver','trade'].includes(tx.type)) {
+                allTx.push({ type: tx.type, adds: Object.keys(tx.adds||{}).map(id => { const p = pDb[id]; return p ? `${p.first_name} ${p.last_name}` : id; }), drops: Object.keys(tx.drops||{}).map(id => { const p = pDb[id]; return p ? `${p.first_name} ${p.last_name}` : id; }), trader: userMap[tx.creator] || 'Unknown', time: tx.created });
+              }
+            });
+          } catch {}
+        }
+        setTransactions(allTx.sort((a, b) => b.time - a.time).slice(0, 50));
       }
-    } catch (err) { console.error(err); } finally { setActivityLoading(false); }
+    } catch (err) { console.error(err); }
+    finally { setActivityLoading(false); }
   };
 
   const fetchWaivers = async () => {
@@ -221,57 +318,116 @@ export default function LeagueScreen() {
         const rosters = await (await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`)).json();
         const taken   = new Set(rosters.flatMap((r: any) => r.players || []));
         const pDb     = await getPlayersDb();
-        setWaiverPlayers(Object.values(pDb).filter((p: any) => ['QB','RB','WR','TE','K'].includes(p.position) && p.team && !taken.has(p.player_id)).slice(0,150).map((p: any) => ({ id: p.player_id, name: `${p.first_name} ${p.last_name}`, position: p.position, team: p.team, injuryStatus: p.injury_status, isStarter: false })));
+        setWaiverPlayers(
+          Object.values(pDb)
+            .filter((p: any) => ['QB','RB','WR','TE','K'].includes(p.position) && p.team && !taken.has(p.player_id))
+            .slice(0, 150)
+            .map((p: any) => ({ id: p.player_id, name: `${p.first_name} ${p.last_name}`, position: p.position, team: p.team, injuryStatus: p.injury_status, isStarter: false }))
+        );
       } else if (platformStr === 'espn') {
         const creds = await loadESPNCredentials(); if (!creds) return;
         const data  = await getESPNLeague(parseInt(leagueId as string), creds);
         const filter = JSON.stringify({ players: { filterStatus: { value: ['FREEAGENT','WAIVERS'] }, filterSlotIds: { value: [0,2,4,6,16,17,23] }, limit: 100 } });
         const res = await fetch(`https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2025/segments/0/leagues/${leagueId}?view=kona_player_info&scoringPeriodId=${data.scoringPeriodId||1}`, { headers: { 'Content-Type': 'application/json', 'X-Fantasy-Filter': filter, Cookie: `espn_s2=${creds.espnS2}; SWID=${creds.swid}` } });
-        setWaiverPlayers(((await res.json()).players||[]).map((p: any) => { const pl=p.playerPoolEntry?.player; return { id: String(pl?.id||''), name: pl?.fullName||'Unknown', position: formatESPNPosition(pl?.defaultPositionId), team: String(pl?.proTeamId||'FA'), injuryStatus: pl?.injuryStatus, isStarter: false }; }));
+        setWaiverPlayers(((await res.json()).players || []).map((p: any) => { const pl = p.playerPoolEntry?.player; return { id: String(pl?.id || ''), name: pl?.fullName || 'Unknown', position: formatESPNPosition(pl?.defaultPositionId), team: String(pl?.proTeamId || 'FA'), injuryStatus: pl?.injuryStatus, isStarter: false }; }));
       } else if (platformStr === 'yahoo') {
         const token = await getValidYahooToken(); if (!token) return;
         const data  = await (await fetch(`https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueId}/players;status=FA;sort=OR;count=50?format=json`, { headers: { Authorization: `Bearer ${token}` } })).json();
-        setWaiverPlayers(Object.values(data?.fantasy_content?.league?.[1]?.players || {}).filter((v: any) => typeof v==='object'&&v.player).map((v: any) => { const p=v.player[0]; return { id: p.player_key, name: p.name?.full||'Unknown', position: p.display_position||'?', team: p.editorial_team_abbr||'FA', injuryStatus: p.status, isStarter: false }; }));
+        setWaiverPlayers(Object.values(data?.fantasy_content?.league?.[1]?.players || {}).filter((v: any) => typeof v === 'object' && v.player).map((v: any) => { const p = v.player[0]; return { id: p.player_key, name: p.name?.full || 'Unknown', position: p.display_position || '?', team: p.editorial_team_abbr || 'FA', injuryStatus: p.status, isStarter: false }; }));
       }
-    } catch (err) { console.error(err); } finally { setWaiverLoading(false); }
+    } catch (err) { console.error(err); }
+    finally { setWaiverLoading(false); }
   };
 
   const handleAdvice = async (player: Player, isWaiver = false) => {
-    setSelectedPlayer(player); setAdvice(''); setModalVisible(true); setAdviceLoading(true);
-    const isPPR = leagueSettings?.scoring_settings?.rec > 0;
+    setSelectedPlayer(player);
+    setAdvice('');
+    setModalVisible(true);
+    setAdviceLoading(true);
+
+    const controller = new AbortController();
+    const timeout    = setTimeout(() => controller.abort(), 15000);
+
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 200, messages: [{ role: 'user', content: `You are AIOmni, expert fantasy football analyst.\nLeague: ${leagueName} (${platformStr.toUpperCase()}) | Scoring: ${isPPR ? 'PPR' : 'Standard'}\nPlayer: ${player.name} | ${player.position} | ${player.team}${player.injuryStatus ? ` | Injury: ${player.injuryStatus}` : ''}\n${isWaiver ? 'Should I add off waivers?' : 'Should I start?'} Sharp, direct, under 80 words.` }] }) });
-      setAdvice(((await res.json()).content[0].text));
-    } catch { setAdvice('Could not load advice. Try again.'); } finally { setAdviceLoading(false); }
+      const isPPR = leagueSettings?.scoring_settings?.rec > 0;
+      const res   = await fetch('https://api.anthropic.com/v1/messages', {
+        method:  'POST',
+        signal:  controller.signal,
+        headers: {
+          'Content-Type':      'application/json',
+          'x-api-key':         API_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model:      'claude-sonnet-4-20250514',
+          max_tokens: 200,
+          messages: [{
+            role:    'user',
+            content: `You are AIOmni, expert fantasy football analyst.\nLeague: ${leagueName} (${platformStr.toUpperCase()}) | Scoring: ${isPPR ? 'PPR' : 'Standard'}\nPlayer: ${player.name} | ${player.position} | ${player.team}${player.injuryStatus ? ` | Injury: ${player.injuryStatus}` : ''}\n${isWaiver ? 'Should I add off waivers?' : 'Should I start or sit?'} Be sharp, direct, under 80 words. No intros.`,
+          }],
+        }),
+      });
+
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.error?.message || `API error ${res.status}`);
+      }
+
+      const data = await res.json();
+      const text = data.content?.[0]?.text;
+      if (!text) throw new Error('Empty response from API');
+      setAdvice(text);
+    } catch (e: any) {
+      clearTimeout(timeout);
+      if (e?.name === 'AbortError') {
+        setAdvice('Request timed out. Check your connection and try again.');
+      } else {
+        console.error('handleAdvice error:', e);
+        setAdvice('Could not load advice. Tap retry or try again in a moment.');
+      }
+    } finally {
+      setAdviceLoading(false);
+    }
   };
 
   const filteredWaivers = waiverPlayers.filter(p => selectedPosition === 'ALL' || p.position === selectedPosition);
 
-  // ── Player Card ───────────────────────────────────────────────────────────────
   const renderPlayer = (player: Player, isWaiver = false, index = 0) => {
     const posColor  = POS_COLORS[player.position] || C.dim2;
     const isInjured = !!player.injuryStatus;
     const slotLabel = player.slotLabel || player.position;
     const active    = player.isStarter || isWaiver;
     return (
-      <TouchableOpacity key={`${player.id}-${index}`} style={[styles.playerCard, !active && styles.benchCard]} onPress={() => handleAdvice(player, isWaiver)} activeOpacity={0.8}>
+      <TouchableOpacity
+        key={`${player.id}-${index}`}
+        style={[styles.playerCard, !active && styles.benchCard]}
+        onPress={() => handleAdvice(player, isWaiver)}
+        activeOpacity={0.8}
+      >
         <View style={[styles.playerAccentBar, { backgroundColor: active ? posColor : 'rgba(255,255,255,0.15)' }]} />
         <Text style={styles.slotLabel}>{slotLabel}</Text>
-        <View style={styles.diamondWrap}>
-          <View style={[styles.diamond, { backgroundColor: active ? posColor : 'rgba(255,255,255,0.08)', borderColor: posColor, borderWidth: active ? 0 : 1 }]}>
-            <Text style={[styles.diamondText, { color: active ? '#1a1a1a' : posColor }]}>{player.position}</Text>
-          </View>
-        </View>
+
+        {/* Player photo with position badge */}
+        <PlayerAvatar player={player} posColor={posColor} active={active} />
+
         <View style={styles.playerInfoCol}>
           <Text style={[styles.playerName, !active && { color: C.dim2 }]} numberOfLines={1}>{player.name}</Text>
           <View style={styles.playerMeta}>
             <Text style={styles.playerTeam}>{player.team}</Text>
-            {isInjured && <><Text style={styles.metaDot}>·</Text><Text style={styles.injuryText}>{player.injuryStatus}</Text></>}
+            {isInjured && (
+              <>
+                <Text style={styles.metaDot}>·</Text>
+                <Text style={styles.injuryText}>{player.injuryStatus}</Text>
+              </>
+            )}
           </View>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${Math.random() * 60 + 20}%`, backgroundColor: active ? posColor : 'rgba(255,255,255,0.2)' }]} />
           </View>
         </View>
+
         <View style={styles.aiTag}>
           <Text style={styles.aiTagText}>AI</Text>
         </View>
@@ -289,33 +445,41 @@ export default function LeagueScreen() {
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
-      {/* Header */}
+
+      {/* ── Header ── */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Text style={styles.backText}>← BACK</Text>
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <RadarLogo size={36} />
+          {/* Real Sleeper avatar — falls back to radar */}
+          <LeagueAvatar avatarId={avatarId} size={36} />
           <View style={{ marginLeft: 10 }}>
             <Text style={styles.leagueName} numberOfLines={1}>{leagueName || 'MY LEAGUE'}</Text>
             <Text style={styles.leagueSub}>{platformStr.toUpperCase()}</Text>
           </View>
         </View>
         <View style={[styles.platformBadge, { backgroundColor: PLATFORM_COLOR }]}>
-          <Text style={[styles.platformBadgeText, { color: platformStr === 'sleeper' ? '#1a1a1a' : '#fff' }]}>{platformStr.toUpperCase()}</Text>
+          <Text style={[styles.platformBadgeText, { color: platformStr === 'sleeper' ? '#1a1a1a' : '#fff' }]}>
+            {platformStr.toUpperCase()}
+          </Text>
         </View>
       </View>
 
-      {/* Tabs */}
+      {/* ── Tabs ── */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll} contentContainerStyle={styles.tabRow}>
         {TAB_DATA.map(tab => (
-          <TouchableOpacity key={tab.key} style={[styles.tabBtn, activeTab === tab.key && { borderBottomColor: PLATFORM_COLOR, borderBottomWidth: 2 }]} onPress={() => setActiveTab(tab.key)}>
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tabBtn, activeTab === tab.key && { borderBottomColor: PLATFORM_COLOR, borderBottomWidth: 2 }]}
+            onPress={() => setActiveTab(tab.key)}
+          >
             <Text style={[styles.tabText, activeTab === tab.key && { color: PLATFORM_COLOR }]}>{tab.label}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
-      {/* Content */}
+      {/* ── Content ── */}
       {loading ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator color={C.gold} size="large" />
@@ -333,35 +497,37 @@ export default function LeagueScreen() {
           <View style={[styles.sectionHeader, { marginTop: 20 }]}>
             <View style={[styles.sectionAccent, { backgroundColor: C.dim2 }]} />
             <Text style={[styles.sectionLabel, { color: C.dim2 }]}>BENCH</Text>
-            <View style={[styles.sectionCount, { backgroundColor: 'rgba(255,255,255,0.08)' }]}><Text style={[styles.sectionCountText, { color: C.dim2 }]}>{bench.length}</Text></View>
+            <View style={[styles.sectionCount, { backgroundColor: 'rgba(255,255,255,0.08)' }]}>
+              <Text style={[styles.sectionCountText, { color: C.dim2 }]}>{bench.length}</Text>
+            </View>
           </View>
           {bench.map((p, i) => renderPlayer(p, false, i))}
           <View style={{ height: 40 }} />
         </ScrollView>
 
       ) : activeTab === 'standings' ? (
-        standingsLoading
-          ? <View style={styles.loadingBox}><ActivityIndicator color={C.gold} /><Text style={styles.loadingText}>LOADING</Text></View>
-          : (
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
-              <Text style={styles.sectionLabel}>STANDINGS · TAP TO SPY ROSTER</Text>
-              {standings.map((team, i) => (
-                <TouchableOpacity key={String(team.rosterId)} style={styles.standingRow} onPress={() => { const r = otherRosters.find(r => r.rosterId === team.rosterId); if (r) { setSelectedRoster(r); setRosterModalVisible(true); } }}>
-                  <Text style={[styles.standingRank, i < 3 && { color: C.gold }]}>{i + 1}</Text>
-                  <View style={styles.standingInfo}>
-                    <Text style={styles.standingName}>{team.username}</Text>
-                    <Text style={styles.standingPts}>{team.pointsFor.toFixed(1)} PF · {team.pointsAgainst.toFixed(1)} PA</Text>
-                  </View>
-                  <View style={styles.standingRecord}>
-                    <Text style={styles.standingRecordText}>{team.wins}–{team.losses}{team.ties > 0 ? `–${team.ties}` : ''}</Text>
-                    {team.streak ? <Text style={[styles.standingStreak, { color: team.streak.startsWith('W') ? C.sage : '#c87878' }]}>{team.streak}</Text> : null}
-                  </View>
-                  <Text style={styles.standingArrow}>›</Text>
-                </TouchableOpacity>
-              ))}
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          )
+        standingsLoading ? (
+          <View style={styles.loadingBox}><ActivityIndicator color={C.gold} /><Text style={styles.loadingText}>LOADING</Text></View>
+        ) : (
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+            <Text style={styles.sectionLabel}>STANDINGS · TAP TO SPY ROSTER</Text>
+            {standings.map((team, i) => (
+              <TouchableOpacity key={String(team.rosterId)} style={styles.standingRow} onPress={() => { const r = otherRosters.find(r => r.rosterId === team.rosterId); if (r) { setSelectedRoster(r); setRosterModalVisible(true); } }}>
+                <Text style={[styles.standingRank, i < 3 && { color: C.gold }]}>{i + 1}</Text>
+                <View style={styles.standingInfo}>
+                  <Text style={styles.standingName}>{team.username}</Text>
+                  <Text style={styles.standingPts}>{team.pointsFor.toFixed(1)} PF · {team.pointsAgainst.toFixed(1)} PA</Text>
+                </View>
+                <View style={styles.standingRecord}>
+                  <Text style={styles.standingRecordText}>{team.wins}–{team.losses}{team.ties > 0 ? `–${team.ties}` : ''}</Text>
+                  {team.streak ? <Text style={[styles.standingStreak, { color: team.streak.startsWith('W') ? C.sage : '#c87878' }]}>{team.streak}</Text> : null}
+                </View>
+                <Text style={styles.standingArrow}>›</Text>
+              </TouchableOpacity>
+            ))}
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        )
 
       ) : activeTab === 'matchup' ? (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
@@ -383,7 +549,9 @@ export default function LeagueScreen() {
                   </View>
                 </View>
                 <View style={[styles.matchupStatus, { borderColor: matchup.myPoints >= matchup.opponentPoints ? C.sageBorder : 'rgba(200,120,120,0.35)', backgroundColor: matchup.myPoints >= matchup.opponentPoints ? C.sageS : 'rgba(200,120,120,0.12)' }]}>
-                  <Text style={[styles.matchupStatusText, { color: matchup.myPoints >= matchup.opponentPoints ? C.sage : '#c87878' }]}>{matchup.myPoints > matchup.opponentPoints ? 'WINNING ✓' : matchup.myPoints < matchup.opponentPoints ? 'LOSING ✗' : 'TIED'}</Text>
+                  <Text style={[styles.matchupStatusText, { color: matchup.myPoints >= matchup.opponentPoints ? C.sage : '#c87878' }]}>
+                    {matchup.myPoints > matchup.opponentPoints ? 'WINNING ✓' : matchup.myPoints < matchup.opponentPoints ? 'LOSING ✗' : 'TIED'}
+                  </Text>
                 </View>
               </View>
               {matchup.allMatchups?.length > 0 && (
@@ -391,16 +559,24 @@ export default function LeagueScreen() {
                   <Text style={[styles.sectionLabel, { marginTop: 24 }]}>ALL MATCHUPS</Text>
                   {matchup.allMatchups.map((m: any, i: number) => (
                     <View key={i} style={[styles.allMatchupRow, m.isMyMatchup && { borderColor: PLATFORM_COLOR }]}>
-                      <View style={{ flex: 1 }}><Text style={[styles.allMatchupTeam, m.isMyMatchup && { color: C.ink }]} numberOfLines={1}>{m.team1}</Text><Text style={styles.allMatchupScore}>{m.team1Points?.toFixed(2)}</Text></View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.allMatchupTeam, m.isMyMatchup && { color: C.ink }]} numberOfLines={1}>{m.team1}</Text>
+                        <Text style={styles.allMatchupScore}>{m.team1Points?.toFixed(2)}</Text>
+                      </View>
                       <Text style={styles.allMatchupVs}>vs</Text>
-                      <View style={{ flex: 1, alignItems: 'flex-end' }}><Text style={[styles.allMatchupTeam, m.isMyMatchup && { color: C.ink }]} numberOfLines={1}>{m.team2}</Text><Text style={styles.allMatchupScore}>{m.team2Points?.toFixed(2)}</Text></View>
+                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                        <Text style={[styles.allMatchupTeam, m.isMyMatchup && { color: C.ink }]} numberOfLines={1}>{m.team2}</Text>
+                        <Text style={styles.allMatchupScore}>{m.team2Points?.toFixed(2)}</Text>
+                      </View>
                     </View>
                   ))}
                 </>
               )}
               <View style={{ height: 40 }} />
             </>
-          ) : <View style={styles.loadingBox}><ActivityIndicator color={C.gold} /><Text style={styles.loadingText}>LOADING</Text></View>}
+          ) : (
+            <View style={styles.loadingBox}><ActivityIndicator color={C.gold} /><Text style={styles.loadingText}>LOADING</Text></View>
+          )}
         </ScrollView>
 
       ) : activeTab === 'waivers' ? (
@@ -412,36 +588,41 @@ export default function LeagueScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
-          {waiverLoading
-            ? <View style={styles.loadingBox}><ActivityIndicator color={C.gold} /><Text style={styles.loadingText}>LOADING</Text></View>
-            : <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>{filteredWaivers.map((p, i) => renderPlayer(p, true, i))}<View style={{ height: 40 }} /></ScrollView>}
+          {waiverLoading ? (
+            <View style={styles.loadingBox}><ActivityIndicator color={C.gold} /><Text style={styles.loadingText}>LOADING</Text></View>
+          ) : (
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+              {filteredWaivers.map((p, i) => renderPlayer(p, true, i))}
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          )}
         </View>
 
       ) : activeTab === 'activity' ? (
-        activityLoading
-          ? <View style={styles.loadingBox}><ActivityIndicator color={C.gold} /><Text style={styles.loadingText}>LOADING</Text></View>
-          : (
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
-              <Text style={styles.sectionLabel}>RECENT TRANSACTIONS</Text>
-              {transactions.length === 0 && <Text style={styles.emptyText}>No recent transactions found.</Text>}
-              {transactions.map((tx, i) => (
-                <View key={i} style={styles.txCard}>
-                  <View style={[styles.txAccent, { backgroundColor: tx.type === 'trade' ? C.gold : tx.type === 'waiver' ? C.sage : C.mint }]} />
-                  <View style={styles.txHeader}>
-                    <Text style={[styles.txType, { color: tx.type === 'trade' ? C.gold : PLATFORM_COLOR }]}>{tx.type === 'trade' ? '⇄ TRADE' : tx.type === 'waiver' ? '◎ WAIVER' : '+ FREE AGENT'}</Text>
-                    <Text style={styles.txTrader}>{tx.trader}</Text>
-                  </View>
-                  {tx.adds.length  > 0 && <Text style={styles.txAdds}>+ {tx.adds.join(', ')}</Text>}
-                  {tx.drops.length > 0 && <Text style={styles.txDrops}>– {tx.drops.join(', ')}</Text>}
-                  <Text style={styles.txTime}>{new Date(tx.time).toLocaleDateString()}</Text>
+        activityLoading ? (
+          <View style={styles.loadingBox}><ActivityIndicator color={C.gold} /><Text style={styles.loadingText}>LOADING</Text></View>
+        ) : (
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+            <Text style={styles.sectionLabel}>RECENT TRANSACTIONS</Text>
+            {transactions.length === 0 && <Text style={styles.emptyText}>No recent transactions found.</Text>}
+            {transactions.map((tx, i) => (
+              <View key={i} style={styles.txCard}>
+                <View style={[styles.txAccent, { backgroundColor: tx.type === 'trade' ? C.gold : tx.type === 'waiver' ? C.sage : C.mint }]} />
+                <View style={styles.txHeader}>
+                  <Text style={[styles.txType, { color: tx.type === 'trade' ? C.gold : PLATFORM_COLOR }]}>{tx.type === 'trade' ? '⇄ TRADE' : tx.type === 'waiver' ? '◎ WAIVER' : '+ FREE AGENT'}</Text>
+                  <Text style={styles.txTrader}>{tx.trader}</Text>
                 </View>
-              ))}
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          )
+                {tx.adds.length  > 0 && <Text style={styles.txAdds}>+ {tx.adds.join(', ')}</Text>}
+                {tx.drops.length > 0 && <Text style={styles.txDrops}>– {tx.drops.join(', ')}</Text>}
+                <Text style={styles.txTime}>{new Date(tx.time).toLocaleDateString()}</Text>
+              </View>
+            ))}
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        )
       ) : null}
 
-      {/* Advice Modal */}
+      {/* ── Advice Modal ── */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -453,11 +634,29 @@ export default function LeagueScreen() {
                   <Text style={styles.modalPosBadgeText}>{selectedPlayer?.position} · {selectedPlayer?.team}</Text>
                 </View>
               </View>
-              <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}><Text style={styles.closeBtnText}>✕</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </TouchableOpacity>
             </View>
-            {adviceLoading
-              ? <View style={styles.loadingAdvice}><ActivityIndicator color={C.gold} size="large" /><Text style={styles.loadingAdviceText}>ANALYZING...</Text></View>
-              : <Text style={styles.adviceText}>{advice}</Text>}
+            {adviceLoading ? (
+              <View style={styles.loadingAdvice}>
+                <ActivityIndicator color={C.gold} size="large" />
+                <Text style={styles.loadingAdviceText}>ANALYZING...</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.adviceText}>{advice}</Text>
+                {/* Retry button if advice failed */}
+                {advice.includes('try again') || advice.includes('timed out') ? (
+                  <TouchableOpacity
+                    style={[styles.gotItBtn, { backgroundColor: 'rgba(255,255,255,0.1)', marginBottom: 8 }]}
+                    onPress={() => selectedPlayer && handleAdvice(selectedPlayer)}
+                  >
+                    <Text style={[styles.gotItText, { color: C.gold }]}>RETRY</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </>
+            )}
             <TouchableOpacity style={[styles.gotItBtn, { backgroundColor: C.gold }]} onPress={() => setModalVisible(false)}>
               <Text style={styles.gotItText}>GOT IT</Text>
             </TouchableOpacity>
@@ -465,18 +664,20 @@ export default function LeagueScreen() {
         </View>
       </Modal>
 
-      {/* Other Roster Modal */}
+      {/* ── Other Roster Modal ── */}
       <Modal visible={rosterModalVisible} transparent animationType="slide" onRequestClose={() => setRosterModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { maxHeight: '85%' }]}>
             <View style={[styles.modalTopAccent, { backgroundColor: PLATFORM_COLOR }]} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalPlayerName}>{selectedRoster?.username}</Text>
-              <TouchableOpacity style={styles.closeBtn} onPress={() => setRosterModalVisible(false)}><Text style={styles.closeBtnText}>✕</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.closeBtn} onPress={() => setRosterModalVisible(false)}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </TouchableOpacity>
             </View>
             <ScrollView>
               <Text style={styles.sectionLabel}>STARTERS</Text>
-              {selectedRoster?.players.filter(p => p.isStarter).map ((p, i) => renderPlayer(p, false, i))}
+              {selectedRoster?.players.filter(p =>  p.isStarter).map((p, i) => renderPlayer(p, false, i))}
               <Text style={[styles.sectionLabel, { marginTop: 16 }]}>BENCH</Text>
               {selectedRoster?.players.filter(p => !p.isStarter).map((p, i) => renderPlayer(p, false, i))}
               <View style={{ height: 20 }} />
@@ -525,23 +726,30 @@ const styles = StyleSheet.create({
   emptyText:        { fontFamily: F.outfit, color: C.dim2, fontSize: SZ.md },
 
   // Player card
-  playerCard:      { flexDirection: 'row', alignItems: 'center', backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER, borderRadius: R.sm, marginBottom: 6, overflow: 'hidden', minHeight: 64 },
+  playerCard:      { flexDirection: 'row', alignItems: 'center', backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER, borderRadius: R.sm, marginBottom: 6, overflow: 'hidden', minHeight: 68 },
   benchCard:       { opacity: 0.6 },
   playerAccentBar: { width: 3, alignSelf: 'stretch' },
-  slotLabel:       { fontFamily: F.mono, color: C.dim2, fontSize: 8, letterSpacing: 1, width: 28, textAlign: 'center' },
-  diamondWrap:     { width: 40, alignItems: 'center', justifyContent: 'center' },
-  diamond:         { width: 30, height: 30, borderRadius: 4, transform: [{ rotate: '45deg' }], alignItems: 'center', justifyContent: 'center' },
-  diamondText:     { fontFamily: F.mono, fontSize: 7, fontWeight: '700', transform: [{ rotate: '-45deg' }], letterSpacing: 0.3 },
-  playerInfoCol:   { flex: 1, paddingVertical: 10, paddingRight: 8 },
-  playerName:      { fontFamily: F.bold, color: C.ink, fontSize: SZ.base, letterSpacing: 0.5, lineHeight: 20 },
-  playerMeta:      { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
-  playerTeam:      { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
-  metaDot:         { color: C.dim2, fontSize: SZ.xs },
-  injuryText:      { fontFamily: F.mono, color: C.amber, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
-  progressTrack:   { height: 2, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 1, marginTop: 6, overflow: 'hidden' },
-  progressFill:    { height: 2, borderRadius: 1 },
-  aiTag:           { width: 28, height: 28, borderRadius: R.xs, borderWidth: 1, borderColor: C.goldBorder, alignItems: 'center', justifyContent: 'center', marginRight: 10, backgroundColor: C.goldS },
-  aiTagText:       { fontFamily: F.mono, color: C.gold, fontSize: 8, letterSpacing: 1 },
+  slotLabel:       { fontFamily: F.mono, color: C.dim2, fontSize: 8, letterSpacing: 1, width: 26, textAlign: 'center' },
+
+  // Photo + position badge
+  posBadge:     { position: 'absolute', bottom: -2, right: -2, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, minWidth: 22, alignItems: 'center' },
+  posBadgeText: { fontFamily: F.mono, fontSize: 7, fontWeight: '700', color: '#1a1a1a', letterSpacing: 0.3 },
+
+  // Diamond fallback
+  diamondWrap: { width: 56, alignItems: 'center', justifyContent: 'center' },
+  diamond:     { width: 30, height: 30, borderRadius: 4, transform: [{ rotate: '45deg' }], alignItems: 'center', justifyContent: 'center' },
+  diamondText: { fontFamily: F.mono, fontSize: 7, fontWeight: '700', transform: [{ rotate: '-45deg' }], letterSpacing: 0.3 },
+
+  playerInfoCol: { flex: 1, paddingVertical: 10, paddingRight: 8 },
+  playerName:    { fontFamily: F.bold, color: C.ink, fontSize: SZ.base, letterSpacing: 0.5, lineHeight: 20 },
+  playerMeta:    { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
+  playerTeam:    { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
+  metaDot:       { color: C.dim2, fontSize: SZ.xs },
+  injuryText:    { fontFamily: F.mono, color: C.amber, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
+  progressTrack: { height: 2, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 1, marginTop: 6, overflow: 'hidden' },
+  progressFill:  { height: 2, borderRadius: 1 },
+  aiTag:         { width: 28, height: 28, borderRadius: R.xs, borderWidth: 1, borderColor: C.goldBorder, alignItems: 'center', justifyContent: 'center', marginRight: 10, backgroundColor: C.goldS },
+  aiTagText:     { fontFamily: F.mono, color: C.gold, fontSize: 8, letterSpacing: 1 },
 
   // Standings
   standingRow:        { backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER, borderRadius: R.sm, padding: 14, marginBottom: 6, flexDirection: 'row', alignItems: 'center' },
@@ -555,20 +763,20 @@ const styles = StyleSheet.create({
   standingArrow:      { color: C.dim2, fontSize: SZ.xl },
 
   // Matchup
-  matchupCard:        { backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER, borderRadius: R.sm, padding: 20, marginTop: 16 },
-  matchupWeekLabel:   { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 2, marginBottom: 16, textAlign: 'center' },
-  matchupScoreRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  matchupTeamCol:     { flex: 1 },
-  matchupTeamName:    { fontFamily: F.outfit, color: C.dim, fontSize: SZ.sm, marginBottom: 4 },
-  matchupScore:       { fontFamily: F.bold, fontSize: SZ['5xl'], letterSpacing: -1.5, lineHeight: 44 },
-  matchupLabel:       { fontFamily: F.mono, color: C.dim2, fontSize: 8, letterSpacing: 2, marginTop: 2 },
-  matchupVs:          { fontFamily: F.bold, color: 'rgba(255,255,255,0.15)', fontSize: SZ.lg, marginHorizontal: 10 },
-  matchupStatus:      { borderRadius: R.xs, padding: 10, alignItems: 'center', marginTop: 16, borderWidth: 1 },
-  matchupStatusText:  { fontFamily: F.bold, fontSize: SZ.base, letterSpacing: 2 },
-  allMatchupRow:      { backgroundColor: SURFACE, borderRadius: R.xs, padding: 12, marginBottom: 6, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: BORDER },
-  allMatchupTeam:     { fontFamily: F.outfit, color: C.dim2, fontSize: SZ.md },
-  allMatchupScore:    { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg, marginTop: 2 },
-  allMatchupVs:       { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs, marginHorizontal: 8 },
+  matchupCard:       { backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER, borderRadius: R.sm, padding: 20, marginTop: 16 },
+  matchupWeekLabel:  { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 2, marginBottom: 16, textAlign: 'center' },
+  matchupScoreRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  matchupTeamCol:    { flex: 1 },
+  matchupTeamName:   { fontFamily: F.outfit, color: C.dim, fontSize: SZ.sm, marginBottom: 4 },
+  matchupScore:      { fontFamily: F.bold, fontSize: SZ['5xl'], letterSpacing: -1.5, lineHeight: 44 },
+  matchupLabel:      { fontFamily: F.mono, color: C.dim2, fontSize: 8, letterSpacing: 2, marginTop: 2 },
+  matchupVs:         { fontFamily: F.bold, color: 'rgba(255,255,255,0.15)', fontSize: SZ.lg, marginHorizontal: 10 },
+  matchupStatus:     { borderRadius: R.xs, padding: 10, alignItems: 'center', marginTop: 16, borderWidth: 1 },
+  matchupStatusText: { fontFamily: F.bold, fontSize: SZ.base, letterSpacing: 2 },
+  allMatchupRow:     { backgroundColor: SURFACE, borderRadius: R.xs, padding: 12, marginBottom: 6, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: BORDER },
+  allMatchupTeam:    { fontFamily: F.outfit, color: C.dim2, fontSize: SZ.md },
+  allMatchupScore:   { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg, marginTop: 2 },
+  allMatchupVs:      { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs, marginHorizontal: 8 },
 
   // Waivers
   filterRow:  { flexGrow: 0, marginVertical: 10 },
@@ -576,28 +784,28 @@ const styles = StyleSheet.create({
   filterText: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs, letterSpacing: 1 },
 
   // Activity
-  txCard:    { backgroundColor: SURFACE, borderRadius: R.sm, padding: 14, marginBottom: 6, borderWidth: 1, borderColor: BORDER, overflow: 'hidden' },
-  txAccent:  { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
-  txHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  txType:    { fontFamily: F.mono, fontSize: SZ.xs, letterSpacing: 1 },
-  txTrader:  { fontFamily: F.outfit, color: C.dim2, fontSize: SZ.sm },
-  txAdds:    { fontFamily: F.semibold, color: C.sage, fontSize: SZ.md, marginBottom: 2 },
-  txDrops:   { fontFamily: F.semibold, color: '#c87878', fontSize: SZ.md, marginBottom: 4 },
-  txTime:    { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, marginTop: 4 },
+  txCard:   { backgroundColor: SURFACE, borderRadius: R.sm, padding: 14, marginBottom: 6, borderWidth: 1, borderColor: BORDER, overflow: 'hidden' },
+  txAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
+  txHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  txType:   { fontFamily: F.mono, fontSize: SZ.xs, letterSpacing: 1 },
+  txTrader: { fontFamily: F.outfit, color: C.dim2, fontSize: SZ.sm },
+  txAdds:   { fontFamily: F.semibold, color: C.sage, fontSize: SZ.md, marginBottom: 2 },
+  txDrops:  { fontFamily: F.semibold, color: '#c87878', fontSize: SZ.md, marginBottom: 4 },
+  txTime:   { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, marginTop: 4 },
 
   // Modal
-  modalOverlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
-  modalCard:          { backgroundColor: '#2a3838', borderTopLeftRadius: R.lg, borderTopRightRadius: R.lg, padding: 24, minHeight: 280, borderTopWidth: 1, borderColor: BORDER, overflow: 'hidden' },
-  modalTopAccent:     { position: 'absolute', top: 0, left: 0, right: 0, height: 2 },
-  modalHeader:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  modalPlayerName:    { fontFamily: F.bold, color: C.ink, fontSize: SZ['2xl'], letterSpacing: 0.5 },
-  modalPosBadge:      { paddingHorizontal: 10, paddingVertical: 3, borderRadius: R.xs, alignSelf: 'flex-start', marginTop: 6 },
-  modalPosBadgeText:  { fontFamily: F.mono, fontSize: SZ.xs - 1, color: '#1a1a1a', letterSpacing: 1 },
-  closeBtn:           { width: 32, height: 32, borderRadius: R.xs, borderWidth: 1, borderColor: BORDER, alignItems: 'center', justifyContent: 'center' },
-  closeBtnText:       { color: C.dim2, fontSize: 14 },
-  loadingAdvice:      { alignItems: 'center', padding: 24, gap: 14 },
-  loadingAdviceText:  { fontFamily: F.mono, color: C.gold, fontSize: SZ.xs, letterSpacing: 3, opacity: 0.7 },
-  adviceText:         { fontFamily: F.outfit, color: C.ink2, fontSize: SZ.md, lineHeight: 24, marginBottom: 20 },
-  gotItBtn:           { borderRadius: R.sm, padding: 16, alignItems: 'center', marginTop: 8 },
-  gotItText:          { fontFamily: F.bold, fontSize: SZ.lg, letterSpacing: 2, color: '#1a1a1a' },
+  modalOverlay:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  modalCard:         { backgroundColor: '#2a3838', borderTopLeftRadius: R.lg, borderTopRightRadius: R.lg, padding: 24, minHeight: 280, borderTopWidth: 1, borderColor: BORDER, overflow: 'hidden' },
+  modalTopAccent:    { position: 'absolute', top: 0, left: 0, right: 0, height: 2 },
+  modalHeader:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  modalPlayerName:   { fontFamily: F.bold, color: C.ink, fontSize: SZ['2xl'], letterSpacing: 0.5 },
+  modalPosBadge:     { paddingHorizontal: 10, paddingVertical: 3, borderRadius: R.xs, alignSelf: 'flex-start', marginTop: 6 },
+  modalPosBadgeText: { fontFamily: F.mono, fontSize: SZ.xs - 1, color: '#1a1a1a', letterSpacing: 1 },
+  closeBtn:          { width: 32, height: 32, borderRadius: R.xs, borderWidth: 1, borderColor: BORDER, alignItems: 'center', justifyContent: 'center' },
+  closeBtnText:      { color: C.dim2, fontSize: 14 },
+  loadingAdvice:     { alignItems: 'center', padding: 24, gap: 14 },
+  loadingAdviceText: { fontFamily: F.mono, color: C.gold, fontSize: SZ.xs, letterSpacing: 3, opacity: 0.7 },
+  adviceText:        { fontFamily: F.outfit, color: C.ink2, fontSize: SZ.md, lineHeight: 24, marginBottom: 20 },
+  gotItBtn:          { borderRadius: R.sm, padding: 16, alignItems: 'center', marginTop: 8 },
+  gotItText:         { fontFamily: F.bold, fontSize: SZ.lg, letterSpacing: 2, color: '#1a1a1a' },
 });

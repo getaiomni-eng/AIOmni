@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AIOmni — Branding & Features</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg-top: #5f7878; /* from tokens C.bgTop */
+      --bg-bot: #354848; /* from tokens C.bgBot */
+      --gold: #FEE229;   /* primary accent */
+      --sage: #2d7a5e;
+      --mint: #7ec8b8;
+      --ink: #ffffff;
+      --glass: rgba(255,255,255,0.12);
+    }
+    html,body{height:100%;margin:0;font-family:Outfit,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{background:linear-gradient(180deg,var(--bg-top),var(--bg-bot));color:var(--ink);-webkit-font-smoothing:antialiased}
+    .wrap{max-width:1100px;margin:36px auto;padding:28px}
+    .hero{display:flex;gap:24px;align-items:center}
+    .logo{width:140px;height:140px;flex:0 0 140px}
+    .title{font-size:34px;font-weight:800;line-height:1}
+    .tag{color:var(--gold);font-weight:700;margin-top:6px}
+    .glass{background:var(--glass);border:1px solid rgba(255,255,255,0.18);backdrop-filter:blur(6px);padding:18px;border-radius:12px}
+    .section{margin-top:22px}
+    .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:12px}
+    .feat{padding:14px;border-radius:10px;background:rgba(0,0,0,0.06);border:1px solid rgba(255,255,255,0.04)}
+    .palette{display:flex;gap:12px;align-items:center}
+    .swatch{width:96px;height:96px;border-radius:8px;display:flex;align-items:flex-end;justify-content:center;padding:8px;color:#000;font-weight:700}
+    .swatch small{background:rgba(255,255,255,0.85);padding:2px 6px;border-radius:6px;font-size:12px}
+    .assets{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+    img.asset{height:88px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:#fff;padding:6px}
+    footer{opacity:0.9;margin-top:28px;font-size:13px;color:rgba(255,255,255,0.85)}
+    code{background:rgba(0,0,0,0.25);padding:4px 8px;border-radius:6px}
+    .fonts sample{font-family:Outfit;font-weight:700}
+    .mono{font-family:'DM Mono',monospace}
+    @media(max-width:640px){.hero{flex-direction:column;align-items:flex-start}.logo{width:96px;height:96px;flex:0 0 96px}.title{font-size:24px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <img class="logo" src="assets/images/logo.png" alt="AIOmni logo">
+      <div>
+        <div class="title">AIOmni</div>
+        <div class="tag">Fantasy manager • Live news • AI insights</div>
+        <p style="margin-top:10px;max-width:680px;opacity:0.95">AIOmni is an Expo/React Native app focused on fantasy football management — integrates leagues from Sleeper, ESPN, and Yahoo; fetches live news feeds; and generates AI-driven actionable insights for your roster.</p>
+      </div>
+    </div>
+
+    <div class="section glass">
+      <strong>What the app does</strong>
+      <div class="features">
+        <div class="feat"><strong>League Aggregation</strong><div>Connect and view leagues from <em>ESPN</em>, <em>Yahoo</em>, and <em>Sleeper</em>.</div></div>
+        <div class="feat"><strong>AI Insights</strong><div>Generates short, actionable recommendations per league using Anthropic APIs (configurable).</div></div>
+        <div class="feat"><strong>Live News Feed</strong><div>Aggregates RSS headlines from Rotowire, PFR, and CBS Sports.</div></div>
+        <div class="feat"><strong>Team & Matchup Details</strong><div>Shows scores, records, and matchup context with platform badges.</div></div>
+        <div class="feat"><strong>Onboarding & Auth</strong><div>Supports OAuth flows (Yahoo), local onboarding, and settings sync.</div></div>
+        <div class="feat"><strong>Monetization</strong><div>Includes paywall/payments and upsell banner components for subscriptions.</div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <strong>Brand palette</strong>
+      <div style="margin-top:10px" class="palette">
+        <div style="text-align:center">
+          <div class="swatch" style="background:linear-gradient(180deg,var(--bg-top),var(--bg-bot));color:var(--ink)"><small>bgTop<br>#5f7878</small></div>
+        </div>
+        <div style="text-align:center">
+          <div class="swatch" style="background:var(--gold)"><small style="color:#000">gold<br>#FEE229</small></div>
+        </div>
+        <div style="text-align:center">
+          <div class="swatch" style="background:var(--sage)"><small style="color:#fff">sage<br>#2d7a5e</small></div>
+        </div>
+        <div style="text-align:center">
+          <div class="swatch" style="background:var(--mint)"><small style="color:#000">mint<br>#7ec8b8</small></div>
+        </div>
+      </div>
+      <div style="margin-top:10px;opacity:0.9">Additional token colors available in <code>app/constants/tokens.ts</code> and <code>constants/Colors.ts</code>.</div>
+    </div>
+
+    <div class="section glass">
+      <strong>Typography</strong>
+      <div style="margin-top:10px">
+        <div style="font-size:22px;font-weight:800">Outfit — Display / Headings</div>
+        <div class="mono" style="margin-top:8px">DM Mono — UI monospaced labels and code</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <strong>Assets</strong>
+      <div class="assets">
+        <img class="asset" src="assets/images/logo.png" alt="logo">
+        <img class="asset" src="assets/images/orb.png" alt="orb">
+        <img class="asset" src="assets/images/favicon.png" alt="favicon">
+        <img class="asset" src="assets/images/react-logo.png" alt="react">
+      </div>
+      <div style="margin-top:10px;opacity:0.9">Source images available in <code>assets/images/</code>.</div>
+    </div>
+
+    <div class="section glass">
+      <strong>Developer notes</strong>
+      <ul style="opacity:0.95">
+        <li>Project is an Expo app (see README). Run with <code>npm install</code> and <code>npx expo start</code>.</li>
+        <li>Fonts are loaded via Expo: <code>Outfit</code> and <code>DMMono</code> (see <code>app/_layout.tsx</code>).</li>
+        <li>AI features call external APIs — keys are configured in services and environment.</li>
+      </ul>
+    </div>
+
+    <footer>
+      Built from repository: <strong>AIOmni</strong>. Open this file from the project root to preview. Images reference <code>assets/images/</code>.
+    </footer>
+  </div>
+</body>
+</html>

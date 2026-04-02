@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { C, F, SZ, R, SP } from '../constants/tokens';
 
-// ── Position Pill ─────────────────────────────────
 export const PositionPill: React.FC<{ pos: string; size?: 'sm' | 'md' }> = ({ pos, size = 'sm' }) => {
   const colorMap: Record<string, { color: string; bg: string }> = {
     QB: { color: C.qb,    bg: C.qbBg  },
@@ -21,14 +20,12 @@ export const PositionPill: React.FC<{ pos: string; size?: 'sm' | 'md' }> = ({ po
   );
 };
 
-// ── Badge ─────────────────────────────────────────
 export const Badge: React.FC<{ label: string; color: string }> = ({ label, color }) => (
   <View style={[styles.badge, { backgroundColor: color + '22' }]}>
     <Text style={[styles.badgeTxt, { color }]}>{label}</Text>
   </View>
 );
 
-// ── Injury Tag ────────────────────────────────────
 export const InjuryTag: React.FC<{ tag?: string }> = ({ tag = 'Q' }) => {
   const c = tag === 'O' || tag === 'IR' ? C.rose : C.amber;
   return (
@@ -38,7 +35,6 @@ export const InjuryTag: React.FC<{ tag?: string }> = ({ tag = 'Q' }) => {
   );
 };
 
-// ── Section Header ────────────────────────────────
 export const SectionHeader: React.FC<{
   label: string;
   barColor?: string;
@@ -52,7 +48,6 @@ export const SectionHeader: React.FC<{
   </View>
 );
 
-// ── Progress Bar ──────────────────────────────────
 export const ProgressBar: React.FC<{
   value: number; max: number; color?: string; height?: number;
 }> = ({ value, max, color = C.sage, height = 3 }) => {

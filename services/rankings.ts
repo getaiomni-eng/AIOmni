@@ -6,7 +6,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchNFLInjuries, fetchVegasLines, InjuryReport, VegasLine } from './liveData';
 import { fetchRotoWireNFL, findNewsForPlayer, formatNewsAge } from './rotowire';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 export interface RankedPlayer {
   id:            string;
   name:          string;
@@ -29,7 +28,6 @@ export interface RankedPlayer {
 
 export type ScoringFormat = 'ppr' | 'half' | 'standard';
 
-// ─── Sleeper Players DB (cached 24h) ──────────────────────────────────────────
 const SLEEPER_CACHE_KEY = 'sleeper_players_db';
 const SLEEPER_CACHE_TTL = 24 * 60 * 60 * 1000;
 
@@ -95,7 +93,6 @@ export async function fetchSleeperPlayers(): Promise<Record<string, SleeperPlaye
   }
 }
 
-// ─── Sleeper Trending ─────────────────────────────────────────────────────────
 interface TrendingItem { player_id: string; count: number; }
 
 export async function fetchSleeperTrending(): Promise<{ adds: TrendingItem[]; drops: TrendingItem[] }> {
@@ -116,7 +113,6 @@ export async function fetchSleeperTrending(): Promise<{ adds: TrendingItem[]; dr
   }
 }
 
-// ─── ESPN Stat Leaders ────────────────────────────────────────────────────────
 interface ESPNLeader {
   name: string;
   team: string;
@@ -165,7 +161,6 @@ export async function fetchESPNLeaders(): Promise<ESPNLeader[]> {
   return leaders;
 }
 
-// ─── nflverse Snap Counts ─────────────────────────────────────────────────────
 interface SnapData { player: string; team: string; position: string; snapPct: number; }
 
 export async function fetchLatestSnaps(season = 2024): Promise<SnapData[]> {
@@ -206,7 +201,6 @@ export async function fetchLatestSnaps(season = 2024): Promise<SnapData[]> {
   }
 }
 
-// ─── Build unified rankings ───────────────────────────────────────────────────
 export async function buildRankings(format: ScoringFormat = 'ppr'): Promise<RankedPlayer[]> {
   const [sleeperPlayers, trending, espnLeaders, injuries, snaps, news, vegas] = await Promise.all([
     fetchSleeperPlayers(),
@@ -250,7 +244,6 @@ export async function buildRankings(format: ScoringFormat = 'ppr'): Promise<Rank
     }
   }
 
-  // ── BASE RANKINGS: Sleeper search_rank (works year-round) ──────────────
   // search_rank is Sleeper's fantasy consensus rank for every active player
   // This ensures we always have proper rankings even in offseason
 
@@ -273,7 +266,7 @@ export async function buildRankings(format: ScoringFormat = 'ppr'): Promise<Rank
     const espnStats = espnStatMap.get(nameKey);
     const inj = injuryMap.get(nameKey);
     const snap = snapMap.get(nameKey);
-    const playerNews = findNewsForPlayer(news, sp.full_name, 1);
+    const playerNews = findNewsForPlayer(news, sp.full_name);
     const trendAdds = trendingAddMap.get(id) ?? 0;
     const trendDrops = trendingDropMap.get(id) ?? 0;
 
@@ -330,8 +323,8 @@ export async function buildRankings(format: ScoringFormat = 'ppr'): Promise<Rank
       trendingAdds: trendAdds,
       trendingDrops: trendDrops,
       snapPct:      snap ?? null,
-      newsHeadline: playerNews.length > 0 ? playerNews[0].title : null,
-      newsAge:      playerNews.length > 0 ? formatNewsAge(playerNews[0].pubDate) : null,
+      newsHeadline: Array.isArray(playerNews) && playerNews.length > 0 ? playerNews[0].title : null,
+      newsAge:      Array.isArray(playerNews) && playerNews.length > 0 ? formatNewsAge(playerNews[0].pubDate) : null,
       impliedTeamScore: implied,
       isDrafted:    false,
     });
@@ -351,7 +344,6 @@ export async function buildRankings(format: ScoringFormat = 'ppr'): Promise<Rank
   return players;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatStatLabel(statType: string, value: number): string {
   if (!value) return '';
   const type = statType.toLowerCase();
