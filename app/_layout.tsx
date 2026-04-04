@@ -1,5 +1,6 @@
-import { DMMono_400Regular, DMMono_500Medium } from '@expo-google-fonts/dm-mono';
-import { Outfit_400Regular, Outfit_500Medium, Outfit_600SemiBold, Outfit_700Bold } from '@expo-google-fonts/outfit';
+import { Bungee_400Regular } from '@expo-google-fonts/bungee';
+import { BungeeInline_400Regular } from '@expo-google-fonts/bungee-inline';
+import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
 import { useFonts } from 'expo-font';
@@ -20,13 +21,21 @@ export default Sentry.wrap(function RootLayout() {
   const router = useRouter();
 
   const [fontsLoaded] = useFonts({
-    'Outfit':          Outfit_400Regular,
-    'Outfit-Medium':   Outfit_500Medium,
-    'Outfit-SemiBold': Outfit_600SemiBold,
-    'Outfit-Bold':     Outfit_700Bold,
-    'Outfit-Black':    Outfit_700Bold,
-    'DMMono-Regular':  DMMono_400Regular,
-    'DMMono-Medium':   DMMono_500Medium,
+    // ── New fonts ──────────────────────────────
+    'Bungee':          Bungee_400Regular,
+    'Bungee Inline':   BungeeInline_400Regular,
+    'SpaceMono':       SpaceMono_400Regular,
+    'SpaceMono-Bold':  SpaceMono_700Bold,
+
+    // ── Aliases — keeps old hardcoded font strings
+    //    in settings.tsx etc. working until migrated ──
+    'Outfit':          SpaceMono_400Regular,
+    'Outfit-Medium':   SpaceMono_400Regular,
+    'Outfit-SemiBold': SpaceMono_400Regular,
+    'Outfit-Bold':     Bungee_400Regular,
+    'Outfit-Black':    Bungee_400Regular,
+    'DMMono-Regular':  SpaceMono_400Regular,
+    'DMMono-Medium':   SpaceMono_700Bold,
   });
 
   useEffect(() => {
@@ -56,22 +65,22 @@ export default Sentry.wrap(function RootLayout() {
 
     const subscription = Linking.addEventListener('url', handleDeepLink);
     Linking.getInitialURL().then(url => { if (url) handleDeepLink({ url }); });
-    return (
-) => subscription.remove();
+    return () => subscription.remove();
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: '#2e4040' }} />;
+  // Cream background while fonts load (matches new theme)
+  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: '#ffffed' }} />;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-    <Stack>
-      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)"     options={{ headerShown: false }} />
-      <Stack.Screen name="auth"       options={{ headerShown: false, presentation: 'modal' }} />
-      <Stack.Screen name="paywall"    options={{ headerShown: false, presentation: 'modal' }} />
-      <Stack.Screen name="settings"   options={{ headerShown: false }} />
-      <Stack.Screen name="espn-login" options={{ headerShown: false }} />
-    </Stack>
+      <Stack>
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)"     options={{ headerShown: false }} />
+        <Stack.Screen name="auth"       options={{ headerShown: false, presentation: 'modal' }} />
+        <Stack.Screen name="paywall"    options={{ headerShown: false, presentation: 'modal' }} />
+        <Stack.Screen name="settings"   options={{ headerShown: false }} />
+        <Stack.Screen name="espn-login" options={{ headerShown: false }} />
+      </Stack>
     </GestureHandlerRootView>
   );
 });

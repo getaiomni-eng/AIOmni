@@ -10,23 +10,26 @@ import { clearESPNCredentials, findMyESPNTeam, getESPNLeague, loadESPNCredential
 import { getCurrentTier, TIER_INFO } from '../../services/purchases';
 import { clearYahooTokens, exchangeYahooCode, getValidYahooToken, getYahooAuthURL } from '../../services/yahoo';
 import { Badge } from '../components/Atoms';
-import { GlassCard, SurfaceCard } from '../components/GlassCard';
 import { OrbAvatar } from '../components/OrbAvatar';
-import { C, F, SP, SZ, textShadow } from '../constants/tokens';
+import { C, F, SP, SZ } from '../constants/tokens';
 import { getRemainingPrompts } from '../utils/promptCounter';
 
 const LOGO         = require('../../assets/images/logo.png');
 const WEEKLY_LIMIT = 25;
 const { width: SCREEN_W } = Dimensions.get('window');
 
+const SURFACE  = 'rgba(255,255,255,0.90)';
+const BORDER   = 'rgba(88,131,191,0.32)';
+const BEVEL_HI = 'rgba(255,255,255,0.95)';
+
 const TIERS = [
-  { key: 'rankings',      name: 'Rankings',      price: '$5.99',  sub: 'Live community rankings',   color: '#4ab8a0' },
+  { key: 'rankings',      name: 'Rankings',      price: '$5.99',  sub: 'Live community rankings',   color: '#2a7aaa' },
   { key: 'pro',           name: 'Pro',           price: '$9.99',  sub: 'Unlimited + Draft Copilot', color: C.gold    },
-  { key: 'premium',       name: 'Premium',       price: '$14.99', sub: '2-season AI memory',        color: '#9b6dbd' },
-  { key: 'dynasty_elite', name: 'Dynasty Elite', price: '$19.99', sub: 'College rankings + picks',  color: '#82c494' },
+  { key: 'premium',       name: 'Premium',       price: '$14.99', sub: '2-season AI memory',        color: '#7b5ea7' },
+  { key: 'dynasty_elite', name: 'Dynasty Elite', price: '$19.99', sub: 'College rankings + picks',  color: '#1e8c42' },
 ];
 
-export default function MoreScreen() {
+export default function SettingsTab() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -57,24 +60,20 @@ export default function MoreScreen() {
     if (!newUsername.trim()) return;
     setLoading(true);
     try {
-      const res  = await fetch(`https://api.sleeper.app/v1/user/${newUsername.trim()}`);
-      const u    = await res.json();
+      const res = await fetch(`https://api.sleeper.app/v1/user/${newUsername.trim()}`);
+      const u   = await res.json();
       if (!u?.user_id) { Alert.alert('Not Found', 'Could not find that Sleeper account.'); return; }
       await AsyncStorage.setItem('sleeper_username', newUsername.trim());
-      setUsername(newUsername.trim());
-      setShowAccountModal(false);
-      setNewUsername('');
+      setUsername(newUsername.trim()); setShowAccountModal(false); setNewUsername('');
       Alert.alert('✓ Updated', 'Sleeper account connected.');
     } catch { Alert.alert('Error', 'Could not connect to Sleeper.'); }
     finally { setLoading(false); }
   };
 
-  const handleSignOut = () => {
-    Alert.alert('Sign Out?', '', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: async () => { await signOut(); setUser(null); setCurrentTier('free'); } },
-    ]);
-  };
+  const handleSignOut = () => Alert.alert('Sign Out?', '', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Sign Out', style: 'destructive', onPress: async () => { await signOut(); setUser(null); setCurrentTier('free'); } },
+  ]);
 
   const handleConnectESPN = async () => {
     if (!espnS2.trim() || !espnSWID.trim() || !espnLeagueId.trim()) { Alert.alert('Missing Info', 'Please fill in all ESPN fields.'); return; }
@@ -94,7 +93,7 @@ export default function MoreScreen() {
   const handleConnectYahoo = async () => {
     setLoading(true);
     try {
-      const authUrl = await getYahooAuthURL();
+      const authUrl     = await getYahooAuthURL();
       const codePromise = new Promise<string | null>((resolve) => {
         const timeout = setTimeout(() => { sub.remove(); resolve(null); }, 120000);
         const sub = Linking.addEventListener('url', ({ url }: { url: string }) => {
@@ -118,7 +117,7 @@ export default function MoreScreen() {
 
   const platformSub = [username ? 'Sleeper' : null, espnConnected ? 'ESPN' : null, yahooConnected ? 'Yahoo' : null].filter(Boolean).join(' · ') || 'Tap to connect';
   const promptPct   = (remaining / WEEKLY_LIMIT) * 100;
-  const promptColor = remaining <= 5 ? '#c87878' : remaining <= 10 ? C.amber : C.gold;
+  const promptColor = remaining <= 5 ? '#a83040' : remaining <= 10 ? C.amber : C.blueDeep;
   const tierInfo    = TIER_INFO[currentTier] ?? TIER_INFO.free;
 
   return (
@@ -127,8 +126,9 @@ export default function MoreScreen() {
 
         <Image source={LOGO} style={styles.logo} resizeMode="contain" />
 
-        {/* User card */}
-        <GlassCard style={styles.mb14}>
+        {/* ── User card ── */}
+        <View style={styles.card}>
+          <View style={styles.cardShine} />
           <View style={styles.userRow}>
             <OrbAvatar size={44} />
             <View style={{ flex: 1 }}>
@@ -140,65 +140,80 @@ export default function MoreScreen() {
           <View style={{ marginTop: 14 }}>
             <View style={styles.promptRow}>
               <Text style={styles.promptLbl}>WEEKLY PROMPTS</Text>
-              <Text style={[styles.promptCount, { color: promptColor }]}>{remaining}<Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.xs }}>/{WEEKLY_LIMIT}</Text></Text>
+              <Text style={[styles.promptCount, { color: promptColor }]}>
+                {remaining}<Text style={{ color: C.dim2, fontFamily: F.mono, fontSize: SZ.xs }}>/{WEEKLY_LIMIT}</Text>
+              </Text>
             </View>
-            <View style={styles.promptBg}><View style={[styles.promptFill, { width: `${promptPct}%` as any, backgroundColor: promptColor }]} /></View>
+            <View style={styles.promptBg}>
+              <View style={[styles.promptFill, { width: `${promptPct}%` as any, backgroundColor: promptColor }]} />
+            </View>
             <Text style={styles.promptSub}>Resets Sunday noon · Waivers run Wednesday</Text>
           </View>
-        </GlassCard>
+        </View>
 
-        {/* Auth CTA */}
+        {/* ── Auth CTA ── */}
         {!user && (
           <TouchableOpacity style={styles.authCta} onPress={() => router.push('/auth')}>
             <Text style={styles.authCtaTxt}>🔑  Create account to sync across devices →</Text>
           </TouchableOpacity>
         )}
 
-        {/* Tiers */}
+        {/* ── Tiers ── */}
         <Text style={styles.sectionLbl}>UPGRADE</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }} contentContainerStyle={{ gap: 10, paddingVertical: 2 }}>
           {TIERS.map(tier => {
             const isActive = currentTier === tier.key;
             return (
               <TouchableOpacity key={tier.key} activeOpacity={0.8} onPress={() => !isActive && router.push({ pathname: '/paywall', params: { context: 'upgrade' } })}>
-                <GlassCard style={[styles.tierCard, isActive && { borderColor: tier.color, borderWidth: 1.5 }]} padding={14} radius={16}>
+                <View style={[styles.tierCard, isActive && { borderColor: tier.color, borderWidth: 2 }]}>
+                  <View style={styles.tierCardShine} />
                   <View style={[styles.tierDot, { backgroundColor: tier.color }]} />
                   <Text style={styles.tierName}>{tier.name}</Text>
                   <Text style={[styles.tierPrice, { color: tier.color }]}>{tier.price}</Text>
                   <View style={styles.tierSubWrap}><Text style={styles.tierSub}>{tier.sub}</Text></View>
                   <View style={styles.tierFooter}>
-                    {isActive ? <Badge label="CURRENT" color={tier.color} /> : <View style={[styles.tierBtn, { borderColor: tier.color }]}><Text style={[styles.tierBtnTxt, { color: tier.color }]}>Upgrade</Text></View>}
+                    {isActive
+                      ? <Badge label="CURRENT" color={tier.color} />
+                      : <View style={[styles.tierBtn, { borderColor: tier.color }]}><Text style={[styles.tierBtnTxt, { color: tier.color }]}>Upgrade</Text></View>
+                    }
                   </View>
-                </GlassCard>
+                </View>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
 
-        {/* Settings */}
+        {/* ── Settings rows ── */}
         <Text style={[styles.sectionLbl, { marginTop: 20 }]}>SETTINGS</Text>
-        <SurfaceCard radius={18} padding={0}>
+        <View style={styles.menuCard}>
+          <View style={styles.menuCardShine} />
           {[
-            { icon: '👤', label: 'Account',        sub: `@${username || 'tap to connect Sleeper'}`, onPress: () => setShowAccountModal(true) },
-            { icon: '🏈', label: 'My Platforms',    sub: platformSub,                               onPress: () => setShowPlatformModal(true) },
-            { icon: '🔔', label: 'Notifications',   sub: 'All alerts on',                           onPress: () => {} },
-            { icon: '📊', label: 'Usage',           sub: `${remaining} of ${WEEKLY_LIMIT} prompts remaining`, onPress: () => {} },
-            { icon: '🔒', label: 'Privacy',         sub: 'Data never sold',                         onPress: () => {} },
+            { icon: '👤', label: 'Account',      sub: `@${username || 'tap to connect Sleeper'}`, onPress: () => setShowAccountModal(true) },
+            { icon: '🏈', label: 'My Platforms',  sub: platformSub,                               onPress: () => setShowPlatformModal(true) },
+            { icon: '🔔', label: 'Notifications', sub: 'All alerts on',                           onPress: () => {} },
+            { icon: '📊', label: 'Usage',         sub: `${remaining} of ${WEEKLY_LIMIT} prompts remaining`, onPress: () => {} },
+            { icon: '🔒', label: 'Privacy',       sub: 'Data never sold',                         onPress: () => {} },
           ].map((item, i) => (
             <TouchableOpacity key={item.label} style={[styles.menuRow, i > 0 && styles.menuBorder]} activeOpacity={0.7} onPress={item.onPress}>
               <Text style={styles.menuIcon}>{item.icon}</Text>
-              <View style={{ flex: 1 }}><Text style={styles.menuLabel}>{item.label}</Text><Text style={styles.menuSub}>{item.sub}</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuLabel}>{item.label}</Text>
+                <Text style={styles.menuSub}>{item.sub}</Text>
+              </View>
               <Text style={styles.menuChevron}>›</Text>
             </TouchableOpacity>
           ))}
           {user && (
             <TouchableOpacity style={[styles.menuRow, styles.menuBorder]} activeOpacity={0.7} onPress={handleSignOut}>
               <Text style={styles.menuIcon}>🚪</Text>
-              <View style={{ flex: 1 }}><Text style={[styles.menuLabel, { color: '#c87878' }]}>Sign Out</Text><Text style={styles.menuSub}>{user.email}</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.menuLabel, { color: '#a83040' }]}>Sign Out</Text>
+                <Text style={styles.menuSub}>{user.email}</Text>
+              </View>
               <Text style={styles.menuChevron}>›</Text>
             </TouchableOpacity>
           )}
-        </SurfaceCard>
+        </View>
 
         <View style={styles.footer}>
           <Text style={styles.footerTxt}>AIOmni · getaiomni.com</Text>
@@ -206,63 +221,68 @@ export default function MoreScreen() {
         </View>
       </ScrollView>
 
-      {/* Account Modal */}
+      {/* ── Account Modal ── */}
       <Modal visible={showAccountModal} transparent animationType="slide">
         <View style={styles.overlay}>
-          <GlassCard style={styles.modalCard}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalShine} />
             <Text style={styles.modalTitle}>Sleeper Account</Text>
             <Text style={styles.modalSub}>Enter your Sleeper username to load your leagues.</Text>
-            <TextInput style={styles.input} placeholder="Sleeper username" placeholderTextColor="rgba(255,255,255,0.35)" value={newUsername} onChangeText={setNewUsername} autoCapitalize="none" autoCorrect={false} />
+            <TextInput style={styles.input} placeholder="Sleeper username" placeholderTextColor={C.dim2} value={newUsername} onChangeText={setNewUsername} autoCapitalize="none" autoCorrect={false} />
             <TouchableOpacity style={styles.modalBtn} onPress={handleSaveUsername} disabled={loading}>
               <Text style={styles.modalBtnTxt}>{loading ? 'Connecting...' : 'Connect Sleeper'}</Text>
             </TouchableOpacity>
             {!user && (
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: 'rgba(254,226,41,0.15)', borderColor: C.goldBorder, marginTop: 8 }]} onPress={() => { setShowAccountModal(false); router.push('/auth'); }}>
-                <Text style={[styles.modalBtnTxt, { color: C.gold }]}>Create AIOmni Account →</Text>
+              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: C.goldS, borderColor: C.goldBorder, marginTop: 8 }]} onPress={() => { setShowAccountModal(false); router.push('/auth'); }}>
+                <Text style={[styles.modalBtnTxt, { color: C.blueDeep }]}>Create AIOmni Account →</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity onPress={() => setShowAccountModal(false)} style={{ marginTop: 12, alignItems: 'center' }}>
-              <Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.sm }}>Cancel</Text>
+              <Text style={{ color: C.dim2, fontFamily: F.mono, fontSize: SZ.sm }}>Cancel</Text>
             </TouchableOpacity>
-          </GlassCard>
+          </View>
         </View>
       </Modal>
 
-      {/* Platforms Modal */}
+      {/* ── Platforms Modal ── */}
       <Modal visible={showPlatformModal} transparent animationType="slide">
         <View style={styles.overlay}>
-          <GlassCard style={styles.modalCard}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalShine} />
             <Text style={styles.modalTitle}>My Platforms</Text>
-            <Text style={[styles.platformLabel, { color: '#FF4444' }]}>ESPN</Text>
+
+            <Text style={[styles.platformLabel, { color: '#e03030' }]}>ESPN</Text>
             {espnConnected ? (
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: 'rgba(122,31,46,0.4)', borderColor: '#7a1f2e' }]} onPress={handleDisconnectESPN}>
-                <Text style={[styles.modalBtnTxt, { color: '#ff8888' }]}>Disconnect ESPN</Text>
+              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: 'rgba(168,48,64,0.08)', borderColor: 'rgba(168,48,64,0.25)' }]} onPress={handleDisconnectESPN}>
+                <Text style={[styles.modalBtnTxt, { color: '#a83040' }]}>Disconnect ESPN</Text>
               </TouchableOpacity>
             ) : (
               <>
                 <Text style={styles.platformHint}>{'1. Log into espn.com in Safari\n2. Open DevTools → Application → Cookies\n3. Copy espn_s2 + SWID values\n4. Find League ID in your ESPN league URL'}</Text>
-                <TextInput style={styles.input} placeholder="espn_s2 cookie" placeholderTextColor="rgba(255,255,255,0.35)" value={espnS2} onChangeText={setEspnS2} autoCapitalize="none" multiline />
-                <TextInput style={[styles.input, { marginTop: 8 }]} placeholder="SWID ({XXXX-XXXX})" placeholderTextColor="rgba(255,255,255,0.35)" value={espnSWID} onChangeText={setEspnSWID} autoCapitalize="none" />
-                <TextInput style={[styles.input, { marginTop: 8 }]} placeholder="League ID (numbers only)" placeholderTextColor="rgba(255,255,255,0.35)" value={espnLeagueId} onChangeText={setEspnLeagueId} keyboardType="numeric" />
+                <TextInput style={styles.input} placeholder="espn_s2 cookie" placeholderTextColor={C.dim2} value={espnS2} onChangeText={setEspnS2} autoCapitalize="none" multiline />
+                <TextInput style={[styles.input, { marginTop: 8 }]} placeholder="SWID ({XXXX-XXXX})" placeholderTextColor={C.dim2} value={espnSWID} onChangeText={setEspnSWID} autoCapitalize="none" />
+                <TextInput style={[styles.input, { marginTop: 8 }]} placeholder="League ID (numbers only)" placeholderTextColor={C.dim2} value={espnLeagueId} onChangeText={setEspnLeagueId} keyboardType="numeric" />
                 <TouchableOpacity style={styles.modalBtn} onPress={handleConnectESPN} disabled={loading}>
                   <Text style={styles.modalBtnTxt}>{loading ? 'Connecting...' : 'Connect ESPN'}</Text>
                 </TouchableOpacity>
               </>
             )}
-            <Text style={[styles.platformLabel, { color: '#7a44cc', marginTop: 20 }]}>Yahoo</Text>
+
+            <Text style={[styles.platformLabel, { color: '#6001D2', marginTop: 20 }]}>Yahoo</Text>
             {yahooConnected ? (
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: 'rgba(90,0,170,0.3)', borderColor: '#5a00aa' }]} onPress={handleDisconnectYahoo}>
-                <Text style={[styles.modalBtnTxt, { color: '#bb88ff' }]}>Disconnect Yahoo</Text>
+              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: 'rgba(96,1,210,0.08)', borderColor: 'rgba(96,1,210,0.25)' }]} onPress={handleDisconnectYahoo}>
+                <Text style={[styles.modalBtnTxt, { color: '#6001D2' }]}>Disconnect Yahoo</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={[styles.modalBtn, { borderColor: '#7a44cc', backgroundColor: 'rgba(122,68,204,0.2)' }]} onPress={handleConnectYahoo} disabled={loading}>
-                <Text style={[styles.modalBtnTxt, { color: '#bb88ff' }]}>{loading ? 'Opening Yahoo...' : 'Connect Yahoo'}</Text>
+              <TouchableOpacity style={[styles.modalBtn, { borderColor: 'rgba(96,1,210,0.3)', backgroundColor: 'rgba(96,1,210,0.06)' }]} onPress={handleConnectYahoo} disabled={loading}>
+                <Text style={[styles.modalBtnTxt, { color: '#6001D2' }]}>{loading ? 'Opening Yahoo...' : 'Connect Yahoo'}</Text>
               </TouchableOpacity>
             )}
+
             <TouchableOpacity onPress={() => setShowPlatformModal(false)} style={{ marginTop: 20, alignItems: 'center' }}>
-              <Text style={{ color: C.dim, fontFamily: F.mono, fontSize: SZ.sm }}>Done</Text>
+              <Text style={{ color: C.dim2, fontFamily: F.mono, fontSize: SZ.sm }}>Done</Text>
             </TouchableOpacity>
-          </GlassCard>
+          </View>
         </View>
       </Modal>
     </LinearGradient>
@@ -272,50 +292,83 @@ export default function MoreScreen() {
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: SP[3], paddingBottom: 110 },
   logo:   { width: SCREEN_W, height: 140, marginLeft: -SP[3], marginBottom: 20 },
-  mb14:   { marginBottom: 14 },
 
-  authCta:    { backgroundColor: C.goldS, borderWidth: 1, borderColor: C.goldBorder, borderRadius: 12, padding: 14, alignItems: 'center', marginBottom: 16 },
-  authCtaTxt: { fontFamily: F.mono, color: C.gold, fontSize: SZ.sm, letterSpacing: 0.5 },
+  // Glass card
+  card: {
+    backgroundColor: SURFACE, borderWidth: 1.5, borderColor: BORDER,
+    borderRadius: 18, padding: 16, marginBottom: 14, position: 'relative', overflow: 'hidden',
+    shadowColor: '#3d6aaa', shadowOffset:{width:0,height:4}, shadowOpacity:0.10, shadowRadius:14, elevation:4,
+  },
+  cardShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
 
-  userRow:     { flexDirection: 'row', alignItems: 'center', gap: 13 },
-  userName:    { fontSize: SZ.base, fontWeight: '700', color: C.ink, fontFamily: F.bold, ...textShadow.body },
-  userHandle:  { fontSize: SZ.sm, fontFamily: F.mono, marginTop: 2, ...textShadow.subtle },
-  promptRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  promptLbl:   { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 1.5, ...textShadow.subtle },
-  promptCount: { fontSize: SZ.base, fontWeight: '700', fontFamily: F.bold, ...textShadow.body },
-  promptBg:    { height: 4, backgroundColor: 'rgba(122,31,46,0.4)', borderRadius: 3, overflow: 'hidden' },
-  promptFill:  { height: 4, borderRadius: 3 },
-  promptSub:   { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim, marginTop: 5, opacity: 0.7, ...textShadow.subtle },
-  sectionLbl:  { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 3, marginBottom: 10, ...textShadow.subtle },
+  authCta:    { backgroundColor: C.sageS, borderWidth: 1.5, borderColor: BORDER, borderRadius: 12, padding: 14, alignItems: 'center', marginBottom: 16 },
+  authCtaTxt: { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.sm, letterSpacing: 0.5 },
 
-  tierCard:    { flex: 1, minHeight: 185, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
-  tierDot:     { width: 8, height: 8, borderRadius: 4, marginBottom: 8 },
-  tierName:    { fontSize: SZ.sm, fontWeight: '700', color: C.ink, fontFamily: F.bold, marginBottom: 3, ...textShadow.body },
-  tierPrice:   { fontSize: SZ.xl, fontWeight: '800', fontFamily: F.bold, marginBottom: 4, ...textShadow.body },
-  tierSubWrap: { minHeight: 32 },
-  tierSub:     { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, lineHeight: 14, ...textShadow.subtle },
-  tierFooter:  { marginTop: 'auto' as any, paddingTop: 10 },
-  tierBtn:     { borderWidth: 1, borderRadius: 8, paddingVertical: 5, alignItems: 'center' },
-  tierBtnTxt:  { fontSize: SZ.sm, fontWeight: '700', fontFamily: F.bold, ...textShadow.body },
+  userRow:    { flexDirection: 'row', alignItems: 'center', gap: 13 },
+  userName:   { fontSize: SZ.base, fontFamily: F.bold, color: C.ink },
+  userHandle: { fontSize: SZ.sm, fontFamily: F.mono, marginTop: 2 },
 
-  menuRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, padding: SP[3] },
-  menuBorder:  { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)' },
-  menuIcon:    { fontSize: 18, width: 28, textAlign: 'center' },
-  menuLabel:   { fontSize: SZ.base, fontWeight: '600', color: C.ink, fontFamily: F.bold, ...textShadow.body },
-  menuSub:     { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginTop: 1, ...textShadow.subtle },
-  menuChevron: { color: C.dim2, fontSize: SZ.xl, ...textShadow.body },
+  promptRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  promptLbl:  { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, letterSpacing: 1.5 },
+  promptCount:{ fontSize: SZ.base, fontFamily: F.bold },
+  promptBg:   { height: 4, backgroundColor: 'rgba(88,131,191,0.12)', borderRadius: 3, overflow: 'hidden' },
+  promptFill: { height: 4, borderRadius: 3 },
+  promptSub:  { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim2, marginTop: 5, opacity: 0.8 },
+
+  sectionLbl: { fontSize: SZ.xs, fontFamily: F.bold, color: C.blueDeep, letterSpacing: 3, marginBottom: 10 },
+
+  // Tier cards
+  tierCard: {
+    width: 160, minHeight: 185, backgroundColor: SURFACE,
+    borderWidth: 1.5, borderColor: BORDER, borderRadius: 16,
+    padding: 14, position: 'relative', overflow: 'hidden',
+    shadowColor: '#3d6aaa', shadowOffset:{width:0,height:2}, shadowOpacity:0.08, shadowRadius:8, elevation:3,
+  },
+  tierCardShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  tierDot:       { width: 8, height: 8, borderRadius: 4, marginBottom: 8 },
+  tierName:      { fontSize: SZ.sm, fontFamily: F.bold, color: C.ink, marginBottom: 3 },
+  tierPrice:     { fontSize: SZ.xl, fontFamily: F.bold, marginBottom: 4 },
+  tierSubWrap:   { minHeight: 32 },
+  tierSub:       { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, lineHeight: 14 },
+  tierFooter:    { marginTop: 'auto' as any, paddingTop: 10 },
+  tierBtn:       { borderWidth: 1.5, borderRadius: 8, paddingVertical: 5, alignItems: 'center' },
+  tierBtnTxt:    { fontSize: SZ.sm, fontFamily: F.bold },
+
+  // Menu card
+  menuCard: {
+    backgroundColor: SURFACE, borderWidth: 1.5, borderColor: BORDER,
+    borderRadius: 18, overflow: 'hidden', position: 'relative',
+    shadowColor: '#3d6aaa', shadowOffset:{width:0,height:4}, shadowOpacity:0.10, shadowRadius:14, elevation:4,
+  },
+  menuCardShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  menuRow:    { flexDirection: 'row', alignItems: 'center', gap: 12, padding: SP[3] },
+  menuBorder: { borderTopWidth: 1, borderTopColor: 'rgba(88,131,191,0.12)' },
+  menuIcon:   { fontSize: 18, width: 28, textAlign: 'center' },
+  menuLabel:  { fontSize: SZ.base, fontFamily: F.bold, color: C.ink },
+  menuSub:    { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim2, marginTop: 1 },
+  menuChevron:{ color: C.dim2, fontSize: SZ.xl },
 
   footer:    { alignItems: 'center', marginTop: SP[8], gap: 5 },
-  footerTxt: { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, letterSpacing: 1, ...textShadow.subtle },
-  footerSub: { fontSize: SZ.xs, fontFamily: F.mono, color: 'rgba(255,255,255,0.2)', letterSpacing: 1.5, ...textShadow.subtle },
+  footerTxt: { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim2, letterSpacing: 1 },
+  footerSub: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, letterSpacing: 1.5, opacity: 0.6 },
 
-  overlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', padding: SP[3], paddingBottom: 40 },
-  modalCard:     { padding: 24 },
-  modalTitle:    { fontSize: SZ.xl, fontWeight: '700', color: C.ink, fontFamily: F.bold, marginBottom: 4, ...textShadow.hero },
-  modalSub:      { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim, marginBottom: 14, ...textShadow.subtle },
-  platformLabel: { fontSize: SZ.sm, fontFamily: F.bold, fontWeight: '700', letterSpacing: 1, marginBottom: 8, marginTop: 4, ...textShadow.body },
-  platformHint:  { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 10, lineHeight: 18, ...textShadow.subtle },
-  input:         { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, color: C.ink, fontFamily: F.mono, fontSize: SZ.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
-  modalBtn:      { backgroundColor: C.sageS, borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: C.sageBorder, marginTop: 12 },
-  modalBtnTxt:   { color: C.sage, fontWeight: '700', fontFamily: F.bold, fontSize: SZ.base, ...textShadow.body },
+  // Modals
+  overlay:  { flex: 1, backgroundColor: 'rgba(26,31,46,0.45)', justifyContent: 'flex-end', padding: SP[3], paddingBottom: 40 },
+  modalCard: {
+    backgroundColor: '#ffffff', borderRadius: 20, padding: 24,
+    borderWidth: 1.5, borderColor: BORDER, overflow: 'hidden', position: 'relative',
+    shadowColor: '#3d6aaa', shadowOffset:{width:0,height:-4}, shadowOpacity:0.12, shadowRadius:20, elevation:12,
+  },
+  modalShine:    { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  modalTitle:    { fontSize: SZ.xl, fontFamily: F.bold, color: C.ink, marginBottom: 4 },
+  modalSub:      { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim2, marginBottom: 14 },
+  platformLabel: { fontSize: SZ.sm, fontFamily: F.bold, letterSpacing: 1, marginBottom: 8, marginTop: 4 },
+  platformHint:  { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, marginBottom: 10, lineHeight: 18, backgroundColor: C.sageS, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: BORDER },
+  input: {
+    backgroundColor: 'rgba(88,131,191,0.06)', borderRadius: 10, padding: 14,
+    color: C.ink, fontFamily: F.mono, fontSize: SZ.sm,
+    borderWidth: 1.5, borderColor: BORDER,
+  },
+  modalBtn:    { backgroundColor: C.sageS, borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1.5, borderColor: BORDER, marginTop: 12 },
+  modalBtnTxt: { color: C.blueDeep, fontFamily: F.bold, fontSize: SZ.base },
 });

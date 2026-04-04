@@ -1,52 +1,57 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { C, F, R, SZ } from '../constants/tokens';
+
+const SURFACE  = 'rgba(255,255,255,0.90)';
+const BORDER   = 'rgba(88,131,191,0.32)';
+const BEVEL_HI = 'rgba(255,255,255,0.95)';
 
 const UPSELL_MESSAGES = [
   {
-    trigger: 'coach',
-    emoji: '⚡',
-    headline: 'You\'re 3 prompts from your daily limit',
-    body: 'Pro users get unlimited AI Coach access — no daily caps, ever.',
-    cta: 'Upgrade to Pro — $9.99/mo',
-    tier: 'Pro',
+    trigger:  'coach',
+    emoji:    '⚡',
+    headline: "You're 3 prompts from your limit",
+    body:     'Pro users get unlimited AI Coach — no weekly caps, ever.',
+    cta:      'Upgrade to Pro — $9.99/mo',
+    color:    C.gold,
   },
   {
-    trigger: 'trade',
-    emoji: '📊',
+    trigger:  'trade',
+    emoji:    '📊',
     headline: 'Your trade grade is ready',
-    body: 'Pro unlocks full trade history, grade tracking, and opponent analysis every week.',
-    cta: 'Upgrade to Pro — $9.99/mo',
-    tier: 'Pro',
+    body:     'Pro unlocks full trade history, grade tracking, and opponent analysis every week.',
+    cta:      'Upgrade to Pro — $9.99/mo',
+    color:    C.gold,
   },
   {
-    trigger: 'dynasty',
-    emoji: '👑',
+    trigger:  'dynasty',
+    emoji:    '👑',
     headline: 'Dynasty trades need Dynasty intelligence',
-    body: 'Dynasty Elite grades future picks using live college rankings and rookie upside scores.',
-    cta: 'Upgrade to Dynasty Elite — $19.99/mo',
-    tier: 'Dynasty Elite',
+    body:     'Dynasty Elite grades future picks using live college rankings and rookie upside scores.',
+    cta:      'Upgrade to Dynasty Elite — $19.99/mo',
+    color:    '#1e8c42',
   },
   {
-    trigger: 'trash',
-    emoji: '🔥',
+    trigger:  'trash',
+    emoji:    '🔥',
     headline: 'Your league chat is missing AIOmni',
-    body: 'Premium users get Adaptive Trash Talk — AI that learns every manager\'s voice and roasts them personally.',
-    cta: 'Upgrade to Premium — $14.99/mo',
-    tier: 'Premium',
+    body:     "Premium users get Adaptive Trash Talk — AI that learns every manager's voice.",
+    cta:      'Upgrade to Premium — $14.99/mo',
+    color:    '#7b5ea7',
   },
   {
-    trigger: 'general',
-    emoji: '🏆',
-    headline: 'You\'re playing with one hand tied',
-    body: 'Rankings tier users see community rankings from 500+ active players — updated weekly.',
-    cta: 'Upgrade to Rankings — $5.99/mo',
-    tier: 'Rankings',
+    trigger:  'general',
+    emoji:    '🏆',
+    headline: "You're playing with one hand tied",
+    body:     'Rankings tier gets community rankings from 500+ active players — updated weekly.',
+    cta:      'Upgrade to Rankings — $5.99/mo',
+    color:    '#2a7aaa',
   },
 ];
 
-const COOLDOWN_MS = 48 * 60 * 60 * 1000; // 48 hours
+const COOLDOWN_MS    = 48 * 60 * 60 * 1000;
 const MAX_DISMISSALS = 3;
 
 type Props = {
@@ -54,66 +59,54 @@ type Props = {
 };
 
 export default function UpsellBanner({ trigger = 'general' }: Props) {
-  const [visible, setVisible] = useState(false);
+  const [visible,   setVisible]   = useState(false);
   const [showTrial, setShowTrial] = useState(false);
-  const [message, setMessage] = useState(UPSELL_MESSAGES[4]);
+  const [message,   setMessage]   = useState(UPSELL_MESSAGES[4]);
   const router = useRouter();
 
-  useEffect(() => {
-    checkShouldShow();
-  }, []);
+  useEffect(() => { checkShouldShow(); }, []);
 
   const checkShouldShow = async () => {
     try {
-      // Check session flag — only 1 per session
       const shownThisSession = await AsyncStorage.getItem('upsell_session_shown');
       if (shownThisSession === 'true') return;
 
-      // Check 48hr cooldown
       const lastShown = await AsyncStorage.getItem('upsell_last_shown');
-      if (lastShown) {
-        const elapsed = Date.now() - parseInt(lastShown);
-        if (elapsed < COOLDOWN_MS) return;
-      }
+      if (lastShown && Date.now() - parseInt(lastShown) < COOLDOWN_MS) return;
 
-      // Check dismissal count — after 3, show trial offer instead
       const dismissals = parseInt(await AsyncStorage.getItem('upsell_dismissals') || '0');
-      if (dismissals >= MAX_DISMISSALS) {
-        setShowTrial(true);
-      }
+      if (dismissals >= MAX_DISMISSALS) setShowTrial(true);
 
-      // Find matching message for trigger
       const match = UPSELL_MESSAGES.find(m => m.trigger === trigger) || UPSELL_MESSAGES[4];
       setMessage(match);
       setVisible(true);
 
-      // Mark session
       await AsyncStorage.setItem('upsell_session_shown', 'true');
       await AsyncStorage.setItem('upsell_last_shown', Date.now().toString());
-    } catch (err) {
-      // Fail silently — never break the app for an upsell
-    }
+    } catch {}
   };
 
   const handleDismiss = async () => {
     try {
-      const dismissals = parseInt(await AsyncStorage.getItem('upsell_dismissals') || '0');
-      await AsyncStorage.setItem('upsell_dismissals', (dismissals + 1).toString());
+      const d = parseInt(await AsyncStorage.getItem('upsell_dismissals') || '0');
+      await AsyncStorage.setItem('upsell_dismissals', (d + 1).toString());
     } catch {}
     setVisible(false);
   };
 
-  const handleUpgrade = () => {
-    setVisible(false);
-    router.push('/paywall');
-  };
+  const handleUpgrade = () => { setVisible(false); router.push('/paywall'); };
 
   if (!visible) return null;
 
   return (
     <View style={styles.container}>
-      <View style={styles.banner}>
-        <TouchableOpacity style={styles.dismissBtn} onPress={handleDismiss}>
+      <View style={[styles.banner, { borderColor: message.color + '55' }]}>
+        {/* bevel shine */}
+        <View style={styles.shine} />
+        {/* colour accent bar along top */}
+        <View style={[styles.accentBar, { backgroundColor: message.color }]} />
+
+        <TouchableOpacity style={styles.dismissBtn} onPress={handleDismiss} hitSlop={8}>
           <Text style={styles.dismissX}>✕</Text>
         </TouchableOpacity>
 
@@ -123,14 +116,18 @@ export default function UpsellBanner({ trigger = 'general' }: Props) {
 
         {showTrial ? (
           <>
-            <TouchableOpacity style={styles.trialBtn} onPress={handleUpgrade}>
-              <Text style={styles.trialBtnText}>🎁 Start 7-Day Free Trial →</Text>
+            <TouchableOpacity style={[styles.ctaBtn, { backgroundColor: message.color }]} onPress={handleUpgrade}>
+              <Text style={[styles.ctaBtnText, { color: message.trigger === 'coach' || message.trigger === 'trade' ? C.ink : '#ffffff' }]}>
+                🎁 Start 7-Day Free Trial →
+              </Text>
             </TouchableOpacity>
             <Text style={styles.trialNote}>No charge for 7 days. Cancel anytime.</Text>
           </>
         ) : (
-          <TouchableOpacity style={styles.ctaBtn} onPress={handleUpgrade}>
-            <Text style={styles.ctaBtnText}>{message.cta} →</Text>
+          <TouchableOpacity style={[styles.ctaBtn, { backgroundColor: message.color }]} onPress={handleUpgrade}>
+            <Text style={[styles.ctaBtnText, { color: message.trigger === 'coach' || message.trigger === 'trade' ? C.ink : '#ffffff' }]}>
+              {message.cta} →
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -139,72 +136,29 @@ export default function UpsellBanner({ trigger = 'general' }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
+  container: { paddingHorizontal: 16, marginBottom: 12 },
   banner: {
-    backgroundColor: '#1a1400',
-    borderRadius: 14,
+    backgroundColor: SURFACE,
+    borderRadius: R.md,
     padding: 18,
-    borderWidth: 1,
-    borderColor: '#b8891a',
+    paddingTop: 22,
+    borderWidth: 1.5,
     position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#3d6aaa',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 14,
+    elevation: 4,
   },
-  dismissBtn: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    zIndex: 10,
-    padding: 4,
-  },
-  dismissX: {
-    color: '#555',
-    fontSize: 16,
-  },
-  emoji: {
-    fontSize: 28,
-    marginBottom: 8,
-  },
-  headline: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 15,
-    marginBottom: 6,
-    paddingRight: 24,
-  },
-  body: {
-    color: '#888',
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: 14,
-  },
-  ctaBtn: {
-    backgroundColor: '#b8891a',
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
-  },
-  ctaBtnText: {
-    color: '#000',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  trialBtn: {
-    backgroundColor: '#b8891a',
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  trialBtnText: {
-    color: '#000',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  trialNote: {
-    color: '#555',
-    fontSize: 11,
-    textAlign: 'center',
-  },
+  shine:     { position: 'absolute', top: 0, left: '8%', right: '8%', height: 1.5, backgroundColor: BEVEL_HI, zIndex: 6 },
+  accentBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
+  dismissBtn:{ position: 'absolute', top: 12, right: 12, zIndex: 10, padding: 4 },
+  dismissX:  { color: C.dim2, fontSize: 14, fontFamily: F.mono },
+  emoji:     { fontSize: 26, marginBottom: 8, marginTop: 4 },
+  headline:  { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg, marginBottom: 6, paddingRight: 28, letterSpacing: 0.5 },
+  body:      { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm, lineHeight: 20, marginBottom: 14 },
+  ctaBtn:    { borderRadius: R.sm, padding: 13, alignItems: 'center' },
+  ctaBtnText:{ fontFamily: F.bold, fontSize: SZ.base, letterSpacing: 1 },
+  trialNote: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, textAlign: 'center', marginTop: 6 },
 });

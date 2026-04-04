@@ -1,12 +1,14 @@
-import { askAI } from "../../services/ai";
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { askAI } from "../../services/ai";
 import { PositionPill } from '../components/Atoms';
-import { GlassCard } from '../components/GlassCard';
 import { C, F, SP, SZ } from '../constants/tokens';
 
+const SURFACE  = 'rgba(255,255,255,0.90)';
+const BORDER   = 'rgba(88,131,191,0.32)';
+const BEVEL_HI = 'rgba(255,255,255,0.95)';
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K'];
 
 export default function WaiverScreen() {
@@ -50,36 +52,31 @@ export default function WaiverScreen() {
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
       <View style={[styles.wrap, { paddingTop: insets.top + 12 }]}>
 
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Waiver Wire</Text>
           <Text style={styles.subtitle}>AI-POWERED PICKUP INTELLIGENCE</Text>
         </View>
 
-        {/* Position filters */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={{ paddingHorizontal: SP[3], gap: 8 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={{ paddingHorizontal:SP[3], gap:8 }}>
           {POSITIONS.map(pos => (
-            <TouchableOpacity
-              key={pos}
-              style={[styles.filterBtn, selectedPosition === pos && { borderColor: C.gold, backgroundColor: C.goldS }]}
-              onPress={() => setSelectedPosition(pos)}
-            >
-              <Text style={[styles.filterText, selectedPosition === pos && { color: C.gold }]}>{pos}</Text>
+            <TouchableOpacity key={pos} style={[styles.filterBtn, selectedPosition === pos && { borderColor:C.blueDeep, backgroundColor:C.sageS }]} onPress={() => setSelectedPosition(pos)}>
+              <Text style={[styles.filterText, selectedPosition === pos && { color:C.blueDeep }]}>{pos}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
         {loading ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator color={C.gold} size="large" />
+            <ActivityIndicator color={C.blueDeep} size="large" />
             <Text style={styles.loadingText}>LOADING AVAILABLE PLAYERS</Text>
           </View>
         ) : (
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: SP[3], paddingBottom: 40 }}>
+          <ScrollView style={{ flex:1 }} contentContainerStyle={{ paddingHorizontal:SP[3], paddingBottom:40 }}>
             {filteredPlayers.map((player, index) => (
-              <TouchableOpacity key={`${player.player_id || index}`} activeOpacity={0.8} onPress={() => handleAdvice(player)}>
-                <GlassCard style={styles.playerCard} padding={12} radius={14}>
-                  <Text style={styles.rankText}>#{index + 1}</Text>
+              <TouchableOpacity key={`${player.player_id||index}`} activeOpacity={0.8} onPress={() => handleAdvice(player)}>
+                <View style={styles.playerCard}>
+                  <View style={styles.playerCardShine} />
+                  <Text style={styles.rankText}>#{index+1}</Text>
                   <PositionPill pos={player.position} />
                   <View style={styles.playerInfo}>
                     <Text style={styles.playerName}>{player.first_name} {player.last_name}</Text>
@@ -88,19 +85,19 @@ export default function WaiverScreen() {
                   <View style={styles.aiHint}>
                     <Text style={styles.aiHintText}>AI</Text>
                   </View>
-                </GlassCard>
+                </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
         )}
       </View>
 
-      {/* Player modal */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
-          <GlassCard style={styles.modalCard} padding={24} radius={20}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalShine} />
             <View style={styles.modalHeader}>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex:1 }}>
                 <Text style={styles.modalTitle}>{selectedPlayer?.first_name} {selectedPlayer?.last_name}</Text>
                 <PositionPill pos={selectedPlayer?.position ?? 'WR'} />
               </View>
@@ -109,15 +106,16 @@ export default function WaiverScreen() {
               </TouchableOpacity>
             </View>
             {adviceLoading
-              ? <View style={{ alignItems: 'center', padding: 24, gap: 14 }}>
-                  <ActivityIndicator color={C.gold} size="large" />
-                  <Text style={{ fontFamily: F.mono, color: C.gold, fontSize: SZ.xs, letterSpacing: 2 }}>ANALYZING...</Text>
+              ? <View style={{ alignItems:'center', padding:24, gap:14 }}>
+                  <ActivityIndicator color={C.blueDeep} size="large" />
+                  <Text style={{ fontFamily:F.mono, color:C.blueDeep, fontSize:SZ.xs, letterSpacing:2 }}>ANALYZING...</Text>
                 </View>
-              : <Text style={styles.adviceText}>{advice}</Text>}
+              : <Text style={styles.adviceText}>{advice}</Text>
+            }
             <TouchableOpacity style={styles.gotItBtn} onPress={() => setModalVisible(false)}>
               <Text style={styles.gotItText}>GOT IT</Text>
             </TouchableOpacity>
-          </GlassCard>
+          </View>
         </View>
       </Modal>
     </LinearGradient>
@@ -125,29 +123,45 @@ export default function WaiverScreen() {
 }
 
 const styles = StyleSheet.create({
-  wrap:         { flex: 1 },
-  header:       { paddingHorizontal: SP[3], paddingBottom: 12, marginBottom: 4 },
-  title:        { fontSize: SZ['2xl'], fontWeight: '700', color: C.ink, fontFamily: F.bold },
-  subtitle:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim, letterSpacing: 2, marginTop: 3 },
-  filterRow:    { flexGrow: 0, marginBottom: 12 },
-  filterBtn:    { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', backgroundColor: 'rgba(255,255,255,0.08)' },
-  filterText:   { fontFamily: F.mono, color: C.dim, fontSize: SZ.xs, letterSpacing: 1 },
-  loadingBox:   { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  loadingText:  { fontFamily: F.mono, color: C.gold, fontSize: SZ.xs, letterSpacing: 3, opacity: 0.6 },
-  playerCard:   { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  rankText:     { fontFamily: F.mono, color: C.dim, fontSize: SZ.xs - 1, width: 28 },
-  playerInfo:   { flex: 1 },
-  playerName:   { fontFamily: F.semibold, color: C.ink, fontSize: SZ.base, marginBottom: 2 },
-  playerTeam:   { fontFamily: F.mono, color: C.dim, fontSize: SZ.xs, letterSpacing: 0.5 },
-  aiHint:       { width: 28, height: 28, borderRadius: 8, borderWidth: 1, borderColor: C.goldBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: C.goldS },
-  aiHintText:   { fontFamily: F.mono, color: C.gold, fontSize: SZ.xs - 1, letterSpacing: 1 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', padding: SP[3], paddingBottom: 40 },
-  modalCard:    {},
-  modalHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  modalTitle:   { fontFamily: F.bold, color: C.ink, fontSize: SZ.xl, marginBottom: 8 },
-  closeBtn:     { width: 32, height: 32, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-  closeBtnText: { color: C.dim, fontSize: SZ.base },
-  adviceText:   { fontFamily: F.outfit, color: C.ink, fontSize: SZ.md, lineHeight: 24, marginBottom: 20 },
-  gotItBtn:     { backgroundColor: C.gold, borderRadius: 12, padding: 14, alignItems: 'center' },
-  gotItText:    { fontFamily: F.bold, fontSize: SZ.base, color: '#1a1208', letterSpacing: 2 },
+  wrap:        { flex:1 },
+  header:      { paddingHorizontal:SP[3], paddingBottom:12, marginBottom:4 },
+  title:       { fontSize:SZ['2xl'], fontFamily:F.bold, color:C.ink },
+  subtitle:    { fontSize:SZ.xs-1, fontFamily:F.mono, color:C.dim2, letterSpacing:2, marginTop:3 },
+
+  filterRow:   { flexGrow:0, marginBottom:12 },
+  filterBtn:   { paddingHorizontal:14, paddingVertical:7, borderRadius:20, borderWidth:1.5, borderColor:BORDER, backgroundColor:SURFACE },
+  filterText:  { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs, letterSpacing:1 },
+
+  loadingBox:  { flex:1, alignItems:'center', justifyContent:'center', gap:14 },
+  loadingText: { fontFamily:F.mono, color:C.blueDeep, fontSize:SZ.xs, letterSpacing:3, opacity:0.7 },
+
+  playerCard: {
+    flexDirection:'row', alignItems:'center', gap:10, marginBottom:8,
+    backgroundColor:SURFACE, borderWidth:1.5, borderColor:BORDER,
+    borderRadius:14, padding:12, position:'relative', overflow:'hidden',
+    shadowColor:'#3d6aaa', shadowOffset:{width:0,height:2}, shadowOpacity:0.08, shadowRadius:8, elevation:3,
+  },
+  playerCardShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+
+  rankText:    { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs-1, width:28 },
+  playerInfo:  { flex:1 },
+  playerName:  { fontFamily:F.bold, color:C.ink, fontSize:SZ.base, marginBottom:2 },
+  playerTeam:  { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs, letterSpacing:0.5 },
+  aiHint:      { width:28, height:28, borderRadius:8, borderWidth:1.5, borderColor:C.goldBorder, alignItems:'center', justifyContent:'center', backgroundColor:C.goldS },
+  aiHintText:  { fontFamily:F.mono, color:C.blueDeep, fontSize:SZ.xs-1, letterSpacing:1 },
+
+  modalOverlay: { flex:1, backgroundColor:'rgba(26,31,46,0.5)', justifyContent:'flex-end', padding:SP[3], paddingBottom:40 },
+  modalCard: {
+    backgroundColor:'#ffffff', borderRadius:20, padding:24,
+    borderWidth:1.5, borderColor:BORDER, position:'relative', overflow:'hidden',
+    shadowColor:'#3d6aaa', shadowOffset:{width:0,height:-4}, shadowOpacity:0.12, shadowRadius:20, elevation:12,
+  },
+  modalShine:  { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  modalHeader: { flexDirection:'row', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 },
+  modalTitle:  { fontFamily:F.bold, color:C.ink, fontSize:SZ.xl, marginBottom:8 },
+  closeBtn:    { width:32, height:32, borderRadius:10, borderWidth:1.5, borderColor:BORDER, alignItems:'center', justifyContent:'center', backgroundColor:C.sageS },
+  closeBtnText:{ color:C.blueDeep, fontSize:SZ.base, fontFamily:F.bold },
+  adviceText:  { fontFamily:F.mono, color:C.ink, fontSize:SZ.md, lineHeight:24, marginBottom:20 },
+  gotItBtn:    { backgroundColor:C.gold, borderRadius:12, padding:14, alignItems:'center' },
+  gotItText:   { fontFamily:F.bold, fontSize:SZ.base, color:C.ink, letterSpacing:2 },
 });

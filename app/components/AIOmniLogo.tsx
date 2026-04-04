@@ -2,22 +2,22 @@ import { Image, StyleSheet, View } from 'react-native';
 
 type Props = {
   size?: 'small' | 'medium' | 'large';
+  width?: number;
+  height?: number;
 };
 
-export default function AIOmniLogo({ size = 'medium' }: Props) {
-  const sizes = {
-    small:  { width: 60,  height: 60  },
-    medium: { width: 100, height: 100 },
-    large:  { width: 160, height: 160 },
+export default function AIOmniLogo({ size = 'medium', width, height }: Props) {
+  const preset = {
+    small:  { width: 60,  height: 30  },
+    medium: { width: 140, height: 70  },
+    large:  { width: 240, height: 120 },
   };
-
-  const s = sizes[size];
-
+  const s = { width: width ?? preset[size].width, height: height ?? preset[size].height };
   return (
     <View style={styles.container}>
       <Image
         source={require('../../assets/images/logo.png')}
-        style={{ width: s.width, height: s.height }}
+        style={s}
         resizeMode="contain"
       />
     </View>
@@ -25,8 +25,5 @@ export default function AIOmniLogo({ size = 'medium' }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  container: { alignItems: 'center', justifyContent: 'center' },
 });

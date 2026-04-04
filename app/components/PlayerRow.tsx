@@ -4,17 +4,17 @@ import { C, F, SZ, SP, R } from '../constants/tokens';
 import { PositionPill, InjuryTag, ProgressBar } from './Atoms';
 
 export interface Player {
-  slot:      string;
-  pos:       string;
-  name:      string;
-  team:      string;
-  pts?:      number;
-  proj?:     number;
-  injured?:  boolean;
-  injTag?:   string;
-  owned?:    string;
-  trend?:    '↑' | '↓' | '→';
-  lastWk?:   number;
+  slot:     string;
+  pos:      string;
+  name:     string;
+  team:     string;
+  pts?:     number;
+  proj?:    number;
+  injured?: boolean;
+  injTag?:  string;
+  owned?:   string;
+  trend?:   '↑' | '↓' | '→';
+  lastWk?:  number;
 }
 
 interface Props {
@@ -33,26 +33,27 @@ export const PlayerRow: React.FC<Props> = ({
   showAdd = false, showOwned = false,
   dimmed = false, onAdd, onPress,
 }) => {
-  const { slot, pos, name, team, pts = 0, proj = 0, injured, injTag, owned, trend, lastWk } = player;
-  const beating = showScore && pts > proj && proj > 0;
-  const scoreColor = beating ? C.sage : C.ink;
+  const { slot, pos, name, team, pts = 0, proj = 0,
+          injured, injTag, owned, trend, lastWk } = player;
 
-  const trendColor = trend === '↑' ? C.sage : trend === '↓' ? C.rose : C.dim;
+  const beating    = showScore && pts > proj && proj > 0;
+  const scoreColor = beating ? C.mint : C.blueDeep;
+  const trendColor = trend === '↑' ? C.mint : trend === '↓' ? C.rose : C.dim2;
 
   return (
     <TouchableOpacity
-      style={[styles.row, dimmed && { opacity: 0.58 }]}
+      style={[styles.row, dimmed && { opacity: 0.5 }]}
       onPress={onPress}
       disabled={!onPress}
       activeOpacity={0.7}
     >
-      {/* Slot */}
+      {/* Slot label */}
       <Text style={styles.slot}>{slot}</Text>
 
-      {/* Position */}
+      {/* Position pill */}
       <PositionPill pos={pos} />
 
-      {/* Info */}
+      {/* Player info */}
       <View style={styles.info}>
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>{name}</Text>
@@ -61,15 +62,17 @@ export const PlayerRow: React.FC<Props> = ({
         <View style={styles.subRow}>
           <Text style={styles.team}>{team}</Text>
           {showOwned && owned && (
-            <Text style={styles.owned}> · {owned}
+            <Text style={styles.owned}>
+              {' · '}{owned}
               {trend && <Text style={{ color: trendColor }}> {trend}</Text>}
             </Text>
           )}
         </View>
         {showBar && proj > 0 && (
           <ProgressBar
-            value={pts} max={proj}
-            color={beating ? C.sage : 'rgba(255,255,255,0.2)'}
+            value={pts}
+            max={proj}
+            color={beating ? C.mint : 'rgba(88,131,191,0.25)'}
             height={3}
           />
         )}
@@ -83,7 +86,7 @@ export const PlayerRow: React.FC<Props> = ({
         </View>
       )}
 
-      {/* Last week (waivers) */}
+      {/* Last week (waivers view) */}
       {!showScore && lastWk !== undefined && (
         <View style={styles.scoreCol}>
           <Text style={styles.pts}>{lastWk}</Text>
@@ -102,17 +105,27 @@ export const PlayerRow: React.FC<Props> = ({
 };
 
 const styles = StyleSheet.create({
-  row:      { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: SP[3], paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)' },
-  slot:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim, width: 24, flexShrink: 0 },
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: SP[3], paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(88,131,191,0.12)',
+  },
+  slot:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim2, width: 24, flexShrink: 0 },
   info:     { flex: 1, minWidth: 0, gap: 2 },
   nameRow:  { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  name:     { fontSize: SZ.base - 1, fontWeight: '600', color: C.ink, fontFamily: F.outfit, flex: 1 },
+  name:     { fontSize: SZ.base - 1, fontFamily: F.semibold, color: C.ink, flex: 1 },
   subRow:   { flexDirection: 'row', alignItems: 'center' },
-  team:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim },
-  owned:    { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim },
-  scoreCol: { alignItems: 'flex-end', width: 38, flexShrink: 0 },
-  pts:      { fontSize: SZ.lg, fontWeight: '700', color: C.ink, lineHeight: 18, fontFamily: F.outfit },
-  proj:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim, marginTop: 1 },
-  addBtn:   { backgroundColor: C.sageS, borderWidth: 1, borderColor: C.sageBorder, borderRadius: R.sm - 2, paddingHorizontal: 9, paddingVertical: 5 },
-  addTxt:   { fontSize: SZ.sm, fontWeight: '700', color: C.sage, fontFamily: F.monoBold },
+  team:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim2 },
+  owned:    { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim2 },
+  scoreCol: { alignItems: 'flex-end', width: 40, flexShrink: 0 },
+  pts:      { fontSize: SZ.lg, fontFamily: F.bold, color: C.ink, lineHeight: 18 },
+  proj:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim2, marginTop: 1 },
+  addBtn: {
+    backgroundColor: C.sageS,
+    borderWidth: 1.5, borderColor: C.sageBorder,
+    borderRadius: R.sm - 2,
+    paddingHorizontal: 9, paddingVertical: 5,
+  },
+  addTxt: { fontSize: SZ.sm, fontFamily: F.mono, color: C.blueDeep, fontWeight: '700' },
 });
