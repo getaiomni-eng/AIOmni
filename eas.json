@@ -25,16 +25,21 @@
       }
     },
     "preview": {
-      "distribution": "internal",
+      "distribution": "store",
       "env": {
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
-      }
+      },
+      "ios": {
+        "buildConfiguration": "Release"
+      },
+      "autoIncrement": true
     },
     "production": {
       "distribution": "store",
       "ios": {
         "buildConfiguration": "Release"
-      }
+      },
+      "autoIncrement": true
     }
   },
   "submit": {
