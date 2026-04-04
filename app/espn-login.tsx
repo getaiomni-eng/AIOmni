@@ -50,8 +50,8 @@ export function ESPNLoginScreen({ navigation }: any) {
         headers: { 'Content-Type': 'application/json', Cookie: `espn_s2=${creds.espnS2}; SWID=${creds.swid}` },
       });
 
-      let leagueIds: number[]   = [];
-      let leagueNames: string[] = [];
+      let leagueIds:   number[]   = [];
+      let leagueNames: string[]   = [];
 
       if (res.ok) {
         const leaguesData = await res.json();
@@ -74,7 +74,7 @@ export function ESPNLoginScreen({ navigation }: any) {
         setStatus(`Connected! Found ${leagueIds.length} league${leagueIds.length !== 1 ? 's' : ''}.`);
         setTimeout(() => {
           Alert.alert(
-            'ESPN Connected!',
+            '✓ ESPN Connected',
             `Found ${leagueIds.length} league${leagueIds.length !== 1 ? 's' : ''}. Your ESPN leagues will now appear on the Home tab.`,
             [{ text: 'Done', onPress: () => navigation.goBack() }]
           );
@@ -85,7 +85,7 @@ export function ESPNLoginScreen({ navigation }: any) {
         setTimeout(() => {
           Alert.alert(
             'ESPN Logged In',
-            "Your ESPN account is connected. If your leagues don't appear automatically, you can add your League ID in Settings.",
+            "Your ESPN account is connected. If your leagues don't appear automatically, add your League ID in Settings.",
             [{ text: 'Done', onPress: () => navigation.goBack() }]
           );
         }, 500);
@@ -99,17 +99,20 @@ export function ESPNLoginScreen({ navigation }: any) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>← Cancel</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Connect ESPN</Text>
+        <View style={{ width: 60 }} />
       </View>
 
-      <View style={styles.statusBar}>
-        {connecting && !connected && <ActivityIndicator color={C.gold} size="small" style={{ marginRight: 8 }} />}
-        {connected && <Text style={{ marginRight: 8 }}>✅</Text>}
-        <Text style={[styles.statusText, connected && { color: C.sage }]}>{status}</Text>
+      {/* Status bar */}
+      <View style={[styles.statusBar, connected && { backgroundColor: 'rgba(30,140,66,0.08)', borderBottomColor: 'rgba(30,140,66,0.2)' }]}>
+        {connecting && !connected && <ActivityIndicator color={C.blueDeep} size="small" style={{ marginRight: 8 }} />}
+        {connected && <Text style={{ marginRight: 8 }}>✓</Text>}
+        <Text style={[styles.statusText, connected && { color: C.mint }]}>{status}</Text>
       </View>
 
       <WebView
@@ -129,12 +132,22 @@ export function ESPNLoginScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container:  { flex: 1, backgroundColor: C.bgBot },
-  header:     { paddingHorizontal: SP[3], paddingVertical: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
-  backBtn:    { marginRight: 16 },
-  backText:   { fontFamily: F.outfit, color: C.gold, fontSize: SZ.base },
-  title:      { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg },
-  statusBar:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SP[3], paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
-  statusText: { fontFamily: F.mono, color: C.dim, fontSize: SZ.sm, flex: 1 },
-  webview:    { flex: 1 },
+  container: { flex:1, backgroundColor:'#ffffff' },
+  header:    {
+    paddingHorizontal:SP[3], paddingVertical:12,
+    flexDirection:'row', alignItems:'center', justifyContent:'space-between',
+    borderBottomWidth:1.5, borderBottomColor:'rgba(88,131,191,0.18)',
+    backgroundColor:'rgba(255,255,237,0.95)',
+  },
+  backBtn:    {},
+  backText:   { fontFamily:F.mono, color:C.blueDeep, fontSize:SZ.base },
+  title:      { fontFamily:F.bold, color:C.ink, fontSize:SZ.lg },
+  statusBar:  {
+    flexDirection:'row', alignItems:'center',
+    paddingHorizontal:SP[3], paddingVertical:10,
+    backgroundColor:'rgba(88,131,191,0.06)',
+    borderBottomWidth:1, borderBottomColor:'rgba(88,131,191,0.14)',
+  },
+  statusText: { fontFamily:F.mono, color:C.dim2, fontSize:SZ.sm, flex:1 },
+  webview:    { flex:1 },
 });
