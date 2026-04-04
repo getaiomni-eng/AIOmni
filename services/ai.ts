@@ -1,22 +1,35 @@
-const API_KEY = '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';
-const API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL   = 'claude-sonnet-4-20250514';
-const VERSION = '2023-06-01';
+import { supabase } from './supabase';
+
+const PROXY_URL = 'https://khoruzvsprxyocisuhet.supabase.co/functions/v1/claude-proxy';
 
 export async function askAI(prompt: string, maxTokens = 200): Promise<string> {
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
+  try {
+    // Get auth token if user is signed in
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'x-api-key': API_KEY,
-      'anthropic-version': VERSION,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  const data = await res.json();
-  return data?.content?.[0]?.text ?? '';
+      'Authorization': `Bearer ${session?.access_token ?? ''}`,
+    };
+
+    const res = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model:      'claude-sonnet-4-20250514',
+        max_tokens: maxTokens,
+        messages:   [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (res.status === 429) {
+      const data = await res.json();
+      throw new Error(`prompt_limit_reached:${data.tier}`);
+    }
+
+    const data = await res.json();
+    return data?.content?.[0]?.text ?? '';
+  } catch (e: any) {
+    console.error('askAI error:', e);
+    throw e;
+  }
 }
