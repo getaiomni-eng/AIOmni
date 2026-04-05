@@ -36,7 +36,7 @@ const TIERS = [
     color: C.gold, badge: 'MOST POPULAR',
     monthlyId: 'pro_monthly', yearlyId: 'pro_yearly',
     features: [
-      'Unlimited AI Coach prompts',
+      '75 AI Coach prompts per week',
       'Full league settings analysis',
       'Draft Copilot — real-time pick advice',
       'Trade Analyzer — A to F grades',
@@ -52,6 +52,7 @@ const TIERS = [
     monthlyId: 'premium_monthly', yearlyId: 'premium_yearly',
     features: [
       'Everything in Pro',
+      '125 AI Coach prompts per week',
       '2 full seasons of AI memory',
       'Adaptive Trash Talk engine',
       'Opponent deep-dive weekly',

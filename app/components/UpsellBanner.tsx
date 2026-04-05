@@ -13,7 +13,7 @@ const UPSELL_MESSAGES = [
     trigger:  'coach',
     emoji:    '⚡',
     headline: "You're 3 prompts from your limit",
-    body:     'Pro users get unlimited AI Coach — no weekly caps, ever.',
+    body:     'Pro users get 75 AI Coach prompts per week — 3x more than free.',
     cta:      'Upgrade to Pro — $9.99/mo',
     color:    C.gold,
   },
