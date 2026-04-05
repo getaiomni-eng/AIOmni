@@ -14,14 +14,13 @@ import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../servic
 import { fetchAllLiveData, formatLiveDataForPrompt } from '../../services/liveData';
 import { getCurrentTier } from '../../services/purchases';
 import { getMemories, saveMemory } from '../../services/supabase';
+import { getPlayerContext } from '../../services/playerIntelligence';
 import { PositionPill } from '../components/Atoms';
-import { GlassCard } from '../components/GlassCard';
-import { OrbAvatar } from '../components/OrbAvatar';
-import { C, F, SP, SZ } from '../constants/tokens';
+import { AIOmniLogo } from '../components/AIOmniLogo';
+import { C, F, R, SP, SZ } from '../constants/tokens';
 import { getRemainingPrompts, getResetTime, incrementPrompt } from '../utils/promptCounter';
 
 const WEEKLY_LIMIT = 25;
-const SURFACE  = 'rgba(255,255,255,0.90)';
 const BORDER   = 'rgba(88,131,191,0.32)';
 const BEVEL_HI = 'rgba(255,255,255,0.95)';
 
@@ -76,9 +75,7 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
       const isSF  = (l.roster_positions || []).includes('SUPER_FLEX');
       const fmt   = `${isPPR ? (l.scoring_settings.rec >= 1 ? 'PPR' : '0.5 PPR') : 'STD'}${isSF ? ' · SuperFlex' : ''}`;
       try {
-        const [rosters] = await Promise.all([
-          fetch(`https://api.sleeper.app/v1/league/${l.league_id}/rosters`).then(r => r.json()),
-        ]);
+        const rosters = await fetch(`https://api.sleeper.app/v1/league/${l.league_id}/rosters`).then(r => r.json());
         const myRoster    = Array.isArray(rosters) ? rosters.find((r: any) => r.owner_id === user.user_id) : null;
         const wins        = myRoster?.settings?.wins   ?? 0;
         const losses      = myRoster?.settings?.losses ?? 0;
@@ -129,17 +126,28 @@ League: ${l.name} (${l.platform} · ${l.format})
 Record: ${l.record} · Rank: ${l.rank} · Week: ${l.week}
 Roster: ${l.roster.length > 0 ? l.roster.join(', ') : 'Not loaded'}
 `).join('\n---\n');
-  const focusNote = selectedLeague
-    ? `\n\nThe user has focused on ONE league: ${selectedLeague.name}. All advice should be specific to this league's scoring format and roster.`
-    : '';
+  const focusNote  = selectedLeague ? `\n\nThe user has focused on ONE league: ${selectedLeague.name}. All advice should be specific to this league's scoring format and roster.` : '';
   const memoryBlock = memories ? `\n\nPAST DECISIONS (use for context, don't repeat):\n${memories}` : '';
   return `${BASE_SYSTEM}\n\nYou have loaded ${targets.length} league${targets.length > 1 ? 's' : ''}:\n${leagueBlocks}\n${FF_KNOWLEDGE}${focusNote}${memoryBlock}`;
 }
 
+// ── Verdict card (blue) ─────────────────────────────────────
 const VerdictCard: React.FC<{ text: string; color?: string }> = ({ text, color = C.mint }) => (
   <View style={[styles.verdict, { borderLeftColor: color, backgroundColor: color + '18' }]}>
     <Text style={[styles.verdictEye, { color }]}>VERDICT</Text>
     <Text style={styles.verdictTxt}>{text}</Text>
+  </View>
+);
+
+// ── Recommendation card (blue bevel — matches mockup) ───────
+const RecoCard: React.FC<{ emoji: string; title: string; body: string }> = ({ emoji, title, body }) => (
+  <View style={styles.recoCard}>
+    <View style={styles.bevelShine} />
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+      <Text style={{ fontSize: 14 }}>{emoji}</Text>
+      <Text style={styles.recoTitle}>{title}</Text>
+    </View>
+    <Text style={styles.recoBody}>{body}</Text>
   </View>
 );
 
@@ -166,6 +174,10 @@ const QUICK_PROMPTS = ['🎯 Start/Sit', '📈 Best waiver', '⇄ Trade value', 
 const renderAIText = (text: string) =>
   text.split('\n').map((line, i) => {
     if (line.startsWith('__verdict__')) return <VerdictCard key={i} text={line.replace('__verdict__', '')} />;
+    if (line.startsWith('__reco__')) {
+      const parts = line.replace('__reco__', '').split('|');
+      return <RecoCard key={i} emoji={parts[0] ?? '⚡'} title={parts[1] ?? ''} body={parts[2] ?? ''} />;
+    }
     if (line.startsWith('__add__')) {
       const [, pos, name, team, detail] = line.split('|');
       return <AddCard key={i} pos={pos ?? 'WR'} name={name ?? ''} team={team ?? ''} detail={detail ?? ''} />;
@@ -205,7 +217,6 @@ export default function CoachScreen() {
       ]);
       const all = [...sleeperLeagues, ...espnLeagues];
 
-      // ── Load Supabase memories ─────────────────────────────
       try {
         const leagueId = all[0]?.name ?? 'general';
         const mems = await getMemories(leagueId, 10);
@@ -270,11 +281,20 @@ export default function CoachScreen() {
         .filter(m => !m.isLoading)
         .map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
 
-      const fullPrompt = `${systemPromptRef.current}\n\nConversation history:\n${history.slice(-6).map(h => `${h.role}: ${h.content}`).join('\n')}\n\nuser: ${text}`;
+      // ── Player Intelligence injection ────────────────────
+      let playerContext = '';
+      try { playerContext = await getPlayerContext(text); } catch {}
+
+      const fullPrompt = [
+        systemPromptRef.current,
+        playerContext ? `\nPLAYER INTELLIGENCE FROM DATABASE:\n${playerContext}` : '',
+        `\nConversation history:\n${history.slice(-6).map(h => `${h.role}: ${h.content}`).join('\n')}`,
+        `\nuser: ${text}`,
+      ].filter(Boolean).join('\n');
+
       const reply = await askAI(fullPrompt, 1000);
       setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: reply }]);
 
-      // ── Save memory to Supabase for paid tiers ─────────────
       if (['pro','premium','dynasty_elite'].includes(tier) && selectedLeague) {
         try {
           await saveMemory({
@@ -286,7 +306,7 @@ export default function CoachScreen() {
       }
     } catch (e: any) {
       const errMsg = e?.message?.includes('prompt_limit_reached')
-        ? 'You\'ve hit your weekly prompt limit. Upgrade to Pro for unlimited prompts.'
+        ? "You've hit your weekly prompt limit. Upgrade to Pro for unlimited prompts."
         : 'Connection error. Try again.';
       setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: errMsg }]);
     } finally {
@@ -307,9 +327,12 @@ export default function CoachScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
         <View style={[styles.wrap, { paddingTop: insets.top + 8 }]}>
 
-          {/* ── Header ── */}
+          {/* ── Header — matches mockup ── */}
           <View style={styles.hdr}>
-            <OrbAvatar size={36} />
+            {/* Mini logo avatar */}
+            <View style={styles.logoAvatar}>
+              <AIOmniLogo width={48} />
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>AI Coach</Text>
               <Text style={styles.subtitle}>{contextReady ? selectorSub : 'LOADING LEAGUES...'}</Text>
@@ -352,7 +375,7 @@ export default function CoachScreen() {
           </ScrollView>
 
           {/* ── Messages ── */}
-          <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 8, gap: 9 }} showsVerticalScrollIndicator={false}>
+          <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 8, gap: 10 }} showsVerticalScrollIndicator={false}>
             {!contextReady && messages.length === 0 && (
               <View style={{ alignItems:'center', paddingVertical:40, gap:10 }}>
                 <ActivityIndicator color={C.blueDeep} size="large" />
@@ -361,20 +384,28 @@ export default function CoachScreen() {
             )}
             {messages.map((m, i) => (
               m.role === 'user' ? (
+                // User bubble — gold card (matches mockup)
                 <View key={i} style={styles.userRow}>
                   <View style={styles.userBubble}>
+                    <View style={styles.userBubbleShine} />
                     <Text style={styles.userTxt}>{m.text}</Text>
                   </View>
                 </View>
               ) : (
+                // AI bubble — cream bevel card (matches mockup)
                 <View key={i} style={styles.aiRow}>
-                  <OrbAvatar size={22} style={{ flexShrink:0, marginTop:2 }} />
-                  <GlassCard style={{ maxWidth:'85%' }} padding={10} radius={14}>
-                    {m.isLoading
-                      ? <ActivityIndicator color={C.blueDeep} size="small" />
-                      : renderAIText(m.text)
-                    }
-                  </GlassCard>
+                  <View style={styles.aiBubbleAvatar}>
+                    <Text style={{ fontSize: 12 }}>🤖</Text>
+                  </View>
+                  <View style={[styles.aiBubble, { maxWidth: '85%' }]}>
+                    <View style={styles.bevelShine} />
+                    {m.isLoading ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 4 }}>
+                        <ActivityIndicator color={C.blueDeep} size="small" />
+                        <Text style={[styles.aiTxt, { color: C.dim2 }]}>Analyzing...</Text>
+                      </View>
+                    ) : renderAIText(m.text)}
+                  </View>
                 </View>
               )
             ))}
@@ -452,7 +483,10 @@ export default function CoachScreen() {
 
 const styles = StyleSheet.create({
   wrap:     { flex:1, paddingHorizontal: SP[3] },
-  hdr:      { flexDirection:'row', alignItems:'center', gap:9, marginBottom:8 },
+
+  // Header
+  hdr:      { flexDirection:'row', alignItems:'center', gap:10, marginBottom:10 },
+  logoAvatar: { width:44, height:44, borderRadius:12, backgroundColor: C.goldS, borderWidth:1.5, borderColor: C.goldBorder, alignItems:'center', justifyContent:'center', overflow:'hidden' },
   title:    { fontSize:SZ.xl, fontFamily:F.bold, color:C.ink },
   subtitle: { fontSize:SZ.xs-1, fontFamily:F.mono, color:C.dim2, letterSpacing:0.8 },
   rightHdr: { flexDirection:'row', alignItems:'center', gap:6 },
@@ -474,31 +508,106 @@ const styles = StyleSheet.create({
   promptTxt:    { fontSize:SZ.sm, color:C.blueDeep, fontFamily:F.mono },
 
   loadingSub: { color:C.dim2, fontFamily:F.mono, fontSize:SZ.sm },
-  aiRow:      { flexDirection:'row', gap:7, alignItems:'flex-start' },
-  userRow:    { flexDirection:'row', justifyContent:'flex-end' },
-  userBubble: { backgroundColor:C.goldS, borderWidth:1.5, borderColor:C.goldBorder, borderRadius:14, borderTopRightRadius:3, padding:10, maxWidth:'80%' },
-  userTxt:    { fontSize:SZ.md, color:C.ink, lineHeight:20, fontFamily:F.outfit },
-  aiTxt:      { fontSize:SZ.md, color:C.ink, lineHeight:20, fontFamily:F.outfit },
-  aiBold:     { fontSize:SZ.md, fontFamily:F.bold, color:C.blueDeep, lineHeight:20 },
 
-  verdict:    { borderLeftWidth:2, borderRadius:9, padding:8, marginTop:7 },
+  // AI bubble — cream bevel (matches mockup card system)
+  aiRow:   { flexDirection:'row', gap:8, alignItems:'flex-start' },
+  aiBubbleAvatar: {
+    width:30, height:30, borderRadius:9,
+    backgroundColor: C.goldS, borderWidth:1.5, borderColor: C.goldBorder,
+    alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:2,
+  },
+  aiBubble: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(88,131,191,0.32)',
+    borderTopColor: 'rgba(255,255,255,0.95)',
+    borderLeftColor: 'rgba(255,255,255,0.85)',
+    borderBottomColor: 'rgba(88,131,191,0.45)',
+    borderRightColor: 'rgba(88,131,191,0.28)',
+    borderRadius: 14,
+    borderTopLeftRadius: 4,
+    padding: 11,
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#3d6aaa',
+    shadowOffset: { width:0, height:2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  bevelShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+
+  // User bubble — gold card (matches mockup)
+  userRow:    { flexDirection:'row', justifyContent:'flex-end' },
+  userBubble: {
+    backgroundColor: '#fee229',
+    borderWidth: 1.5,
+    borderColor: 'rgba(200,170,0,0.6)',
+    borderTopColor: 'rgba(255,255,255,0.95)',
+    borderLeftColor: 'rgba(255,255,255,0.7)',
+    borderBottomColor: 'rgba(140,110,0,0.4)',
+    borderRightColor: 'rgba(140,110,0,0.2)',
+    borderRadius: 14,
+    borderTopRightRadius: 4,
+    padding: 11,
+    maxWidth: '80%',
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#c9b100',
+    shadowOffset: { width:0, height:3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  userBubbleShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:'rgba(255,255,255,0.98)', zIndex:6 },
+  userTxt:    { fontSize:SZ.md, color:C.ink, lineHeight:20, fontFamily:F.outfit },
+
+  aiTxt:    { fontSize:SZ.md, color:C.ink, lineHeight:20, fontFamily:F.outfit },
+  aiBold:   { fontSize:SZ.md, fontFamily:F.semibold, color:C.blueDeep, lineHeight:20 },
+
+  // Verdict card
+  verdict:    { borderLeftWidth:2, borderRadius:9, padding:9, marginTop:7 },
   verdictEye: { fontSize:SZ.xs-2, fontFamily:F.mono, letterSpacing:1, marginBottom:2 },
   verdictTxt: { fontSize:SZ.sm+1, fontFamily:F.semibold, color:C.ink },
 
-  addCard:   { flexDirection:'row', alignItems:'center', gap:8, backgroundColor:SURFACE, borderWidth:1.5, borderColor:BORDER, borderRadius:10, padding:8, marginTop:7 },
+  // Recommendation card — blue (matches mockup)
+  recoCard: {
+    backgroundColor: '#4d7abf',
+    borderRadius: 12,
+    borderTopLeftRadius: 4,
+    padding: 11,
+    marginTop: 7,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+    borderTopColor: 'rgba(255,255,255,0.6)',
+    borderBottomColor: 'rgba(20,45,100,0.5)',
+    shadowColor: '#3d6aaa',
+    shadowOffset: { width:0, height:4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  recoTitle: { fontSize:SZ.sm, fontFamily:F.bold, color:'#fee229', letterSpacing:0.5 },
+  recoBody:  { fontSize:SZ.sm, fontFamily:F.outfit, color:'rgba(255,255,237,0.85)', lineHeight:18, marginTop:2 },
+
+  // Add player card
+  addCard:   { flexDirection:'row', alignItems:'center', gap:8, backgroundColor:'rgba(255,255,255,0.9)', borderWidth:1.5, borderColor:BORDER, borderRadius:10, padding:8, marginTop:7 },
   addName:   { fontSize:SZ.md, fontFamily:F.bold, color:C.ink },
   addSub:    { fontSize:SZ.sm, fontFamily:F.mono, color:C.dim2 },
   addBtn:    { backgroundColor:C.sageS, borderWidth:1.5, borderColor:C.sageBorder, borderRadius:7, paddingHorizontal:8, paddingVertical:4 },
   addBtnTxt: { fontSize:SZ.sm, fontFamily:F.mono, color:C.blueDeep, fontWeight:'700' },
 
+  // Input
   inputWrap: { paddingTop:8 },
-  inputRow:  { flexDirection:'row', alignItems:'center', gap:7, backgroundColor:SURFACE, borderWidth:1.5, borderColor:BORDER, borderRadius:18, paddingLeft:13, paddingRight:4, paddingVertical:4 },
+  inputRow:  { flexDirection:'row', alignItems:'center', gap:7, backgroundColor:'rgba(255,255,255,0.92)', borderWidth:1.5, borderColor:BORDER, borderTopColor:'rgba(255,255,255,0.95)', borderRadius:18, paddingLeft:13, paddingRight:4, paddingVertical:4 },
   input:     { flex:1, fontSize:SZ.md, color:C.ink, paddingVertical:8, fontFamily:F.outfit },
   sendBtn:   { width:34, height:34, backgroundColor:C.gold, borderRadius:10, alignItems:'center', justifyContent:'center' },
   sendBtnOff:{ backgroundColor:C.goldS },
   sendArrow: { fontSize:14, fontFamily:F.bold, color:C.ink },
 
-  // Modal — cream theme
+  // Picker modal — cream theme
   pickerOverlay:  { flex:1, backgroundColor:'rgba(26,31,46,0.55)', justifyContent:'flex-end' },
   pickerSheet: {
     backgroundColor:'#ffffff',

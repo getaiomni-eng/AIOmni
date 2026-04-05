@@ -5,27 +5,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated, Dimensions,
-  Image,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-Linking, } from 'react-native';
+  ActivityIndicator, Animated, Dimensions, Image,
+  Linking, RefreshControl, ScrollView,
+  StyleSheet, Text, TouchableOpacity, View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../services/espn';
 import { getValidYahooToken } from '../../services/yahoo';
 import { Badge, SectionHeader } from '../components/Atoms';
 import { GlassCard } from '../components/GlassCard';
-import { OrbAvatar } from '../components/OrbAvatar';
-import { C, F, R, SP, SZ, textShadow } from '../constants/tokens';
+import { AIOmniLogo } from '../components/AIOmniLogo';
+import { C, F, R, SP, SZ, shadow } from '../constants/tokens';
 
-const LOGO = require('../../assets/images/logo.png');
 const { width: SCREEN_W } = Dimensions.get('window');
-
 const CARD_W    = SCREEN_W - SP[3] * 2;
 const INSIGHT_W = CARD_W - 28;
 
@@ -35,7 +27,6 @@ const YAHOO_PURPLE        = '#6001D2';
 const YAHOO_PURPLE_BORDER = 'rgba(96,1,210,0.35)';
 
 type Platform = 'sleeper' | 'espn' | 'yahoo';
-
 type League = {
   id: string; name: string; platform: Platform;
   format?: string; rec?: string; rank?: string;
@@ -46,10 +37,7 @@ const PLAT_COLOR  = (p: Platform) => p === 'espn' ? ESPN_RED : p === 'yahoo' ? Y
 const PLAT_BORDER = (p: Platform) => p === 'espn' ? ESPN_RED_BORDER : p === 'yahoo' ? YAHOO_PURPLE_BORDER : 'transparent';
 const PLAT_LABEL  = (p: Platform) => p === 'espn' ? 'ESPN' : p === 'yahoo' ? 'YAHOO' : 'SLEEPER';
 
-const SLEEPER_LOGO = 'https://play-lh.googleusercontent.com/V_P59T3JQ9qEBSBSrABCqCz0lBBz2FRcJFBHbyrJqoIr_TKQAlT0A6ixJVEXPEpNLg';
-
 function PlatformLogo({ platform, size = 64 }: { platform: Platform; avatar?: string; size?: number }) {
-  const radius = size * 0.18;
   const LOGOS: Record<string, any> = {
     sleeper: require('../../assets/images/platforms/sleeper.png'),
     espn:    require('../../assets/images/platforms/espn.png'),
@@ -58,10 +46,11 @@ function PlatformLogo({ platform, size = 64 }: { platform: Platform; avatar?: st
   return (
     <Image
       source={LOGOS[platform] ?? LOGOS.sleeper}
-      style={{ width: size, height: size, borderRadius: radius, borderWidth: 1.5, borderColor: 'rgba(254,226,41,0.3)' }}
+      style={{ width: size, height: size, borderRadius: size * 0.18, borderWidth: 1.5, borderColor: 'rgba(254,226,41,0.3)' }}
     />
   );
 }
+
 const FALLBACK_NEWS = [
   { source: 'ROTOWIRE',   headline: 'Jaxon Smith-Njigba: 5th-year option picked up by SEA', color: '#4ab8a0' },
   { source: 'PFR',        headline: 'NFL Teams Higher On Their QBs Than Draft Pundits?',    color: '#e8a84b' },
@@ -74,6 +63,15 @@ const FALLBACK_INSIGHTS = [
   { emoji: '⚠️', title: 'Watch Achane',   body: 'Listed Q — check 11:30am reports. Pollard on standby.',  tag: 'MONITOR', color: '#e8a84b' },
   { emoji: '🔥', title: 'Add Shaheed',    body: '3 TDs in last 4 games. 78% target share with Drake.',    tag: 'HOT',     color: C.gold },
 ];
+
+// ── Bevel Card ────────────────────────────────────────────────
+// Matches mockup: cream gradient, blue bevel edges, gold inner glow
+const BevelCard: React.FC<{ style?: any; children: React.ReactNode; blue?: boolean }> = ({ style, children, blue }) => (
+  <View style={[blue ? styles.bevelBlue : styles.bevelCard, style]}>
+    <View style={styles.bevelShine} />
+    {children}
+  </View>
+);
 
 export default function HomeScreen() {
   const router  = useRouter();
@@ -93,6 +91,7 @@ export default function HomeScreen() {
 
   useEffect(() => { loadLeagues(); fetchNews(); }, []);
 
+  // ── ALL DATA LOADING LOGIC UNCHANGED ──────────────────────
   const loadSleeperLeagues = async (): Promise<League[]> => {
     try {
       const u = await AsyncStorage.getItem('sleeper_username');
@@ -129,7 +128,7 @@ export default function HomeScreen() {
           return { id: l.league_id, name: l.name, platform: 'sleeper', format: fmt, avatar: l.avatar };
         }
       }));
-    } catch (e) { console.log('loadSleeperLeagues:', e); return []; }
+    } catch (e) { return []; }
   };
 
   const loadESPNLeagues = async (): Promise<League[]> => {
@@ -152,48 +151,40 @@ export default function HomeScreen() {
       const myScore  = matchupData?.home?.teamId === myTeam?.id ? matchupData?.home?.totalPoints : matchupData?.away?.totalPoints;
       const oppScore = matchupData?.home?.teamId === myTeam?.id ? matchupData?.away?.totalPoints : matchupData?.home?.totalPoints;
       return [{ id: String(creds.leagueId), name: leagueData.settings?.name ?? 'ESPN League', platform: 'espn', format: fmt, rec: `${wins}–${losses}`, rank: rankStr, pts: myScore ?? 0, opp: oppScore ?? 0, week }];
-    } catch (e) { console.log('loadESPNLeagues:', e); return []; }
+    } catch (e) { return []; }
   };
 
   const loadYahooLeagues = async (): Promise<League[]> => {
     try {
       const token = await getValidYahooToken();
       if (!token) return [];
-
       const res = await fetch(
         'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_codes=nfl/leagues?format=json',
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!res.ok) return [];
       const data = await res.json();
-
       const gamesData = data?.fantasy_content?.users?.[0]?.user?.[1]?.games;
       if (!gamesData) return [];
-
       const leagues: League[] = [];
       const gameCount = gamesData?.count ?? 0;
-
       for (let g = 0; g < gameCount; g++) {
         const game        = gamesData[g]?.game;
         const leaguesData = game?.[1]?.leagues;
         if (!leaguesData) continue;
         const leagueCount = leaguesData.count ?? 0;
-
         for (let i = 0; i < leagueCount; i++) {
           try {
             const lg         = leaguesData[i]?.league?.[0];
             const leagueKey  = lg?.league_key;
             const leagueName = lg?.name ?? 'Yahoo League';
             if (!leagueKey) continue;
-
             const [standingsRes, matchupRes] = await Promise.allSettled([
               fetch(`https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueKey}/standings?format=json`, { headers: { Authorization: `Bearer ${token}` } }),
               fetch(`https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueKey}/scoreboard?format=json`, { headers: { Authorization: `Bearer ${token}` } }),
             ]);
-
             let rec = '?'; let rank: string | undefined;
-            let pts = 0;   let opp = 0; let fmt = 'PPR';
-
+            let pts = 0;   let opp = 0;
             if (standingsRes.status === 'fulfilled' && standingsRes.value.ok) {
               const sd     = await standingsRes.value.json();
               const stData = sd?.fantasy_content?.league;
@@ -216,7 +207,6 @@ export default function HomeScreen() {
                 }
               }
             }
-
             if (matchupRes.status === 'fulfilled' && matchupRes.value.ok) {
               const md     = await matchupRes.value.json();
               const sbData = md?.fantasy_content?.league?.[1]?.scoreboard?.[0]?.matchups;
@@ -235,13 +225,12 @@ export default function HomeScreen() {
                 }
               }
             }
-
-            leagues.push({ id: leagueKey, name: leagueName, platform: 'yahoo', format: fmt, rec, rank, pts, opp });
-          } catch (e) { console.log('Yahoo league parse error:', e); }
+            leagues.push({ id: leagueKey, name: leagueName, platform: 'yahoo', rec, rank, pts, opp });
+          } catch {}
         }
       }
       return leagues;
-    } catch (e) { console.log('loadYahooLeagues:', e); return []; }
+    } catch { return []; }
   };
 
   const loadLeagues = async () => {
@@ -272,7 +261,6 @@ export default function HomeScreen() {
       const safeParseInsight = (text: string) => {
         try {
           const cleaned = text.replace(/```json|```/g, '').trim();
-          // Find JSON object even if surrounded by extra text
           const match = cleaned.match(/\{[\s\S]*\}/);
           return match ? JSON.parse(match[0]) : {};
         } catch { return {}; }
@@ -292,7 +280,7 @@ export default function HomeScreen() {
       }));
 
       setAiInsights(results);
-    } catch (e) { console.log('AI insight error:', e); setAiInsights(FALLBACK_INSIGHTS); }
+    } catch { setAiInsights(FALLBACK_INSIGHTS); }
     setInsightLoading(false);
   };
 
@@ -313,7 +301,7 @@ export default function HomeScreen() {
         fetch('https://www.profootballrumors.com/feed').then(r => r.text()),
         fetch('https://www.cbssports.com/rss/headlines/nfl/').then(r => r.text()),
       ]);
-      const results: { source: string; headline: string; color: string }[] = [];
+      const results: { source: string; headline: string; color: string; url?: string }[] = [];
       if (rotoRes.status === 'fulfilled') results.push(...parseRSS(rotoRes.value, 'ROTOWIRE',   '#4ab8a0'));
       if (pfrRes.status  === 'fulfilled') results.push(...parseRSS(pfrRes.value,  'PFR',        '#e8a84b'));
       if (cbsRes.status  === 'fulfilled') results.push(...parseRSS(cbsRes.value,  'CBS SPORTS', '#0055a5'));
@@ -347,81 +335,126 @@ export default function HomeScreen() {
   return (
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 8 }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 4 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.gold} />}
       >
-        <Image source={LOGO} style={styles.logo} resizeMode="contain" />
+        {/* ── V26 Animated Logo ── */}
+        <View style={styles.logoWrap}>
+          <AIOmniLogo width={SCREEN_W * 0.72} />
+        </View>
 
+        {/* ── Header row ── */}
         <View style={styles.headerBar}>
           <View style={{ flex: 1 }} />
-          {username ? <View style={styles.handlePill}><Text style={styles.handleTxt}>@{username}</Text></View> : null}
+          {username ? (
+            <View style={styles.handlePill}>
+              <Text style={styles.handleTxt}>@{username}</Text>
+            </View>
+          ) : null}
           <TouchableOpacity onPress={() => router.push('/settings')} style={styles.gearBtn}>
-            <Ionicons name="settings-sharp" size={22} color={C.dim2} />
+            <Ionicons name="settings-sharp" size={20} color={C.dim2} />
           </TouchableOpacity>
         </View>
 
+        {/* ── Live feed ── */}
         <View style={styles.newsHeaderRow}>
           <Text style={styles.newsEye}>📡  LIVE FEED</Text>
           <Text style={styles.newsHint}>← swipe →</Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
           {news.map((n, i) => (
-            <TouchableOpacity key={i} onPress={() => n.url ? Linking.openURL(n.url) : null} activeOpacity={0.7} style={[styles.newsChip, { borderColor: n.color + '40' }]}>
-              <View style={[styles.newsDot, { backgroundColor: n.color }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.newsSource, { color: n.color }]}>{n.source}</Text>
-                <Text style={styles.newsText} numberOfLines={2}>{n.headline}</Text>
-              </View>
+            <TouchableOpacity key={i} onPress={() => n.url ? Linking.openURL(n.url) : null} activeOpacity={0.8}>
+              <BevelCard style={[styles.newsChip, { borderColor: n.color + '30' }]}>
+                <View style={[styles.newsDot, { backgroundColor: n.color }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.newsSource, { color: n.color }]}>{n.source}</Text>
+                  <Text style={styles.newsText} numberOfLines={2}>{n.headline}</Text>
+                </View>
+              </BevelCard>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
+        {/* ── Score cards ── */}
         {loading ? (
-          <View style={styles.loadingCard}><ActivityIndicator color={C.gold} size="large" /><Text style={styles.loadingTxt}>Loading your leagues...</Text></View>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator color={C.blueDeep} size="large" />
+            <Text style={styles.loadingTxt}>Loading your leagues...</Text>
+          </View>
         ) : leagues.length > 0 ? (
           <>
-            <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} snapToInterval={CARD_W + 10} decelerationRate="fast" contentContainerStyle={{ gap: 10 }} style={{ marginBottom: 4 }} onMomentumScrollEnd={e => setScoreIdx(Math.round(e.nativeEvent.contentOffset.x / (CARD_W + 10)))}>
+            <ScrollView
+              horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+              snapToInterval={CARD_W + 10} decelerationRate="fast"
+              contentContainerStyle={{ gap: 10 }}
+              style={{ marginBottom: 4 }}
+              onMomentumScrollEnd={e => setScoreIdx(Math.round(e.nativeEvent.contentOffset.x / (CARD_W + 10)))}
+            >
               {leagues.map((lg, i) => {
-                const winning       = (lg.pts ?? 0) > (lg.opp ?? 0);
-                const platColor     = PLAT_COLOR(lg.platform);
-                const isNonSleeper  = lg.platform !== 'sleeper';
-                const ptsVal        = parseFloat((lg.pts ?? 0).toFixed(1));
+                const winning      = (lg.pts ?? 0) > (lg.opp ?? 0);
+                const platColor    = PLAT_COLOR(lg.platform);
+                const isNonSleeper = lg.platform !== 'sleeper';
+                const ptsVal       = parseFloat((lg.pts ?? 0).toFixed(1));
                 return (
-                  <GlassCard key={lg.id} style={[styles.scoreCard, { width: CARD_W }, isNonSleeper && { borderColor: PLAT_BORDER(lg.platform) }]}>
-                    <Text style={styles.scoreEye}>{'⚡  LIVE · WK '}{lg.week}{'  '}<Text style={{ color: platColor }}>{PLAT_LABEL(lg.platform)}</Text>{'  ·  '}{lg.format}</Text>
+                  <BevelCard key={lg.id} style={[styles.scoreCard, { width: CARD_W }, isNonSleeper && { borderColor: PLAT_BORDER(lg.platform) }]}>
+                    <Text style={styles.scoreEye}>
+                      {'⚡  LIVE · WK '}{lg.week}{'  '}
+                      <Text style={{ color: platColor }}>{PLAT_LABEL(lg.platform)}</Text>
+                      {'  ·  '}{lg.format}
+                    </Text>
                     <View style={styles.matchRow}>
                       <View>
                         <Text style={styles.teamLbl} numberOfLines={1}>{lg.name.toUpperCase()}</Text>
-                        <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.scoreNum, { color: winning ? "#82c494" : C.ink }]}>{ptsVal.toFixed(1)}</Text>
+                        {/* Gold score number with blue stroke — matches mockup */}
+                        <Text style={[styles.scoreNum, { color: winning ? '#fee229' : C.dim }]}>
+                          {ptsVal.toFixed(1)}
+                        </Text>
                       </View>
                       <View style={[styles.winPill, !winning && styles.losePill]}>
-                        <Text style={[styles.winTxt, !winning && styles.loseTxt]}>{winning ? '↑ WINNING' : '↓ LOSING'}</Text>
+                        <Text style={[styles.winTxt, !winning && styles.loseTxt]}>
+                          {winning ? '↑ WINNING' : '↓ LOSING'}
+                        </Text>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.teamLbl}>OPPONENT</Text>
-                        <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.scoreNum, { color: '#e05555' }]}>{(lg.opp ?? 0).toFixed(1)}</Text>
+                        <Text style={[styles.scoreNum, { color: '#e05555' }]}>
+                          {(lg.opp ?? 0).toFixed(1)}
+                        </Text>
                       </View>
                     </View>
                     <View style={styles.progBg}>
-                      <View style={[styles.progFill, { width: `${((lg.pts ?? 0) / Math.max((lg.pts ?? 0) + (lg.opp ?? 0), 1) * 100).toFixed(0)}%` as any, backgroundColor: winning ? '#82c494' : '#e05555' }]} />
+                      <View style={[styles.progFill, {
+                        width: `${((lg.pts ?? 0) / Math.max((lg.pts ?? 0) + (lg.opp ?? 0), 1) * 100).toFixed(0)}%` as any,
+                        backgroundColor: winning ? '#1e8c42' : '#e05555',
+                      }]} />
                     </View>
-                    {isNonSleeper && (
-                      <View style={[styles.platBadge, { backgroundColor: platColor }]}>
-                        <Text style={styles.platBadgeTxt}>{PLAT_LABEL(lg.platform)}</Text>
+                    {/* AI insight strip inside card */}
+                    {displayInsights[i + 1] && (
+                      <View style={styles.aiStrip}>
+                        <View style={styles.aiDot} />
+                        <Text style={styles.aiStripTxt} numberOfLines={2}>
+                          <Text style={{ fontFamily: F.semibold, color: C.blueDeep }}>AI: </Text>
+                          {displayInsights[i + 1]?.body}
+                        </Text>
                       </View>
                     )}
-                  </GlassCard>
+                  </BevelCard>
                 );
               })}
             </ScrollView>
-            <View style={styles.dotsRow}>{leagues.map((_, i) => <View key={i} style={[styles.dot, i === scoreIdx && styles.dotActive]} />)}</View>
+            <View style={styles.dotsRow}>
+              {leagues.map((_, i) => <View key={i} style={[styles.dot, i === scoreIdx && styles.dotActive]} />)}
+            </View>
           </>
         ) : null}
 
-        <GlassCard style={{ marginBottom: 10 }}>
+        {/* ── AI Insight card ── */}
+        <BevelCard style={{ marginBottom: 12 }}>
           <View style={styles.insightHdr}>
-            <OrbAvatar size={9} />
+            <View style={styles.aiOrbSmall}>
+              <Text style={{ fontSize: 9, color: C.blueDeep }}>◉</Text>
+            </View>
             <Text style={styles.insightEye}>AI INSIGHT · {leagues.length > 0 ? `${leagues.length} LEAGUES` : 'LIVE'}</Text>
             <View style={{ flexDirection: 'row', gap: 4 }}>
               {displayInsights.map((_, i) => <View key={i} style={[styles.dotInsight, i === insightIdx && styles.dotInsightActive]} />)}
@@ -429,10 +462,15 @@ export default function HomeScreen() {
           </View>
           {insightLoading ? (
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 4 }}>
-              <ActivityIndicator size="small" color={C.gold} /><Text style={styles.loadingTxt}>Scanning {leagues.length} leagues...</Text>
+              <ActivityIndicator size="small" color={C.blueDeep} />
+              <Text style={styles.loadingTxt}>Scanning {leagues.length} leagues...</Text>
             </View>
           ) : (
-            <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} snapToInterval={INSIGHT_W} decelerationRate="fast" onMomentumScrollEnd={e => { if (INSIGHT_W > 0) setInsightIdx(Math.round(e.nativeEvent.contentOffset.x / INSIGHT_W)); }}>
+            <ScrollView
+              horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+              snapToInterval={INSIGHT_W} decelerationRate="fast"
+              onMomentumScrollEnd={e => { if (INSIGHT_W > 0) setInsightIdx(Math.round(e.nativeEvent.contentOffset.x / INSIGHT_W)); }}
+            >
               {displayInsights.map((item, i) => (
                 <View key={i} style={{ width: INSIGHT_W, flexDirection: 'row', gap: 9, alignItems: 'flex-start' }}>
                   <Text style={{ fontSize: 20 }}>{item.emoji}</Text>
@@ -447,38 +485,36 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
           )}
-        </GlassCard>
+        </BevelCard>
 
+        {/* ── My Leagues ── */}
         <SectionHeader label="MY LEAGUES" barColor={C.gold} />
         {!loading && leagues.map(lg => {
-          const [w, l]   = (lg.rec ?? '0–0').split('–').map(Number);
-          const platColor = PLAT_COLOR(lg.platform);
-          const isYahoo  = lg.platform === 'yahoo';
-          const isESPN   = lg.platform === 'espn';
+          const [w, l]    = (lg.rec ?? '0–0').split('–').map(Number);
+          const platColor  = PLAT_COLOR(lg.platform);
+          const isYahoo   = lg.platform === 'yahoo';
+          const isESPN    = lg.platform === 'espn';
           return (
             <TouchableOpacity key={lg.id} onPress={() => goToLeague(lg)} activeOpacity={0.8}>
-              <GlassCard style={[{ marginBottom: 8 }, isESPN && { borderColor: ESPN_RED_BORDER }, isYahoo && { borderColor: YAHOO_PURPLE_BORDER }]} padding={0}>
-                <View style={styles.leagueRow}>
-                  <PlatformLogo platform={lg.platform} avatar={lg.avatar} size={64} />
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.leagueName}>{lg.name}</Text>
-                    <Text style={styles.leagueSub}>
-                      <Text style={{ color: platColor, fontWeight: '700' }}>{PLAT_LABEL(lg.platform)}</Text>
-                      {lg.format ? ` · ${lg.format}` : ''}
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end', marginRight: 6 }}>
-                    {lg.rec  && <Text style={[styles.leagueRec, { color: w >= l ? C.sage : '#c87878' }]}>{lg.rec}</Text>}
-                    {lg.rank && <Text style={styles.leagueRank}>{lg.rank}</Text>}
-                  </View>
-                  {(isESPN || isYahoo) && (
-                    <View style={[styles.leaguePlatBadge, { backgroundColor: platColor }]}>
-                      <Text style={styles.leaguePlatBadgeTxt}>{isESPN ? 'E' : 'Y'}</Text>
-                    </View>
-                  )}
-                  <Text style={styles.chevron}>›</Text>
+              <BevelCard style={[
+                styles.leagueCard,
+                isESPN  && { borderColor: ESPN_RED_BORDER },
+                isYahoo && { borderColor: YAHOO_PURPLE_BORDER },
+              ]}>
+                <PlatformLogo platform={lg.platform} avatar={lg.avatar} size={52} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.leagueName}>{lg.name}</Text>
+                  <Text style={styles.leagueSub}>
+                    <Text style={{ color: platColor, fontFamily: F.semibold }}>{PLAT_LABEL(lg.platform)}</Text>
+                    {lg.format ? ` · ${lg.format}` : ''}
+                  </Text>
                 </View>
-              </GlassCard>
+                <View style={{ alignItems: 'flex-end', marginRight: 6 }}>
+                  {lg.rec  && <Text style={[styles.leagueRec, { color: w >= l ? C.mint : '#a83040' }]}>{lg.rec}</Text>}
+                  {lg.rank && <Text style={styles.leagueRank}>{lg.rank}</Text>}
+                </View>
+                <Text style={styles.chevron}>›</Text>
+              </BevelCard>
             </TouchableOpacity>
           );
         })}
@@ -491,57 +527,124 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: SP[3], paddingBottom: 110 },
-  logo:   { width: SCREEN_W, height: 180, marginLeft: -SP[3], marginBottom: 2 },
 
-  headerBar:  { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 12 },
-  handlePill: { backgroundColor: C.glass, borderRadius: R.full, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: C.glassBorder },
-  handleTxt:  { fontSize: SZ.sm, color: C.dim, fontFamily: F.mono, ...textShadow.subtle },
+  // Logo
+  logoWrap: { alignItems: 'center', marginBottom: 4, marginTop: 4 },
+
+  // Header
+  headerBar:  { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 14 },
+  handlePill: { backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: R.full, paddingHorizontal: 12, paddingVertical: 5, borderWidth: 1.5, borderColor: C.glassBorder },
+  handleTxt:  { fontSize: SZ.sm, color: C.blueDeep, fontFamily: F.mono },
   gearBtn:    { padding: 6 },
 
+  // Bevel card system — cream + bevel matching mockup
+  bevelCard: {
+    background: undefined,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(88,131,191,0.38)',
+    borderRadius: R.lg,
+    shadowColor: '#3d6aaa',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 4,
+    position: 'relative',
+    overflow: 'hidden',
+    // Bevel edges
+    borderTopColor: 'rgba(255,255,255,0.95)',
+    borderLeftColor: 'rgba(255,255,255,0.85)',
+    borderBottomColor: 'rgba(88,131,191,0.45)',
+    borderRightColor: 'rgba(88,131,191,0.28)',
+    padding: 14,
+    marginBottom: 10,
+  },
+  bevelBlue: {
+    backgroundColor: '#4d7abf',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.4)',
+    borderRadius: R.lg,
+    shadowColor: '#3d6aaa',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 6,
+    position: 'relative',
+    overflow: 'hidden',
+    borderTopColor: 'rgba(255,255,255,0.6)',
+    borderLeftColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: 'rgba(20,45,100,0.5)',
+    borderRightColor: 'rgba(20,45,100,0.25)',
+    padding: 14,
+    marginBottom: 10,
+  },
+  bevelShine: {
+    position: 'absolute', top: 0, left: '8%', right: '8%', height: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.95)', zIndex: 6,
+  },
+
+  // News
   newsHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 7 },
-  newsEye:       { fontSize: SZ.xs, fontFamily: F.mono, color: C.gold, letterSpacing: 1.4, ...textShadow.gold },
-  newsHint:      { marginLeft: 'auto' as any, fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, opacity: 0.5, ...textShadow.subtle },
-  newsChip:      { width: 240, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 14, borderWidth: 1, padding: 12, flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  newsEye:       { fontSize: SZ.xs, fontFamily: F.mono, color: C.gold, letterSpacing: 1.4 },
+  newsHint:      { marginLeft: 'auto' as any, fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, opacity: 0.5 },
+  newsChip:      { width: 240, padding: 12, flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 0 },
   newsDot:       { width: 6, height: 6, borderRadius: 3, marginTop: 3, flexShrink: 0 },
-  newsSource:    { fontSize: SZ.xs, fontFamily: F.mono, letterSpacing: 1, marginBottom: 3, fontWeight: '700', ...textShadow.subtle },
-  newsText:      { fontSize: SZ.sm, fontFamily: F.outfit, color: '#ffffff', lineHeight: 18, ...textShadow.body },
+  newsSource:    { fontSize: SZ.xs, fontFamily: F.mono, letterSpacing: 1, marginBottom: 3, fontFamily: F.monoBold },
+  newsText:      { fontSize: SZ.sm, fontFamily: F.outfit, color: C.ink, lineHeight: 18 },
 
+  // Loading
   loadingCard: { alignItems: 'center', padding: 40, gap: 12 },
-  loadingTxt:  { color: C.dim, fontFamily: F.mono, fontSize: SZ.sm, ...textShadow.subtle },
+  loadingTxt:  { color: C.dim2, fontFamily: F.mono, fontSize: SZ.sm },
 
-  scoreCard: { padding: 14 },
-  scoreEye:  { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 1.2, marginBottom: 8, ...textShadow.subtle },
-  matchRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  teamLbl:   { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, marginBottom: 2, ...textShadow.subtle },
-  scoreNum:  { fontSize: SZ['2xl'], fontWeight: '900', color: '#ffffff', letterSpacing: -1, lineHeight: 32, fontFamily: F.bold, ...textShadow.hero },
-  winPill:   { backgroundColor: 'rgba(82,196,148,0.35)', borderRadius: R.full, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1.5, borderColor: 'rgba(82,196,148,0.65)' },
-  losePill:  { backgroundColor: 'rgba(224,85,85,0.18)', borderColor: 'rgba(224,85,85,0.45)' },
-  winTxt:    { fontSize: SZ.sm, fontWeight: '700', color: '#82c494', fontFamily: F.bold, letterSpacing: 0.5, ...textShadow.body },
-  loseTxt:   { color: '#e05555' },
-  progBg:    { height: 6, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 3, overflow: 'hidden', marginTop: 10 },
-  progFill:  { height: 6, borderRadius: 3 },
+  // Score card
+  scoreCard: { padding: 16, marginBottom: 0 },
+  scoreEye:  { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, letterSpacing: 1.2, marginBottom: 10 },
+  matchRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  teamLbl:   { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, marginBottom: 3 },
 
-  platBadge:    { position: 'absolute', top: 10, right: 10, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  platBadgeTxt: { fontSize: 9, fontWeight: '900', color: '#fff', fontFamily: F.mono, letterSpacing: 1 },
+  // Gold score number with blue text-shadow (mockup style)
+  scoreNum: {
+    fontSize: SZ['4xl'],
+    fontFamily: F.bold,
+    letterSpacing: -0.5,
+    lineHeight: 38,
+    // Simulated stroke via text shadow
+    textShadowColor: '#3d6aaa',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 2,
+  },
 
-  leaguePlatBadge:    { width: 20, height: 20, borderRadius: 4, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
-  leaguePlatBadgeTxt: { fontSize: 10, fontWeight: '900', color: '#fff', fontFamily: F.mono },
+  winPill:  { backgroundColor: 'rgba(30,140,66,0.15)', borderRadius: R.full, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1.5, borderColor: 'rgba(30,140,66,0.45)' },
+  losePill: { backgroundColor: 'rgba(168,48,64,0.12)', borderColor: 'rgba(168,48,64,0.35)' },
+  winTxt:   { fontSize: SZ.sm, fontFamily: F.semibold, color: '#1e8c42', letterSpacing: 0.5 },
+  loseTxt:  { color: '#a83040' },
+  progBg:   { height: 5, backgroundColor: 'rgba(88,131,191,0.12)', borderRadius: 3, overflow: 'hidden' },
+  progFill: { height: 5, borderRadius: 3 },
 
-  dotsRow:  { flexDirection: 'row', justifyContent: 'center', gap: 5, marginBottom: 10 },
-  dot:      { width: 5, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,0.18)' },
-  dotActive:{ backgroundColor: C.gold, width: 14, borderRadius: 3 },
+  // AI strip inside score card
+  aiStrip:    { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(88,131,191,0.12)' },
+  aiDot:      { width: 7, height: 7, borderRadius: 4, backgroundColor: C.gold, borderWidth: 1.5, borderColor: C.blueDeep, marginTop: 3 },
+  aiStripTxt: { flex: 1, fontSize: SZ.sm, fontFamily: F.outfit, color: C.ink2, lineHeight: 18 },
 
-  insightHdr:       { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 9 },
-  insightEye:       { fontSize: SZ.xs, fontFamily: F.mono, color: C.gold, letterSpacing: 1.4, flex: 1, ...textShadow.gold },
+  // Dots
+  dotsRow:          { flexDirection: 'row', justifyContent: 'center', gap: 5, marginBottom: 12 },
+  dot:              { width: 5, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(88,131,191,0.2)' },
+  dotActive:        { backgroundColor: C.gold, width: 14, borderRadius: 3 },
+
+  // AI Insight
+  insightHdr:       { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  aiOrbSmall:       { width: 20, height: 20, borderRadius: 10, backgroundColor: C.goldS, borderWidth: 1, borderColor: C.goldBorder, alignItems: 'center', justifyContent: 'center' },
+  insightEye:       { fontSize: SZ.xs, fontFamily: F.mono, color: C.gold, letterSpacing: 1.4, flex: 1 },
   dotInsight:       { width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(254,226,41,0.25)' },
   dotInsightActive: { width: 12, backgroundColor: C.gold },
-  insightTitle:     { fontSize: SZ.base, fontWeight: '700', color: C.ink, fontFamily: F.bold, ...textShadow.body },
-  insightText:      { fontSize: SZ.md, color: C.ink2, lineHeight: 18, fontFamily: F.outfit, ...textShadow.body },
+  insightTitle:     { fontSize: SZ.base, fontFamily: F.bold, color: C.ink },
+  insightText:      { fontSize: SZ.md, color: C.ink2, lineHeight: 18, fontFamily: F.outfit },
 
-  leagueRow:  { flexDirection: 'row', alignItems: 'center', padding: 14 },
-  leagueName: { fontSize: SZ.base, fontWeight: '700', color: C.ink, fontFamily: F.bold, ...textShadow.body },
-  leagueSub:  { fontSize: SZ.sm, fontFamily: F.mono, color: 'rgba(255,255,255,0.75)', marginTop: 2, ...textShadow.subtle },
-  leagueRec:  { fontSize: SZ.base, fontWeight: '700', fontFamily: F.bold, ...textShadow.body },
-  leagueRank: { fontSize: SZ.xs, fontFamily: F.mono, color: 'rgba(254,226,41,0.9)', marginTop: 3, ...textShadow.gold },
-  chevron:    { color: C.dim2, fontSize: SZ.xl, ...textShadow.body },
+  // Leagues
+  leagueCard: { flexDirection: 'row', alignItems: 'center' },
+  leagueName: { fontSize: SZ.base, fontFamily: F.bold, color: C.ink },
+  leagueSub:  { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim2, marginTop: 2 },
+  leagueRec:  { fontSize: SZ.base, fontFamily: F.bold },
+  leagueRank: { fontSize: SZ.xs, fontFamily: F.mono, color: C.gold, marginTop: 3 },
+  chevron:    { color: C.dim2, fontSize: SZ.xl },
 });

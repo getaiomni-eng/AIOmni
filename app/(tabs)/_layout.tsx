@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
-import TabIcon from '../components/TabIcon';
 import { C } from '../constants/tokens';
+import TabIcon from '../components/TabIcon';
 
 export default function TabLayout() {
   return (
@@ -11,9 +11,9 @@ export default function TabLayout() {
           backgroundColor: '#ffffff',
           borderTopWidth: 1.5,
           borderTopColor: 'rgba(88,131,191,0.18)',
-          paddingTop: 6,
-          paddingBottom: 8,
-          height: 64,
+          paddingTop: 8,
+          paddingBottom: 10,
+          height: 72,
           shadowColor: '#3d6aaa',
           shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.08,
@@ -29,44 +29,46 @@ export default function TabLayout() {
         },
         tabBarActiveTintColor:   C.blueDeep,
         tabBarInactiveTintColor: C.dim2,
+        tabBarIconStyle: {
+          marginBottom: 0,
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Teams',
-          tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} size={26}/>,
+          tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} size={32}/>,
         }}
       />
       <Tabs.Screen
         name="waiver"
         options={{
           title: 'Waiver',
-          tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} size={26}/>,
+          tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} size={32}/>,
         }}
       />
       <Tabs.Screen
         name="rankings"
         options={{
           title: 'Rankings',
-          tabBarIcon: ({ focused }) => <TabIcon name="rankings" focused={focused} size={26}/>,
+          tabBarIcon: ({ focused }) => <TabIcon name="rankings" focused={focused} size={32}/>,
         }}
       />
       <Tabs.Screen
         name="trade"
         options={{
           title: 'Trade',
-          tabBarIcon: ({ focused }) => <TabIcon name="trade" focused={focused} size={26}/>,
+          tabBarIcon: ({ focused }) => <TabIcon name="trade" focused={focused} size={32}/>,
         }}
       />
       <Tabs.Screen
         name="coach"
         options={{
           title: 'AI Coach',
-          tabBarIcon: ({ focused }) => <TabIcon name="coach" focused={focused} size={26}/>,
+          tabBarIcon: ({ focused }) => <TabIcon name="coach" focused={focused} size={32}/>,
         }}
       />
-      {/* Hidden from tab bar */}
       <Tabs.Screen name="league"   options={{ href: null }}/>
       <Tabs.Screen name="explore"  options={{ href: null }}/>
       <Tabs.Screen name="settings" options={{ href: null }}/>
