@@ -18,10 +18,6 @@ interface Player {
   rank: number; bye?: number; trend?: 'up' | 'down' | 'neutral'; drafted?: boolean;
 }
 
-const SURFACE  = 'rgba(255,255,255,0.90)';
-const BORDER   = 'rgba(88,131,191,0.32)';
-const BEVEL_HI = 'rgba(255,255,255,0.95)';
-
 const POS_COLORS: Record<string, string> = {
   QB: '#7b5ea7', RB: '#1e8c42', WR: '#2a7aaa',
   TE: '#b85a1a', K: '#6b7491',
@@ -59,16 +55,6 @@ const SEED_PLAYERS: Player[] = [
   { id:'9493',  name:'Trey McBride',         position:'TE', team:'ARI', rank:28 },
   { id:'5849',  name:'DeVonta Smith',        position:'WR', team:'PHI', rank:29 },
   { id:'7588',  name:'Michael Pittman Jr.',  position:'WR', team:'IND', rank:30 },
-  { id:'10229', name:'Malik Nabers',         position:'WR', team:'NYG', rank:31 },
-  { id:'11596', name:'Marvin Harrison Jr.',  position:'WR', team:'ARI', rank:32 },
-  { id:'10211', name:'Brian Thomas Jr.',     position:'WR', team:'JAX', rank:33 },
-  { id:'9226',  name:'Brock Bowers',         position:'TE', team:'LV',  rank:34 },
-  { id:'4034',  name:'Stefon Diggs',         position:'WR', team:'NE',  rank:35 },
-  { id:'11565', name:'Ashton Jeanty',        position:'RB', team:'LV',  rank:36 },
-  { id:'10859', name:'Jayden Higgins',       position:'WR', team:'HOU', rank:37 },
-  { id:'4034',  name:'Nico Collins',         position:'WR', team:'HOU', rank:38 },
-  { id:'9504',  name:'Tank Dell',            position:'WR', team:'HOU', rank:39 },
-  { id:'4217',  name:'Aaron Rodgers',        position:'QB', team:'PIT', rank:40 },
 ].map(p => ({ ...p, trend: 'neutral' as const, drafted: false }));
 
 function PlayerPhoto({ playerId, size = 48 }: { playerId: string; size?: number }) {
@@ -78,13 +64,13 @@ function PlayerPhoto({ playerId, size = 48 }: { playerId: string; size?: number 
     return (
       <Image
         source={{ uri: `https://sleepercdn.com/content/nfl/players/thumb/${playerId}.jpg` }}
-        style={[s, { backgroundColor: SURFACE }]}
+        style={[s, { backgroundColor: 'rgba(255,255,255,0.9)' }]}
         onError={() => setErr(true)}
       />
     );
   }
   return (
-    <View style={[s, { backgroundColor: C.sageS, alignItems:'center', justifyContent:'center', borderWidth:1.5, borderColor:BORDER }]}>
+    <View style={[s, { backgroundColor: C.sageS, alignItems:'center', justifyContent:'center', borderWidth:1.5, borderColor: 'rgba(88,131,191,0.18)' }]}>
       <Text style={{ fontSize: size * 0.35, color: C.dim2 }}>?</Text>
     </View>
   );
@@ -140,7 +126,6 @@ export default function RankingsScreen() {
 
   const resetMyRanks = () => saveMyRanks(SEED_PLAYERS.map(p => ({ ...p, drafted: false })));
 
-  // Fixed renderPlayer — no index in DraggableFlatList params
   const renderDraggableItem = ({ item, drag, isActive, getIndex }: RenderItemParams<Player>) => {
     const index    = getIndex?.() ?? 0;
     const posColor = POS_COLORS[item.position] || C.dim2;
@@ -148,69 +133,51 @@ export default function RankingsScreen() {
 
     return (
       <ScaleDecorator>
-        <View style={[
-          styles.playerRow,
-          isDrafted && styles.playerRowDrafted,
-          isActive && { backgroundColor: C.goldS, borderColor: C.goldBorder },
-        ]}>
-          <View style={styles.rankWrap}>
-            <Text style={[styles.rankNum, isDrafted && { color: C.dim2 }]}>{index + 1}</Text>
-          </View>
-
-          <View style={{ opacity: isDrafted ? 0.4 : 1, position: 'relative' }}>
-            <PlayerPhoto playerId={item.id} size={44} />
-            <View style={[styles.posBadge, { backgroundColor: posColor }]}>
-              <Text style={styles.posBadgeText}>{item.position}</Text>
+        <TouchableOpacity
+          onLongPress={drag}
+          disabled={isActive}
+          style={[styles.playerRow, isActive && styles.playerRowActive, isDrafted && styles.playerRowDrafted]}
+        >
+          <View style={styles.playerLeft}>
+            <Text style={[styles.rankNum, { color: posColor }]}>{index + 1}</Text>
+            <PlayerPhoto playerId={item.id} size={40} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[styles.playerName, isDrafted && styles.playerNameDrafted]}>{item.name}</Text>
+              <Text style={styles.playerSub}>{item.team} · {item.position}</Text>
             </View>
           </View>
-
-          <View style={[styles.playerInfo, isDrafted && { opacity: 0.5 }]}>
-            <Text style={[styles.playerName, isDrafted && { textDecorationLine: 'line-through' }]} numberOfLines={1}>
-              {item.name}
-            </Text>
-            <Text style={styles.playerTeam}>
-              {item.team}{item.bye ? ` · BYE ${item.bye}` : ''}
-            </Text>
-          </View>
-
-          <View style={styles.actions}>
-            {draftMode && mode === 'mine' ? (
-              <TouchableOpacity
-                style={[styles.draftBtn, isDrafted && styles.draftBtnOn]}
-                onPress={() => toggleDrafted(item)}
-              >
-                <Text style={[styles.draftBtnTxt, isDrafted && { color: C.blueDeep }]}>
-                  {isDrafted ? '✓' : '○'}
-                </Text>
+          <View style={styles.playerRight}>
+            {mode === 'mine' && (
+              <TouchableOpacity onPress={() => toggleDrafted(item)} style={styles.draftBtn}>
+                <Text style={[styles.draftTxt, isDrafted && styles.draftTxtOn]}>{isDrafted ? '✓' : '+'}</Text>
               </TouchableOpacity>
-            ) : mode === 'mine' ? (
-              <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.dragHandle}>
-                <Text style={styles.dragIcon}>⠿</Text>
-              </TouchableOpacity>
-            ) : null}
+            )}
           </View>
-        </View>
+        </TouchableOpacity>
       </ScaleDecorator>
     );
   };
 
-  // Separate render for FlatList (community mode) — has index
   const renderStaticItem = ({ item, index }: { item: Player; index: number }) => {
     const posColor = POS_COLORS[item.position] || C.dim2;
+    const isDrafted = item.drafted;
+
     return (
-      <View style={styles.playerRow}>
-        <View style={styles.rankWrap}>
-          <Text style={styles.rankNum}>{index + 1}</Text>
-        </View>
-        <View style={{ position: 'relative' }}>
-          <PlayerPhoto playerId={item.id} size={44} />
-          <View style={[styles.posBadge, { backgroundColor: posColor }]}>
-            <Text style={styles.posBadgeText}>{item.position}</Text>
+      <View style={[styles.playerRow, isDrafted && styles.playerRowDrafted]}>
+        <View style={styles.playerLeft}>
+          <Text style={[styles.rankNum, { color: posColor }]}>{index + 1}</Text>
+          <PlayerPhoto playerId={item.id} size={40} />
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={[styles.playerName, isDrafted && styles.playerNameDrafted]}>{item.name}</Text>
+            <Text style={styles.playerSub}>{item.team} · {item.position}</Text>
           </View>
         </View>
-        <View style={styles.playerInfo}>
-          <Text style={styles.playerName} numberOfLines={1}>{item.name}</Text>
-          <Text style={styles.playerTeam}>{item.team}{item.bye ? ` · BYE ${item.bye}` : ''}</Text>
+        <View style={styles.playerRight}>
+          {mode === 'mine' && (
+            <TouchableOpacity onPress={() => toggleDrafted(item)} style={styles.draftBtn}>
+              <Text style={[styles.draftTxt, isDrafted && styles.draftTxtOn]}>{isDrafted ? '✓' : '+'}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -218,105 +185,43 @@ export default function RankingsScreen() {
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
-      <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <Text style={styles.title}>📊 Rankings</Text>
+        <TouchableOpacity onPress={() => setDraftMode(!draftMode)} style={styles.draftModeBtn}>
+          <Text style={styles.draftModeTxt}>{draftMode ? 'View' : 'Edit'}</Text>
+        </TouchableOpacity>
+      </View>
 
-        {/* Platform prompt */}
-        {showPlatformPrompt && (
-          <View style={styles.platformOverlay}>
-            <View style={styles.platformSheet}>
-              <Text style={styles.platformTitle}>START YOUR RANKINGS</Text>
-              <Text style={styles.platformSub}>Choose a base to start your custom rankings from.</Text>
-              {[
-                { label:'AIOmni Consensus', sub:'Community-weighted rankings',   color:C.gold      },
-                { label:'Sleeper ADP',      sub:'Based on Sleeper draft trends',  color:C.blueDeep  },
-                { label:'ESPN ADP',         sub:'Based on ESPN draft trends',     color:'#e03030'   },
-                { label:'Yahoo ADP',        sub:'Based on Yahoo draft trends',    color:'#6001D2'   },
-              ].map(opt => (
-                <TouchableOpacity
-                  key={opt.label}
-                  style={[styles.platformOption, { borderColor: opt.color + '40' }]}
-                  onPress={initFromPlatform}
-                >
-                  <View style={[styles.platformDot, { backgroundColor: opt.color }]} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.platformOptLabel, { color: opt.color }]}>{opt.label}</Text>
-                    <Text style={styles.platformOptSub}>{opt.sub}</Text>
-                  </View>
-                  <Text style={{ color: C.dim2, fontSize: 18 }}>›</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.eyebrow}>RANKINGS</Text>
-            <Text style={styles.headline}>{mode === 'community' ? 'Community Consensus' : 'My Custom Rankings'}</Text>
-          </View>
-          {mode === 'mine' && (
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={[styles.draftModeBtn, draftMode && styles.draftModeBtnOn]}
-                onPress={() => setDraftMode(d => !d)}
-              >
-                <Text style={[styles.draftModeTxt, draftMode && { color: C.blueDeep }]}>
-                  {draftMode ? '✓ DRAFT' : '⊙ DRAFT'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.resetBtn} onPress={resetMyRanks}>
-                <Text style={styles.resetTxt}>RESET</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        {/* Mode toggle */}
-        <View style={styles.modeToggle}>
-          {(['community','mine'] as Mode[]).map(m => (
+      <View style={styles.filters}>
+        <View style={styles.modeRow}>
+          {(['community', 'mine'] as Mode[]).map(m => (
             <TouchableOpacity
               key={m}
-              style={[styles.modeBtn, mode === m && styles.modeBtnOn]}
               onPress={() => setMode(m)}
+              style={[styles.modeBtn, mode === m && styles.modeBtnOn]}
             >
               <Text style={[styles.modeTxt, mode === m && styles.modeTxtOn]}>
-                {m === 'community' ? '👥 COMMUNITY' : '⭐ MINE'}
+                {m === 'community' ? 'Community' : 'My Rankings'}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Filters */}
-        <View style={styles.filtersRow}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-            {(['PPR','HALF','STD'] as Format[]).map(f => (
-              <TouchableOpacity
-                key={f}
-                style={[styles.filterChip, format === f && { backgroundColor: C.goldS, borderColor: C.goldBorder }]}
-                onPress={() => setFormat(f)}
-              >
-                <Text style={[styles.filterChipTxt, format === f && { color: C.blueDeep }]}>
-                  {f === 'HALF' ? '0.5 PPR' : f}
-                </Text>
-              </TouchableOpacity>
-            ))}
-            <View style={styles.filterSep} />
+        <View style={styles.filterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {POSITIONS.map(pos => (
               <TouchableOpacity
                 key={pos}
-                style={[styles.filterChip, position === pos && { backgroundColor: (POS_COLORS[pos] ?? C.blueDeep) + '18', borderColor: (POS_COLORS[pos] ?? C.blueDeep) + '55' }]}
                 onPress={() => setPosition(pos)}
+                style={[styles.posBtn, position === pos && styles.posBtnOn]}
               >
-                <Text style={[styles.filterChipTxt, position === pos && { color: POS_COLORS[pos] ?? C.blueDeep }]}>{pos}</Text>
+                <Text style={[styles.posTxt, position === pos && styles.posTxtOn]}>{pos}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
 
-        {/* Search */}
-        <View style={styles.searchWrap}>
-          <Text style={styles.searchIcon}>🔍</Text>
+        <View style={styles.searchRow}>
           <TextInput
             style={styles.searchInput}
             placeholder="Search players..."
@@ -324,115 +229,268 @@ export default function RankingsScreen() {
             value={search}
             onChangeText={setSearch}
           />
-          {search ? (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Text style={styles.searchClear}>✕</Text>
-            </TouchableOpacity>
-          ) : null}
         </View>
-
-        {/* Banner */}
-        <View style={[styles.communityBanner, draftMode && mode === 'mine' && { borderColor: C.goldBorder, backgroundColor: C.goldS }]}>
-          <Text style={[styles.communityTxt, draftMode && mode === 'mine' && { color: C.blueDeep }]}>
-            {mode === 'community'
-              ? `📊 Community consensus · ${format} scoring · Updated daily`
-              : draftMode
-                ? '⊙ Draft mode — tap ○ to mark as drafted'
-                : '⭐ Your rankings · Hold ⠿ to drag and reorder'}
-          </Text>
-        </View>
-
-        {/* List */}
-        {mode === 'mine' ? (
-          <DraggableFlatList
-            data={filtered}
-            keyExtractor={(item, i) => `mine-${item.id}-${item.name}-${i}`}
-            renderItem={renderDraggableItem}
-            onDragEnd={({ data }) => saveMyRanks(data)}
-            contentContainerStyle={{ paddingBottom: 100, paddingTop: 4 }}
-            showsVerticalScrollIndicator={false}
-            ItemSeparatorComponent={() => <View style={{ height: 4 }} />}
-          />
-        ) : (
-          <FlatList
-            data={filtered}
-            keyExtractor={(item, i) => `comm-${item.id}-${item.name}-${i}`}
-            renderItem={renderStaticItem}
-            contentContainerStyle={{ paddingBottom: 100, paddingTop: 4 }}
-            showsVerticalScrollIndicator={false}
-            ItemSeparatorComponent={() => <View style={{ height: 4 }} />}
-          />
-        )}
       </View>
+
+      {mode === 'mine' && draftMode && (
+        <View style={styles.editBar}>
+          <TouchableOpacity onPress={resetMyRanks} style={styles.resetBtn}>
+            <Text style={styles.resetTxt}>Reset to Consensus</Text>
+          </TouchableOpacity>
+          <Text style={styles.editHint}>Long press to drag & reorder</Text>
+        </View>
+      )}
+
+      {mode === 'mine' && draftMode ? (
+        <DraggableFlatList
+          data={filtered}
+          onDragEnd={({ data }) => saveMyRanks(data)}
+          keyExtractor={item => item.id}
+          renderItem={renderDraggableItem}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+        />
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={item => item.id}
+          renderItem={renderStaticItem}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+
+      {showPlatformPrompt && (
+        <View style={styles.promptOverlay}>
+          <View style={styles.promptCard}>
+            <Text style={styles.promptTitle}>Set Up Your Rankings</Text>
+            <Text style={styles.promptTxt}>Start with 2025 consensus rankings and customize for your league.</Text>
+            <TouchableOpacity onPress={initFromPlatform} style={styles.promptBtn}>
+              <Text style={styles.promptBtnTxt}>Get Started</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: SP[3] },
-
-  header:        { flexDirection:'row', alignItems:'flex-start', justifyContent:'space-between', marginBottom:12 },
-  eyebrow:       { fontSize:SZ.xs, fontFamily:F.mono, color:C.blueDeep, letterSpacing:2, marginBottom:2 },
-  headline:      { fontSize:SZ.xl, fontFamily:F.bold, color:C.ink },
-  headerActions: { flexDirection:'row', gap:8, alignItems:'center' },
-
-  draftModeBtn:   { borderWidth:1.5, borderColor:BORDER, borderRadius:8, paddingHorizontal:10, paddingVertical:5, backgroundColor:SURFACE },
-  draftModeBtnOn: { borderColor:C.blueDeep, backgroundColor:C.sageS },
-  draftModeTxt:   { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs, letterSpacing:1 },
-  resetBtn:       { borderWidth:1.5, borderColor:'rgba(168,48,64,0.3)', borderRadius:8, paddingHorizontal:10, paddingVertical:5 },
-  resetTxt:       { fontFamily:F.mono, color:'#a83040', fontSize:SZ.xs, letterSpacing:1 },
-
-  modeToggle: { flexDirection:'row', backgroundColor:SURFACE, borderRadius:12, padding:3, marginBottom:10, borderWidth:1.5, borderColor:BORDER },
-  modeBtn:    { flex:1, paddingVertical:7, borderRadius:9, alignItems:'center' },
-  modeBtnOn:  { backgroundColor:C.sageS },
-  modeTxt:    { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs, letterSpacing:1 },
-  modeTxtOn:  { color:C.blueDeep, fontFamily:F.bold },
-
-  filtersRow:    { marginBottom:8 },
-  filterChip:    { paddingHorizontal:10, paddingVertical:5, borderRadius:8, borderWidth:1.5, borderColor:BORDER, backgroundColor:SURFACE },
-  filterChipTxt: { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs-1, letterSpacing:0.8 },
-  filterSep:     { width:1, backgroundColor:BORDER, marginHorizontal:2 },
-
-  searchWrap:  { flexDirection:'row', alignItems:'center', backgroundColor:SURFACE, borderWidth:1.5, borderColor:BORDER, borderRadius:10, paddingHorizontal:10, paddingVertical:6, marginBottom:8, gap:7 },
-  searchIcon:  { fontSize:14 },
-  searchInput: { flex:1, fontFamily:F.mono, color:C.ink, fontSize:SZ.sm },
-  searchClear: { color:C.dim2, fontSize:14, padding:2 },
-
-  communityBanner: { borderWidth:1.5, borderColor:BORDER, borderRadius:8, paddingHorizontal:10, paddingVertical:6, marginBottom:8, backgroundColor:SURFACE },
-  communityTxt:    { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs-1, letterSpacing:0.5 },
-
-  playerRow: {
-    flexDirection:'row', alignItems:'center',
-    backgroundColor:SURFACE, borderWidth:1.5, borderColor:BORDER,
-    borderRadius:12, paddingVertical:8, paddingHorizontal:10, gap:10,
-    shadowColor:'#3d6aaa', shadowOffset:{width:0,height:1}, shadowOpacity:0.06, shadowRadius:4, elevation:2,
+  header: {
+    paddingHorizontal: SP[3],
+    paddingBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  playerRowDrafted: { opacity:0.45 },
-
-  rankWrap:  { width:28, alignItems:'center' },
-  rankNum:   { fontFamily:F.bold, color:C.ink, fontSize:SZ.base, lineHeight:18 },
-
-  posBadge:     { position:'absolute', bottom:-2, right:-2, paddingHorizontal:4, paddingVertical:1, borderRadius:4, minWidth:22, alignItems:'center' },
-  posBadgeText: { fontFamily:F.mono, fontSize:7, fontWeight:'700', color:'#ffffff' },
-
-  playerInfo: { flex:1 },
-  playerName: { fontFamily:F.bold, color:C.ink, fontSize:SZ.base },
-  playerTeam: { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs-1, marginTop:1, letterSpacing:0.4 },
-
-  actions:    { flexDirection:'row', alignItems:'center', gap:4 },
-  dragHandle: { padding:10, justifyContent:'center', alignItems:'center' },
-  dragIcon:   { fontSize:20, color:C.dim2, letterSpacing:-1 },
-
-  draftBtn:    { width:32, height:32, borderRadius:8, borderWidth:1.5, borderColor:BORDER, alignItems:'center', justifyContent:'center', backgroundColor:SURFACE },
-  draftBtnOn:  { borderColor:C.blueDeep, backgroundColor:C.sageS },
-  draftBtnTxt: { fontSize:16, color:C.dim2 },
-
-  platformOverlay: { position:'absolute', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(26,31,46,0.7)', zIndex:100, justifyContent:'center', padding:SP[3] },
-  platformSheet:   { backgroundColor:'#ffffff', borderRadius:20, padding:24, borderWidth:1.5, borderColor:BORDER },
-  platformTitle:   { fontFamily:F.bold, color:C.blueDeep, fontSize:SZ.sm, letterSpacing:2, marginBottom:8 },
-  platformSub:     { fontFamily:F.mono, color:C.dim2, fontSize:SZ.sm, lineHeight:18, marginBottom:20 },
-  platformOption:  { flexDirection:'row', alignItems:'center', gap:12, padding:14, borderRadius:12, borderWidth:1.5, marginBottom:8, backgroundColor:SURFACE },
-  platformDot:     { width:10, height:10, borderRadius:5 },
-  platformOptLabel:{ fontFamily:F.bold, fontSize:SZ.base, marginBottom:2 },
-  platformOptSub:  { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs-1, letterSpacing:0.3 },
+  title: {
+    fontSize: SZ.xl,
+    fontFamily: F.bold,
+    color: "#ffffff",
+  },
+  draftModeBtn: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  draftModeTxt: {
+    fontSize: SZ.sm,
+    fontFamily: F.mono,
+    color: "#ffffff",
+  },
+  filters: {
+    paddingHorizontal: SP[3],
+    paddingBottom: 12,
+  },
+  modeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  modeBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  modeBtnOn: {
+    backgroundColor: "#ffffff",
+  },
+  modeTxt: {
+    fontSize: SZ.sm,
+    fontFamily: F.bold,
+    color: "#ffffff",
+  },
+  modeTxtOn: {
+    color: C.ink,
+  },
+  filterRow: {
+    marginBottom: 12,
+  },
+  posBtn: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  posBtnOn: {
+    backgroundColor: C.blueDeep,
+  },
+  posTxt: {
+    fontSize: SZ.sm,
+    fontFamily: F.mono,
+    color: "#ffffff",
+  },
+  posTxtOn: {
+    color: "#ffffff",
+    fontFamily: F.bold,
+  },
+  searchRow: {
+    marginBottom: 8,
+  },
+  searchInput: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: SZ.sm,
+    color: C.ink,
+    fontFamily: F.mono,
+    borderWidth: 1.5,
+    borderColor: 'rgba(88,131,191,0.18)',
+  },
+  editBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SP[3],
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  resetBtn: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  resetTxt: {
+    fontSize: SZ.xs,
+    fontFamily: F.mono,
+    color: "#ffffff",
+  },
+  editHint: {
+    fontSize: SZ.xs,
+    fontFamily: F.mono,
+    color: C.dim2,
+  },
+  list: {
+    paddingHorizontal: SP[3],
+    paddingBottom: 100,
+  },
+  playerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1.5,
+    borderColor: 'rgba(88,131,191,0.18)',
+  },
+  playerRowActive: {
+    opacity: 0.8,
+    transform: [{ scale: 1.02 }],
+  },
+  playerRowDrafted: {
+    backgroundColor: 'rgba(217,253,243,0.9)',
+    borderColor: C.mint,
+  },
+  playerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  rankNum: {
+    fontSize: SZ.lg,
+    fontFamily: F.bold,
+    width: 32,
+    textAlign: 'center',
+  },
+  playerName: {
+    fontSize: SZ.sm,
+    fontFamily: F.bold,
+    color: C.ink,
+  },
+  playerNameDrafted: {
+    textDecorationLine: 'line-through',
+    color: C.dim2,
+  },
+  playerSub: {
+    fontSize: SZ.xs,
+    fontFamily: F.mono,
+    color: C.dim2,
+    marginTop: 2,
+  },
+  playerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  draftBtn: {
+    backgroundColor: 'rgba(88,131,191,0.1)',
+    borderRadius: 8,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  draftTxt: {
+    fontSize: SZ.sm,
+    fontFamily: F.bold,
+    color: C.dim2,
+  },
+  draftTxtOn: {
+    color: C.mint,
+  },
+  promptOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  promptCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 24,
+    width: '80%',
+    alignItems: 'center',
+  },
+  promptTitle: {
+    fontSize: SZ.lg,
+    fontFamily: F.bold,
+    color: C.ink,
+    marginBottom: 8,
+  },
+  promptTxt: {
+    fontSize: SZ.sm,
+    color: C.dim,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  promptBtn: {
+    backgroundColor: C.blueDeep,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  promptBtnTxt: {
+    color: "#ffffff",
+    fontSize: SZ.sm,
+    fontFamily: F.bold,
+  },
 });

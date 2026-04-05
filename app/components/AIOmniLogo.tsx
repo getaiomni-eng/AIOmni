@@ -6,7 +6,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, Defs, G, Path, Polygon, RadialGradient, Stop, Text as SvgText } from 'react-native-svg';
 
-const BLADE = "M 3,-52 L -48,6 C -44,20 -32,40 -16,50 L 14,-14 Z";
+const BLADE = "M 0,0 L -28,-48.5 A 56,56 0 0,1 28,-48.5 Z";
 const ROTS  = [0, 60, 120, 180, 240, 300];
 const OPEN  = 70;
 

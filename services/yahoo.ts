@@ -181,7 +181,7 @@ async function yahooFetch(path: string, accessToken: string): Promise<any> {
 }
 
 export async function getYahooLeagues(accessToken: string): Promise<YahooLeague[]> {
-  const data = await yahooFetch(`/users;use_login=1/games;game_keys=${YAHOO_NFL_GAME_KEY}/leagues`, accessToken);
+  const data = await yahooFetch(`/users;use_login=1/games;game_codes=${YAHOO_NFL_GAME_KEY};seasons=2025/leagues`, accessToken);
   try {
     const gamesData = data.fantasy_content.users[0].user[1].games;
     const game = gamesData[0]?.game;

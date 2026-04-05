@@ -8,7 +8,7 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#ffffff',
+          backgroundColor: C.bgTop,
           borderTopWidth: 1.5,
           borderTopColor: 'rgba(88,131,191,0.18)',
           paddingTop: 8,
@@ -38,40 +38,40 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Teams',
-          tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} size={32}/>,
+          tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} size={32} />,
         }}
       />
       <Tabs.Screen
         name="waiver"
         options={{
           title: 'Waiver',
-          tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} size={32}/>,
+          tabBarIcon: ({ focused }) => <TabIcon name="waiver" focused={focused} size={32} />,
         }}
       />
       <Tabs.Screen
         name="rankings"
         options={{
           title: 'Rankings',
-          tabBarIcon: ({ focused }) => <TabIcon name="rankings" focused={focused} size={32}/>,
+          tabBarIcon: ({ focused }) => <TabIcon name="rankings" focused={focused} size={32} />,
         }}
       />
       <Tabs.Screen
         name="trade"
         options={{
           title: 'Trade',
-          tabBarIcon: ({ focused }) => <TabIcon name="trade" focused={focused} size={32}/>,
+          tabBarIcon: ({ focused }) => <TabIcon name="trade" focused={focused} size={32} />,
         }}
       />
       <Tabs.Screen
         name="coach"
         options={{
           title: 'AI Coach',
-          tabBarIcon: ({ focused }) => <TabIcon name="coach" focused={focused} size={32}/>,
+          tabBarIcon: ({ focused }) => <TabIcon name="coach" focused={focused} size={32} />,
         }}
       />
-      <Tabs.Screen name="league"   options={{ href: null }}/>
-      <Tabs.Screen name="explore"  options={{ href: null }}/>
-      <Tabs.Screen name="settings" options={{ href: null }}/>
+      <Tabs.Screen name="league"   options={{ href: null }} />
+      <Tabs.Screen name="explore"  options={{ href: null }} />
+      <Tabs.Screen name="settings" options={{ href: null }} />
     </Tabs>
   );
 }

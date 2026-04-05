@@ -153,7 +153,7 @@ export default function SettingsTab() {
 
         {/* ── Auth CTA ── */}
         {!user && (
-          <TouchableOpacity style={styles.authCta} onPress={() => router.push('/auth')}>
+          <TouchableOpacity style={styles.authCta} onPress={() => router.replace('/onboarding')}>
             <Text style={styles.authCtaTxt}>🔑  Create account to sync across devices →</Text>
           </TouchableOpacity>
         )}
@@ -233,7 +233,7 @@ export default function SettingsTab() {
               <Text style={styles.modalBtnTxt}>{loading ? 'Connecting...' : 'Connect Sleeper'}</Text>
             </TouchableOpacity>
             {!user && (
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: C.goldS, borderColor: C.goldBorder, marginTop: 8 }]} onPress={() => { setShowAccountModal(false); router.push('/auth'); }}>
+              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: C.goldS, borderColor: C.goldBorder, marginTop: 8 }]} onPress={() => { setShowAccountModal(false); router.replace('/onboarding'); }}>
                 <Text style={[styles.modalBtnTxt, { color: C.blueDeep }]}>Create AIOmni Account →</Text>
               </TouchableOpacity>
             )}

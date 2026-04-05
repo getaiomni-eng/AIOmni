@@ -3,9 +3,21 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { getCurrentTier } from '../../services/purchases';
+
 const PROMPT_COUNT_KEY = 'prompt_count';
 const PROMPT_RESET_KEY = 'prompt_reset_time';
-const WEEKLY_LIMIT = 25;
+
+function getPromptLimit(tier: string): number {
+  switch (tier) {
+    case 'free': return 25;
+    case 'rankings': return 0;
+    case 'pro': return 75;
+    case 'premium': return 125;
+    case 'dynasty_elite': return 999;
+    default: return 25;
+  }
+}
 
 function getNextSundayNoon(): number {
   const now = new Date();
@@ -37,18 +49,26 @@ async function maybeReset(): Promise<void> {
 }
 
 export async function getRemainingPrompts(): Promise<number> {
+  const tier = await getCurrentTier();
+  const limit = getPromptLimit(tier);
   await maybeReset();
   const countStr = await AsyncStorage.getItem(PROMPT_COUNT_KEY);
   const used = parseInt(countStr || '0', 10);
-  return Math.max(0, WEEKLY_LIMIT - used);
+  if (limit >= 999) return 999;
+  return Math.max(0, limit - used);
 }
 
 export async function canSendPrompt(): Promise<boolean> {
+  const tier = await getCurrentTier();
+  if (getPromptLimit(tier) >= 999) return true;
   const remaining = await getRemainingPrompts();
   return remaining > 0;
 }
 
 export async function incrementPrompt(): Promise<void> {
+  const tier = await getCurrentTier();
+  const limit = getPromptLimit(tier);
+  if (limit >= 999) return;
   await maybeReset();
   const countStr = await AsyncStorage.getItem(PROMPT_COUNT_KEY);
   const used = parseInt(countStr || '0', 10);

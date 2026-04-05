@@ -4,16 +4,17 @@ import Svg, {
   Circle, ClipPath, Defs, G, Line, Path, Polygon, Rect,
   Text as SvgText,
 } from 'react-native-svg';
+import { C } from '../constants/tokens';
 
 const AnimatedPolygon = Animated.createAnimatedComponent(Polygon);
 const AnimatedG       = Animated.createAnimatedComponent(G);
 const AnimatedRect    = Animated.createAnimatedComponent(Rect);
 
-const GOLD  = '#fee229';
-const BLUE  = '#5883bf';
-const BD    = '#3d6aaa';
-const CREAM = '#ffffed';
-const DARK  = 'rgba(61,106,170,0.06)';
+const GOLD  = C.gold;
+const BLUE  = C.sage;
+const BD    = C.blueDeep;
+const CREAM = C.bgTop;
+const DARK  = C.oceanS;
 const rand  = (a: number, b: number) => a + Math.random() * (b - a);
 const ease  = (t: number) => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3) / 2;
 
@@ -259,6 +260,44 @@ function TradeIcon({ size }: { size: number }) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// WAIVER — radar sweep inside hex (rotating translucent wedge)
+// ══════════════════════════════════════════════════════════════
+function WaiverIcon({ size }: { size: number }) {
+  const stroke = useStrokeCycle(1000);
+  const [op1, op2] = useHexPulse(4800, 2200);
+  const rot = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(rot, { toValue: 1, duration: 2400, useNativeDriver: false })
+    ).start();
+  }, []);
+
+  const rotDeg = rot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
+  return (
+    <Svg width={size} height={size} viewBox="0 0 64 64">
+      <Defs>
+        <ClipPath id="hexW"><Polygon points="32,4 56,18 56,46 32,60 8,46 8,18"/></ClipPath>
+      </Defs>
+      <AnimatedPolygon points="32,4 56,18 56,46 32,60 8,46 8,18"
+        fill={DARK} stroke={stroke as any} strokeWidth={2.2} strokeLinejoin="round"/>
+      <AnimatedPolygon points="32,4 56,18 56,46 32,60 8,46 8,18"
+        fill="none" stroke={GOLD} strokeWidth={1.5} strokeLinejoin="round" opacity={op1 as any}/>
+      <AnimatedPolygon points="32,4 56,18 56,46 32,60 8,46 8,18"
+        fill="none" stroke={GOLD} strokeWidth={1.5} strokeLinejoin="round" opacity={op2 as any}/>
+
+      <G clipPath="url(#hexW)">
+        <AnimatedG transform={rotDeg as any} origin="32,32">
+          <Path d="M32 32 L56 20 A32 32 0 0 1 56 44 Z" fill={`${C.goldG || 'rgba(254,226,41,0.18)'}`} opacity={0.75}/>
+        </AnimatedG>
+        <Circle cx="32" cy="32" r="10" fill={BD} stroke={BLUE} strokeWidth={1.5}/>
+      </G>
+    </Svg>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // EXPORT
 // ══════════════════════════════════════════════════════════════
 export default function TabIcon({
@@ -274,9 +313,10 @@ export default function TabIcon({
     <View style={{ opacity: focused ? 1 : 0.38 }}>
       {name === 'home'     && <HomeIcon     size={size}/>}
       {name === 'coach'    && <CoachIcon    size={size}/>}
+      {name === 'waiver'   && <WaiverIcon   size={size}/>}
       {name === 'rankings' && <RankingsIcon size={size}/>}
       {name === 'trade'    && <TradeIcon    size={size}/>}
-      {!['home','coach','rankings','trade'].includes(name) && <HomeIcon size={size}/>}
+      {!['home','coach','waiver','rankings','trade'].includes(name) && <HomeIcon size={size}/>} 
     </View>
   );
 }

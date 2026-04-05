@@ -12,10 +12,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../services/espn';
 import { getValidYahooToken } from '../../services/yahoo';
-import { Badge, SectionHeader } from '../components/Atoms';
-import { GlassCard } from '../components/GlassCard';
 import { AIOmniLogo } from '../components/AIOmniLogo';
-import { C, F, R, SP, SZ, shadow } from '../constants/tokens';
+import { Badge, SectionHeader } from '../components/Atoms';
+import { C, F, R, SP, SZ } from '../constants/tokens';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W    = SCREEN_W - SP[3] * 2;
@@ -200,8 +199,14 @@ export default function HomeScreen() {
                   if (isMe) {
                     const w = teamStats?.outcome_totals?.wins   ?? 0;
                     const l = teamStats?.outcome_totals?.losses ?? 0;
-                    rec  = `${w}–${l}`;
-                    rank = `${teamStats?.rank ?? '?'} of ${teamCount}`;
+                    rec = `${w}–${l}`;
+                    const sortedTeams = [...Array.from({ length: teamCount }, (_, idx) => idx)].sort((a, b) => {
+                      const aStats = teams[a]?.team?.[1]?.team_standings?.outcome_totals;
+                      const bStats = teams[b]?.team?.[1]?.team_standings?.outcome_totals;
+                      return (bStats?.wins ?? 0) - (aStats?.wins ?? 0);
+                    });
+                    const myRank = sortedTeams.indexOf(t) + 1;
+                    rank = `${myRank}${ordinal(myRank)} of ${teamCount}`;
                     break;
                   }
                 }
@@ -209,19 +214,28 @@ export default function HomeScreen() {
             }
             if (matchupRes.status === 'fulfilled' && matchupRes.value.ok) {
               const md     = await matchupRes.value.json();
-              const sbData = md?.fantasy_content?.league?.[1]?.scoreboard?.[0]?.matchups;
-              if (sbData) {
-                const mCount = sbData.count ?? 0;
-                for (let m = 0; m < mCount; m++) {
-                  const matchup = sbData[m]?.matchup;
+              const mtData = md?.fantasy_content?.league;
+              const matchups = mtData?.[1]?.scoreboard?.[0]?.matchups;
+              if (matchups) {
+                const matchupCount = matchups.count ?? 0;
+                for (let m = 0; m < matchupCount; m++) {
+                  const matchup = matchups[m]?.matchup;
                   const teams   = matchup?.[0]?.teams;
-                  if (!teams) continue;
-                  const t0     = teams[0]?.team;
-                  const t1     = teams[1]?.team;
-                  const t0IsMe = t0?.[0]?.find?.((x: any) => Array.isArray(x?.managers))?.managers?.[0]?.manager?.is_current_login === '1';
-                  const t1IsMe = t1?.[0]?.find?.((x: any) => Array.isArray(x?.managers))?.managers?.[0]?.manager?.is_current_login === '1';
-                  if (t0IsMe) { pts = parseFloat(t0?.[1]?.team_points?.total ?? 0); opp = parseFloat(t1?.[1]?.team_points?.total ?? 0); break; }
-                  if (t1IsMe) { pts = parseFloat(t1?.[1]?.team_points?.total ?? 0); opp = parseFloat(t0?.[1]?.team_points?.total ?? 0); break; }
+                  if (teams) {
+                    const teamCount = teams.count ?? 0;
+                    for (let t = 0; t < teamCount; t++) {
+                      const teamData = teams[t]?.team;
+                      const teamInfo = teamData?.[0];
+                      const managerArr = teamInfo?.find((x: any) => Array.isArray(x?.managers));
+                      const isMe = managerArr?.managers?.[0]?.manager?.is_current_login === '1';
+                      if (isMe) {
+                        pts = parseFloat(teamData?.[1]?.team_points?.total ?? '0');
+                        const oppIdx = t === 0 ? 1 : 0;
+                        opp = parseFloat(teams[oppIdx]?.team?.[1]?.team_points?.total ?? '0');
+                        break;
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -230,75 +244,60 @@ export default function HomeScreen() {
         }
       }
       return leagues;
-    } catch { return []; }
+    } catch (e) { return []; }
   };
 
   const loadLeagues = async () => {
     setLoading(true);
-    const u = await AsyncStorage.getItem('sleeper_username');
-    if (u) setUsername(u);
-    const [sleeperLeagues, espnLeagues, yahooLeagues] = await Promise.all([
-      loadSleeperLeagues(), loadESPNLeagues(), loadYahooLeagues(),
-    ]);
-    const all = [...sleeperLeagues, ...espnLeagues, ...yahooLeagues];
-    setLeagues(all);
+    try {
+      const [sleeper, espn, yahoo] = await Promise.allSettled([
+        loadSleeperLeagues(),
+        loadESPNLeagues(),
+        loadYahooLeagues(),
+      ]);
+      const allLeagues: League[] = [];
+      if (sleeper.status === 'fulfilled') allLeagues.push(...sleeper.value);
+      if (espn.status    === 'fulfilled') allLeagues.push(...espn.value);
+      if (yahoo.status   === 'fulfilled') allLeagues.push(...yahoo.value);
+      setLeagues(allLeagues);
+      const u = await AsyncStorage.getItem('sleeper_username');
+      setUsername(u || '');
+      if (allLeagues.length > 0) fetchAIInsights(allLeagues[0]);
+    } catch (e) { console.error('Load leagues error:', e); }
     setLoading(false);
-    if (all.length > 0) fetchAIInsights(all);
-    all.forEach((lg, i) => {
-      if (i < scoreAnims.length && lg.pts) {
-        Animated.timing(scoreAnims[i], { toValue: lg.pts, duration: 1400 + i * 120, useNativeDriver: false }).start();
-      }
-    });
   };
 
-  const fetchAIInsights = async (leagueList: League[]) => {
+  const fetchAIInsights = async (league: League) => {
+    if (insightLoading) return;
     setInsightLoading(true);
     try {
-      const results: {title:string;body:string;tag:string;color:string;emoji:string}[] = [];
-      const colorMap: Record<string, string> = { sage: C.sage, gold: C.gold, red: '#c87878' };
-      const leagueContext = leagueList.map(l => `${l.name} (${l.platform.toUpperCase()} · ${l.format}): Record ${l.rec ?? '?'}, Rank ${l.rank ?? '?'}, Score ${l.pts?.toFixed(1) ?? '?'} vs ${l.opp?.toFixed(1) ?? '?'} (${(l.pts ?? 0) > (l.opp ?? 0) ? 'WINNING' : 'LOSING'})`).join('\n');
-
-      const safeParseInsight = (text: string) => {
-        try {
-          const cleaned = text.replace(/```json|```/g, '').trim();
-          const match = cleaned.match(/\{[\s\S]*\}/);
-          return match ? JSON.parse(match[0]) : {};
-        } catch { return {}; }
-      };
-
-      const crossRes    = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': 'MOVED_TO_SERVICES', 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 200, messages: [{ role: 'user', content: `You are AIOmni. Fantasy manager has ${leagueList.length} leagues:\n${leagueContext}\n\nRespond with ONLY valid JSON, no other text:\n{"emoji":"🎯","title":"Short title under 5 words","body":"One specific actionable insight under 20 words referencing a real player or matchup","tag":"RISK","color":"sage"}` }] }) });
-      const crossText   = (await crossRes.json()).content?.[0]?.text ?? '';
-      const crossParsed = safeParseInsight(crossText);
-      const crossBody   = crossParsed.body && crossParsed.body.length > 5 ? crossParsed.body : `${leagueList[0]?.name ?? 'Your league'} — check the waiver wire before Wednesday.`;
-      results.push({ emoji: crossParsed.emoji ?? '🎯', title: crossParsed.title ?? 'Cross-League Insight', body: crossBody, tag: crossParsed.tag ?? 'INSIGHT', color: colorMap[crossParsed.color] ?? C.sage });
-
-      await Promise.allSettled(leagueList.map(async (lg) => {
-        const res    = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': 'MOVED_TO_SERVICES', 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 200, messages: [{ role: 'user', content: `You are AIOmni. Fantasy league: ${lg.name} (${lg.format}, ${lg.platform.toUpperCase()}). Record: ${lg.rec}, Rank: ${lg.rank}, Score: ${lg.pts?.toFixed(1)} vs ${lg.opp?.toFixed(1)} (${(lg.pts ?? 0) > (lg.opp ?? 0) ? 'WINNING' : 'LOSING'}).\n\nRespond with ONLY valid JSON, no other text:\n{"emoji":"🏈","title":"Short title under 5 words","body":"One specific actionable insight under 20 words with player or matchup name","tag":"START","color":"gold"}` }] }) });
-        const parsed  = safeParseInsight((await res.json()).content?.[0]?.text ?? '');
-        const body    = parsed.body && parsed.body.length > 5 ? parsed.body : `Check your waiver wire — ${(lg.pts ?? 0) > (lg.opp ?? 0) ? 'protect the lead' : 'need an upside play'}.`;
-        results.push({ emoji: parsed.emoji ?? '🏈', title: `${lg.name}: ${parsed.title ?? 'Insight'}`, body, tag: parsed.tag ?? 'INSIGHT', color: colorMap[parsed.color] ?? C.gold });
-      }));
-
-      setAiInsights(results);
-    } catch { setAiInsights(FALLBACK_INSIGHTS); }
+      const prompt = `You are AIOmni, an elite fantasy football analyst. For this ${league.platform.toUpperCase()} league (${league.format}), provide 3 concise, actionable insights for Week ${league.week}. Focus on starting/sitting decisions, waiver wire adds, and matchup analysis. Format as JSON array with objects having: emoji, title, body, tag, color. Use colors: sage, gold, amber, rose, ocean, mauve. Keep each insight under 120 characters.`;
+      const response = await askAI(prompt, 400);
+      const insights = JSON.parse(response?.replace(/```json|```/g, '').trim() || '[]');
+      if (Array.isArray(insights) && insights.length > 0) setAiInsights(insights);
+    } catch (e) { console.error('AI insights error:', e); }
     setInsightLoading(false);
   };
 
   const fetchNews = async () => {
-    const parseRSS = (xml: string, source: string, color: string) => {
-      const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
-      return items.slice(0, 6).flatMap(item => {
-        const m   = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) ?? item.match(/<title>(.*?)<\/title>/);
-        const raw = (m?.[1] ?? '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&apos;/g,"'").replace(/&quot;/g,'"').replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code))).replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16))).replace(/<[^>]+>/g,'').trim();
-        const lnk = item.match(/<link>(.*?)<\/link>/);
-        const url = (lnk?.[1] ?? '').trim();
-        return raw ? [{ source, headline: raw, color, url }] : [];
-      });
-    };
     try {
+      const parseRSS = (xml: string, source: string, color: string): { source: string; headline: string; color: string; url?: string }[] => {
+        const items: typeof FALLBACK_NEWS = [];
+        const itemRegex = /<item>(.*?)<\/item>/gs;
+        let match;
+        while ((match = itemRegex.exec(xml)) !== null) {
+          const itemXml = match[1];
+          const titleMatch = itemXml.match(/<title>(.*?)<\/title>/);
+          const linkMatch  = itemXml.match(/<link>(.*?)<\/link>/);
+          if (titleMatch && items.length < 3) {
+            items.push({ source, headline: titleMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim(), color });
+          }
+        }
+        return items;
+      };
       const [rotoRes, pfrRes, cbsRes] = await Promise.allSettled([
-        fetch('https://www.rotowire.com/rss/news.php?sport=NFL').then(r => r.text()),
-        fetch('https://www.profootballrumors.com/feed').then(r => r.text()),
+        fetch('https://www.rotowire.com/rss/current.xml').then(r => r.text()),
+        fetch('https://www.pro-football-reference.com/rss.xml').then(r => r.text()),
         fetch('https://www.cbssports.com/rss/headlines/nfl/').then(r => r.text()),
       ]);
       const results: { source: string; headline: string; color: string; url?: string }[] = [];
@@ -364,15 +363,13 @@ export default function HomeScreen() {
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
           {news.map((n, i) => (
-            <TouchableOpacity key={i} onPress={() => n.url ? Linking.openURL(n.url) : null} activeOpacity={0.8}>
-              <BevelCard style={[styles.newsChip, { borderColor: n.color + '30' }]}>
-                <View style={[styles.newsDot, { backgroundColor: n.color }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.newsSource, { color: n.color }]}>{n.source}</Text>
-                  <Text style={styles.newsText} numberOfLines={2}>{n.headline}</Text>
-                </View>
-              </BevelCard>
-            </TouchableOpacity>
+            <View key={i} style={[styles.newsChip, { borderColor: n.color + '30' }]}>
+              <View style={[styles.newsDot, { backgroundColor: n.color }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.newsSource, { color: n.color }]}>{n.source}</Text>
+                <Text style={styles.newsText} numberOfLines={2}>{n.headline}</Text>
+              </View>
+            </View>
           ))}
         </ScrollView>
 
@@ -400,251 +397,141 @@ export default function HomeScreen() {
                   <BevelCard key={lg.id} style={[styles.scoreCard, { width: CARD_W }, isNonSleeper && { borderColor: PLAT_BORDER(lg.platform) }]}>
                     <Text style={styles.scoreEye}>
                       {'⚡  LIVE · WK '}{lg.week}{'  '}
-                      <Text style={{ color: platColor }}>{PLAT_LABEL(lg.platform)}</Text>
-                      {'  ·  '}{lg.format}
+                      <Text style={[styles.platBadge, { backgroundColor: platColor }]}>{PLAT_LABEL(lg.platform)}</Text>
                     </Text>
-                    <View style={styles.matchRow}>
-                      <View>
-                        <Text style={styles.teamLbl} numberOfLines={1}>{lg.name.toUpperCase()}</Text>
-                        {/* Gold score number with blue stroke — matches mockup */}
-                        <Text style={[styles.scoreNum, { color: winning ? '#fee229' : C.dim }]}>
-                          {ptsVal.toFixed(1)}
-                        </Text>
+                    <TouchableOpacity onPress={() => goToLeague(lg)} activeOpacity={0.8} style={styles.leagueBtn}>
+                      <View style={styles.leagueTop}>
+                        <PlatformLogo platform={lg.platform} size={32} />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={styles.leagueName} numberOfLines={1}>{lg.name}</Text>
+                          <Text style={styles.leagueMeta}>{lg.format} · {lg.rec}</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color={C.dim2} />
                       </View>
-                      <View style={[styles.winPill, !winning && styles.losePill]}>
-                        <Text style={[styles.winTxt, !winning && styles.loseTxt]}>
-                          {winning ? '↑ WINNING' : '↓ LOSING'}
-                        </Text>
+                      {lg.rank && <Text style={styles.leagueRank}>{lg.rank}</Text>}
+                    </TouchableOpacity>
+                    <View style={styles.scoreRow}>
+                      <View style={styles.scoreBox}>
+                        <Text style={styles.scoreLabel}>YOU</Text>
+                        <Text style={[styles.scoreNum, winning && styles.scoreWin]}>{ptsVal}</Text>
                       </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.teamLbl}>OPPONENT</Text>
-                        <Text style={[styles.scoreNum, { color: '#e05555' }]}>
-                          {(lg.opp ?? 0).toFixed(1)}
-                        </Text>
+                      <Text style={styles.scoreVs}>VS</Text>
+                      <View style={styles.scoreBox}>
+                        <Text style={styles.scoreLabel}>OPP</Text>
+                        <Text style={[styles.scoreNum, !winning && styles.scoreWin]}>{parseFloat((lg.opp ?? 0).toFixed(1))}</Text>
                       </View>
                     </View>
-                    <View style={styles.progBg}>
-                      <View style={[styles.progFill, {
-                        width: `${((lg.pts ?? 0) / Math.max((lg.pts ?? 0) + (lg.opp ?? 0), 1) * 100).toFixed(0)}%` as any,
-                        backgroundColor: winning ? '#1e8c42' : '#e05555',
-                      }]} />
-                    </View>
-                    {/* AI insight strip inside card */}
-                    {displayInsights[i + 1] && (
-                      <View style={styles.aiStrip}>
-                        <View style={styles.aiDot} />
-                        <Text style={styles.aiStripTxt} numberOfLines={2}>
-                          <Text style={{ fontFamily: F.semibold, color: C.blueDeep }}>AI: </Text>
-                          {displayInsights[i + 1]?.body}
-                        </Text>
-                      </View>
-                    )}
                   </BevelCard>
                 );
               })}
             </ScrollView>
-            <View style={styles.dotsRow}>
-              {leagues.map((_, i) => <View key={i} style={[styles.dot, i === scoreIdx && styles.dotActive]} />)}
+            <View style={styles.scoreDots}>
+              {leagues.map((_, i) => (
+                <View key={i} style={[styles.scoreDot, i === scoreIdx && styles.scoreDotOn]} />
+              ))}
             </View>
           </>
-        ) : null}
-
-        {/* ── AI Insight card ── */}
-        <BevelCard style={{ marginBottom: 12 }}>
-          <View style={styles.insightHdr}>
-            <View style={styles.aiOrbSmall}>
-              <Text style={{ fontSize: 9, color: C.blueDeep }}>◉</Text>
-            </View>
-            <Text style={styles.insightEye}>AI INSIGHT · {leagues.length > 0 ? `${leagues.length} LEAGUES` : 'LIVE'}</Text>
-            <View style={{ flexDirection: 'row', gap: 4 }}>
-              {displayInsights.map((_, i) => <View key={i} style={[styles.dotInsight, i === insightIdx && styles.dotInsightActive]} />)}
-            </View>
-          </View>
-          {insightLoading ? (
-            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 4 }}>
-              <ActivityIndicator size="small" color={C.blueDeep} />
-              <Text style={styles.loadingTxt}>Scanning {leagues.length} leagues...</Text>
-            </View>
-          ) : (
-            <ScrollView
-              horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-              snapToInterval={INSIGHT_W} decelerationRate="fast"
-              onMomentumScrollEnd={e => { if (INSIGHT_W > 0) setInsightIdx(Math.round(e.nativeEvent.contentOffset.x / INSIGHT_W)); }}
-            >
-              {displayInsights.map((item, i) => (
-                <View key={i} style={{ width: INSIGHT_W, flexDirection: 'row', gap: 9, alignItems: 'flex-start' }}>
-                  <Text style={{ fontSize: 20 }}>{item.emoji}</Text>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 4, flexWrap: 'wrap' }}>
-                      <Text style={styles.insightTitle}>{item.title}</Text>
-                      <Badge label={item.tag} color={item.color} />
-                    </View>
-                    <Text style={styles.insightText}>{item.body}</Text>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-        </BevelCard>
-
-        {/* ── My Leagues ── */}
-        <SectionHeader label="MY LEAGUES" barColor={C.gold} />
-        {!loading && leagues.map(lg => {
-          const [w, l]    = (lg.rec ?? '0–0').split('–').map(Number);
-          const platColor  = PLAT_COLOR(lg.platform);
-          const isYahoo   = lg.platform === 'yahoo';
-          const isESPN    = lg.platform === 'espn';
-          return (
-            <TouchableOpacity key={lg.id} onPress={() => goToLeague(lg)} activeOpacity={0.8}>
-              <BevelCard style={[
-                styles.leagueCard,
-                isESPN  && { borderColor: ESPN_RED_BORDER },
-                isYahoo && { borderColor: YAHOO_PURPLE_BORDER },
-              ]}>
-                <PlatformLogo platform={lg.platform} avatar={lg.avatar} size={52} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.leagueName}>{lg.name}</Text>
-                  <Text style={styles.leagueSub}>
-                    <Text style={{ color: platColor, fontFamily: F.semibold }}>{PLAT_LABEL(lg.platform)}</Text>
-                    {lg.format ? ` · ${lg.format}` : ''}
-                  </Text>
-                </View>
-                <View style={{ alignItems: 'flex-end', marginRight: 6 }}>
-                  {lg.rec  && <Text style={[styles.leagueRec, { color: w >= l ? C.mint : '#a83040' }]}>{lg.rec}</Text>}
-                  {lg.rank && <Text style={styles.leagueRank}>{lg.rank}</Text>}
-                </View>
-                <Text style={styles.chevron}>›</Text>
-              </BevelCard>
+        ) : (
+          <BevelCard style={styles.emptyCard}>
+            <Text style={styles.emptyEye}>🏆  NO LEAGUES FOUND</Text>
+            <Text style={styles.emptyTxt}>Connect your Sleeper, ESPN, or Yahoo account in Settings to see your leagues.</Text>
+            <TouchableOpacity onPress={() => router.push('/settings')} style={styles.emptyBtn}>
+              <Text style={styles.emptyBtnTxt}>GO TO SETTINGS</Text>
             </TouchableOpacity>
-          );
-        })}
+          </BevelCard>
+        )}
 
-        <View style={{ height: 40 }} />
+        {/* ── AI Insights ── */}
+        <View style={styles.insightsHeader}>
+          <Text style={styles.insightsEye}>🤖  AI INSIGHTS</Text>
+          <Text style={styles.insightsHint}>← swipe →</Text>
+        </View>
+        <ScrollView
+          horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+          snapToInterval={INSIGHT_W + 10} decelerationRate="fast"
+          contentContainerStyle={{ gap: 10 }}
+          style={{ marginBottom: 4 }}
+          onMomentumScrollEnd={e => setInsightIdx(Math.round(e.nativeEvent.contentOffset.x / (INSIGHT_W + 10)))}
+        >
+          {displayInsights.map((insight, i) => (
+            <BevelCard key={i} style={[styles.insightCard, { width: INSIGHT_W }]}>
+              <View style={styles.insightTop}>
+                <Text style={styles.insightEmoji}>{insight.emoji}</Text>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.insightTitle}>{insight.title}</Text>
+                  <Text style={styles.insightBody}>{insight.body}</Text>
+                </View>
+              </View>
+              <View style={[styles.insightTag, { backgroundColor: insight.color + '20', borderColor: insight.color + '40' }]}>
+                <Text style={[styles.insightTagTxt, { color: insight.color }]}>{insight.tag}</Text>
+              </View>
+            </BevelCard>
+          ))}
+        </ScrollView>
+        <View style={styles.insightDots}>
+          {displayInsights.map((_, i) => (
+            <View key={i} style={[styles.insightDot, i === insightIdx && styles.insightDotOn]} />
+          ))}
+        </View>
+
+        <View style={{ height: 60 }} />
       </ScrollView>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingHorizontal: SP[3], paddingBottom: 110 },
-
-  // Logo
-  logoWrap: { alignItems: 'center', marginBottom: 4, marginTop: 4 },
-
-  // Header
-  headerBar:  { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 14 },
-  handlePill: { backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: R.full, paddingHorizontal: 12, paddingVertical: 5, borderWidth: 1.5, borderColor: C.glassBorder },
-  handleTxt:  { fontSize: SZ.sm, color: C.blueDeep, fontFamily: F.mono },
-  gearBtn:    { padding: 6 },
-
-  // Bevel card system — cream + bevel matching mockup
-  bevelCard: {
-    background: undefined,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(88,131,191,0.38)',
-    borderRadius: R.lg,
-    shadowColor: '#3d6aaa',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 4,
-    position: 'relative',
-    overflow: 'hidden',
-    // Bevel edges
-    borderTopColor: 'rgba(255,255,255,0.95)',
-    borderLeftColor: 'rgba(255,255,255,0.85)',
-    borderBottomColor: 'rgba(88,131,191,0.45)',
-    borderRightColor: 'rgba(88,131,191,0.28)',
-    padding: 14,
-    marginBottom: 10,
-  },
-  bevelBlue: {
-    backgroundColor: '#4d7abf',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.4)',
-    borderRadius: R.lg,
-    shadowColor: '#3d6aaa',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 6,
-    position: 'relative',
-    overflow: 'hidden',
-    borderTopColor: 'rgba(255,255,255,0.6)',
-    borderLeftColor: 'rgba(255,255,255,0.3)',
-    borderBottomColor: 'rgba(20,45,100,0.5)',
-    borderRightColor: 'rgba(20,45,100,0.25)',
-    padding: 14,
-    marginBottom: 10,
-  },
-  bevelShine: {
-    position: 'absolute', top: 0, left: '8%', right: '8%', height: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.95)', zIndex: 6,
-  },
-
-  // News
-  newsHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 7 },
-  newsEye:       { fontSize: SZ.xs, fontFamily: F.mono, color: C.gold, letterSpacing: 1.4 },
-  newsHint:      { marginLeft: 'auto' as any, fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, opacity: 0.5 },
-  newsChip:      { width: 240, padding: 12, flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 0 },
-  newsDot:       { width: 6, height: 6, borderRadius: 3, marginTop: 3, flexShrink: 0 },
-  newsSource:    { fontSize: SZ.xs, fontFamily: F.mono, letterSpacing: 1, marginBottom: 3, fontFamily: F.monoBold },
-  newsText:      { fontSize: SZ.sm, fontFamily: F.outfit, color: C.ink, lineHeight: 18 },
-
-  // Loading
-  loadingCard: { alignItems: 'center', padding: 40, gap: 12 },
-  loadingTxt:  { color: C.dim2, fontFamily: F.mono, fontSize: SZ.sm },
-
-  // Score card
-  scoreCard: { padding: 16, marginBottom: 0 },
-  scoreEye:  { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, letterSpacing: 1.2, marginBottom: 10 },
-  matchRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  teamLbl:   { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, marginBottom: 3 },
-
-  // Gold score number with blue text-shadow (mockup style)
-  scoreNum: {
-    fontSize: SZ['4xl'],
-    fontFamily: F.bold,
-    letterSpacing: -0.5,
-    lineHeight: 38,
-    // Simulated stroke via text shadow
-    textShadowColor: '#3d6aaa',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 2,
-  },
-
-  winPill:  { backgroundColor: 'rgba(30,140,66,0.15)', borderRadius: R.full, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1.5, borderColor: 'rgba(30,140,66,0.45)' },
-  losePill: { backgroundColor: 'rgba(168,48,64,0.12)', borderColor: 'rgba(168,48,64,0.35)' },
-  winTxt:   { fontSize: SZ.sm, fontFamily: F.semibold, color: '#1e8c42', letterSpacing: 0.5 },
-  loseTxt:  { color: '#a83040' },
-  progBg:   { height: 5, backgroundColor: 'rgba(88,131,191,0.12)', borderRadius: 3, overflow: 'hidden' },
-  progFill: { height: 5, borderRadius: 3 },
-
-  // AI strip inside score card
-  aiStrip:    { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(88,131,191,0.12)' },
-  aiDot:      { width: 7, height: 7, borderRadius: 4, backgroundColor: C.gold, borderWidth: 1.5, borderColor: C.blueDeep, marginTop: 3 },
-  aiStripTxt: { flex: 1, fontSize: SZ.sm, fontFamily: F.outfit, color: C.ink2, lineHeight: 18 },
-
-  // Dots
-  dotsRow:          { flexDirection: 'row', justifyContent: 'center', gap: 5, marginBottom: 12 },
-  dot:              { width: 5, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(88,131,191,0.2)' },
-  dotActive:        { backgroundColor: C.gold, width: 14, borderRadius: 3 },
-
-  // AI Insight
-  insightHdr:       { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  aiOrbSmall:       { width: 20, height: 20, borderRadius: 10, backgroundColor: C.goldS, borderWidth: 1, borderColor: C.goldBorder, alignItems: 'center', justifyContent: 'center' },
-  insightEye:       { fontSize: SZ.xs, fontFamily: F.mono, color: C.gold, letterSpacing: 1.4, flex: 1 },
-  dotInsight:       { width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(254,226,41,0.25)' },
-  dotInsightActive: { width: 12, backgroundColor: C.gold },
-  insightTitle:     { fontSize: SZ.base, fontFamily: F.bold, color: C.ink },
-  insightText:      { fontSize: SZ.md, color: C.ink2, lineHeight: 18, fontFamily: F.outfit },
-
-  // Leagues
-  leagueCard: { flexDirection: 'row', alignItems: 'center' },
-  leagueName: { fontSize: SZ.base, fontFamily: F.bold, color: C.ink },
-  leagueSub:  { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim2, marginTop: 2 },
-  leagueRec:  { fontSize: SZ.base, fontFamily: F.bold },
-  leagueRank: { fontSize: SZ.xs, fontFamily: F.mono, color: C.gold, marginTop: 3 },
-  chevron:    { color: C.dim2, fontSize: SZ.xl },
+  scroll: { paddingHorizontal: SP[3] },
+  logoWrap: { alignItems: 'center', marginBottom: 16 },
+  headerBar: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  handlePill: { backgroundColor: C.surface, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
+  handleTxt: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 0.5 },
+  gearBtn: { padding: 8, marginLeft: 8 },
+  newsHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  newsEye: { fontSize: SZ.sm, fontFamily: F.mono, color: C.blueDeep, letterSpacing: 2 },
+  newsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
+  newsChip: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12, padding: 12, borderWidth: 1.5, minWidth: 240 },
+  newsDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8, marginTop: 2 },
+  newsSource: { fontSize: SZ.xs, fontFamily: F.mono, letterSpacing: 1, marginBottom: 2 },
+  newsText: { fontSize: SZ.sm, color: C.ink, lineHeight: 18 },
+  loadingCard: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 16, padding: 40, alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
+  loadingTxt: { fontSize: SZ.sm, color: C.dim2, marginTop: 12, fontFamily: F.mono },
+  scoreCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 18, borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
+  scoreEye: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, letterSpacing: 1.5, marginBottom: 12 },
+  platBadge: { color: '#ffffff', fontSize: SZ.xs, fontFamily: F.bold, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
+  leagueBtn: { marginBottom: 16 },
+  leagueTop: { flexDirection: 'row', alignItems: 'center' },
+  leagueName: { fontSize: SZ.base, color: C.ink, fontFamily: F.bold },
+  leagueMeta: { fontSize: SZ.xs, color: C.dim2, fontFamily: F.mono, marginTop: 2 },
+  leagueRank: { fontSize: SZ.sm, color: C.blueDeep, fontFamily: F.mono, textAlign: 'center', marginBottom: 8 },
+  scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  scoreBox: { alignItems: 'center', flex: 1 },
+  scoreLabel: { fontSize: SZ.xs, color: C.dim2, fontFamily: F.mono, letterSpacing: 1, marginBottom: 4 },
+  scoreNum: { fontSize: SZ['3xl'], color: C.ink, fontFamily: F.bold },
+  scoreWin: { color: C.mint },
+  scoreVs: { fontSize: SZ.lg, color: C.dim2, fontFamily: F.bold, marginHorizontal: 12 },
+  scoreDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 24 },
+  scoreDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.dim2 },
+  scoreDotOn: { backgroundColor: C.blueDeep },
+  emptyCard: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 16, padding: 24, alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
+  emptyEye: { fontSize: SZ.sm, fontFamily: F.mono, color: C.blueDeep, letterSpacing: 2, marginBottom: 8 },
+  emptyTxt: { fontSize: SZ.sm, color: C.dim2, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
+  emptyBtn: { backgroundColor: C.blueDeep, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 20 },
+  emptyBtnTxt: { color: '#ffffff', fontSize: SZ.sm, fontFamily: F.bold, letterSpacing: 1 },
+  insightsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  insightsEye: { fontSize: SZ.sm, fontFamily: F.mono, color: C.blueDeep, letterSpacing: 2 },
+  insightsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
+  insightCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 18, borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
+  insightTop: { flexDirection: 'row', marginBottom: 12 },
+  insightEmoji: { fontSize: SZ.xl },
+  insightTitle: { fontSize: SZ.base, color: C.ink, fontFamily: F.bold, marginBottom: 4 },
+  insightBody: { fontSize: SZ.sm, color: C.dim, lineHeight: 18 },
+  insightTag: { alignSelf: 'flex-start', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
+  insightTagTxt: { fontSize: SZ.xs, fontFamily: F.mono, letterSpacing: 0.5 },
+  insightDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 20 },
+  insightDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.dim2 },
+  insightDotOn: { backgroundColor: C.blueDeep },
+  bevelCard: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)', position: 'relative', overflow: 'hidden' },
+  bevelBlue: { backgroundColor: 'rgba(217,253,243,0.9)', borderColor: 'rgba(88,131,191,0.18)' },
+  bevelShine: { position: 'absolute', top: 0, left: '10%', right: '10%', height: 2, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 1 },
 });

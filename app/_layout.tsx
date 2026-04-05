@@ -10,6 +10,8 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { exchangeYahooCode } from '../services/yahoo';
+import { getUser, getUserRow } from '../services/supabase';
+import { C } from './constants/tokens';
 
 Sentry.init({
   dsn: 'https://bff368e4055a1f51bda1b9464e0d2a39@o4511046397394944.ingest.us.sentry.io/4511046438158336',
@@ -41,13 +43,32 @@ export default Sentry.wrap(function RootLayout() {
   useEffect(() => {
     if (!fontsLoaded) return;
 
-    AsyncStorage.getItem('sleeper_username').then(username => {
-      if (username) {
-        Sentry.setUser({ username });
-      } else {
+    (async () => {
+      try {
+        const user = await getUser();
+        if (!user) {
+          router.replace('/onboarding');
+          return;
+        }
+        Sentry.setUser({ id: user.id, email: user.email });
+
+        // Determine whether the user already has connected leagues.
+        const row = await getUserRow();
+        const hasSleeper = Boolean(row?.sleeper_username);
+        const espnIds = await AsyncStorage.getItem('espn_league_ids');
+        const yahooTokens = await AsyncStorage.getItem('yahoo_tokens');
+        const hasLeagues = hasSleeper || Boolean(espnIds) || Boolean(yahooTokens);
+
+        if (!hasLeagues) {
+          router.replace('/onboarding');
+        } else {
+          router.replace('/(tabs)');
+        }
+      } catch (err) {
+        console.error('Session check error', err);
         router.replace('/onboarding');
       }
-    });
+    })();
 
     const handleDeepLink = async (event: { url: string }) => {
       const url = event.url;
@@ -69,7 +90,7 @@ export default Sentry.wrap(function RootLayout() {
   }, [fontsLoaded]);
 
   // Cream background while fonts load (matches new theme)
-  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: '#ffffed' }} />;
+  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: C.bgTop }} />;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

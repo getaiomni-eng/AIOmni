@@ -21,8 +21,6 @@ import { C, F, R, SP, SZ } from '../constants/tokens';
 import { getRemainingPrompts, getResetTime, incrementPrompt } from '../utils/promptCounter';
 
 const WEEKLY_LIMIT = 25;
-const BORDER   = 'rgba(88,131,191,0.32)';
-const BEVEL_HI = 'rgba(255,255,255,0.95)';
 
 const FF_KNOWLEDGE = `
 FANTASY FOOTBALL FUNDAMENTALS (apply to every answer):
@@ -50,7 +48,7 @@ Format responses concisely — this is a mobile chat interface.
 Never compare players across different leagues — each league is scored independently.`;
 
 type LeagueContext = {
-  name: string; platform: string; format: string;
+  leagueId: string; name: string; platform: string; format: string;
   record: string; rank: string; roster: string[]; week: number;
 };
 
@@ -85,9 +83,9 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
           const p = playerMap[id];
           return p ? `${p.first_name} ${p.last_name} (${p.position})` : id;
         });
-        return { name: l.name, platform: 'Sleeper', format: fmt, record: `${wins}–${losses}`, rank: rankIdx >= 0 ? `${rankIdx + 1} of ${rosters.length}` : 'unknown', roster: rosterNames, week };
+        return { leagueId: l.league_id, name: l.name, platform: 'Sleeper', format: fmt, record: `${wins}–${losses}`, rank: rankIdx >= 0 ? `${rankIdx + 1} of ${rosters.length}` : 'unknown', roster: rosterNames, week };
       } catch {
-        return { name: l.name, platform: 'Sleeper', format: fmt, record: '?', rank: '?', roster: [], week };
+        return { leagueId: l.league_id, name: l.name, platform: 'Sleeper', format: fmt, record: '?', rank: '?', roster: [], week };
       }
     }));
   } catch { return []; }
@@ -114,7 +112,7 @@ async function loadESPNContext(): Promise<LeagueContext[]> {
       const posMap: Record<number, string> = { 1:'QB', 2:'RB', 3:'WR', 4:'TE', 5:'K', 16:'DEF' };
       return `${player?.fullName ?? 'Unknown'} (${posMap[player?.defaultPositionId] ?? 'FLEX'})`;
     });
-    return [{ name: leagueData.settings?.name ?? 'ESPN League', platform: 'ESPN', format: fmt, record: `${wins}–${losses}`, rank: rankIdx >= 0 ? `${rankIdx + 1} of ${teams.length}` : 'unknown', roster: rosterNames, week }];
+    return [{ leagueId: String(creds.leagueId), name: leagueData.settings?.name ?? 'ESPN League', platform: 'ESPN', format: fmt, record: `${wins}–${losses}`, rank: rankIdx >= 0 ? `${rankIdx + 1} of ${teams.length}` : 'unknown', roster: rosterNames, week }];
   } catch { return []; }
 }
 
@@ -298,334 +296,345 @@ export default function CoachScreen() {
       if (['pro','premium','dynasty_elite'].includes(tier) && selectedLeague) {
         try {
           await saveMemory({
-            leagueId: selectedLeague.name,
+            leagueId: selectedLeague.leagueId,
             platform: selectedLeague.platform,
-            content:  `Q: ${text.slice(0, 100)} | A: ${reply.slice(0, 200)}`,
+            content: `Q: ${text}\nA: ${reply.slice(0, 200)}...`,
           });
         } catch {}
       }
     } catch (e: any) {
-      const errMsg = e?.message?.includes('prompt_limit_reached')
-        ? "You've hit your weekly prompt limit. Upgrade to Pro for unlimited prompts."
-        : 'Connection error. Try again.';
-      setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: errMsg }]);
-    } finally {
-      setLoading(false);
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+      setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: 'Sorry, I encountered an error. Please try again.' }]);
     }
+    setLoading(false);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
-  const promptColor   = remaining <= 5 ? '#a83040' : remaining <= 10 ? C.amber : C.mint;
-  const selectorLabel = selectedLeague ? selectedLeague.name : 'All Leagues';
-  const selectorSub   = selectedLeague
-    ? `${selectedLeague.platform} · ${selectedLeague.format}`
-    : `${allLeagues.length} LEAGUE${allLeagues.length !== 1 ? 'S' : ''} · PERSONALIZED`;
-  const selectorColor = selectedLeague ? (PLATFORM_COLOR[selectedLeague.platform] ?? C.gold) : C.gold;
+  const quickSend = (prompt: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    send(prompt);
+  };
+
+  const clearChat = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setMessages([]);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+  };
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
-        <View style={[styles.wrap, { paddingTop: insets.top + 8 }]}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <View style={styles.header}>
+          <Text style={styles.title}>🤖 AI Coach</Text>
+          <TouchableOpacity onPress={clearChat} style={styles.clearBtn}>
+            <Ionicons name="trash-outline" size={18} color={C.dim2} />
+          </TouchableOpacity>
+        </View>
 
-          {/* ── Header — matches mockup ── */}
-          <View style={styles.hdr}>
-            {/* Mini logo avatar */}
-            <View style={styles.logoAvatar}>
-              <AIOmniLogo width={48} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>AI Coach</Text>
-              <Text style={styles.subtitle}>{contextReady ? selectorSub : 'LOADING LEAGUES...'}</Text>
-            </View>
-            <View style={styles.rightHdr}>
-              <View style={[styles.promptCounter, { borderColor: promptColor + '55', backgroundColor: promptColor + '12' }]}>
-                <Text style={[styles.promptCountNum, { color: promptColor }]}>{remaining}</Text>
-                <Text style={[styles.promptCountLbl, { color: promptColor }]}>/{WEEKLY_LIMIT}</Text>
-              </View>
-              <View style={styles.liveDot}>
-                <View style={[styles.livePulse, !contextReady && { backgroundColor: C.gold }]} />
-                <Text style={[styles.liveTxt, !contextReady && { color: C.gold }]}>{contextReady ? 'LIVE' : 'SYNC'}</Text>
-              </View>
-              <TouchableOpacity onPress={() => router.push('/settings')} style={styles.gearBtn}>
-                <Ionicons name="settings-sharp" size={20} color={C.dim2} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* ── League selector ── */}
-          {contextReady && allLeagues.length > 0 && (
-            <TouchableOpacity
-              style={[styles.leaguePicker, { borderColor: selectorColor + '55', backgroundColor: selectorColor + '12' }]}
-              onPress={() => setPickerVisible(true)}
-              activeOpacity={0.75}
-            >
-              <View style={[styles.leaguePickerDot, { backgroundColor: selectorColor }]} />
-              <Text style={[styles.leaguePickerLabel, { color: selectorColor }]} numberOfLines={1}>{selectorLabel}</Text>
-              <Ionicons name="chevron-down" size={14} color={selectorColor} style={{ marginLeft: 2 }} />
-            </TouchableOpacity>
-          )}
-
-          {/* ── Quick prompts ── */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.promptScroll} contentContainerStyle={{ gap: 5 }}>
-            {QUICK_PROMPTS.map(p => (
-              <TouchableOpacity key={p} style={styles.promptChip} onPress={() => send(p)}>
-                <Text style={styles.promptTxt}>{p}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* ── Messages ── */}
-          <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 8, gap: 10 }} showsVerticalScrollIndicator={false}>
-            {!contextReady && messages.length === 0 && (
-              <View style={{ alignItems:'center', paddingVertical:40, gap:10 }}>
-                <ActivityIndicator color={C.blueDeep} size="large" />
-                <Text style={styles.loadingSub}>Loading your leagues...</Text>
-              </View>
-            )}
-            {messages.map((m, i) => (
-              m.role === 'user' ? (
-                // User bubble — gold card (matches mockup)
-                <View key={i} style={styles.userRow}>
-                  <View style={styles.userBubble}>
-                    <View style={styles.userBubbleShine} />
-                    <Text style={styles.userTxt}>{m.text}</Text>
-                  </View>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.chatScroll}
+          contentContainerStyle={{ paddingBottom: 20 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {messages.map((msg, i) => (
+            <View key={i} style={[styles.msg, msg.role === 'user' && styles.userMsg]}>
+              {msg.isLoading ? (
+                <ActivityIndicator color={C.blueDeep} size="small" />
+              ) : msg.role === 'ai' ? (
+                <View style={styles.aiMsg}>
+                  {renderAIText(msg.text)}
                 </View>
               ) : (
-                // AI bubble — cream bevel card (matches mockup)
-                <View key={i} style={styles.aiRow}>
-                  <View style={styles.aiBubbleAvatar}>
-                    <Text style={{ fontSize: 12 }}>🤖</Text>
-                  </View>
-                  <View style={[styles.aiBubble, { maxWidth: '85%' }]}>
-                    <View style={styles.bevelShine} />
-                    {m.isLoading ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 4 }}>
-                        <ActivityIndicator color={C.blueDeep} size="small" />
-                        <Text style={[styles.aiTxt, { color: C.dim2 }]}>Analyzing...</Text>
-                      </View>
-                    ) : renderAIText(m.text)}
-                  </View>
-                </View>
-              )
-            ))}
-          </ScrollView>
-
-          {/* ── Input ── */}
-          <View style={[styles.inputWrap, { paddingBottom: insets.bottom + 4 }]}>
-            <View style={styles.inputRow}>
-              <TextInput
-                value={input}
-                onChangeText={setInput}
-                placeholder={remaining > 0 ? 'Ask about your leagues…' : 'Upgrade to Pro for unlimited prompts'}
-                placeholderTextColor={C.dim2}
-                style={styles.input}
-                onSubmitEditing={() => send(input)}
-                returnKeyType="send"
-                editable={remaining > 0}
-              />
-              <TouchableOpacity
-                style={[styles.sendBtn, (!input.trim() || loading || remaining <= 0) && styles.sendBtnOff]}
-                onPress={() => send(input)}
-                disabled={!input.trim() || loading || remaining <= 0}
-              >
-                <Text style={styles.sendArrow}>↑</Text>
-              </TouchableOpacity>
+                <Text style={styles.userTxt}>{msg.text}</Text>
+              )}
             </View>
+          ))}
+        </ScrollView>
+
+        <View style={[styles.inputBar, { paddingBottom: insets.bottom + 10 }]}>
+          <View style={styles.quickRow}>
+            {QUICK_PROMPTS.map(prompt => (
+              <TouchableOpacity key={prompt} onPress={() => quickSend(prompt)} style={styles.quickBtn} disabled={loading}>
+                <Text style={styles.quickTxt}>{prompt}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
+
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              value={input}
+              onChangeText={setInput}
+              placeholder="Ask anything about your leagues..."
+              placeholderTextColor={C.dim2}
+              multiline
+              returnKeyType="send"
+              onSubmitEditing={() => send(input)}
+              editable={!loading}
+            />
+            <TouchableOpacity
+              onPress={() => send(input)}
+              style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
+              disabled={!input.trim() || loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#ffffff" size="small" />
+              ) : (
+                <Ionicons name="send" size={18} color="#ffffff" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.remaining}>
+            {remaining} prompts remaining this week
+          </Text>
         </View>
-      </KeyboardAvoidingView>
 
-      {/* ── League Picker Modal ── */}
-      <Modal visible={pickerVisible} transparent animationType="slide" onRequestClose={() => setPickerVisible(false)}>
-        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setPickerVisible(false)}>
-          <View style={styles.pickerSheet}>
-            <View style={styles.pickerShineBar} />
-            <View style={styles.pickerHandle} />
-            <Text style={styles.pickerTitle}>FOCUS ON A LEAGUE</Text>
-            <Text style={styles.pickerSub}>AI advice will be tailored to the selected league's roster and scoring format.</Text>
-
-            <TouchableOpacity style={[styles.pickerRow, !selectedLeague && styles.pickerRowActive]} onPress={() => selectLeague(null)}>
-              <View style={[styles.pickerDot, { backgroundColor: C.gold }]} />
-              <View style={{ flex:1 }}>
-                <Text style={[styles.pickerRowLabel, !selectedLeague && { color: C.gold }]}>All Leagues</Text>
-                <Text style={styles.pickerRowSub}>{allLeagues.length} leagues · Cross-league insights</Text>
-              </View>
-              {!selectedLeague && <Ionicons name="checkmark" size={18} color={C.gold} />}
-            </TouchableOpacity>
-
-            <View style={styles.pickerDivider} />
-
-            {allLeagues.map((lg, i) => {
-              const isActive = selectedLeague?.name === lg.name && selectedLeague?.platform === lg.platform;
-              const color    = PLATFORM_COLOR[lg.platform] ?? C.gold;
-              return (
-                <TouchableOpacity key={i} style={[styles.pickerRow, isActive && styles.pickerRowActive]} onPress={() => selectLeague(lg)}>
-                  <View style={[styles.pickerDot, { backgroundColor: color }]} />
-                  <View style={{ flex:1 }}>
-                    <Text style={[styles.pickerRowLabel, isActive && { color }]} numberOfLines={1}>{lg.name}</Text>
-                    <Text style={styles.pickerRowSub}>{lg.platform} · {lg.format} · {lg.record} · Rank {lg.rank}</Text>
-                  </View>
-                  {isActive && <Ionicons name="checkmark" size={18} color={color} />}
+        <Modal visible={pickerVisible} transparent animationType="fade">
+          <TouchableOpacity style={styles.modalOverlay} onPress={() => setPickerVisible(false)}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Focus on League</Text>
+              <TouchableOpacity onPress={() => selectLeague(null)} style={styles.leagueOption}>
+                <Text style={styles.leagueTxt}>All Leagues ({allLeagues.length})</Text>
+              </TouchableOpacity>
+              {allLeagues.map((l, i) => (
+                <TouchableOpacity key={i} onPress={() => selectLeague(l)} style={styles.leagueOption}>
+                  <Text style={[styles.leagueTxt, { color: PLATFORM_COLOR[l.platform] ?? C.dim }]}>
+                    {l.name} ({l.platform})
+                  </Text>
+                  <Text style={styles.leagueSub}>{l.record} · {l.rank}</Text>
                 </TouchableOpacity>
-              );
-            })}
-
-            <TouchableOpacity style={styles.pickerClose} onPress={() => setPickerVisible(false)}>
-              <Text style={styles.pickerCloseTxt}>CANCEL</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      </KeyboardAvoidingView>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap:     { flex:1, paddingHorizontal: SP[3] },
-
-  // Header
-  hdr:      { flexDirection:'row', alignItems:'center', gap:10, marginBottom:10 },
-  logoAvatar: { width:44, height:44, borderRadius:12, backgroundColor: C.goldS, borderWidth:1.5, borderColor: C.goldBorder, alignItems:'center', justifyContent:'center', overflow:'hidden' },
-  title:    { fontSize:SZ.xl, fontFamily:F.bold, color:C.ink },
-  subtitle: { fontSize:SZ.xs-1, fontFamily:F.mono, color:C.dim2, letterSpacing:0.8 },
-  rightHdr: { flexDirection:'row', alignItems:'center', gap:6 },
-  gearBtn:  { padding:4 },
-
-  promptCounter:  { flexDirection:'row', alignItems:'baseline', borderRadius:20, paddingHorizontal:8, paddingVertical:3, borderWidth:1.5 },
-  promptCountNum: { fontSize:SZ.sm, fontFamily:F.bold },
-  promptCountLbl: { fontSize:SZ.xs-1, fontFamily:F.mono, opacity:0.7 },
-  liveDot:  { flexDirection:'row', alignItems:'center', gap:4, backgroundColor:'rgba(30,140,66,0.12)', borderWidth:1, borderColor:'rgba(30,140,66,0.3)', borderRadius:20, paddingHorizontal:8, paddingVertical:3 },
-  livePulse:{ width:5, height:5, borderRadius:3, backgroundColor:C.mint },
-  liveTxt:  { fontSize:SZ.xs-1, fontFamily:F.mono, color:C.mint, letterSpacing:1 },
-
-  leaguePicker:     { flexDirection:'row', alignItems:'center', alignSelf:'flex-start', gap:6, borderWidth:1.5, borderRadius:20, paddingHorizontal:12, paddingVertical:6, marginBottom:10, maxWidth:'70%' },
-  leaguePickerDot:  { width:6, height:6, borderRadius:3 },
-  leaguePickerLabel:{ fontFamily:F.mono, fontSize:SZ.xs, letterSpacing:0.8, fontWeight:'700', flex:1 },
-
-  promptScroll: { maxHeight:36, marginBottom:10 },
-  promptChip:   { paddingHorizontal:11, paddingVertical:5, borderRadius:20, backgroundColor:C.goldS, borderWidth:1.5, borderColor:C.goldBorder },
-  promptTxt:    { fontSize:SZ.sm, color:C.blueDeep, fontFamily:F.mono },
-
-  loadingSub: { color:C.dim2, fontFamily:F.mono, fontSize:SZ.sm },
-
-  // AI bubble — cream bevel (matches mockup card system)
-  aiRow:   { flexDirection:'row', gap:8, alignItems:'flex-start' },
-  aiBubbleAvatar: {
-    width:30, height:30, borderRadius:9,
-    backgroundColor: C.goldS, borderWidth:1.5, borderColor: C.goldBorder,
-    alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:2,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SP[3],
+    paddingTop: 50,
+    paddingBottom: 10,
   },
-  aiBubble: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(88,131,191,0.32)',
-    borderTopColor: 'rgba(255,255,255,0.95)',
-    borderLeftColor: 'rgba(255,255,255,0.85)',
-    borderBottomColor: 'rgba(88,131,191,0.45)',
-    borderRightColor: 'rgba(88,131,191,0.28)',
-    borderRadius: 14,
-    borderTopLeftRadius: 4,
-    padding: 11,
-    position: 'relative',
-    overflow: 'hidden',
-    shadowColor: '#3d6aaa',
-    shadowOffset: { width:0, height:2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+  title: {
+    fontSize: SZ.xl,
+    fontFamily: F.bold,
+    color: '#ffffff',
   },
-  bevelShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
-
-  // User bubble — gold card (matches mockup)
-  userRow:    { flexDirection:'row', justifyContent:'flex-end' },
-  userBubble: {
-    backgroundColor: '#fee229',
-    borderWidth: 1.5,
-    borderColor: 'rgba(200,170,0,0.6)',
-    borderTopColor: 'rgba(255,255,255,0.95)',
-    borderLeftColor: 'rgba(255,255,255,0.7)',
-    borderBottomColor: 'rgba(140,110,0,0.4)',
-    borderRightColor: 'rgba(140,110,0,0.2)',
-    borderRadius: 14,
-    borderTopRightRadius: 4,
-    padding: 11,
+  clearBtn: {
+    padding: 8,
+  },
+  chatScroll: {
+    flex: 1,
+    paddingHorizontal: SP[3],
+  },
+  msg: {
+    marginBottom: 16,
     maxWidth: '80%',
-    position: 'relative',
-    overflow: 'hidden',
-    shadowColor: '#c9b100',
-    shadowOffset: { width:0, height:3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 3,
   },
-  userBubbleShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:'rgba(255,255,255,0.98)', zIndex:6 },
-  userTxt:    { fontSize:SZ.md, color:C.ink, lineHeight:20, fontFamily:F.outfit },
-
-  aiTxt:    { fontSize:SZ.md, color:C.ink, lineHeight:20, fontFamily:F.outfit },
-  aiBold:   { fontSize:SZ.md, fontFamily:F.semibold, color:C.blueDeep, lineHeight:20 },
-
-  // Verdict card
-  verdict:    { borderLeftWidth:2, borderRadius:9, padding:9, marginTop:7 },
-  verdictEye: { fontSize:SZ.xs-2, fontFamily:F.mono, letterSpacing:1, marginBottom:2 },
-  verdictTxt: { fontSize:SZ.sm+1, fontFamily:F.semibold, color:C.ink },
-
-  // Recommendation card — blue (matches mockup)
-  recoCard: {
-    backgroundColor: '#4d7abf',
-    borderRadius: 12,
-    borderTopLeftRadius: 4,
-    padding: 11,
-    marginTop: 7,
+  userMsg: {
+    alignSelf: 'flex-end',
+  },
+  aiMsg: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.35)',
-    borderTopColor: 'rgba(255,255,255,0.6)',
-    borderBottomColor: 'rgba(20,45,100,0.5)',
-    shadowColor: '#3d6aaa',
-    shadowOffset: { width:0, height:4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 4,
+    borderColor: 'rgba(88,131,191,0.18)',
+  },
+  userTxt: {
+    backgroundColor: C.blueDeep,
+    color: '#ffffff',
+    borderRadius: 16,
+    padding: 14,
+    fontFamily: F.mono,
+    fontSize: SZ.sm,
+  },
+  aiTxt: {
+    fontSize: SZ.sm,
+    color: C.ink,
+    lineHeight: 20,
+    fontFamily: F.mono,
+  },
+  aiBold: {
+    fontSize: SZ.sm,
+    color: C.ink,
+    fontFamily: F.bold,
+    lineHeight: 20,
+  },
+  verdict: {
+    borderLeftWidth: 4,
+    borderRadius: 12,
+    padding: 14,
+    marginVertical: 8,
+  },
+  verdictEye: {
+    fontSize: SZ.xs,
+    fontFamily: F.mono,
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
+  verdictTxt: {
+    fontSize: SZ.sm,
+    fontFamily: F.bold,
+    color: C.ink,
+  },
+  recoCard: {
+    backgroundColor: 'rgba(217,253,243,0.9)',
+    borderRadius: 16,
+    padding: 14,
+    marginVertical: 8,
+    borderWidth: 1.5,
+    borderColor: 'rgba(88,131,191,0.18)',
     position: 'relative',
     overflow: 'hidden',
   },
-  recoTitle: { fontSize:SZ.sm, fontFamily:F.bold, color:'#fee229', letterSpacing:0.5 },
-  recoBody:  { fontSize:SZ.sm, fontFamily:F.outfit, color:'rgba(255,255,237,0.85)', lineHeight:18, marginTop:2 },
-
-  // Add player card
-  addCard:   { flexDirection:'row', alignItems:'center', gap:8, backgroundColor:'rgba(255,255,255,0.9)', borderWidth:1.5, borderColor:BORDER, borderRadius:10, padding:8, marginTop:7 },
-  addName:   { fontSize:SZ.md, fontFamily:F.bold, color:C.ink },
-  addSub:    { fontSize:SZ.sm, fontFamily:F.mono, color:C.dim2 },
-  addBtn:    { backgroundColor:C.sageS, borderWidth:1.5, borderColor:C.sageBorder, borderRadius:7, paddingHorizontal:8, paddingVertical:4 },
-  addBtnTxt: { fontSize:SZ.sm, fontFamily:F.mono, color:C.blueDeep, fontWeight:'700' },
-
-  // Input
-  inputWrap: { paddingTop:8 },
-  inputRow:  { flexDirection:'row', alignItems:'center', gap:7, backgroundColor:'rgba(255,255,255,0.92)', borderWidth:1.5, borderColor:BORDER, borderTopColor:'rgba(255,255,255,0.95)', borderRadius:18, paddingLeft:13, paddingRight:4, paddingVertical:4 },
-  input:     { flex:1, fontSize:SZ.md, color:C.ink, paddingVertical:8, fontFamily:F.outfit },
-  sendBtn:   { width:34, height:34, backgroundColor:C.gold, borderRadius:10, alignItems:'center', justifyContent:'center' },
-  sendBtnOff:{ backgroundColor:C.goldS },
-  sendArrow: { fontSize:14, fontFamily:F.bold, color:C.ink },
-
-  // Picker modal — cream theme
-  pickerOverlay:  { flex:1, backgroundColor:'rgba(26,31,46,0.55)', justifyContent:'flex-end' },
-  pickerSheet: {
-    backgroundColor:'#ffffff',
-    borderTopLeftRadius:20, borderTopRightRadius:20,
-    paddingTop:12, paddingBottom:32, paddingHorizontal:20,
-    borderTopWidth:1.5, borderLeftWidth:1.5, borderRightWidth:1.5,
-    borderColor:BORDER, overflow:'hidden', position:'relative',
+  bevelShine: {
+    position: 'absolute',
+    top: 0,
+    left: '10%',
+    right: '10%',
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 1,
   },
-  pickerShineBar: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
-  pickerHandle:   { width:36, height:4, borderRadius:2, backgroundColor:BORDER, alignSelf:'center', marginBottom:20 },
-  pickerTitle:    { fontFamily:F.bold, color:C.blueDeep, fontSize:SZ.sm, letterSpacing:2, marginBottom:6 },
-  pickerSub:      { fontFamily:F.mono, color:C.dim2, fontSize:SZ.sm, lineHeight:18, marginBottom:16 },
-  pickerDivider:  { height:1, backgroundColor:BORDER, marginVertical:8 },
-  pickerRow:      { flexDirection:'row', alignItems:'center', gap:10, paddingVertical:13, paddingHorizontal:12, borderRadius:12, marginBottom:4 },
-  pickerRowActive:{ backgroundColor:'rgba(88,131,191,0.08)' },
-  pickerDot:      { width:8, height:8, borderRadius:4, flexShrink:0 },
-  pickerRowLabel: { fontFamily:F.bold, color:C.ink, fontSize:SZ.base },
-  pickerRowSub:   { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs-1, marginTop:2, letterSpacing:0.4 },
-  pickerClose:    { marginTop:12, alignItems:'center', paddingVertical:14, borderRadius:12, borderWidth:1.5, borderColor:BORDER },
-  pickerCloseTxt: { fontFamily:F.mono, color:C.dim2, fontSize:SZ.sm, letterSpacing:1.5 },
+  recoTitle: {
+    fontSize: SZ.base,
+    fontFamily: F.bold,
+    color: C.ink,
+  },
+  recoBody: {
+    fontSize: SZ.sm,
+    color: C.dim,
+    lineHeight: 18,
+  },
+  addCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 12,
+    padding: 12,
+    marginVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(88,131,191,0.24)',
+  },
+  addName: {
+    fontSize: SZ.sm,
+    fontFamily: F.bold,
+    color: C.ink,
+  },
+  addSub: {
+    fontSize: SZ.xs,
+    color: C.dim2,
+    fontFamily: F.mono,
+  },
+  addBtn: {
+    backgroundColor: C.blueDeep,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  addBtnTxt: {
+    color: '#ffffff',
+    fontSize: SZ.xs,
+    fontFamily: F.bold,
+  },
+  inputBar: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(88,131,191,0.18)',
+    paddingHorizontal: SP[3],
+    paddingTop: 12,
+  },
+  quickRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  quickBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(88,131,191,0.08)',
+    borderRadius: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  quickTxt: {
+    fontSize: SZ.xs,
+    fontFamily: F.bold,
+    color: C.dim,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: 'rgba(88,131,191,0.06)',
+    borderRadius: 16,
+    padding: 12,
+    fontSize: SZ.sm,
+    color: C.ink,
+    fontFamily: F.mono,
+    maxHeight: 100,
+  },
+  sendBtn: {
+    backgroundColor: C.blueDeep,
+    borderRadius: 16,
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendBtnDisabled: {
+    opacity: 0.5,
+  },
+  remaining: {
+    fontSize: SZ.xs,
+    color: C.dim,
+    textAlign: 'center',
+    marginTop: 8,
+    fontFamily: F.mono,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    width: '80%',
+    maxHeight: '60%',
+  },
+  modalTitle: {
+    fontSize: SZ.lg,
+    fontFamily: F.bold,
+    color: C.ink,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  leagueOption: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(88,131,191,0.12)',
+  },
+  leagueTxt: {
+    fontSize: SZ.sm,
+    fontFamily: F.bold,
+    color: C.ink,
+  },
+  leagueSub: {
+    fontSize: SZ.xs,
+    color: C.dim2,
+    fontFamily: F.mono,
+    marginTop: 2,
+  },
 });
