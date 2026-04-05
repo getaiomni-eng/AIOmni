@@ -113,7 +113,16 @@ export async function exchangeYahooCode(code: string): Promise<YahooTokens> {
     body:    body.toString(),
   });
 
-  if (!res.ok) throw new Error(`Yahoo token exchange failed: ${await res.text()}`);
+  if (!res.ok) {
+    const errText = await res.text();
+    let errMsg = 'Yahoo sign-in failed. Please try again.';
+    try {
+      const errJson = JSON.parse(errText);
+      if (errJson.error === 'SHERPA_WRITE_FAIL') errMsg = 'Yahoo timed out. Wait a moment and try again.';
+      else if (errJson.error_description) errMsg = errJson.error_description;
+    } catch {}
+    throw new Error(errMsg);
+  }
 
   const data = await res.json();
   const tokens: YahooTokens = {
