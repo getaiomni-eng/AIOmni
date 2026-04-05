@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Animated, Dimensions, Image,
+  ActivityIndicator, Alert, Animated, Dimensions, Image,
   Linking, RefreshControl, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
@@ -85,19 +85,21 @@ export default function HomeScreen() {
   const [insightLoading, setInsightLoading] = useState(false);
   const [scoreIdx,       setScoreIdx]       = useState(0);
   const [news,           setNews]           = useState(FALLBACK_NEWS);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['sleeper', 'espn', 'yahoo']);
+  const [selectedSeason,    setSelectedSeason]    = useState('2025');
 
   const scoreAnims = useRef(Array.from({ length: 12 }, () => new Animated.Value(0))).current;
 
-  useEffect(() => { loadLeagues(); fetchNews(); }, []);
+  useEffect(() => { loadLeagues(); fetchNews(); }, [selectedSeason]);
 
   // ── ALL DATA LOADING LOGIC UNCHANGED ──────────────────────
-  const loadSleeperLeagues = async (): Promise<League[]> => {
+  const loadSleeperLeagues = async (year: string = '2025'): Promise<League[]> => {
     try {
       const u = await AsyncStorage.getItem('sleeper_username');
       if (!u) return [];
       const user = await (await fetch(`https://api.sleeper.app/v1/user/${u}`)).json();
       if (!user?.user_id) return [];
-      const leaguesList = await (await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/2025`)).json();
+      const leaguesList = await (await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/${year}`)).json();
       if (!Array.isArray(leaguesList)) return [];
       const state = await (await fetch('https://api.sleeper.app/v1/state/nfl')).json();
       const week  = state.leg || state.display_week || state.week || 17;
@@ -130,11 +132,11 @@ export default function HomeScreen() {
     } catch (e) { return []; }
   };
 
-  const loadESPNLeagues = async (): Promise<League[]> => {
+  const loadESPNLeagues = async (year: string = '2025'): Promise<League[]> => {
     try {
       const creds = await loadESPNCredentials();
       if (!creds?.leagueId) return [];
-      const leagueData = await getESPNLeague(creds.leagueId, creds);
+      const leagueData = await getESPNLeague(creds.leagueId, creds, parseInt(year));
       if (!leagueData) return [];
       const myTeam  = findMyESPNTeam(leagueData, creds.teamName || '');
       const recPts  = leagueData.settings?.scoringSettings?.REC ?? 0;
@@ -153,12 +155,12 @@ export default function HomeScreen() {
     } catch (e) { return []; }
   };
 
-  const loadYahooLeagues = async (): Promise<League[]> => {
+  const loadYahooLeagues = async (year: string = '2025'): Promise<League[]> => {
     try {
       const token = await getValidYahooToken();
       if (!token) return [];
       const res = await fetch(
-        'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_codes=nfl/leagues?format=json',
+        `https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_codes=nfl;seasons=${year}/leagues?format=json`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!res.ok) return [];
@@ -247,13 +249,13 @@ export default function HomeScreen() {
     } catch (e) { return []; }
   };
 
-  const loadLeagues = async () => {
+  const loadLeagues = useCallback(async () => {
     setLoading(true);
     try {
       const [sleeper, espn, yahoo] = await Promise.allSettled([
-        loadSleeperLeagues(),
-        loadESPNLeagues(),
-        loadYahooLeagues(),
+        loadSleeperLeagues(selectedSeason),
+        loadESPNLeagues(selectedSeason),
+        loadYahooLeagues(selectedSeason),
       ]);
       const allLeagues: League[] = [];
       if (sleeper.status === 'fulfilled') allLeagues.push(...sleeper.value);
@@ -265,7 +267,7 @@ export default function HomeScreen() {
       if (allLeagues.length > 0) fetchAIInsights(allLeagues[0]);
     } catch (e) { console.error('Load leagues error:', e); }
     setLoading(false);
-  };
+  }, [selectedSeason]);
 
   const fetchAIInsights = async (league: League) => {
     if (insightLoading) return;
@@ -324,7 +326,7 @@ export default function HomeScreen() {
     scoreAnims.forEach(a => a.setValue(0));
     await loadLeagues();
     setRefreshing(false);
-  }, []);
+  }, [loadLeagues]);
 
   const goToLeague = (l: League) =>
     router.push({ pathname: '/league', params: { leagueId: l.id, leagueName: l.name, platform: l.platform, avatar: l.avatar ?? '' } });
@@ -373,6 +375,50 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
 
+        {/* Platform toggles and season selector */}
+        <View style={styles.platformRow}>
+          <TouchableOpacity
+            onPress={() => {
+              // Show season selector
+              const options = ['2025', '2024', '2023', '2022'];
+              Alert.alert(
+                'Select Season',
+                '',
+                options.map(year => ({
+                  text: year,
+                  onPress: () => setSelectedSeason(year),
+                })),
+                { cancelable: true }
+              );
+            }}
+            style={styles.seasonPill}
+          >
+            <Text style={styles.seasonPillText}>{selectedSeason} ▾</Text>
+          </TouchableOpacity>
+          <View style={styles.platformToggles}>
+            {(['sleeper', 'espn', 'yahoo'] as Platform[]).map(platform => {
+              const isSelected = selectedPlatforms.includes(platform);
+              return (
+                <TouchableOpacity
+                  key={platform}
+                  onPress={() => {
+                    setSelectedPlatforms(prev =>
+                      isSelected
+                        ? prev.filter(p => p !== platform)
+                        : [...prev, platform]
+                    );
+                  }}
+                  style={[styles.platformToggle, isSelected && styles.platformToggleOn]}
+                >
+                  <Text style={[styles.platformToggleText, isSelected && styles.platformToggleTextOn]}>
+                    {PLAT_LABEL(platform)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         {/* ── Score cards ── */}
         {loading ? (
           <View style={styles.loadingCard}>
@@ -381,55 +427,52 @@ export default function HomeScreen() {
           </View>
         ) : leagues.length > 0 ? (
           <>
-            <ScrollView
-              horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-              snapToInterval={CARD_W + 10} decelerationRate="fast"
-              contentContainerStyle={{ gap: 10 }}
-              style={{ marginBottom: 4 }}
-              onMomentumScrollEnd={e => setScoreIdx(Math.round(e.nativeEvent.contentOffset.x / (CARD_W + 10)))}
-            >
-              {leagues.map((lg, i) => {
-                const winning      = (lg.pts ?? 0) > (lg.opp ?? 0);
-                const platColor    = PLAT_COLOR(lg.platform);
-                const isNonSleeper = lg.platform !== 'sleeper';
-                const ptsVal       = parseFloat((lg.pts ?? 0).toFixed(1));
-                return (
-                  <BevelCard key={lg.id} style={[styles.scoreCard, { width: CARD_W }, isNonSleeper && { borderColor: PLAT_BORDER(lg.platform) }]}>
-                    <Text style={styles.scoreEye}>
-                      {'⚡  LIVE · WK '}{lg.week}{'  '}
-                      <Text style={[styles.platBadge, { backgroundColor: platColor }]}>{PLAT_LABEL(lg.platform)}</Text>
-                    </Text>
-                    <TouchableOpacity onPress={() => goToLeague(lg)} activeOpacity={0.8} style={styles.leagueBtn}>
-                      <View style={styles.leagueTop}>
-                        <PlatformLogo platform={lg.platform} size={32} />
-                        <View style={{ flex: 1, marginLeft: 12 }}>
-                          <Text style={styles.leagueName} numberOfLines={1}>{lg.name}</Text>
-                          <Text style={styles.leagueMeta}>{lg.format} · {lg.rec}</Text>
+            {(() => {
+              const filteredLeagues = leagues.filter(lg => selectedPlatforms.includes(lg.platform));
+              const gridLeagues = filteredLeagues.slice(0, 4); // 2x2 grid
+              return (
+                <View style={styles.scoreGrid}>
+                  {gridLeagues.map((lg, i) => {
+                    const winning      = (lg.pts ?? 0) > (lg.opp ?? 0);
+                    const platColor    = PLAT_COLOR(lg.platform);
+                    const isNonSleeper = lg.platform !== 'sleeper';
+                    const ptsVal       = parseFloat((lg.pts ?? 0).toFixed(1));
+                    return (
+                      <BevelCard key={lg.id} style={[styles.scoreCardGrid, isNonSleeper && { borderColor: PLAT_BORDER(lg.platform) }]}>
+                        <Text style={styles.scoreEyeGrid}>
+                          {'⚡ WK '}{lg.week}
+                        </Text>
+                        <TouchableOpacity onPress={() => goToLeague(lg)} activeOpacity={0.8} style={styles.leagueBtnGrid}>
+                          <View style={styles.leagueTopGrid}>
+                            <PlatformLogo platform={lg.platform} size={24} />
+                            <View style={{ flex: 1, marginLeft: 8 }}>
+                              <Text style={styles.leagueNameGrid} numberOfLines={1}>{lg.name}</Text>
+                              <Text style={styles.leagueMetaGrid}>{lg.format}</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={14} color={C.dim2} />
+                          </View>
+                          {lg.rank && <Text style={styles.leagueRankGrid}>{lg.rank}</Text>}
+                        </TouchableOpacity>
+                        <View style={styles.scoreRowGrid}>
+                          <View style={styles.scoreBoxGrid}>
+                            <Text style={styles.scoreLabelGrid}>YOU</Text>
+                            <Text style={[styles.scoreNumGrid, styles.scoreYou]}>{ptsVal}</Text>
+                          </View>
+                          <Text style={styles.scoreVsGrid}>VS</Text>
+                          <View style={styles.scoreBoxGrid}>
+                            <Text style={styles.scoreLabelGrid}>OPP</Text>
+                            <Text style={[styles.scoreNumGrid, styles.scoreOpp]}>{parseFloat((lg.opp ?? 0).toFixed(1))}</Text>
+                          </View>
                         </View>
-                        <Ionicons name="chevron-forward" size={18} color={C.dim2} />
-                      </View>
-                      {lg.rank && <Text style={styles.leagueRank}>{lg.rank}</Text>}
-                    </TouchableOpacity>
-                    <View style={styles.scoreRow}>
-                      <View style={styles.scoreBox}>
-                        <Text style={styles.scoreLabel}>YOU</Text>
-                        <Text style={[styles.scoreNum, winning && styles.scoreWin]}>{ptsVal}</Text>
-                      </View>
-                      <Text style={styles.scoreVs}>VS</Text>
-                      <View style={styles.scoreBox}>
-                        <Text style={styles.scoreLabel}>OPP</Text>
-                        <Text style={[styles.scoreNum, !winning && styles.scoreWin]}>{parseFloat((lg.opp ?? 0).toFixed(1))}</Text>
-                      </View>
-                    </View>
-                  </BevelCard>
-                );
-              })}
-            </ScrollView>
-            <View style={styles.scoreDots}>
-              {leagues.map((_, i) => (
-                <View key={i} style={[styles.scoreDot, i === scoreIdx && styles.scoreDotOn]} />
-              ))}
-            </View>
+                      </BevelCard>
+                    );
+                  })}
+                  {Array.from({ length: Math.max(0, 4 - gridLeagues.length) }, (_, i) => (
+                    <View key={`empty-${i}`} style={styles.emptyScoreCard} />
+                  ))}
+                </View>
+              );
+            })()}
           </>
         ) : (
           <BevelCard style={styles.emptyCard}>
@@ -497,22 +540,30 @@ const styles = StyleSheet.create({
   loadingCard: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 16, padding: 40, alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
   loadingTxt: { fontSize: SZ.sm, color: C.dim2, marginTop: 12, fontFamily: F.mono },
   scoreCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 18, borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
-  scoreEye: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, letterSpacing: 1.5, marginBottom: 12 },
-  platBadge: { color: '#ffffff', fontSize: SZ.xs, fontFamily: F.bold, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
-  leagueBtn: { marginBottom: 16 },
-  leagueTop: { flexDirection: 'row', alignItems: 'center' },
-  leagueName: { fontSize: SZ.base, color: C.ink, fontFamily: F.bold },
-  leagueMeta: { fontSize: SZ.xs, color: C.dim2, fontFamily: F.mono, marginTop: 2 },
-  leagueRank: { fontSize: SZ.sm, color: C.blueDeep, fontFamily: F.mono, textAlign: 'center', marginBottom: 8 },
-  scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  scoreBox: { alignItems: 'center', flex: 1 },
-  scoreLabel: { fontSize: SZ.xs, color: C.dim2, fontFamily: F.mono, letterSpacing: 1, marginBottom: 4 },
-  scoreNum: { fontSize: SZ['3xl'], color: C.ink, fontFamily: F.bold },
-  scoreWin: { color: C.mint },
-  scoreVs: { fontSize: SZ.lg, color: C.dim2, fontFamily: F.bold, marginHorizontal: 12 },
-  scoreDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 24 },
-  scoreDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.dim2 },
-  scoreDotOn: { backgroundColor: C.blueDeep },
+  platformRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  seasonPill: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', paddingHorizontal: 12, paddingVertical: 6 },
+  seasonPillText: { fontSize: SZ.sm, fontFamily: F.mono, color: '#ffffff' },
+  platformToggles: { flexDirection: 'row', gap: 8 },
+  platformToggle: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', backgroundColor: 'rgba(255,255,255,0.1)' },
+  platformToggleOn: { backgroundColor: C.blueDeep, borderColor: C.blueDeep },
+  platformToggleText: { fontSize: SZ.sm, fontFamily: F.mono, color: '#ffffff' },
+  platformToggleTextOn: { color: '#ffffff', fontFamily: F.bold },
+  scoreGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  scoreCardGrid: { width: (SCREEN_W - SP[3] * 2 - 8) / 2, aspectRatio: 1.2 },
+  scoreEyeGrid: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, letterSpacing: 1.5, marginBottom: 8, textAlign: 'center' },
+  leagueBtnGrid: { marginBottom: 8 },
+  leagueTopGrid: { flexDirection: 'row', alignItems: 'center' },
+  leagueNameGrid: { fontSize: SZ.sm, color: C.ink, fontFamily: F.bold },
+  leagueMetaGrid: { fontSize: SZ.xs, color: C.dim2, fontFamily: F.mono, marginTop: 2 },
+  leagueRankGrid: { fontSize: SZ.sm, color: C.blueDeep, fontFamily: F.mono, textAlign: 'center', marginBottom: 4 },
+  scoreRowGrid: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  scoreBoxGrid: { alignItems: 'center', flex: 1 },
+  scoreLabelGrid: { fontSize: SZ.xs, color: C.dim2, fontFamily: F.mono, letterSpacing: 1, marginBottom: 2 },
+  scoreNumGrid: { fontSize: SZ.xl, fontFamily: F.bold },
+  scoreYou: { color: '#fee229' },
+  scoreOpp: { color: '#5883bf' },
+  scoreVsGrid: { fontSize: SZ.md, color: C.dim2, fontFamily: F.bold, marginHorizontal: 8 },
+  emptyScoreCard: { width: (SCREEN_W - SP[3] * 2 - 8) / 2, aspectRatio: 1.2, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   emptyCard: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 16, padding: 24, alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
   emptyEye: { fontSize: SZ.sm, fontFamily: F.mono, color: C.blueDeep, letterSpacing: 2, marginBottom: 8 },
   emptyTxt: { fontSize: SZ.sm, color: C.dim2, textAlign: 'center', lineHeight: 20, marginBottom: 16 },

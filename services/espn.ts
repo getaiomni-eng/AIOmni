@@ -39,24 +39,24 @@ async function espnFetch(path: string, creds: ESPNCredentials): Promise<any> {
   return res.json();
 }
 
-export async function getESPNLeagues(creds: ESPNCredentials): Promise<any[]> {
+export async function getESPNLeagues(creds: ESPNCredentials, year: number = 2025): Promise<any[]> {
   const data = await espnFetch(
-    `/seasons/${ESPN_SEASON}/segments/0/leagues?view=mSettings`,
+    `/seasons/${year}/segments/0/leagues?view=mSettings`,
     creds
   );
   return data || [];
 }
 
-export async function getESPNLeague(leagueId: number, creds: ESPNCredentials): Promise<any> {
+export async function getESPNLeague(leagueId: number, creds: ESPNCredentials, year: number = 2025): Promise<any> {
   return espnFetch(
-    `/seasons/${ESPN_SEASON}/segments/0/leagues/${leagueId}?view=mSettings&view=mStatus&view=mTeam&view=mRoster`,
+    `/seasons/${year}/segments/0/leagues/${leagueId}?view=mSettings&view=mStatus&view=mTeam&view=mRoster`,
     creds
   );
 }
 
-export async function getESPNRoster(leagueId: number, creds: ESPNCredentials): Promise<any> {
+export async function getESPNRoster(leagueId: number, creds: ESPNCredentials, year: number = 2025): Promise<any> {
   return espnFetch(
-    `/seasons/${ESPN_SEASON}/segments/0/leagues/${leagueId}?view=mTeam&view=mRoster`,
+    `/seasons/${year}/segments/0/leagues/${leagueId}?view=mTeam&view=mRoster`,
     creds
   );
 }

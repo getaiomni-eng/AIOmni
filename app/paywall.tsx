@@ -71,7 +71,7 @@ const TIERS = [
       'Future pick grade engine',
       'Personalized rookie draft board',
       'Dynasty-specific AI memory',
-      'Unlimited prompts year-round',
+      '75 prompts per week',
     ],
   },
 ];

@@ -1,13 +1,11 @@
-import { LinearGradient } from 'expo-linear-gradient';
+import { AIOmniLogo } from './components/AIOmniLogo';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import {
-  ActivityIndicator, KeyboardAvoidingView, Platform,
-  StyleSheet, Text, TextInput, TouchableOpacity, View,
-} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useState } from 'react';
 import { signInWithEmail, signUpWithEmail, resetPassword } from '../services/auth';
-import { C, F, R, SP, SZ } from './constants/tokens';
+import { LinearGradient } from 'expo-linear-gradient';
+import { C, F, SZ, R, SP } from './constants/tokens';
+import { KeyboardAvoidingView, Platform, View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 
 const SURFACE  = 'rgba(255,255,255,0.92)';
 const BORDER   = 'rgba(88,131,191,0.32)';
@@ -63,9 +61,9 @@ export default function AuthScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={[styles.wrap, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]}>
 
-          {/* Wordmark */}
+          {/* Logo */}
           <View style={styles.logoBlock}>
-            <Text style={styles.logoText}>AIOmni</Text>
+            <AIOmniLogo width={200} />
             <Text style={styles.logoSub}>See everything. Know everyone. Win always.</Text>
           </View>
 
@@ -80,7 +78,7 @@ export default function AuthScreen() {
             <TextInput
               style={styles.input}
               value={email}
-              onChangeText={t => { setEmail(t); clear(); }}
+              onChangeText={(t: string) => { setEmail(t); clear(); }}
               placeholder="you@example.com"
               placeholderTextColor={C.dim2}
               keyboardType="email-address"
@@ -94,7 +92,7 @@ export default function AuthScreen() {
                 <TextInput
                   style={styles.input}
                   value={password}
-                  onChangeText={t => { setPassword(t); clear(); }}
+                  onChangeText={(t: string) => { setPassword(t); clear(); }}
                   placeholder="••••••••"
                   placeholderTextColor={C.dim2}
                   secureTextEntry
@@ -198,7 +196,7 @@ const styles = StyleSheet.create({
   successTxt: { fontFamily: F.mono, color: C.mint,    fontSize: SZ.sm, marginBottom: 12, lineHeight: 18 },
 
   submitBtn: {
-    backgroundColor: C.blueDeep,
+    backgroundColor: C.gold,
     borderRadius: R.sm,
     padding: 16,
     alignItems: 'center',

@@ -1,5 +1,4 @@
-import { Bungee_400Regular } from '@expo-google-fonts/bungee';
-import { BungeeInline_400Regular } from '@expo-google-fonts/bungee-inline';
+import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
@@ -24,8 +23,8 @@ export default Sentry.wrap(function RootLayout() {
 
   const [fontsLoaded] = useFonts({
     // ── New fonts ──────────────────────────────
-    'Bungee':          Bungee_400Regular,
-    'Bungee Inline':   BungeeInline_400Regular,
+    'BebasNeue':       BebasNeue_400Regular,
+
     'SpaceMono':       SpaceMono_400Regular,
     'SpaceMono-Bold':  SpaceMono_700Bold,
 
@@ -34,8 +33,8 @@ export default Sentry.wrap(function RootLayout() {
     'Outfit':          SpaceMono_400Regular,
     'Outfit-Medium':   SpaceMono_400Regular,
     'Outfit-SemiBold': SpaceMono_400Regular,
-    'Outfit-Bold':     Bungee_400Regular,
-    'Outfit-Black':    Bungee_400Regular,
+    'Outfit-Bold':     BebasNeue_400Regular,
+    'Outfit-Black':    BebasNeue_400Regular,
     'DMMono-Regular':  SpaceMono_400Regular,
     'DMMono-Medium':   SpaceMono_700Bold,
   });
@@ -47,7 +46,7 @@ export default Sentry.wrap(function RootLayout() {
       try {
         const user = await getUser();
         if (!user) {
-          router.replace('/onboarding');
+          router.replace('/auth' as any);
           return;
         }
         Sentry.setUser({ id: user.id, email: user.email });
@@ -60,13 +59,13 @@ export default Sentry.wrap(function RootLayout() {
         const hasLeagues = hasSleeper || Boolean(espnIds) || Boolean(yahooTokens);
 
         if (!hasLeagues) {
-          router.replace('/onboarding');
+          router.replace('/auth' as any);
         } else {
           router.replace('/(tabs)');
         }
       } catch (err) {
         console.error('Session check error', err);
-        router.replace('/onboarding');
+        router.replace('/auth' as any);
       }
     })();
 

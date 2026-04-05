@@ -24,7 +24,7 @@ const BEVEL_HI = 'rgba(255,255,255,0.95)';
 
 const TIERS = [
   { key: 'rankings',      name: 'Rankings',      price: '$5.99',  sub: 'Live community rankings',   color: '#2a7aaa' },
-  { key: 'pro',           name: 'Pro',           price: '$9.99',  sub: 'Unlimited + Draft Copilot', color: C.gold    },
+  { key: 'pro',           name: 'Pro',           price: '$9.99',  sub: '75 prompts per week', color: C.gold    },
   { key: 'premium',       name: 'Premium',       price: '$14.99', sub: '2-season AI memory',        color: '#7b5ea7' },
   { key: 'dynasty_elite', name: 'Dynasty Elite', price: '$19.99', sub: 'College rankings + picks',  color: '#1e8c42' },
 ];
