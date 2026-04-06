@@ -79,10 +79,50 @@ function HomeIcon({ size }: { size: number }) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// COACH — aperture O, same blink engine as v26 logo
+// COACH — hex with aperture iris
 // ══════════════════════════════════════════════════════════════
 function CoachIcon({ size }: { size: number }) {
-  return <AIOmniIris width={size} />;
+  const stroke = useStrokeCycle(1000);
+  const [op1, op2] = useHexPulse(4000, 2000);
+  const scale = size / 64; // viewBox 64
+
+  return (
+    <Svg width={size} height={size} viewBox="0 0 64 64">
+      <G transform={`scale(${scale}) translate(32,32)`}>
+        {/* Outer hex */}
+        <AnimatedPolygon
+          points="0,-30 26,-15 26,15 0,30 -26,15 -26,-15"
+          fill="none" stroke={stroke as any} strokeWidth={3} strokeLinejoin="round"
+        />
+        <AnimatedPolygon
+          points="0,-30 26,-15 26,15 0,30 -26,15 -26,-15"
+          fill="none" stroke={GOLD} strokeWidth={2} strokeLinejoin="round" opacity={op1 as any}
+        />
+        <AnimatedPolygon
+          points="0,-30 26,-15 26,15 0,30 -26,15 -26,-15"
+          fill="none" stroke={GOLD} strokeWidth={2} strokeLinejoin="round" opacity={op2 as any}
+        />
+
+        {/* Aperture iris */}
+        <Circle r={18} fill="#091622" />
+        <Circle r={12} fill="#fee229" />
+        <G>
+          {[0, 60, 120, 180, 240, 300].map(rot => (
+            <G key={rot} transform={`rotate(${rot})`}>
+              <Path
+                d="M 0,0 L -7.5,-13 A 15,15 0 0,1 7.5,-13 Z"
+                fill="#2a6bb0"
+                stroke="#ffffed"
+                strokeWidth={0.5}
+              />
+            </G>
+          ))}
+        </G>
+        <Circle r={15} fill="none" stroke="#091622" strokeWidth={3} />
+        <Circle r={18} fill="none" stroke="#ffffed" strokeWidth={1} />
+      </G>
+    </Svg>
+  );
 }
 
 // ══════════════════════════════════════════════════════════════

@@ -35,15 +35,19 @@ async function maybeReset(): Promise<void> {
 
   if (!resetTimeStr) {
     // First time — set the first reset window
+    const tier = await getCurrentTier();
+    const limit = getPromptLimit(tier);
     await AsyncStorage.setItem(PROMPT_RESET_KEY, getNextSundayNoon().toString());
-    await AsyncStorage.setItem(PROMPT_COUNT_KEY, '0');
+    await AsyncStorage.setItem(PROMPT_COUNT_KEY, limit.toString());
     return;
   }
 
   const resetTime = parseInt(resetTimeStr, 10);
   if (now >= resetTime) {
     // Past reset time — wipe count and set next reset
-    await AsyncStorage.setItem(PROMPT_COUNT_KEY, '0');
+    const tier = await getCurrentTier();
+    const limit = getPromptLimit(tier);
+    await AsyncStorage.setItem(PROMPT_COUNT_KEY, limit.toString());
     await AsyncStorage.setItem(PROMPT_RESET_KEY, getNextSundayNoon().toString());
   }
 }
@@ -53,7 +57,7 @@ export async function getRemainingPrompts(): Promise<number> {
   const limit = getPromptLimit(tier);
   await maybeReset();
   const countStr = await AsyncStorage.getItem(PROMPT_COUNT_KEY);
-  const used = parseInt(countStr || '0', 10);
+  const used = parseInt(countStr || limit.toString(), 10);
   if (limit >= 999) return 999;
   return Math.max(0, limit - used);
 }
@@ -75,8 +79,10 @@ export async function incrementPrompt(): Promise<void> {
   await AsyncStorage.setItem(PROMPT_COUNT_KEY, (used + 1).toString());
 }
 
-export async function getResetTime(): Promise<Date | null> {
+export async function getResetTime(): Promise<Date> {
   const resetTimeStr = await AsyncStorage.getItem(PROMPT_RESET_KEY);
-  if (!resetTimeStr) return null;
+  if (!resetTimeStr) {
+    return new Date(getNextSundayNoon());
+  }
   return new Date(parseInt(resetTimeStr, 10));
 }

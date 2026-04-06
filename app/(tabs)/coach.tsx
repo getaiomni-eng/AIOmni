@@ -53,7 +53,7 @@ type LeagueContext = {
 };
 
 function getPaywallMessage(resetStr: string): string {
-  return `You've used all ${WEEKLY_LIMIT} weekly prompts. Resets ${resetStr}.\n\n__verdict__Upgrade to Pro for unlimited prompts → getaiomni.com`;
+  return `You've used all ${WEEKLY_LIMIT} weekly prompts. Resets ${resetStr}.\n\n__verdict__Upgrade to Pro for 75 prompts per week → getaiomni.com`;
 }
 
 async function loadSleeperContext(): Promise<LeagueContext[]> {
@@ -308,7 +308,7 @@ export default function CoachScreen() {
         console.log('RAW AI RESULT:', reply);
 
         if (!reply) {
-          const debugMsg: Message = { role:'ai', text: 'DEBUG: AI returned empty. Check API key and prompt.' };
+          const debugMsg: Message = { role:'ai', text: 'Connection issue. Check your network and try again.' };
           setMessages(prev => [...prev.slice(0, -1), debugMsg]);
         } else {
           const messageObject: Message = { role:'ai', text: reply || "Sorry, couldn't get a response. Try again." };
@@ -326,7 +326,7 @@ export default function CoachScreen() {
           }
         }
       } catch (aiError: any) {
-        const errorMsg: Message = { role:'ai', text: 'DEBUG ERROR: ' + (aiError?.message || String(aiError)) };
+        const errorMsg: Message = { role:'ai', text: 'Connection issue. Check your network and try again.' };
         setMessages(prev => [...prev.slice(0, -1), errorMsg]);
       }
     } catch (e: any) {
@@ -463,9 +463,10 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   title: {
-    fontSize: SZ.xl,
+    fontSize: 28,
     fontFamily: F.bold,
     color: '#ffffff',
+    letterSpacing: 3,
   },
   clearBtn: {
     padding: 8,
@@ -496,11 +497,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   aiLabel: {
-    fontSize: SZ.xs,
+    fontSize: 11,
     fontFamily: F.mono,
     color: C.dim2,
     marginLeft: 8,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
   },
   userTxt: {
     backgroundColor: '#fee229',
@@ -509,19 +510,20 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 4,
     padding: 14,
     fontFamily: F.outfit,
-    fontSize: SZ.sm,
+    fontSize: 16,
+    lineHeight: 24,
   },
   aiTxt: {
-    fontSize: SZ.sm,
+    fontSize: 16,
     color: C.ink,
-    lineHeight: 20,
+    lineHeight: 24,
     fontFamily: F.outfit,
   },
   aiBold: {
-    fontSize: SZ.sm,
+    fontSize: 16,
     color: C.ink,
     fontFamily: F.bold,
-    lineHeight: 20,
+    lineHeight: 24,
   },
   verdict: {
     borderLeftWidth: 4,
@@ -536,7 +538,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   verdictTxt: {
-    fontSize: SZ.sm,
+    fontSize: 16,
     fontFamily: F.bold,
     color: C.ink,
   },
@@ -561,9 +563,9 @@ const styles = StyleSheet.create({
     color: C.ink,
   },
   recoBody: {
-    fontSize: SZ.sm,
+    fontSize: 16,
     color: C.dim,
-    lineHeight: 18,
+    lineHeight: 24,
   },
   addCard: {
     flexDirection: 'row',
@@ -616,8 +618,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   quickTxt: {
-    fontSize: SZ.xs,
-    fontFamily: F.bold,
+    fontSize: 12,
+    fontFamily: F.mono,
     color: C.dim,
   },
   quickContent: {
@@ -635,7 +637,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(88,131,191,0.06)',
     borderRadius: 16,
     padding: 12,
-    fontSize: SZ.sm,
+    fontSize: 15,
     color: C.ink,
     fontFamily: F.mono,
     maxHeight: 100,

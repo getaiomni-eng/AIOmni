@@ -107,82 +107,43 @@ export function AIOmniIris({ width = 72 }: { width?: number }) {
 
 export function AIOmniLogo({ width = 280, height }: { width?: number; height?: number }) {
   const actualHeight = height || width * 0.5;
-  const [angle, setAngle] = useState(OPEN);
-  useApertureBlink(setAngle);
-
-  // Color cycle state: 0=gold, 1=blue, 2=cream
-  const [colorIdx, setColorIdx] = useState(0);
-  const COLORS = ['#fee229', '#3d6aaa', '#ffffed'];
-  const hexColor = COLORS[colorIdx];
-
-  useEffect(() => {
-    const timer = setInterval(() => setColorIdx(i => (i + 1) % 3), 6000);
-    return () => clearInterval(timer);
-  }, []);
 
   return (
     <View style={{ width, height: actualHeight }}>
-      <Svg width={width} height={height} viewBox="0 0 1040 520">
-        <Defs>
-          <RadialGradient id="cgL" gradientUnits="userSpaceOnUse" cx="410" cy="260" r="42" fx="410" fy="260">
-            <Stop offset="0%"   stopColor="#fee229" stopOpacity={1}   />
-            <Stop offset="25%"  stopColor="#fee229" stopOpacity={0.85}/>
-            <Stop offset="50%"  stopColor="#d4b800" stopOpacity={0.45}/>
-            <Stop offset="75%"  stopColor="#2a2000" stopOpacity={0.12}/>
-            <Stop offset="100%" stopColor="#000000" stopOpacity={0}   />
-          </RadialGradient>
-          <ClipPath id="bladeClip">
-            <Circle cx={0} cy={0} r={42} />
-          </ClipPath>
-        </Defs>
-
-        {/* Black shadow hex */}
+      <Svg width={width} height={actualHeight} viewBox="0 0 1040 520">
+        {/* Single outer hex with gold animated stroke */}
         <Polygon
           points="310,50 490,154 490,366 310,470 130,366 130,154"
-          fill="none" stroke="#000000" strokeWidth={34} strokeLinejoin="round"
-        />
-        {/* Color cycling outer hex */}
-        <Polygon
-          points="310,50 490,154 490,366 310,470 130,366 130,154"
-          fill="none" stroke={hexColor} strokeWidth={28} strokeLinejoin="round"
+          fill="none" stroke="#fee229" strokeWidth={28} strokeLinejoin="round"
         />
 
-        {/* A */}
+        {/* "AI" text in gold BebasNeue */}
         <SvgText x="152" y="316" fontFamily="BebasNeue_400Regular" fontSize="142"
-          fill={hexColor} stroke={hexColor} strokeWidth="3">A</SvgText>
+          fill="#fee229" stroke="#fee229" strokeWidth="3">AI</SvgText>
 
-        {/* I */}
-        <SvgText x="268" y="316" fontFamily="BebasNeue_400Regular" fontSize="142"
-          fill={hexColor} stroke={hexColor} strokeWidth="3">I</SvgText>
-
-        {/* Aperture O */}
+        {/* Aperture O with 6 blades */}
         <G transform="translate(410,260)">
           <Circle r={60} fill="#091622" />
-          <Circle r={42} fill="url(#cgL)" />
-          <G clipPath="url(#bladeClip)">
-            {ROTS.map(rot => (
+          <Circle r={42} fill="#fee229" />
+          <G>
+            {[0, 60, 120, 180, 240, 300].map(rot => (
               <G key={rot} transform={`rotate(${rot})`}>
                 <Path
-                  d={BLADE}
+                  d="M 0,0 L -28,-48.5 A 56,56 0 0,1 28,-48.5 Z"
                   fill="#2a6bb0"
                   stroke="#ffffed"
                   strokeWidth={1.3}
-                  rotation={angle}
-                  originX={0}
-                  originY={-52}
                 />
               </G>
             ))}
           </G>
-          <Polygon points="0,-5 4.33,-2.5 4.33,2.5 0,5 -4.33,2.5 -4.33,-2.5" fill="#fee229" />
           <Circle r={51} fill="none" stroke="#091622" strokeWidth={18} />
           <Circle r={60} fill="none" stroke="#ffffed" strokeWidth={3} />
-          <Circle r={57.5} fill="none" stroke="#0a1e30" strokeWidth={1.5} />
         </G>
 
-        {/* mni */}
+        {/* "mni" text in gold after the O */}
         <SvgText x="514" y="316" fontFamily="BebasNeue_400Regular" fontSize="88"
-          letterSpacing="2" fill={hexColor} stroke={hexColor} strokeWidth="3">mni</SvgText>
+          letterSpacing="2" fill="#fee229" stroke="#fee229" strokeWidth="3">mni</SvgText>
       </Svg>
     </View>
   );

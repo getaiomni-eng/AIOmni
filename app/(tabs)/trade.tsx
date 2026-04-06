@@ -5,6 +5,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOp
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI } from '../../services/ai';
 import { C, F, R, SP, SZ } from '../constants/tokens';
+import { Icon } from '../components/AIOmniIcons';
 
 type Format = 'redraft' | 'dynasty';
 type Grade = 'A+' | 'A' | 'A-' | 'B+' | 'B' | 'B-' | 'C+' | 'C' | 'C-' | 'D+' | 'D' | 'F';
@@ -101,9 +102,16 @@ export default function TradesScreen() {
               style={[styles.toggleBtn, format === item && styles.toggleBtnOn]}
               onPress={() => setFormat(item)}
             >
-              <Text style={[styles.toggleTxt, format === item && styles.toggleTxtOn]}>
-                {item === 'redraft' ? '📅 REDRAFT' : '👑 DYNASTY'}
-              </Text>
+              <View style={{flexDirection:'row', alignItems:'center', gap:4}}>
+                {item === 'redraft' ? (
+                  <Icon name="calendar" size={16} color={format === item ? '#ffffff' : C.blueDeep} />
+                ) : (
+                  <Icon name="crown" size={16} color={format === item ? '#ffffff' : C.gold} />
+                )}
+                <Text style={[styles.toggleTxt, format === item && styles.toggleTxtOn]}>
+                  {item === 'redraft' ? 'REDRAFT' : 'DYNASTY'}
+                </Text>
+              </View>
             </TouchableOpacity>
           ))}
         </View>

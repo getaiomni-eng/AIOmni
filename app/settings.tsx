@@ -8,6 +8,7 @@ import { loadESPNCredentials } from '../services/espn';
 import { clearYahooTokens, exchangeYahooCode, getValidYahooToken, getYahooAuthURL, getYahooLeagues, loadYahooTokens } from '../services/yahoo';
 import { getUser, signOut } from '../services/auth';
 import { AIOmniLogo } from './components/AIOmniLogo';
+import { Icon } from './components/AIOmniIcons';
 import { C, F, SP, SZ } from './constants/tokens';
 import { getRemainingPrompts } from './utils/promptCounter';
 
@@ -115,7 +116,10 @@ export default function SettingsScreen() {
         <View style={styles.header}>
           <AIOmniLogo width={Dimensions.get('window').width * 0.55} />
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>← BACK</Text>
+            <View style={{flexDirection:'row', alignItems:'center', gap:8}}>
+              <Icon name="chevron" size={20} color={C.blueDeep} />
+              <Text style={styles.backText}>BACK</Text>
+            </View>
           </TouchableOpacity>
           <Text style={styles.title}>SETTINGS</Text>
         </View>
@@ -125,15 +129,25 @@ export default function SettingsScreen() {
           <View style={styles.card}>
             <View style={styles.cardShine} />
             <View style={styles.row}>
-              <Text style={styles.rowLabel}>Email</Text>
+              <View style={{flexDirection:'row', alignItems:'center', gap:8}}>
+                <Icon name="person" size={22} color={C.blueDeep} />
+                <Text style={styles.rowLabel}>Email</Text>
+              </View>
               <Text style={styles.rowValue}>{email || 'Not signed in'}</Text>
             </View>
             <View style={[styles.row, { borderBottomWidth: 0 }]}> 
-              <Text style={styles.rowLabel}>Username</Text>
+              <View style={{flexDirection:'row', alignItems:'center', gap:8}}>
+                <Icon name="person" size={22} color={C.blueDeep} />
+                <Text style={styles.rowLabel}>Username</Text>
+              </View>
               <Text style={styles.rowValue}>{username ? `@${username}` : 'No Sleeper linked'}</Text>
             </View>
             <TouchableOpacity onPress={() => Alert.alert('Change Password', 'Use your email provider to change your password.')} style={styles.linkRow}>
-              <Text style={styles.linkText}>Change password →</Text>
+              <View style={{flexDirection:'row', alignItems:'center', gap:8}}>
+                <Icon name="key" size={18} color={C.gold} />
+                <Text style={styles.linkText}>Change password</Text>
+                <Icon name="chevron" size={20} color={C.dim2} />
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -144,7 +158,7 @@ export default function SettingsScreen() {
             <View style={styles.cardShine} />
 
             <View style={styles.platformRow}> 
-              <View style={styles.platformBadgeSleeper} />
+              <Icon name="football" size={22} color={C.blueDeep} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.platformName}>Sleeper</Text>
                 <Text style={styles.platformSub}>{username ? `@${username}` : 'Not connected'}</Text>
@@ -199,7 +213,10 @@ export default function SettingsScreen() {
             </View>
             <Text style={styles.smallText}>Resets Sunday noon · Waivers run Wednesday</Text>
             <TouchableOpacity style={styles.upgradeBtn} onPress={() => router.push('/paywall')}>
-              <Text style={styles.upgradeBtnText}>UPGRADE TO PRO →</Text>
+              <View style={{flexDirection:'row', alignItems:'center', gap:8}}>
+                <Icon name="bell" size={22} color={C.gold} />
+                <Text style={styles.upgradeBtnText}>UPGRADE TO PRO →</Text>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -224,7 +241,10 @@ export default function SettingsScreen() {
         </View>
 
         <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
-          <Text style={styles.signOutText}>SIGN OUT</Text>
+          <View style={{flexDirection:'row', alignItems:'center', gap:8}}>
+            <Icon name="lock" size={22} color={'#a83040'} />
+            <Text style={styles.signOutText}>SIGN OUT</Text>
+          </View>
         </TouchableOpacity>
 
         <Text style={styles.footerText}>AIOmni · See everything. Know everyone. Win always.</Text>
@@ -241,7 +261,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: F.bold, fontSize: 36, color: C.ink, letterSpacing: 3 },
 
   section: { marginBottom: 22 },
-  sectionTitle: { fontFamily: F.bold, color: C.dim2, fontSize: 10, letterSpacing: 2, marginBottom: 10 },
+  sectionTitle: { fontFamily: F.bold, color: C.dim2, fontSize: 13, letterSpacing: 2, marginBottom: 10 },
   card: {
     backgroundColor: SURFACE, borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: BORDER,
     position: 'relative', overflow: 'hidden', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 18, elevation: 4,
@@ -249,8 +269,8 @@ const styles = StyleSheet.create({
   cardShine: { position: 'absolute', top: 0, left: '8%', right: '8%', height: 1.5, backgroundColor: BEVEL_HI, zIndex: 6 },
 
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(88,131,191,0.12)' },
-  rowLabel: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm },
-  rowValue: { fontFamily: F.outfit, color: C.ink, fontSize: SZ.sm },
+  rowLabel: { fontFamily: F.bold, color: C.dim2, fontSize: 16 },
+  rowValue: { fontFamily: F.mono, color: C.ink, fontSize: 12 },
 
   linkRow: { marginTop: 14 },
   linkText: { fontFamily: F.bold, color: C.blueDeep, fontSize: SZ.sm, letterSpacing: 1.5 },
