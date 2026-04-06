@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     marginBottom: 12, paddingHorizontal: 14,
   },
   inputWrapError: { borderColor: 'rgba(168,48,64,0.5)' },
-  inputPrefix:    { fontFamily: F.bold, fontSize: 20, color: C.dim2, marginRight: 6 },
+  inputPrefix:    { fontFamily: F.mono, fontSize: 20, color: C.dim2, marginRight: 6 },
   input: {
     flex: 1, color: C.ink, fontFamily: F.mono,
     fontSize: SZ.base, paddingVertical: 14,
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35, shadowRadius: 12, elevation: 4,
   },
-  buttonText: { fontFamily: F.bold, color: C.ink, fontSize: SZ.base, letterSpacing: 2 },
+  buttonText: { fontFamily: F.mono, color: C.ink, fontSize: SZ.base, letterSpacing: 2 },
 
   platformStrip: {
     flexDirection: 'row', alignItems: 'center',

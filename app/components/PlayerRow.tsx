@@ -40,6 +40,19 @@ export const PlayerRow: React.FC<Props> = ({
   const scoreColor = beating ? C.mint : C.blueDeep;
   const trendColor = trend === '↑' ? C.mint : trend === '↓' ? C.rose : C.dim2;
 
+  // Position-based progress bar colors
+  const positionBarColors: Record<string, string> = {
+    QB: '#7b5ea7',
+    RB: '#1e8c42',
+    WR: '#2a7aaa',
+    TE: '#b85a1a',
+    K:  '#888888',
+    FLX: '#1e8c42',
+    DEF: '#7b5ea7',
+    BN: 'rgba(88,131,191,0.25)',
+  };
+  const barColor = positionBarColors[pos] || 'rgba(88,131,191,0.25)';
+
   return (
     <TouchableOpacity
       style={[styles.row, dimmed && { opacity: 0.5 }]}
@@ -72,7 +85,7 @@ export const PlayerRow: React.FC<Props> = ({
           <ProgressBar
             value={pts}
             max={proj}
-            color={beating ? C.mint : 'rgba(88,131,191,0.25)'}
+            color={barColor}
             height={3}
           />
         )}
@@ -114,7 +127,7 @@ const styles = StyleSheet.create({
   slot:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim2, width: 24, flexShrink: 0 },
   info:     { flex: 1, minWidth: 0, gap: 2 },
   nameRow:  { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  name:     { fontSize: SZ.base - 1, fontFamily: F.semibold, color: C.ink, flex: 1 },
+  name:     { fontSize: SZ.base - 1, fontFamily: F.bold, color: C.ink, flex: 1 },
   subRow:   { flexDirection: 'row', alignItems: 'center' },
   team:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim2 },
   owned:    { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim2 },

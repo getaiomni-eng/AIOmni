@@ -15,8 +15,7 @@ import { fetchAllLiveData, formatLiveDataForPrompt } from '../../services/liveDa
 import { getCurrentTier } from '../../services/purchases';
 import { getMemories, saveMemory } from '../../services/supabase';
 import { getPlayerContext } from '../../services/playerIntelligence';
-import { PositionPill } from '../components/Atoms';
-import { AIOmniLogo } from '../components/AIOmniLogo';
+import { OrbAvatar } from '../components/OrbAvatar';
 import { C, F, R, SP, SZ } from '../constants/tokens';
 import { getRemainingPrompts, getResetTime, incrementPrompt } from '../utils/promptCounter';
 
@@ -146,6 +145,17 @@ const RecoCard: React.FC<{ emoji: string; title: string; body: string }> = ({ em
       <Text style={styles.recoTitle}>{title}</Text>
     </View>
     <Text style={styles.recoBody}>{body}</Text>
+  </View>
+);
+
+const POS_COLORS: Record<string, string> = {
+  QB: '#7b5ea7', RB: '#1e8c42', WR: '#2a7aaa',
+  TE: '#b85a1a', K: '#6b7491',
+};
+
+const PositionPill: React.FC<{ pos: string }> = ({ pos }) => (
+  <View style={[styles.posPill, { backgroundColor: POS_COLORS[pos] || C.dim2 }]}>
+    <Text style={styles.posPillTxt}>{pos}</Text>
   </View>
 );
 
@@ -291,7 +301,8 @@ export default function CoachScreen() {
       ].filter(Boolean).join('\n');
 
       const reply = await askAI(fullPrompt, 1000);
-      setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: reply }]);
+      console.log('AI response:', reply);
+      setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: reply ?? '' }]);
 
       if (['pro','premium','dynasty_elite'].includes(tier) && selectedLeague) {
         try {
@@ -324,7 +335,7 @@ export default function CoachScreen() {
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.header}>
-          <Text style={styles.title}>🤖 AI Coach</Text>
+          <Text style={styles.title}>AI COACH</Text>
           <TouchableOpacity onPress={clearChat} style={styles.clearBtn}>
             <Ionicons name="trash-outline" size={18} color={C.dim2} />
           </TouchableOpacity>
@@ -342,6 +353,10 @@ export default function CoachScreen() {
                 <ActivityIndicator color={C.blueDeep} size="small" />
               ) : msg.role === 'ai' ? (
                 <View style={styles.aiMsg}>
+                  <View style={styles.aiHeader}>
+                    <OrbAvatar size={28} />
+                    <Text style={styles.aiLabel}>AI Coach</Text>
+                  </View>
                   {renderAIText(msg.text)}
                 </View>
               ) : (
@@ -385,7 +400,7 @@ export default function CoachScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.remaining}>
+          <Text style={[styles.remaining, { color: remaining > 10 ? C.mint : remaining > 5 ? C.amber : C.rose }]}>
             {remaining} prompts remaining this week
           </Text>
         </View>
@@ -447,20 +462,36 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1.5,
     borderColor: 'rgba(88,131,191,0.18)',
+    borderRightWidth: 2.5,
+    borderBottomWidth: 2.5,
+    borderRightColor: '#3d6aaa',
+    borderBottomColor: '#3d6aaa',
+  },
+  aiHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  aiLabel: {
+    fontSize: SZ.xs,
+    fontFamily: F.mono,
+    color: C.dim2,
+    marginLeft: 8,
+    letterSpacing: 1,
   },
   userTxt: {
-    backgroundColor: C.blueDeep,
-    color: '#ffffff',
+    backgroundColor: '#fee229',
+    color: C.ink,
     borderRadius: 16,
     padding: 14,
-    fontFamily: F.mono,
+    fontFamily: F.outfit,
     fontSize: SZ.sm,
   },
   aiTxt: {
     fontSize: SZ.sm,
     color: C.ink,
     lineHeight: 20,
-    fontFamily: F.mono,
+    fontFamily: F.outfit,
   },
   aiBold: {
     fontSize: SZ.sm,
@@ -636,5 +667,15 @@ const styles = StyleSheet.create({
     color: C.dim2,
     fontFamily: F.mono,
     marginTop: 2,
+  },
+  posPill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  posPillTxt: {
+    fontSize: SZ.xs,
+    fontFamily: F.bold,
+    color: '#ffffff',
   },
 });

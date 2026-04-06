@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     marginTop: 4,
   },
-  submitTxt: { fontFamily: F.bold, color: '#ffffff', fontSize: SZ.base, letterSpacing: 2 },
+  submitTxt: { fontFamily: F.mono, color: '#ffffff', fontSize: SZ.base, letterSpacing: 2 },
 
   switchRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 2 },
   switchTxt: { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.sm },

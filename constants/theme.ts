@@ -1,29 +1,49 @@
-import { Colors } from './Colors';
+import { Colors as ColorsFlat } from './Colors';
+
+// Create a light/dark variant structure for theme hooks
+export const Colors = {
+  light: {
+    text: ColorsFlat.white,
+    background: ColorsFlat.background,
+    tint: ColorsFlat.y,
+    icon: ColorsFlat.y,
+    tabIconDefault: 'rgba(255,255,255,0.3)',
+    tabIconSelected: ColorsFlat.y,
+  },
+  dark: {
+    text: ColorsFlat.white,
+    background: ColorsFlat.void,
+    tint: ColorsFlat.y,
+    icon: ColorsFlat.y,
+    tabIconDefault: 'rgba(255,255,255,0.3)',
+    tabIconSelected: ColorsFlat.y,
+  },
+};
 
 // Tab bar / navigation colors (Expo Router uses these)
 export const NavColors = {
   light: {
-    text:           Colors.white,
-    background:     Colors.background,
-    tint:           Colors.y,
-    icon:           Colors.y,
+    text:           ColorsFlat.white,
+    background:     ColorsFlat.background,
+    tint:           ColorsFlat.y,
+    icon:           ColorsFlat.y,
     tabIconDefault: 'rgba(255,255,255,0.3)',
-    tabIconSelected:Colors.y,
+    tabIconSelected:ColorsFlat.y,
   },
   dark: {
-    text:           Colors.white,
-    background:     Colors.void,
-    tint:           Colors.y,
-    icon:           Colors.y,
+    text:           ColorsFlat.white,
+    background:     ColorsFlat.void,
+    tint:           ColorsFlat.y,
+    icon:           ColorsFlat.y,
     tabIconDefault: 'rgba(255,255,255,0.3)',
-    tabIconSelected:Colors.y,
+    tabIconSelected:ColorsFlat.y,
   },
 };
 
 // Main app theme — import this in your screens
 export const Theme = {
   // Colors (shortcut — same as Colors.ts)
-  ...Colors,
+  ...ColorsFlat,
 
   // Spacing scale
   space: {

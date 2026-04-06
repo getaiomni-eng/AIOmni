@@ -83,26 +83,31 @@ export default function RankingsScreen() {
   const [position,  setPosition]  = useState<Position>('ALL');
   const [search,    setSearch]    = useState('');
   const [players]                 = useState<Player[]>(SEED_PLAYERS);
-  const [myRanks,   setMyRanks]   = useState<Player[]>([]);
+  const [rankedPlayers, setRankedPlayers] = useState<Player[]>([]);
   const [draftMode, setDraftMode] = useState(false);
   const [showPlatformPrompt, setShowPlatformPrompt] = useState(false);
+
+  const resetMyRanks = () => {
+    setRankedPlayers([...SEED_PLAYERS]);
+    AsyncStorage.setItem('custom_rankings_v2', JSON.stringify(SEED_PLAYERS));
+  };
 
   const POSITIONS: Position[] = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K'];
 
   useEffect(() => {
     AsyncStorage.getItem('custom_rankings_v2').then(saved => {
       if (saved) {
-        try { setMyRanks(JSON.parse(saved)); }
-        catch { setShowPlatformPrompt(true); setMyRanks([...SEED_PLAYERS]); }
+        try { setRankedPlayers(JSON.parse(saved)); }
+        catch { setShowPlatformPrompt(true); setRankedPlayers([...SEED_PLAYERS]); }
       } else {
         setShowPlatformPrompt(true);
-        setMyRanks([...SEED_PLAYERS]);
+        setRankedPlayers([...SEED_PLAYERS]);
       }
     });
   }, []);
 
   const saveMyRanks = (ranks: Player[]) => {
-    setMyRanks(ranks);
+    setRankedPlayers(ranks);
     AsyncStorage.setItem('custom_rankings_v2', JSON.stringify(ranks));
   };
 
@@ -112,19 +117,19 @@ export default function RankingsScreen() {
     setMode('mine');
   };
 
-  const activeList = mode === 'mine' ? myRanks : players;
+  const activeList = mode === 'mine' ? rankedPlayers : players;
   const filtered = activeList.filter(p =>
     (position === 'ALL' || p.position === position) &&
     (!search || p.name.toLowerCase().includes(search.toLowerCase()) || p.team.toLowerCase().includes(search.toLowerCase()))
   );
 
   const toggleDrafted = (player: Player) => {
-    saveMyRanks(myRanks.map(p =>
+    saveMyRanks(rankedPlayers.map(p =>
       p.id === player.id && p.name === player.name ? { ...p, drafted: !p.drafted } : p
     ));
   };
 
-  const resetMyRanks = () => saveMyRanks(SEED_PLAYERS.map(p => ({ ...p, drafted: false })));
+  const onDragEnd = ({ data }: { data: Player[] }) => { saveMyRanks(data); };
 
   const renderDraggableItem = ({ item, drag, isActive, getIndex }: RenderItemParams<Player>) => {
     const index    = getIndex?.() ?? 0;
@@ -139,7 +144,7 @@ export default function RankingsScreen() {
           style={[styles.playerRow, isActive && styles.playerRowActive, isDrafted && styles.playerRowDrafted]}
         >
           <View style={styles.playerLeft}>
-            <Text style={[styles.rankNum, { color: posColor }]}>{index + 1}</Text>
+            <Text style={[styles.rankNum, { color: index < 3 ? C.gold : C.blueDeep }]}>{index + 1}</Text>
             <PlayerPhoto playerId={item.id} size={40} />
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={[styles.playerName, isDrafted && styles.playerNameDrafted]}>{item.name}</Text>
@@ -165,7 +170,7 @@ export default function RankingsScreen() {
     return (
       <View style={[styles.playerRow, isDrafted && styles.playerRowDrafted]}>
         <View style={styles.playerLeft}>
-          <Text style={[styles.rankNum, { color: posColor }]}>{index + 1}</Text>
+          <Text style={[styles.rankNum, { color: index < 3 ? C.gold : C.blueDeep }]}>{index + 1}</Text>
           <PlayerPhoto playerId={item.id} size={40} />
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={[styles.playerName, isDrafted && styles.playerNameDrafted]}>{item.name}</Text>
@@ -186,49 +191,25 @@ export default function RankingsScreen() {
   return (
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Text style={styles.title}>📊 Rankings</Text>
-        <TouchableOpacity onPress={() => setDraftMode(!draftMode)} style={styles.draftModeBtn}>
-          <Text style={styles.draftModeTxt}>{draftMode ? 'View' : 'Edit'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.filters}>
-        <View style={styles.modeRow}>
-          {(['community', 'mine'] as Mode[]).map(m => (
-            <TouchableOpacity
-              key={m}
-              onPress={() => setMode(m)}
-              style={[styles.modeBtn, mode === m && styles.modeBtnOn]}
-            >
-              <Text style={[styles.modeTxt, mode === m && styles.modeTxtOn]}>
-                {m === 'community' ? 'Community' : 'My Rankings'}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <Text style={styles.eyebrow}>RANKINGS</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>Rankings.</Text>
+          <TouchableOpacity onPress={() => setMode('mine')} style={[styles.myRankingsPill, mode === 'mine' && styles.myRankingsPillOn]}>
+            <Text style={[styles.myRankingsTxt, mode === 'mine' && styles.myRankingsTxtOn]}>My Rankings</Text>
+          </TouchableOpacity>
         </View>
-
         <View style={styles.filterRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {POSITIONS.map(pos => (
               <TouchableOpacity
                 key={pos}
                 onPress={() => setPosition(pos)}
-                style={[styles.posBtn, position === pos && styles.posBtnOn]}
+                style={[styles.posBtn, position === pos && { backgroundColor: pos === 'ALL' ? C.blueDeep : POS_COLORS[pos] || C.blueDeep }]}
               >
                 <Text style={[styles.posTxt, position === pos && styles.posTxtOn]}>{pos}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
-        </View>
-
-        <View style={styles.searchRow}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search players..."
-            placeholderTextColor={C.dim2}
-            value={search}
-            onChangeText={setSearch}
-          />
         </View>
       </View>
 
@@ -244,8 +225,8 @@ export default function RankingsScreen() {
       {mode === 'mine' && draftMode ? (
         <DraggableFlatList
           data={filtered}
-          onDragEnd={({ data }) => saveMyRanks(data)}
-          keyExtractor={item => item.id}
+          onDragEnd={onDragEnd}
+          keyExtractor={(item) => item.id}
           renderItem={renderDraggableItem}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
@@ -278,26 +259,47 @@ export default function RankingsScreen() {
 const styles = StyleSheet.create({
   header: {
     paddingHorizontal: SP[3],
-    paddingBottom: 12,
+    paddingBottom: 8,
+  },
+  eyebrow: {
+    fontSize: 9,
+    fontFamily: F.mono,
+    color: C.dim2,
+    letterSpacing: 2,
+    marginBottom: 4,
+  },
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 12,
   },
   title: {
-    fontSize: SZ.xl,
+    fontSize: 36,
     fontFamily: F.bold,
-    color: "#ffffff",
+    color: C.ink,
   },
-  draftModeBtn: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
+  myRankingsPill: {
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: C.sageG,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  draftModeTxt: {
+  myRankingsPillOn: {
+    borderColor: C.blueDeep,
+    borderWidth: 2,
+  },
+  myRankingsTxt: {
     fontSize: SZ.sm,
     fontFamily: F.mono,
-    color: "#ffffff",
+    color: C.blueDeep,
+    letterSpacing: 0.5,
+  },
+  myRankingsTxtOn: {
+    color: C.blueDeep,
+    fontFamily: F.bold,
   },
   filters: {
     paddingHorizontal: SP[3],
@@ -320,7 +322,7 @@ const styles = StyleSheet.create({
   },
   modeTxt: {
     fontSize: SZ.sm,
-    fontFamily: F.bold,
+    fontFamily: F.mono,
     color: "#ffffff",
   },
   modeTxtOn: {
@@ -345,7 +347,7 @@ const styles = StyleSheet.create({
   },
   posTxtOn: {
     color: "#ffffff",
-    fontFamily: F.bold,
+    fontFamily: F.mono,
   },
   searchRow: {
     marginBottom: 8,
@@ -391,12 +393,20 @@ const styles = StyleSheet.create({
   playerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,
     borderWidth: 1.5,
-    borderColor: 'rgba(88,131,191,0.18)',
+    borderTopColor: 'rgba(255,255,255,0.95)',
+    borderBottomColor: 'rgba(88,131,191,0.45)',
+    borderLeftColor: 'rgba(88,131,191,0.18)',
+    borderRightColor: 'rgba(88,131,191,0.28)',
+    shadowColor: '#3d6aaa',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
   },
   playerRowActive: {
     opacity: 0.8,
@@ -418,7 +428,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   playerName: {
-    fontSize: SZ.sm,
+    fontSize: 14,
     fontFamily: F.bold,
     color: C.ink,
   },
@@ -427,7 +437,7 @@ const styles = StyleSheet.create({
     color: C.dim2,
   },
   playerSub: {
-    fontSize: SZ.xs,
+    fontSize: 8,
     fontFamily: F.mono,
     color: C.dim2,
     marginTop: 2,
@@ -446,7 +456,7 @@ const styles = StyleSheet.create({
   },
   draftTxt: {
     fontSize: SZ.sm,
-    fontFamily: F.bold,
+    fontFamily: F.mono,
     color: C.dim2,
   },
   draftTxtOn: {
@@ -477,6 +487,7 @@ const styles = StyleSheet.create({
   },
   promptTxt: {
     fontSize: SZ.sm,
+    fontFamily: F.outfit,
     color: C.dim,
     textAlign: 'center',
     lineHeight: 20,
@@ -491,6 +502,6 @@ const styles = StyleSheet.create({
   promptBtnTxt: {
     color: "#ffffff",
     fontSize: SZ.sm,
-    fontFamily: F.bold,
+    fontFamily: F.mono,
   },
 });

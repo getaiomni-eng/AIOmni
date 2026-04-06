@@ -116,11 +116,12 @@ Should I add off waivers? What's their upside? Be sharp, direct, under 80 words.
       const text = await askAI(prompt, 200);
       setAdvice(text || 'No advice available for this player.');
     } catch (e: any) {
+      console.log('Waiver AI error:', e);
       // Handle proxy auth error gracefully
       if (e?.message?.includes('prompt_limit_reached')) {
         setAdvice("You've used all your weekly prompts. Upgrade to Pro for unlimited AI advice.");
       } else {
-        setAdvice('Could not load AI advice. Check your connection and try again.');
+        setAdvice(`Could not load AI advice: ${e?.message || 'Unknown error'}. Check your connection and try again.`);
       }
     } finally {
       setAdviceLoading(false);

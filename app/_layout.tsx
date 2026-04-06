@@ -1,4 +1,5 @@
 import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
+import { Barlow_400Regular, Barlow_600SemiBold } from '@expo-google-fonts/barlow';
 import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
@@ -23,20 +24,26 @@ export default Sentry.wrap(function RootLayout() {
 
   const [fontsLoaded] = useFonts({
     // ── New fonts ──────────────────────────────
-    'BebasNeue':       BebasNeue_400Regular,
+    'BebasNeue_400Regular':     BebasNeue_400Regular,
+    'Barlow_400Regular':        Barlow_400Regular,
+    'Barlow_600SemiBold':       Barlow_600SemiBold,
+    'SpaceMono_400Regular':     SpaceMono_400Regular,
+    'SpaceMono_700Bold':        SpaceMono_700Bold,
 
-    'SpaceMono':       SpaceMono_400Regular,
-    'SpaceMono-Bold':  SpaceMono_700Bold,
+    // ── Aliases — keeps old hardcoded font strings ──
+    'BebasNeue':                BebasNeue_400Regular,
+    'Barlow':                   Barlow_400Regular,
+    'SpaceMono':                SpaceMono_400Regular,
+    'SpaceMono-Bold':           SpaceMono_700Bold,
 
-    // ── Aliases — keeps old hardcoded font strings
-    //    in settings.tsx etc. working until migrated ──
-    'Outfit':          SpaceMono_400Regular,
-    'Outfit-Medium':   SpaceMono_400Regular,
-    'Outfit-SemiBold': SpaceMono_400Regular,
-    'Outfit-Bold':     BebasNeue_400Regular,
-    'Outfit-Black':    BebasNeue_400Regular,
-    'DMMono-Regular':  SpaceMono_400Regular,
-    'DMMono-Medium':   SpaceMono_700Bold,
+    // ── Legacy aliases ──
+    'Outfit':                   Barlow_400Regular,
+    'Outfit-Medium':            Barlow_400Regular,
+    'Outfit-SemiBold':          Barlow_600SemiBold,
+    'Outfit-Bold':              BebasNeue_400Regular,
+    'Outfit-Black':             BebasNeue_400Regular,
+    'DMMono-Regular':           SpaceMono_400Regular,
+    'DMMono-Medium':            SpaceMono_700Bold,
   });
 
   useEffect(() => {

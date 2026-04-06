@@ -4,7 +4,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import Svg, { Circle, Defs, G, Path, Polygon, RadialGradient, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, ClipPath, Defs, G, Path, Polygon, RadialGradient, Stop, Text as SvgText } from 'react-native-svg';
 
 const BLADE = "M 0,0 L -28,-48.5 A 56,56 0 0,1 28,-48.5 Z";
 const ROTS  = [0, 60, 120, 180, 240, 300];
@@ -83,6 +83,9 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
             <Stop offset="75%"  stopColor="#2a2000" stopOpacity={0.12}/>
             <Stop offset="100%" stopColor="#000000" stopOpacity={0}   />
           </RadialGradient>
+          <ClipPath id="bladeClip">
+            <Circle cx={0} cy={0} r={42} />
+          </ClipPath>
         </Defs>
 
         {/* Black shadow hex */}
@@ -108,19 +111,21 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
         <G transform="translate(410,260)">
           <Circle r={60} fill="#091622" />
           <Circle r={42} fill="url(#cgL)" />
-          {ROTS.map(rot => (
-            <G key={rot} transform={`rotate(${rot})`}>
-              <Path
-                d={BLADE}
-                fill="#2a6bb0"
-                stroke="#ffffed"
-                strokeWidth={1.3}
-                rotation={angle}
-                originX={0}
-                originY={-52}
-              />
-            </G>
-          ))}
+          <G clipPath="url(#bladeClip)">
+            {ROTS.map(rot => (
+              <G key={rot} transform={`rotate(${rot})`}>
+                <Path
+                  d={BLADE}
+                  fill="#2a6bb0"
+                  stroke="#ffffed"
+                  strokeWidth={1.3}
+                  rotation={angle}
+                  originX={0}
+                  originY={-52}
+                />
+              </G>
+            ))}
+          </G>
           <Circle r={51} fill="none" stroke="#091622" strokeWidth={18} />
           <Circle r={60} fill="none" stroke="#ffffed" strokeWidth={3} />
           <Circle r={57.5} fill="none" stroke="#0a1e30" strokeWidth={1.5} />

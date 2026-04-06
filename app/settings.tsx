@@ -3,10 +3,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { loadESPNCredentials } from '../services/espn';
 import { clearYahooTokens, exchangeYahooCode, getValidYahooToken, getYahooAuthURL, getYahooLeagues, loadYahooTokens } from '../services/yahoo';
 import { getUser, signOut } from '../services/auth';
+import { AIOmniLogo } from './components/AIOmniLogo';
 import { C, F, SP, SZ } from './constants/tokens';
 import { getRemainingPrompts } from './utils/promptCounter';
 
@@ -112,6 +113,7 @@ export default function SettingsScreen() {
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
+          <AIOmniLogo width={Dimensions.get('window').width * 0.55} />
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={styles.backText}>← BACK</Text>
           </TouchableOpacity>
@@ -156,9 +158,13 @@ export default function SettingsScreen() {
                 <Text style={styles.platformName}>ESPN</Text>
                 <Text style={styles.platformSub}>{espnLeagueName || 'Auto-login via browser'}</Text>
               </View>
-              <TouchableOpacity onPress={handleOpenESPN} style={styles.connectBtnSmall}>
-                <Text style={styles.connectBtnSmallText}>CONNECT</Text>
-              </TouchableOpacity>
+              {espnConnected ? (
+                <Text style={[styles.statusText, { color: C.mint }]}>✓ CONNECTED</Text>
+              ) : (
+                <TouchableOpacity onPress={handleOpenESPN} style={styles.connectBtnSmall}>
+                  <Text style={styles.connectBtnSmallText}>CONNECT</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={[styles.platformRow, { borderBottomWidth: 0 }]}> 
@@ -235,7 +241,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: F.bold, fontSize: 36, color: C.ink, letterSpacing: 3 },
 
   section: { marginBottom: 22 },
-  sectionTitle: { fontFamily: F.mono, color: C.dim2, fontSize: 10, letterSpacing: 2, marginBottom: 10 },
+  sectionTitle: { fontFamily: F.bold, color: C.dim2, fontSize: 10, letterSpacing: 2, marginBottom: 10 },
   card: {
     backgroundColor: SURFACE, borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: BORDER,
     position: 'relative', overflow: 'hidden', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 18, elevation: 4,
@@ -244,7 +250,7 @@ const styles = StyleSheet.create({
 
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(88,131,191,0.12)' },
   rowLabel: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm },
-  rowValue: { fontFamily: F.bold, color: C.ink, fontSize: SZ.sm },
+  rowValue: { fontFamily: F.outfit, color: C.ink, fontSize: SZ.sm },
 
   linkRow: { marginTop: 14 },
   linkText: { fontFamily: F.bold, color: C.blueDeep, fontSize: SZ.sm, letterSpacing: 1.5 },
@@ -253,21 +259,21 @@ const styles = StyleSheet.create({
   platformBadgeSleeper: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.gold, borderWidth: 1.5, borderColor: C.goldBorder },
   platformBadgeEspn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#ffe7e7', borderWidth: 1.5, borderColor: 'rgba(221,0,0,0.35)' },
   platformBadgeYahoo: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(96,1,210,0.12)', borderWidth: 1.5, borderColor: 'rgba(96,1,210,0.35)' },
-  platformName: { fontFamily: F.bold, color: C.ink, fontSize: SZ.base },
+  platformName: { fontFamily: F.outfit, color: C.ink, fontSize: SZ.base },
   platformSub: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm, marginTop: 2 },
-  statusText: { fontFamily: F.bold, color: C.dim2, fontSize: SZ.sm },
+  statusText: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm },
   connectBtnSmall: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: C.blueDeep },
-  connectBtnSmallText: { fontFamily: F.bold, color: '#ffffff', fontSize: SZ.xs, letterSpacing: 2 },
+  connectBtnSmallText: { fontFamily: F.mono, color: '#ffffff', fontSize: SZ.xs, letterSpacing: 2 },
   disconnectBtnSmall: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(168,48,64,0.12)' },
-  disconnectBtnSmallText: { fontFamily: F.bold, color: '#a83040', fontSize: SZ.xs, letterSpacing: 2 },
+  disconnectBtnSmallText: { fontFamily: F.mono, color: '#a83040', fontSize: SZ.xs, letterSpacing: 2 },
 
   progressBar: { height: 4, backgroundColor: 'rgba(88,131,191,0.12)', borderRadius: 3, overflow: 'hidden', marginTop: 12, marginBottom: 10 },
   progressFill: { height: 4, backgroundColor: C.blueDeep },
   smallText: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, lineHeight: 16, marginBottom: 14 },
   upgradeBtn: { backgroundColor: C.gold, borderRadius: 12, padding: 14, alignItems: 'center' },
-  upgradeBtnText: { fontFamily: F.bold, color: C.ink, letterSpacing: 2 },
+  upgradeBtnText: { fontFamily: F.mono, color: C.ink, letterSpacing: 2 },
 
   signOutBtn: { borderWidth: 1.5, borderColor: 'rgba(168,48,64,0.3)', borderRadius: 14, padding: 16, alignItems: 'center', marginVertical: 18, backgroundColor: 'rgba(168,48,64,0.05)' },
-  signOutText: { fontFamily: F.bold, color: '#a83040', fontSize: SZ.sm, letterSpacing: 2 },
+  signOutText: { fontFamily: F.mono, color: '#a83040', fontSize: SZ.sm, letterSpacing: 2 },
   footerText: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs, textAlign: 'center', letterSpacing: 1, marginBottom: 24 },
 });

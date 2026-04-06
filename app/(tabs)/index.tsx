@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Animated, Dimensions, Image,
-  Linking, RefreshControl, ScrollView,
+  Linking, Modal, RefreshControl, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +15,7 @@ import { getValidYahooToken } from '../../services/yahoo';
 import { AIOmniLogo } from '../components/AIOmniLogo';
 import { Badge, SectionHeader } from '../components/Atoms';
 import { C, F, R, SP, SZ } from '../constants/tokens';
+import { incrementPrompt } from '../utils/promptCounter';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W    = SCREEN_W - SP[3] * 2;
@@ -87,6 +88,10 @@ export default function HomeScreen() {
   const [news,           setNews]           = useState(FALLBACK_NEWS);
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['sleeper', 'espn', 'yahoo']);
   const [selectedSeason,    setSelectedSeason]    = useState('2025');
+  const [aiCoachActive,     setAiCoachActive]     = useState(false);
+  const [selectedLeague,    setSelectedLeague]    = useState<League | null>(null);
+  const [aiCoachLoading,    setAiCoachLoading]    = useState(false);
+  const [aiCoachInsight,    setAiCoachInsight]    = useState('');
 
   const scoreAnims = useRef(Array.from({ length: 12 }, () => new Animated.Value(0))).current;
 
@@ -321,6 +326,21 @@ export default function HomeScreen() {
 
   const ordinal = (n: number) => { const s = ['th','st','nd','rd']; return s[(n % 100 > 3 && n % 100 < 21) ? 0 : Math.min(n % 10, 4)] || 'th'; };
 
+  const openAiCoachModal = async (league: League) => {
+    setSelectedLeague(league);
+    setAiCoachLoading(true);
+    setAiCoachInsight('');
+    try {
+      await incrementPrompt();
+      const prompt = `You are AIOmni AI Coach. Analyze this matchup and give 1 actionable insight in 2 sentences max:\n\nLeague: ${league.name} (${league.platform}, ${league.format})\nWeek: ${league.week}\nYour Score: ${league.pts}\nOpponent Score: ${league.opp}\n\nWhat should I focus on this week?`;
+      const insight = await askAI(prompt, 150);
+      setAiCoachInsight(insight);
+    } catch (e) {
+      setAiCoachInsight('Could not generate insight at this time.');
+    }
+    setAiCoachLoading(false);
+  };
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     scoreAnims.forEach(a => a.setValue(0));
@@ -377,6 +397,28 @@ export default function HomeScreen() {
 
         {/* Platform toggles and season selector */}
         <View style={styles.platformRow}>
+          <View style={styles.platformToggles}>
+            {(['sleeper', 'espn', 'yahoo'] as Platform[]).map(platform => {
+              const isSelected = selectedPlatforms.includes(platform);
+              return (
+                <TouchableOpacity
+                  key={platform}
+                  onPress={() => {
+                    setSelectedPlatforms(prev =>
+                      isSelected
+                        ? prev.filter(p => p !== platform)
+                        : [...prev, platform]
+                    );
+                  }}
+                  style={[styles.platformToggle, isSelected && { borderColor: PLAT_COLOR(platform), borderWidth: 2 }]}
+                >
+                  <Text style={[styles.platformToggleText, isSelected && styles.platformToggleTextOn]}>
+                    {PLAT_LABEL(platform)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
           <TouchableOpacity
             onPress={() => {
               // Show season selector
@@ -395,28 +437,6 @@ export default function HomeScreen() {
           >
             <Text style={styles.seasonPillText}>{selectedSeason} ▾</Text>
           </TouchableOpacity>
-          <View style={styles.platformToggles}>
-            {(['sleeper', 'espn', 'yahoo'] as Platform[]).map(platform => {
-              const isSelected = selectedPlatforms.includes(platform);
-              return (
-                <TouchableOpacity
-                  key={platform}
-                  onPress={() => {
-                    setSelectedPlatforms(prev =>
-                      isSelected
-                        ? prev.filter(p => p !== platform)
-                        : [...prev, platform]
-                    );
-                  }}
-                  style={[styles.platformToggle, isSelected && styles.platformToggleOn]}
-                >
-                  <Text style={[styles.platformToggleText, isSelected && styles.platformToggleTextOn]}>
-                    {PLAT_LABEL(platform)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
         </View>
 
         {/* ── Score cards ── */}
@@ -442,7 +462,11 @@ export default function HomeScreen() {
                         <Text style={styles.scoreEyeGrid}>
                           {'⚡ WK '}{lg.week}
                         </Text>
-                        <TouchableOpacity onPress={() => goToLeague(lg)} activeOpacity={0.8} style={styles.leagueBtnGrid}>
+                        <TouchableOpacity 
+                          onPress={() => aiCoachActive ? openAiCoachModal(lg) : goToLeague(lg)} 
+                          activeOpacity={0.8} 
+                          style={styles.leagueBtnGrid}
+                        >
                           <View style={styles.leagueTopGrid}>
                             <PlatformLogo platform={lg.platform} size={24} />
                             <View style={{ flex: 1, marginLeft: 8 }}>
@@ -484,7 +508,24 @@ export default function HomeScreen() {
           </BevelCard>
         )}
 
-        {/* ── AI Insights ── */}
+        {/* AI Coach Bar */}
+        <TouchableOpacity
+          style={[styles.aiCoachBar, aiCoachActive && styles.aiCoachBarActive]}
+          onPress={() => setAiCoachActive(!aiCoachActive)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.aiCoachBarShine} />
+          <View style={styles.aiCoachLeft}>
+            <Text style={styles.aiCoachOrb}>◉</Text>
+          </View>
+          <View style={styles.aiCoachCenter}>
+            <Text style={styles.aiCoachLabel}>AI COACH</Text>
+            <Text style={styles.aiCoachHint}>Tap to activate · then tap any score card</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={C.dim2} />
+        </TouchableOpacity>
+
+        {/* AI Insights */}
         <View style={styles.insightsHeader}>
           <Text style={styles.insightsEye}>🤖  AI INSIGHTS</Text>
           <Text style={styles.insightsHint}>← swipe →</Text>
@@ -519,6 +560,40 @@ export default function HomeScreen() {
 
         <View style={{ height: 60 }} />
       </ScrollView>
+
+      {/* AI Coach Modal */}
+      <Modal visible={!!selectedLeague && aiCoachActive} transparent animationType="slide" onRequestClose={() => setSelectedLeague(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(26,31,46,0.55)', justifyContent: 'flex-end' }}>
+          <View style={styles.aiCoachModal}>
+            <View style={styles.aiCoachModalShine} />
+            <TouchableOpacity onPress={() => setSelectedLeague(null)} hitSlop={12}>
+              <Text style={styles.aiCoachModalClose}>✕</Text>
+            </TouchableOpacity>
+            <Text style={styles.aiCoachModalTitle}>{selectedLeague?.name}</Text>
+            <View style={styles.aiCoachModalScores}>
+              <View>
+                <Text style={styles.aiCoachModalLabel}>YOU</Text>
+                <Text style={styles.aiCoachModalScore}>{(selectedLeague?.pts ?? 0).toFixed(1)}</Text>
+              </View>
+              <Text style={styles.aiCoachModalVs}>VS</Text>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.aiCoachModalLabel}>OPP</Text>
+                <Text style={styles.aiCoachModalScore}>{(selectedLeague?.opp ?? 0).toFixed(1)}</Text>
+              </View>
+            </View>
+            {aiCoachLoading ? (
+              <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                <ActivityIndicator color={C.blueDeep} size="large" />
+              </View>
+            ) : (
+              <Text style={styles.aiCoachModalInsight}>{aiCoachInsight}</Text>
+            )}
+            <TouchableOpacity style={styles.aiCoachModalBtn} onPress={() => setSelectedLeague(null)}>
+              <Text style={styles.aiCoachModalBtnTxt}>GOT IT</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -540,14 +615,14 @@ const styles = StyleSheet.create({
   loadingCard: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 16, padding: 40, alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
   loadingTxt: { fontSize: SZ.sm, color: C.dim2, marginTop: 12, fontFamily: F.mono },
   scoreCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 18, borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
-  platformRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  seasonPill: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', paddingHorizontal: 12, paddingVertical: 6 },
-  seasonPillText: { fontSize: SZ.sm, fontFamily: F.mono, color: '#ffffff' },
-  platformToggles: { flexDirection: 'row', gap: 8 },
-  platformToggle: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', backgroundColor: 'rgba(255,255,255,0.1)' },
-  platformToggleOn: { backgroundColor: C.blueDeep, borderColor: C.blueDeep },
-  platformToggleText: { fontSize: SZ.sm, fontFamily: F.mono, color: '#ffffff' },
-  platformToggleTextOn: { color: '#ffffff', fontFamily: F.bold },
+  platformRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12 },
+  seasonPill: { backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 16, borderWidth: 1.5, borderColor: C.goldBorder, paddingHorizontal: 12, paddingVertical: 6 },
+  seasonPillText: { fontSize: SZ.sm, fontFamily: F.mono, color: C.ink, letterSpacing: 0.5 },
+  platformToggles: { flexDirection: 'row', gap: 8, flex: 1, justifyContent: 'center' },
+  platformToggle: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1.5, borderColor: C.sageG, backgroundColor: 'rgba(255,255,255,0.85)' },
+  platformToggleOn: { borderColor: C.blueDeep, borderWidth: 2 },
+  platformToggleText: { fontSize: SZ.sm, fontFamily: F.mono, color: C.blueDeep, letterSpacing: 0.5 },
+  platformToggleTextOn: { color: C.blueDeep, fontFamily: F.bold },
   scoreGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   scoreCardGrid: { width: (SCREEN_W - SP[3] * 2 - 8) / 2, aspectRatio: 1.2 },
   scoreEyeGrid: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, letterSpacing: 1.5, marginBottom: 8, textAlign: 'center' },
@@ -582,6 +657,25 @@ const styles = StyleSheet.create({
   insightDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 20 },
   insightDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.dim2 },
   insightDotOn: { backgroundColor: C.blueDeep },
+  aiCoachBar: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)', flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12, marginBottom: 16, position: 'relative', overflow: 'hidden' },
+  aiCoachBarActive: { backgroundColor: C.gold + '18', borderColor: C.gold + '40', shadowColor: C.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 },
+  aiCoachBarShine: { position: 'absolute', top: 0, left: '10%', right: '10%', height: 2, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 1 },
+  aiCoachLeft: { width: 40, alignItems: 'center' },
+  aiCoachOrb: { fontSize: SZ.xl, color: C.gold, fontFamily: F.bold },
+  aiCoachCenter: { flex: 1 },
+  aiCoachLabel: { fontSize: SZ.sm, fontFamily: F.bold, color: C.ink, marginBottom: 2 },
+  aiCoachHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
+  aiCoachModal: { backgroundColor: '#ffffff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, minHeight: 320, borderTopWidth: 1.5, borderLeftWidth: 1.5, borderRightWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)', position: 'relative', overflow: 'hidden', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 12 },
+  aiCoachModalShine: { position: 'absolute', top: 0, left: '8%', right: '8%', height: 1.5, backgroundColor: 'rgba(255,255,255,0.95)', zIndex: 6 },
+  aiCoachModalClose: { fontSize: SZ.lg, fontFamily: F.bold, color: C.blueDeep, alignSelf: 'flex-end', marginBottom: 8 },
+  aiCoachModalTitle: { fontSize: SZ.xl, fontFamily: F.bold, color: C.ink, marginBottom: 16 },
+  aiCoachModalScores: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  aiCoachModalLabel: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, letterSpacing: 1 },
+  aiCoachModalScore: { fontSize: SZ['2xl'], fontFamily: F.bold, color: C.blueDeep, marginTop: 4 },
+  aiCoachModalVs: { fontSize: SZ.lg, fontFamily: F.bold, color: C.dim2 },
+  aiCoachModalInsight: { fontSize: SZ.sm, fontFamily: F.outfit, color: C.dim, lineHeight: 20, marginBottom: 20 },
+  aiCoachModalBtn: { backgroundColor: C.gold, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 20, alignItems: 'center' },
+  aiCoachModalBtnTxt: { fontFamily: F.bold, color: C.ink, fontSize: SZ.base, letterSpacing: 2 },
   bevelCard: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)', position: 'relative', overflow: 'hidden' },
   bevelBlue: { backgroundColor: 'rgba(217,253,243,0.9)', borderColor: 'rgba(88,131,191,0.18)' },
   bevelShine: { position: 'absolute', top: 0, left: '10%', right: '10%', height: 2, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 1 },

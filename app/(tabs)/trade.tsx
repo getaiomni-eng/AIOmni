@@ -19,15 +19,15 @@ type TradeResult = {
 };
 
 const GRADE_COLOR: Record<Grade, string> = {
-  'A+': C.mint,
-  A: C.mint,
-  'A-': C.mint,
-  'B+': C.gold,
-  B: C.gold,
-  'B-': C.gold,
-  'C+': C.amber,
-  C: C.amber,
-  'C-': C.amber,
+  'A+': '#1e8c42',
+  A: '#1e8c42',
+  'A-': '#1e8c42',
+  'B+': '#fee229',
+  B: '#fee229',
+  'B-': '#fee229',
+  'C+': '#b87820',
+  C: '#b87820',
+  'C-': '#b87820',
   'D+': '#a83040',
   D: '#a83040',
   F: '#a83040',
@@ -39,41 +39,38 @@ const EXAMPLES = [
   { give: 'Justin Jefferson', get: "Ja'Marr Chase + TE1" },
 ];
 
-async function analyzeTrade(giving: string, getting: string, format: Format): Promise<TradeResult> {
-  try {
-    const prompt = `Analyze this fantasy football trade for a ${format} league with PPR scoring.\n\nGIVING UP: ${giving}\nRECEIVING: ${getting}\n\nRespond with JSON exactly like this format and no markdown:\n{\n  \"receiveGrade\": \"B+\",\n  \"giveGrade\": \"C+\",\n  \"verdict\": \"One sentence verdict.\",\n  \"analysis\": \"2-3 sentence analysis.\",\n  \"accept\": true,\n  \"tags\": [{\"label\":\"PPR advantage\",\"color\":\"sage\"}]\n}\n\nUse color options: sage, gold, amber, rose, ocean, mauve.`;
-    const response = await askAI(prompt, 550);
-    const text = response?.replace(/```json|```/g, '').trim() || '{}';
-    const parsed = JSON.parse(text);
-    const colorMap: Record<string, string> = {
-      sage: C.mint,
-      gold: C.gold,
-      amber: C.amber,
-      rose: '#a83040',
-      ocean: C.blueDeep,
-      mauve: C.mauve,
-    };
-    parsed.tags = (parsed.tags ?? []).map((tag: any) => ({ label: tag.label, color: colorMap[tag.color] ?? C.mint }));
-    return parsed;
-  } catch (error) {
-    return {
-      receiveGrade: 'B+',
-      giveGrade: 'C+',
-      verdict: 'Analysis timed out. Try again.',
-      analysis: 'Unable to complete analysis. Tap Analyze Again to retry.',
-      accept: true,
-      tags: [{ label: 'Retry needed', color: C.amber }],
-    };
-  }
-}
-
 export default function TradesScreen() {
   const insets = useSafeAreaInsets();
   const [format, setFormat] = useState<Format>('redraft');
   const [giving, setGiving] = useState('');
   const [getting, setGetting] = useState('');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<TradeResult | null>(null);
+  const [youReceiveGrade, setYouReceiveGrade] = useState<Grade>('B+');
+  const [youGiveGrade, setYouGiveGrade] = useState<Grade>('C+');
+  const [verdict, setVerdict] = useState('');
+  const [analysis, setAnalysis] = useState('');
+
+  const analyzeTrade = async () => {
+    try {
+      const prompt = `Respond ONLY with a JSON object, no markdown. Format: { youReceiveGrade: 'A', youGiveGrade: 'B+', verdict: '...', analysis: '...' }`;
+      const response = await askAI(prompt, 550);
+      console.log('Raw AI response:', response);
+      const clean = response.replace(/```json|```/g, '').trim();
+      try {
+        const parsed = JSON.parse(clean);
+        setYouReceiveGrade(parsed.youReceiveGrade);
+        setYouGiveGrade(parsed.youGiveGrade);
+        setVerdict(parsed.verdict);
+        setAnalysis(parsed.analysis);
+      } catch(e) {
+        console.log('Parse error:', e);
+        setVerdict(clean.slice(0, 200));
+      }
+    } catch (error) {
+      setVerdict('Analysis timed out. Try again.');
+      setAnalysis('Unable to complete analysis. Tap Analyze Again to retry.');
+    }
+  };
 
   const canAnalyze = giving.trim().length > 0 && getting.trim().length > 0;
 
@@ -81,13 +78,10 @@ export default function TradesScreen() {
     if (!canAnalyze || loading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
-    setResult(null);
-    const r = await analyzeTrade(giving, getting, format);
-    setResult(r);
+    setVerdict('');
+    setAnalysis('');
+    await analyzeTrade();
     setLoading(false);
-    Haptics.notificationAsync(
-      r.accept ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
-    );
   };
 
   return (
@@ -105,10 +99,7 @@ export default function TradesScreen() {
             <TouchableOpacity
               key={item}
               style={[styles.toggleBtn, format === item && styles.toggleBtnOn]}
-              onPress={() => {
-                setFormat(item);
-                setResult(null);
-              }}
+              onPress={() => setFormat(item)}
             >
               <Text style={[styles.toggleTxt, format === item && styles.toggleTxtOn]}>
                 {item === 'redraft' ? '📅 REDRAFT' : '👑 DYNASTY'}
@@ -121,10 +112,7 @@ export default function TradesScreen() {
           <Text style={styles.fieldLbl}>📤 YOU ARE GIVING</Text>
           <TextInput
             value={giving}
-            onChangeText={text => {
-              setGiving(text);
-              setResult(null);
-            }}
+            onChangeText={text => setGiving(text)}
             placeholder="e.g. CeeDee Lamb"
             placeholderTextColor={C.dim2}
             style={styles.input}
@@ -142,10 +130,7 @@ export default function TradesScreen() {
           <Text style={styles.fieldLbl}>📥 YOU ARE RECEIVING</Text>
           <TextInput
             value={getting}
-            onChangeText={text => {
-              setGetting(text);
-              setResult(null);
-            }}
+            onChangeText={text => setGetting(text)}
             placeholder="e.g. Saquon Barkley + T. Lockett"
             placeholderTextColor={C.dim2}
             style={styles.input}
@@ -153,7 +138,7 @@ export default function TradesScreen() {
           />
         </View>
 
-        {!result && (
+        {!verdict && (
           <View style={{ marginBottom: 14 }}>
             <Text style={styles.exLbl}>QUICK EXAMPLES</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
@@ -181,44 +166,49 @@ export default function TradesScreen() {
             <ActivityIndicator color={C.ink} />
           ) : (
             <Text style={[styles.analyzeTxt, canAnalyze && styles.analyzeTxtOn]}>
-              {result ? 'ANALYZE AGAIN' : 'ANALYZE THIS TRADE'}
+              {verdict ? 'ANALYZE AGAIN' : 'ANALYZE THIS TRADE'}
             </Text>
           )}
         </TouchableOpacity>
 
-        {result && !loading && (
+        {verdict && !loading && (
           <View style={styles.resultCard}>
             <View style={styles.resultCardShine} />
             <View style={styles.gradeRow}>
               <View style={[styles.gradeBox, { flex: 1 }]}> 
                 <Text style={styles.gradeLbl}>YOU RECEIVE</Text>
-                <Text style={[styles.grade, { color: GRADE_COLOR[result.receiveGrade] }]}>{result.receiveGrade}</Text>
+                <Text style={[styles.grade, { color: GRADE_COLOR[youReceiveGrade] }]}>{youReceiveGrade}</Text>
               </View>
               <Text style={styles.vs}>VS</Text>
               <View style={[styles.gradeBox, { flex: 1 }]}> 
                 <Text style={styles.gradeLbl}>YOU GIVE UP</Text>
-                <Text style={[styles.grade, { color: GRADE_COLOR[result.giveGrade] }]}>{result.giveGrade}</Text>
+                <Text style={[styles.grade, { color: GRADE_COLOR[youGiveGrade] }]}>{youGiveGrade}</Text>
               </View>
             </View>
-            <Text style={styles.analysis}>{result.analysis}</Text>
-            <View style={styles.tags}>
-              {result.tags.map((tag, idx) => (
-                <View key={idx} style={[styles.tag, { backgroundColor: tag.color + '18', borderColor: tag.color + '40' }]}>
-                  <Text style={[styles.tagTxt, { color: tag.color }]}>{tag.label}</Text>
-                </View>
-              ))}
+            <Text style={styles.analysis}>{analysis}</Text>
+            <Text style={styles.verdict}>{verdict}</Text>
+            <View style={styles.ctaRow}>
+              {(['A', 'B'].includes(youReceiveGrade[0]) || ['A', 'B'].includes(youGiveGrade[0])) && (
+                <TouchableOpacity style={[styles.ctaBtn, styles.acceptBtn]}>
+                  <Text style={styles.ctaTxt}>ACCEPT</Text>
+                </TouchableOpacity>
+              )}
+              {(['D', 'F'].includes(youReceiveGrade[0]) || ['D', 'F'].includes(youGiveGrade[0])) && (
+                <TouchableOpacity style={[styles.ctaBtn, styles.declineBtn]}>
+                  <Text style={styles.ctaTxt}>DECLINE</Text>
+                </TouchableOpacity>
+              )}
+              {(['C'].includes(youReceiveGrade[0]) || ['C'].includes(youGiveGrade[0])) && (
+                <>
+                  <TouchableOpacity style={[styles.ctaBtn, styles.acceptBtn]}>
+                    <Text style={styles.ctaTxt}>ACCEPT</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.ctaBtn, styles.declineBtn]}>
+                    <Text style={styles.ctaTxt}>DECLINE</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
-            <View style={[styles.verdict, { borderLeftColor: result.accept ? C.mint : '#a83040', backgroundColor: (result.accept ? C.mint : '#a83040') + '12' }]}>
-              <Text style={[styles.verdictEye, { color: result.accept ? C.mint : '#a83040' }]}>VERDICT</Text>
-              <Text style={styles.verdictTxt}>{result.verdict}</Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.cta, { backgroundColor: result.accept ? C.blueDeep : '#a83040' }]}
-              activeOpacity={0.85}
-              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
-            >
-              <Text style={styles.ctaTxt}>{result.accept ? '✓ ACCEPT' : '✕ DECLINE'}</Text>
-            </TouchableOpacity>
           </View>
         )}
 
@@ -273,7 +263,7 @@ const styles = StyleSheet.create({
   },
   toggleTxtOn: {
     color: C.ink,
-    fontFamily: F.bold,
+    fontFamily: F.mono,
   },
   inputCard: {
     backgroundColor: 'rgba(255,255,255,0.92)',
@@ -310,7 +300,7 @@ const styles = StyleSheet.create({
   },
   forTxt: {
     color: C.dim2,
-    fontFamily: F.bold,
+    fontFamily: F.mono,
     fontSize: SZ.sm,
     letterSpacing: 1.5,
   },
@@ -346,6 +336,14 @@ const styles = StyleSheet.create({
   analyzeBtnOn: {
     backgroundColor: C.blueDeep,
     borderColor: C.blueDeep,
+  },
+  analyzeText: {
+    fontFamily: F.mono,
+    fontSize: SZ.sm,
+  },
+  analyzeTextOn: {
+    color: '#ffffff',
+    fontFamily: F.mono,
   },
   analyzeTxt: {
     color: C.dim2,
@@ -391,12 +389,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   grade: {
-    fontSize: SZ.hero,
+    fontSize: 48,
     fontFamily: F.bold,
   },
   vs: {
     color: C.dim2,
-    fontFamily: F.bold,
+    fontFamily: F.mono,
     fontSize: SZ.sm,
     alignSelf: 'center',
   },
@@ -405,7 +403,7 @@ const styles = StyleSheet.create({
     fontSize: SZ.sm,
     lineHeight: 22,
     marginBottom: 12,
-    fontFamily: F.mono,
+    fontFamily: F.outfit,
   },
   tags: {
     flexDirection: 'row',
@@ -438,17 +436,29 @@ const styles = StyleSheet.create({
   },
   verdictTxt: {
     color: C.ink,
-    fontFamily: F.bold,
+    fontFamily: F.outfit,
     fontSize: SZ.sm,
   },
-  cta: {
+  ctaRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  ctaBtn: {
+    flex: 1,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
   },
+  acceptBtn: {
+    backgroundColor: C.blueDeep,
+  },
+  declineBtn: {
+    backgroundColor: '#a83040',
+  },
   ctaTxt: {
     color: "#ffffff",
-    fontFamily: F.bold,
+    fontFamily: F.mono,
     fontSize: SZ.base,
     letterSpacing: 1,
   },
