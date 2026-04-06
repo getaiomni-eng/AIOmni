@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { C } from '../constants/tokens';
+import { C, BEVEL } from '../constants/tokens';
 import TabIcon from '../components/TabIcon';
 
 export default function TabLayout() {
@@ -8,17 +8,10 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: C.bgTop,
-          borderTopWidth: 1.5,
-          borderTopColor: 'rgba(88,131,191,0.18)',
+          ...BEVEL.tabBar,
           paddingTop: 8,
           paddingBottom: 10,
           height: 72,
-          shadowColor: '#3d6aaa',
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 16,
-          elevation: 12,
         },
         tabBarLabelStyle: {
           fontFamily: 'SpaceMono_400Regular',

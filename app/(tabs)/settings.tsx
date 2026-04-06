@@ -10,8 +10,8 @@ import { clearESPNCredentials, findMyESPNTeam, getESPNLeague, loadESPNCredential
 import { getCurrentTier, TIER_INFO } from '../../services/purchases';
 import { clearYahooTokens, exchangeYahooCode, getValidYahooToken, getYahooAuthURL } from '../../services/yahoo';
 import { Badge } from '../components/Atoms';
-import { OrbAvatar } from '../components/OrbAvatar';
-import { C, F, SP, SZ } from '../constants/tokens';
+import { AIOmniIris } from '../components/AIOmniLogo';
+import { C, F, SP, SZ, BEVEL } from '../constants/tokens';
 import { getRemainingPrompts } from '../utils/promptCounter';
 
 const LOGO         = require('../../assets/images/logo.png');
@@ -130,7 +130,7 @@ export default function SettingsTab() {
         <View style={styles.card}>
           <View style={styles.cardShine} />
           <View style={styles.userRow}>
-            <OrbAvatar size={44} />
+            <AIOmniIris width={44} />
             <View style={{ flex: 1 }}>
               <Text style={styles.userName}>{user?.email ?? (username ? `@${username}` : 'Not signed in')}</Text>
               <Text style={[styles.userHandle, { color: tierInfo.color }]}>{tierInfo.label} tier</Text>
@@ -295,11 +295,15 @@ const styles = StyleSheet.create({
 
   // Glass card
   card: {
-    backgroundColor: SURFACE, borderWidth: 1.5, borderColor: BORDER,
-    borderRadius: 18, padding: 16, marginBottom: 14, position: 'relative', overflow: 'hidden',
-    shadowColor: '#3d6aaa', shadowOffset:{width:0,height:4}, shadowOpacity:0.10, shadowRadius:14, elevation:4,
+    ...BEVEL.card,
+    backgroundColor: SURFACE,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  cardShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  cardShine: { ...BEVEL.shine, zIndex:6 },
 
   authCta:    { backgroundColor: C.sageS, borderWidth: 1.5, borderColor: BORDER, borderRadius: 12, padding: 14, alignItems: 'center', marginBottom: 16 },
   authCtaTxt: { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.sm, letterSpacing: 0.5 },
@@ -319,12 +323,11 @@ const styles = StyleSheet.create({
 
   // Tier cards
   tierCard: {
+    ...BEVEL.card,
     width: 160, minHeight: 185, backgroundColor: SURFACE,
-    borderWidth: 1.5, borderColor: BORDER, borderRadius: 16,
     padding: 14, position: 'relative', overflow: 'hidden',
-    shadowColor: '#3d6aaa', shadowOffset:{width:0,height:2}, shadowOpacity:0.08, shadowRadius:8, elevation:3,
   },
-  tierCardShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  tierCardShine: { ...BEVEL.shine, zIndex:6 },
   tierDot:       { width: 8, height: 8, borderRadius: 4, marginBottom: 8 },
   tierName:      { fontSize: SZ.sm, fontFamily: F.bold, color: C.ink, marginBottom: 3 },
   tierPrice:     { fontSize: SZ.xl, fontFamily: F.bold, marginBottom: 4 },
@@ -336,11 +339,13 @@ const styles = StyleSheet.create({
 
   // Menu card
   menuCard: {
-    backgroundColor: SURFACE, borderWidth: 1.5, borderColor: BORDER,
-    borderRadius: 18, overflow: 'hidden', position: 'relative',
-    shadowColor: '#3d6aaa', shadowOffset:{width:0,height:4}, shadowOpacity:0.10, shadowRadius:14, elevation:4,
+    ...BEVEL.card,
+    backgroundColor: SURFACE,
+    borderRadius: 18,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  menuCardShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  menuCardShine: { ...BEVEL.shine, zIndex:6 },
   menuRow:    { flexDirection: 'row', alignItems: 'center', gap: 12, padding: SP[3] },
   menuBorder: { borderTopWidth: 1, borderTopColor: 'rgba(88,131,191,0.12)' },
   menuIcon:   { fontSize: 18, width: 28, textAlign: 'center' },
@@ -359,7 +364,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: BORDER, overflow: 'hidden', position: 'relative',
     shadowColor: '#3d6aaa', shadowOffset:{width:0,height:-4}, shadowOpacity:0.12, shadowRadius:20, elevation:12,
   },
-  modalShine:    { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  modalShine:    { ...BEVEL.shine, zIndex:6 },
   modalTitle:    { fontSize: SZ.xl, fontFamily: F.bold, color: C.ink, marginBottom: 4 },
   modalSub:      { fontSize: SZ.sm, fontFamily: F.mono, color: C.dim2, marginBottom: 14 },
   platformLabel: { fontSize: SZ.sm, fontFamily: F.bold, letterSpacing: 1, marginBottom: 8, marginTop: 4 },

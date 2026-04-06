@@ -12,9 +12,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../services/espn';
 import { getValidYahooToken } from '../../services/yahoo';
-import { AIOmniLogo } from '../components/AIOmniLogo';
+import { AIOmniLogo, AIOmniIris } from '../components/AIOmniLogo';
 import { Badge, SectionHeader } from '../components/Atoms';
-import { C, F, R, SP, SZ } from '../constants/tokens';
+import { C, F, R, SP, SZ, BEVEL } from '../constants/tokens';
 import { incrementPrompt } from '../utils/promptCounter';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -516,7 +516,7 @@ export default function HomeScreen() {
         >
           <View style={styles.aiCoachBarShine} />
           <View style={styles.aiCoachLeft}>
-            <Text style={styles.aiCoachOrb}>◉</Text>
+            <AIOmniIris width={32} />
           </View>
           <View style={styles.aiCoachCenter}>
             <Text style={styles.aiCoachLabel}>AI COACH</Text>
@@ -612,9 +612,9 @@ const styles = StyleSheet.create({
   newsDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8, marginTop: 2 },
   newsSource: { fontSize: SZ.xs, fontFamily: F.mono, letterSpacing: 1, marginBottom: 2 },
   newsText: { fontSize: SZ.sm, color: C.ink, lineHeight: 18 },
-  loadingCard: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 16, padding: 40, alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
+  loadingCard: { ...BEVEL.card, padding: 40, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.92)' },
   loadingTxt: { fontSize: SZ.sm, color: C.dim2, marginTop: 12, fontFamily: F.mono },
-  scoreCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 18, borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
+  scoreCard: { ...BEVEL.card, padding: 18, backgroundColor: 'rgba(255,255,255,0.95)' },
   platformRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12 },
   seasonPill: { backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 16, borderWidth: 1.5, borderColor: C.goldBorder, paddingHorizontal: 12, paddingVertical: 6 },
   seasonPillText: { fontSize: SZ.sm, fontFamily: F.mono, color: C.ink, letterSpacing: 0.5 },
@@ -639,7 +639,7 @@ const styles = StyleSheet.create({
   scoreOpp: { color: '#5883bf' },
   scoreVsGrid: { fontSize: SZ.md, color: C.dim2, fontFamily: F.bold, marginHorizontal: 8 },
   emptyScoreCard: { width: (SCREEN_W - SP[3] * 2 - 8) / 2, aspectRatio: 1.2, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  emptyCard: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 16, padding: 24, alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
+  emptyCard: { ...BEVEL.card, padding: 24, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.92)' },
   emptyEye: { fontSize: SZ.sm, fontFamily: F.mono, color: C.blueDeep, letterSpacing: 2, marginBottom: 8 },
   emptyTxt: { fontSize: SZ.sm, color: C.dim2, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
   emptyBtn: { backgroundColor: C.blueDeep, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 20 },
@@ -647,7 +647,7 @@ const styles = StyleSheet.create({
   insightsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   insightsEye: { fontSize: SZ.sm, fontFamily: F.mono, color: C.blueDeep, letterSpacing: 2 },
   insightsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
-  insightCard: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 18, borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
+  insightCard: { ...BEVEL.card, padding: 18, backgroundColor: 'rgba(255,255,255,0.95)' },
   insightTop: { flexDirection: 'row', marginBottom: 12 },
   insightEmoji: { fontSize: SZ.xl },
   insightTitle: { fontSize: SZ.base, color: C.ink, fontFamily: F.bold, marginBottom: 4 },
@@ -657,16 +657,16 @@ const styles = StyleSheet.create({
   insightDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 20 },
   insightDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.dim2 },
   insightDotOn: { backgroundColor: C.blueDeep },
-  aiCoachBar: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)', flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12, marginBottom: 16, position: 'relative', overflow: 'hidden' },
+  aiCoachBar: { ...BEVEL.card, flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12, marginBottom: 16, position: 'relative', overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.92)' },
   aiCoachBarActive: { backgroundColor: C.gold + '18', borderColor: C.gold + '40', shadowColor: C.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 },
-  aiCoachBarShine: { position: 'absolute', top: 0, left: '10%', right: '10%', height: 2, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 1 },
+  aiCoachBarShine: BEVEL.shine,
   aiCoachLeft: { width: 40, alignItems: 'center' },
   aiCoachOrb: { fontSize: SZ.xl, color: C.gold, fontFamily: F.bold },
   aiCoachCenter: { flex: 1 },
   aiCoachLabel: { fontSize: SZ.sm, fontFamily: F.bold, color: C.ink, marginBottom: 2 },
   aiCoachHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
   aiCoachModal: { backgroundColor: '#ffffff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, minHeight: 320, borderTopWidth: 1.5, borderLeftWidth: 1.5, borderRightWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)', position: 'relative', overflow: 'hidden', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 12 },
-  aiCoachModalShine: { position: 'absolute', top: 0, left: '8%', right: '8%', height: 1.5, backgroundColor: 'rgba(255,255,255,0.95)', zIndex: 6 },
+  aiCoachModalShine: BEVEL.shine,
   aiCoachModalClose: { fontSize: SZ.lg, fontFamily: F.bold, color: C.blueDeep, alignSelf: 'flex-end', marginBottom: 8 },
   aiCoachModalTitle: { fontSize: SZ.xl, fontFamily: F.bold, color: C.ink, marginBottom: 16 },
   aiCoachModalScores: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

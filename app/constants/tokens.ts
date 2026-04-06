@@ -61,6 +61,61 @@ export const C = {
   rose:        '#a83040',   roseS:  'rgba(168,48,64,0.12)',
 } as const;
 
+export const BEVEL = {
+  card: {
+    backgroundColor: C.glass,
+    borderWidth: 1.5,
+    borderColor: C.glassBorder,
+    borderTopColor: C.glassShine,
+    borderLeftColor: C.surfShine,
+    borderBottomColor: C.sageBorder,
+    borderRightColor: C.sageBorder,
+    borderRadius: 16,
+    shadowColor: C.blueDeep,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  blueCard: {
+    backgroundColor: C.oceanS,
+    borderWidth: 1.5,
+    borderColor: C.glassBorder,
+    borderTopColor: C.glassShine,
+    borderLeftColor: C.surfShine,
+    borderBottomColor: C.sageBorder,
+    borderRightColor: C.sageBorder,
+    borderRadius: 16,
+    shadowColor: C.blueDeep,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  shine: {
+    position: 'absolute',
+    top: 0,
+    left: '8%',
+    right: '8%',
+    height: 1.5,
+    backgroundColor: C.glassShine,
+    zIndex: 6,
+  },
+  tabBar: {
+    backgroundColor: C.bgTop,
+    borderTopWidth: 1.5,
+    borderTopColor: C.glassShine,
+    borderLeftColor: C.surfShine,
+    borderBottomColor: C.sageBorder,
+    borderRightColor: C.sageBorder,
+    shadowColor: C.blueDeep,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+} as const;
+
 // ─────────────────────────────────────────────
 // FONTS
 // Local TTFs in assets/fonts/
@@ -69,27 +124,27 @@ export const C = {
 // SpaceMono  → mono / data / labels
 // ─────────────────────────────────────────────
 export const F = {
-  // Display headings
+  // Display headings and app-wide body text
   bold:        'BebasNeue_400Regular',
   black:       'BebasNeue_400Regular',
   extrabold:   'BebasNeue_400Regular',
 
-  // Body text
-  outfit:      'Barlow_400Regular',
-  semibold:    'Barlow_600SemiBold',
+  // Body text aliases now use BebasNeue for a unified font system
+  outfit:      'BebasNeue_400Regular',
+  semibold:    'BebasNeue_400Regular',
 
-  // Mono / data
-  mono:        'SpaceMono_400Regular',
-  monoBold:    'SpaceMono_700Bold',
+  // Mono / data aliases now map to BebasNeue too
+  mono:        'BebasNeue_400Regular',
+  monoBold:    'BebasNeue_400Regular',
 
   // Explicit named aliases
   bebas:       'BebasNeue_400Regular',
-  barlow:      'Barlow_400Regular',
-  barlowMd:    'Barlow_500Medium',
-  barlowSb:    'Barlow_600SemiBold',
-  barlowBd:    'Barlow_700Bold',
-  spaceMono:   'SpaceMono_400Regular',
-  spaceMonoBd: 'SpaceMono_700Bold',
+  barlow:      'BebasNeue_400Regular',
+  barlowMd:    'BebasNeue_400Regular',
+  barlowSb:    'BebasNeue_400Regular',
+  barlowBd:    'BebasNeue_400Regular',
+  spaceMono:   'BebasNeue_400Regular',
+  spaceMonoBd: 'BebasNeue_400Regular',
 } as const;
 
 // ─────────────────────────────────────────────

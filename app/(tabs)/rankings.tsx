@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { C, F, SP, SZ } from '../constants/tokens';
+import { C, F, SP, SZ, BEVEL } from '../constants/tokens';
 
 type Format   = 'PPR' | 'HALF' | 'STD';
 type Position = 'ALL' | 'QB' | 'RB' | 'WR' | 'TE' | 'K';
@@ -391,22 +391,13 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   playerRow: {
+    ...BEVEL.card,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255,255,255,0.95)',
-    borderBottomColor: 'rgba(88,131,191,0.45)',
-    borderLeftColor: 'rgba(88,131,191,0.18)',
-    borderRightColor: 'rgba(88,131,191,0.28)',
-    shadowColor: '#3d6aaa',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 4,
   },
   playerRowActive: {
     opacity: 0.8,

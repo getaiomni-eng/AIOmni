@@ -10,28 +10,16 @@ const BLADE = "M 0,0 L -28,-48.5 A 56,56 0 0,1 28,-48.5 Z";
 const ROTS  = [0, 60, 120, 180, 240, 300];
 const OPEN  = 70;
 
-export function AIOmniLogo({ width = 280 }: { width?: number }) {
-  const height     = width * 0.5;
-  const [angle, setAngle] = useState(OPEN);
-  const cancelRef  = useRef(false);
-  const rafRef     = useRef<any>(null);
+const ease = (t: number) => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
+const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
-  // Color cycle state: 0=gold, 1=blue, 2=cream
-  const [colorIdx, setColorIdx] = useState(0);
-  const COLORS = ['#fee229', '#3d6aaa', '#ffffed'];
-  const hexColor = COLORS[colorIdx];
+function useApertureBlink(setAngle: React.Dispatch<React.SetStateAction<number>>) {
+  const rafRef = useRef<any>(null);
+  const cancelRef = useRef(false);
 
   useEffect(() => {
-    const timer = setInterval(() => setColorIdx(i => (i + 1) % 3), 2000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    const ease = (t: number) => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
-    const rand = (a: number, b: number) => a + Math.random() * (b - a);
-
-    function tween(from: number, to: number, ms: number): Promise<void> {
-      return new Promise(resolve => {
+    const tween = (from: number, to: number, ms: number): Promise<void> =>
+      new Promise(resolve => {
         const t0 = Date.now();
         function tick() {
           if (cancelRef.current) return resolve();
@@ -42,7 +30,6 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
         }
         rafRef.current = requestAnimationFrame(tick);
       });
-    }
 
     const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -70,10 +57,71 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
       cancelRef.current = true;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, []);
+  }, [setAngle]);
+}
+
+export function AIOmniIris({ width = 72 }: { width?: number }) {
+  const [angle, setAngle] = useState(OPEN);
+  useApertureBlink(setAngle);
+  const height = width;
 
   return (
     <View style={{ width, height }}>
+      <Svg width={width} height={height} viewBox="0 0 104 104">
+        <Defs>
+          <RadialGradient id="irisGrad" cx="52" cy="52" r="42" fx="52" fy="52">
+            <Stop offset="0%" stopColor="#fee229" stopOpacity={0.98} />
+            <Stop offset="45%" stopColor="#3d6aaa" stopOpacity={0.35} />
+            <Stop offset="100%" stopColor="#0e1b2d" stopOpacity={0.1} />
+          </RadialGradient>
+          <ClipPath id="irisClip">
+            <Circle cx={52} cy={52} r={42} />
+          </ClipPath>
+        </Defs>
+        <G transform="translate(52,52)">
+          <Circle r={60} fill="#091622" />
+          <Circle r={42} fill="url(#irisGrad)" />
+          <G clipPath="url(#irisClip)">
+            {ROTS.map(rot => (
+              <G key={rot} transform={`rotate(${rot})`}>
+                <Path
+                  d={BLADE}
+                  fill="#2a6bb0"
+                  stroke="#ffffed"
+                  strokeWidth={1.3}
+                  rotation={angle}
+                  originX={0}
+                  originY={-52}
+                />
+              </G>
+            ))}
+          </G>
+          <Circle r={51} fill="none" stroke="#091622" strokeWidth={9} />
+          <Circle r={60} fill="none" stroke="#ffffed" strokeWidth={2.2} />
+          <Circle r={57.5} fill="none" stroke="#0a1e30" strokeWidth={1.3} />
+        </G>
+      </Svg>
+    </View>
+  );
+}
+
+export function AIOmniLogo({ width = 280, height }: { width?: number; height?: number }) {
+  const actualHeight = height || width * 0.5;
+  const [angle, setAngle] = useState(OPEN);
+  useApertureBlink(setAngle);
+
+  // Color cycle state: 0=gold, 1=blue, 2=cream
+  const [colorIdx, setColorIdx] = useState(0);
+  const COLORS = ['#fee229', '#3d6aaa', '#ffffed'];
+  const hexColor = COLORS[colorIdx];
+
+  useEffect(() => {
+    const timer = setInterval(() => setColorIdx(i => (i + 1) % 3), 6000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <View style={{ width, height: actualHeight }}>
       <Svg width={width} height={height} viewBox="0 0 1040 520">
         <Defs>
           <RadialGradient id="cgL" gradientUnits="userSpaceOnUse" cx="410" cy="260" r="42" fx="410" fy="260">
@@ -126,6 +174,7 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
               </G>
             ))}
           </G>
+          <Polygon points="0,-5 4.33,-2.5 4.33,2.5 0,5 -4.33,2.5 -4.33,-2.5" fill="#fee229" />
           <Circle r={51} fill="none" stroke="#091622" strokeWidth={18} />
           <Circle r={60} fill="none" stroke="#ffffed" strokeWidth={3} />
           <Circle r={57.5} fill="none" stroke="#0a1e30" strokeWidth={1.5} />

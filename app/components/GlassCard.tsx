@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
-import { C, R } from '../constants/tokens';
+import { C, R, BEVEL } from '../constants/tokens';
 
 interface Props {
   children: React.ReactNode;
@@ -82,20 +82,15 @@ export const GlassCard: React.FC<Props> = ({
   return (
     <View style={[
       {
+        ...BEVEL.card,
         borderRadius: radius,
-        borderWidth: 1.5,
+        overflow: 'hidden',
+        backgroundColor: v.bg,
         borderColor:       v.border,
         borderTopColor:    v.borderTop,
         borderLeftColor:   v.borderLeft,
         borderBottomColor: v.borderBottom,
         borderRightColor:  v.borderRight,
-        overflow: 'hidden',
-        backgroundColor: v.bg,
-        shadowColor: v.shadow,
-        shadowOffset: { width: 0, height: 5 },
-        shadowOpacity: v.shadowOpacity,
-        shadowRadius: 18,
-        elevation: 5,
       },
       style,
     ]}>

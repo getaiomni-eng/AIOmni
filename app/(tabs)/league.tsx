@@ -6,7 +6,7 @@ import { ActivityIndicator, Animated, Image, Modal, ScrollView, StyleSheet, Text
 import { askAI } from "../../services/ai";
 import { findMyESPNTeam, formatESPNPosition, getESPNAllRosters, getESPNLeague, getESPNMatchups, getESPNStandings, getESPNTransactions, isESPNStarter, loadESPNCredentials } from '../../services/espn';
 import { getMyYahooTeam, getValidYahooToken, getYahooAllRosters, getYahooMatchups, getYahooStandings, getYahooTransactions } from '../../services/yahoo';
-import { C, F, R, SZ } from '../constants/tokens';
+import { C, F, R, SZ, BEVEL } from '../constants/tokens';
 
 // ── Cream theme card constants ──────────────────────────────────────────────
 const SURFACE     = 'rgba(255,255,255,0.88)';
@@ -663,8 +663,8 @@ const styles = StyleSheet.create({
   platformBadgeText: { fontFamily: F.mono, fontSize: SZ.xs - 1, letterSpacing: 1.5, fontWeight: '700' },
 
   tabScroll: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: DIM_BORDER, backgroundColor: 'rgba(255,255,237,0.9)' },
-  tabRow:    { paddingHorizontal: 8 },
-  tabBtn:    { paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabRow:    { paddingHorizontal: 8, flexDirection: 'row', gap: 8 },
+  tabBtn:    { paddingVertical: 10, paddingHorizontal: 14, borderRadius: R.sm, borderWidth: 1.5, borderColor: C.glassBorder, borderTopColor: C.glassShine, borderLeftColor: C.surfShine, borderBottomColor: C.sageBorder, borderRightColor: C.sageBorder, backgroundColor: C.glass },
   tabText:   { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 1.5 },
 
   loadingBox:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
@@ -682,15 +682,13 @@ const styles = StyleSheet.create({
 
   // Player card — cream glass with bevel
   playerCard: {
+    ...BEVEL.card,
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: SURFACE,
-    borderWidth: 1.5, borderColor: BORDER,
     borderRadius: R.sm, marginBottom: 6,
     overflow: 'hidden', minHeight: 68,
-    shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
   },
-  playerCardShine: { position: 'absolute', top: 0, left: '8%', right: '8%', height: 1, backgroundColor: BEVEL_HI, zIndex: 1 },
+  playerCardShine: { ...BEVEL.shine, height: 1 },
   benchCard:       { opacity: 0.55 },
   playerAccentBar: { width: 3, alignSelf: 'stretch' },
   slotLabel:       { fontFamily: F.mono, color: C.dim2, fontSize: 8, letterSpacing: 1, width: 26, textAlign: 'center' },
@@ -715,10 +713,10 @@ const styles = StyleSheet.create({
 
   // Standings
   standingRow: {
-    backgroundColor: SURFACE, borderWidth: 1.5, borderColor: BORDER,
+    ...BEVEL.card,
+    backgroundColor: SURFACE,
     borderRadius: R.sm, padding: 14, marginBottom: 6,
     flexDirection: 'row', alignItems: 'center',
-    shadowColor: '#3d6aaa', shadowOffset:{width:0,height:2}, shadowOpacity:0.07, shadowRadius:6, elevation:2,
   },
   standingRank:       { fontFamily: F.bold, color: C.dim2, fontSize: SZ['2xl'], width: 32 },
   standingInfo:       { flex: 1 },
@@ -731,9 +729,9 @@ const styles = StyleSheet.create({
 
   // Matchup
   matchupCard: {
-    backgroundColor: SURFACE, borderWidth: 1.5, borderColor: BORDER,
+    ...BEVEL.card,
+    backgroundColor: SURFACE,
     borderRadius: R.sm, padding: 20, marginTop: 16,
-    shadowColor: '#3d6aaa', shadowOffset:{width:0,height:4}, shadowOpacity:0.1, shadowRadius:14, elevation:4,
   },
   matchupWeekLabel:  { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 2, marginBottom: 16, textAlign: 'center' },
   matchupScoreRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -754,8 +752,9 @@ const styles = StyleSheet.create({
   matchupStatus:   { borderRadius: R.xs, padding: 10, alignItems: 'center', marginTop: 16, borderWidth: 1 },
   matchupStatusText: { fontFamily: F.bold, fontSize: SZ.base, letterSpacing: 2 },
   allMatchupRow:   {
+    ...BEVEL.card,
     backgroundColor: SURFACE, borderRadius: R.xs, padding: 12, marginBottom: 6,
-    flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: BORDER,
+    flexDirection: 'row', alignItems: 'center',
   },
   allMatchupTeam:  { fontFamily: F.outfit, color: C.dim2, fontSize: SZ.md },
   allMatchupScore: { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg, marginTop: 2 },
@@ -772,11 +771,11 @@ const styles = StyleSheet.create({
 
   // Activity
   txCard: {
+    ...BEVEL.card,
     backgroundColor: SURFACE, borderRadius: R.sm, padding: 14, marginBottom: 6,
-    borderWidth: 1.5, borderColor: BORDER, overflow: 'hidden',
-    shadowColor: '#3d6aaa', shadowOffset:{width:0,height:2}, shadowOpacity:0.07, shadowRadius:6, elevation:2,
+    overflow: 'hidden',
   },
-  txCardShine: { position: 'absolute', top: 0, left: '8%', right: '8%', height: 1, backgroundColor: BEVEL_HI },
+  txCardShine: { ...BEVEL.shine, height: 1 },
   txAccent:    { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
   txHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   txType:      { fontFamily: F.mono, fontSize: SZ.xs, letterSpacing: 1 },
@@ -795,7 +794,7 @@ const styles = StyleSheet.create({
     borderColor: BORDER, overflow: 'hidden',
     shadowColor: '#3d6aaa', shadowOffset:{width:0,height:-4}, shadowOpacity:0.12, shadowRadius:20, elevation:12,
   },
-  modalCardShine:    { position: 'absolute', top: 0, left: '8%', right: '8%', height: 1.5, backgroundColor: BEVEL_HI, zIndex: 6 },
+  modalCardShine:    { ...BEVEL.shine, zIndex: 6 },
   modalTopAccent:    { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
   modalHeader:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   modalPlayerName:   { fontFamily: F.bold, color: C.ink, fontSize: SZ['2xl'], letterSpacing: 0.5 },

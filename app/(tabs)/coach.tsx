@@ -16,7 +16,8 @@ import { getCurrentTier } from '../../services/purchases';
 import { getMemories, saveMemory } from '../../services/supabase';
 import { getPlayerContext } from '../../services/playerIntelligence';
 import { OrbAvatar } from '../components/OrbAvatar';
-import { C, F, R, SP, SZ } from '../constants/tokens';
+import { Icon } from '../components/AIOmniIcons';
+import { C, F, R, SP, SZ, BEVEL } from '../constants/tokens';
 import { getRemainingPrompts, getResetTime, incrementPrompt } from '../utils/promptCounter';
 
 const WEEKLY_LIMIT = 25;
@@ -177,7 +178,7 @@ const PLATFORM_COLOR: Record<string, string> = {
 };
 
 type Message = { role: 'ai' | 'user'; text: string; isLoading?: boolean };
-const QUICK_PROMPTS = ['🎯 Start/Sit', '📈 Best waiver', '⇄ Trade value', '📊 Matchup'];
+const QUICK_PROMPTS = ['Start/Sit', 'Best Waiver', 'Trade Value', 'Matchup'];
 
 const renderAIText = (text: string) =>
   text.split('\n').map((line, i) => {
@@ -300,18 +301,33 @@ export default function CoachScreen() {
         `\nuser: ${text}`,
       ].filter(Boolean).join('\n');
 
-      const reply = await askAI(fullPrompt, 1000);
-      console.log('AI response:', reply);
-      setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: reply ?? '' }]);
+      console.log('SENDING PROMPT:', fullPrompt);
+      try {
+        const reply = await askAI(fullPrompt, 1000);
+        console.log('RAW RESULT:', reply, 'TYPE:', typeof reply);
+        console.log('RAW AI RESULT:', reply);
 
-      if (['pro','premium','dynasty_elite'].includes(tier) && selectedLeague) {
-        try {
-          await saveMemory({
-            leagueId: selectedLeague.leagueId,
-            platform: selectedLeague.platform,
-            content: `Q: ${text}\nA: ${reply.slice(0, 200)}...`,
-          });
-        } catch {}
+        if (!reply) {
+          const debugMsg: Message = { role:'ai', text: 'DEBUG: AI returned empty. Check API key and prompt.' };
+          setMessages(prev => [...prev.slice(0, -1), debugMsg]);
+        } else {
+          const messageObject: Message = { role:'ai', text: reply || "Sorry, couldn't get a response. Try again." };
+          console.log('MESSAGE OBJECT BEING SET:', messageObject);
+          setMessages(prev => [...prev.slice(0, -1), messageObject]);
+
+          if (['pro','premium','dynasty_elite'].includes(tier) && selectedLeague) {
+            try {
+              await saveMemory({
+                leagueId: selectedLeague.leagueId,
+                platform: selectedLeague.platform,
+                content: `Q: ${text}\nA: ${reply.slice(0, 200)}...`,
+              });
+            } catch {}
+          }
+        }
+      } catch (aiError: any) {
+        const errorMsg: Message = { role:'ai', text: 'DEBUG ERROR: ' + (aiError?.message || String(aiError)) };
+        setMessages(prev => [...prev.slice(0, -1), errorMsg]);
       }
     } catch (e: any) {
       setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: 'Sorry, I encountered an error. Please try again.' }]);
@@ -337,7 +353,7 @@ export default function CoachScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>AI COACH</Text>
           <TouchableOpacity onPress={clearChat} style={styles.clearBtn}>
-            <Ionicons name="trash-outline" size={18} color={C.dim2} />
+            <Icon name="trash" size={20} color={C.rose} />
           </TouchableOpacity>
         </View>
 
@@ -347,14 +363,16 @@ export default function CoachScreen() {
           contentContainerStyle={{ paddingBottom: 20 }}
           showsVerticalScrollIndicator={false}
         >
-          {messages.map((msg, i) => (
+          {messages.map((msg, i) => {
+            console.log('RENDERING MESSAGE:', msg);
+            return (
             <View key={i} style={[styles.msg, msg.role === 'user' && styles.userMsg]}>
               {msg.isLoading ? (
                 <ActivityIndicator color={C.blueDeep} size="small" />
               ) : msg.role === 'ai' ? (
                 <View style={styles.aiMsg}>
                   <View style={styles.aiHeader}>
-                    <OrbAvatar size={28} />
+                    <OrbAvatar size={32} />
                     <Text style={styles.aiLabel}>AI Coach</Text>
                   </View>
                   {renderAIText(msg.text)}
@@ -363,14 +381,21 @@ export default function CoachScreen() {
                 <Text style={styles.userTxt}>{msg.text}</Text>
               )}
             </View>
-          ))}
+            );
+          })}
         </ScrollView>
 
         <View style={[styles.inputBar, { paddingBottom: insets.bottom + 10 }]}>
           <View style={styles.quickRow}>
             {QUICK_PROMPTS.map(prompt => (
               <TouchableOpacity key={prompt} onPress={() => quickSend(prompt)} style={styles.quickBtn} disabled={loading}>
-                <Text style={styles.quickTxt}>{prompt}</Text>
+                <View style={styles.quickContent}>
+                  {prompt === 'Start/Sit' && <Icon name="target" size={16} color={C.blueDeep} />}
+                  {prompt === 'Best Waiver' && <Icon name="trending" size={16} color={C.blueDeep} />}
+                  {prompt === 'Trade Value' && <Icon name="swap" size={16} color={C.blueDeep} />}
+                  {prompt === 'Matchup' && <Icon name="barchart" size={16} color={C.blueDeep} />}
+                  <Text style={styles.quickTxt}>{prompt}</Text>
+                </View>
               </TouchableOpacity>
             ))}
           </View>
@@ -395,7 +420,7 @@ export default function CoachScreen() {
               {loading ? (
                 <ActivityIndicator color="#ffffff" size="small" />
               ) : (
-                <Ionicons name="send" size={18} color="#ffffff" />
+                <Icon name="send" size={20} color="#ffffff" />
               )}
             </TouchableOpacity>
           </View>
@@ -457,15 +482,13 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   aiMsg: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 14,
-    borderWidth: 1.5,
-    borderColor: 'rgba(88,131,191,0.18)',
-    borderRightWidth: 2.5,
-    borderBottomWidth: 2.5,
-    borderRightColor: '#3d6aaa',
-    borderBottomColor: '#3d6aaa',
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderColor: C.blueDeep,
+    borderTopLeftRadius: 4,
   },
   aiHeader: {
     flexDirection: 'row',
@@ -483,6 +506,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fee229',
     color: C.ink,
     borderRadius: 16,
+    borderTopRightRadius: 4,
     padding: 14,
     fontFamily: F.outfit,
     fontSize: SZ.sm,
@@ -517,22 +541,18 @@ const styles = StyleSheet.create({
     color: C.ink,
   },
   recoCard: {
+    ...BEVEL.card,
     backgroundColor: 'rgba(217,253,243,0.9)',
-    borderRadius: 16,
     padding: 14,
     marginVertical: 8,
-    borderWidth: 1.5,
-    borderColor: 'rgba(88,131,191,0.18)',
     position: 'relative',
     overflow: 'hidden',
   },
   bevelShine: {
-    position: 'absolute',
-    top: 0,
+    ...BEVEL.shine,
     left: '10%',
     right: '10%',
     height: 2,
-    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: 1,
   },
   recoTitle: {
@@ -599,6 +619,11 @@ const styles = StyleSheet.create({
     fontSize: SZ.xs,
     fontFamily: F.bold,
     color: C.dim,
+  },
+  quickContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   inputRow: {
     flexDirection: 'row',

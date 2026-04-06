@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Animated, View } from 'react-native';
 import Svg, {
   Circle, ClipPath, Defs, G, Line, Path, Polygon, Rect,
   Text as SvgText,
 } from 'react-native-svg';
 import { C } from '../constants/tokens';
+import { AIOmniIris } from './AIOmniLogo';
 
 const AnimatedPolygon = Animated.createAnimatedComponent(Polygon);
 const AnimatedG       = Animated.createAnimatedComponent(G);
@@ -81,84 +82,7 @@ function HomeIcon({ size }: { size: number }) {
 // COACH — aperture O, same blink engine as v26 logo
 // ══════════════════════════════════════════════════════════════
 function CoachIcon({ size }: { size: number }) {
-  const stroke     = useStrokeCycle(3000);
-  const [op1, op2] = useHexPulse(4500, 2000);
-  const [angle, setAngle] = useState(70);
-  const rafRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const OPEN = 70;
-    let cancelled = false;
-
-    const tween = (from: number, to: number, ms: number) =>
-      new Promise<void>(resolve => {
-        const t0 = Date.now();
-        const step = () => {
-          if (cancelled) return resolve();
-          const p = Math.min((Date.now() - t0) / ms, 1);
-          setAngle(from + (to - from) * ease(p));
-          if (p < 1) { rafRef.current = requestAnimationFrame(step); }
-          else        { resolve(); }
-        };
-        rafRef.current = requestAnimationFrame(step);
-      });
-
-    const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-
-    (async () => {
-      setAngle(OPEN);
-      for (;;) {
-        if (cancelled) return;
-        const wide = Math.random() < 0.2;
-        await wait(wide ? rand(5000,9000) : rand(2500,6000));
-        if (cancelled) return;
-        await tween(OPEN, 0, wide ? rand(700,1200) : rand(350,700));
-        await wait(wide ? rand(300,600) : rand(100,300));
-        await tween(0, OPEN, wide ? rand(800,1400) : rand(400,800));
-        if (Math.random() < 0.12) {
-          await wait(rand(200,400));
-          await tween(OPEN, 0, rand(250,450));
-          await wait(rand(80,160));
-          await tween(0, OPEN, rand(350,600));
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, []);
-
-  const bt = `rotate(${angle} 3 -52)`;
-  const BP = "M 3,-52 L -48,6 C -44,20 -32,40 -16,50 L 14,-14 Z";
-
-  return (
-    <Svg width={size} height={size} viewBox="0 0 64 64">
-      <Defs><ClipPath id="irisT"><Circle cx="32" cy="32" r="16"/></ClipPath></Defs>
-      <AnimatedPolygon points="32,4 56,18 56,46 32,60 8,46 8,18"
-        fill={DARK} stroke={stroke as any} strokeWidth={2.2} strokeLinejoin="round"/>
-      <AnimatedPolygon points="32,4 56,18 56,46 32,60 8,46 8,18"
-        fill="none" stroke={GOLD} strokeWidth={1.5} strokeLinejoin="round" opacity={op1 as any}/>
-      <AnimatedPolygon points="32,4 56,18 56,46 32,60 8,46 8,18"
-        fill="none" stroke={GOLD} strokeWidth={1.5} strokeLinejoin="round" opacity={op2 as any}/>
-      <Circle cx="32" cy="32" r="16" fill="#091622"/>
-      <Circle cx="32" cy="32" r="14" fill="#f5eecc"/>
-      <G clipPath="url(#irisT)">
-        <G transform="translate(32,32)">
-          {[0,60,120,180,240,300].map(rot => (
-            <Path key={rot}
-              d={BP}
-              transform={`rotate(${rot} 0 0) ${bt}`}
-              fill="#2a6bb0" stroke={CREAM} strokeWidth={1.3} strokeLinejoin="round"
-            />
-          ))}
-        </G>
-      </G>
-      <Circle cx="32" cy="32" r="51" fill="none" stroke="#091622" strokeWidth={18}/>
-      <Circle cx="32" cy="32" r="16" fill="none" stroke={BD} strokeWidth={1.8}/>
-    </Svg>
-  );
+  return <AIOmniIris width={size} />;
 }
 
 // ══════════════════════════════════════════════════════════════
