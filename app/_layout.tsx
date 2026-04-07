@@ -53,7 +53,7 @@ export default Sentry.wrap(function RootLayout() {
       try {
         const user = await getUser();
         if (!user) {
-          router.replace('/auth' as any);
+          router.replace('/onboarding' as any);
           return;
         }
         Sentry.setUser({ id: user.id, email: user.email });
@@ -65,14 +65,14 @@ export default Sentry.wrap(function RootLayout() {
         const yahooTokens = await AsyncStorage.getItem('yahoo_tokens');
         const hasLeagues = hasSleeper || Boolean(espnIds) || Boolean(yahooTokens);
 
-        if (!hasLeagues) {
+        if (false && !hasLeagues) {
           router.replace('/auth' as any);
         } else {
           router.replace('/(tabs)');
         }
       } catch (err) {
         console.error('Session check error', err);
-        router.replace('/auth' as any);
+        router.replace('/onboarding' as any);
       }
     })();
 
