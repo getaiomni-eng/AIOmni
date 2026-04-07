@@ -4,13 +4,13 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { Alert, Dimensions, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { loadESPNCredentials } from '../services/espn';
-import { clearYahooTokens, exchangeYahooCode, getValidYahooToken, getYahooAuthURL, getYahooLeagues, loadYahooTokens } from '../services/yahoo';
-import { getUser, signOut } from '../services/auth';
-import { AIOmniLogo } from './components/AIOmniLogo';
-import { Icon } from './components/AIOmniIcons';
-import { C, F, SP, SZ } from './constants/tokens';
-import { getRemainingPrompts } from './utils/promptCounter';
+import { loadESPNCredentials } from '../../services/espn';
+import { clearYahooTokens, exchangeYahooCode, getValidYahooToken, getYahooAuthURL, getYahooLeagues, loadYahooTokens } from '../../services/yahoo';
+import { getUser, signOut } from '../../services/auth';
+import { AIOmniLogo } from '../components/AIOmniLogo';
+import { Icon } from '../components/AIOmniIcons';
+import { C, F, SP, SZ } from '../constants/tokens';
+import { getRemainingPrompts } from '../utils/promptCounter';
 
 WebBrowser.maybeCompleteAuthSession();
 
