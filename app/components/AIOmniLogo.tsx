@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import Svg, { Circle, ClipPath, Defs, G, Path, Polygon, RadialGradient, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, ClipPath, Defs, G, Path, Polygon, Text as SvgText } from 'react-native-svg';
 
 const BLADES = [0, 60, 120, 180, 240, 300];
-const BLADE_PATH = 'M 0,0 L -20,-36 A 44,44 0 0,1 20,-36 Z';
+const BLADE_PATH = 'M-5.57,-11.96 A13,13,0,0,1,5.57,-11.96 L2.14,-4.7 A5,5,0,0,0,-2.14,-4.7 Z';
 
 const ease = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
@@ -33,16 +33,19 @@ function useApertureBlink(setAngle: React.Dispatch<React.SetStateAction<number>>
 
     const pulse = async () => {
       while (active.current) {
-        await new Promise(r => setTimeout(r, rand(2200, 5200)));
+        await new Promise(r => setTimeout(r, rand(2500, 5500)));
         if (!active.current) break;
-        await tween(72, 4, rand(280, 620));
-        await new Promise(r => setTimeout(r, rand(120, 260)));
-        await tween(4, 72, rand(320, 680));
-        if (Math.random() < 0.18) {
-          await new Promise(r => setTimeout(r, rand(200, 380)));
-          await tween(72, 4, rand(220, 420));
-          await new Promise(r => setTimeout(r, rand(90, 160)));
-          await tween(4, 72, rand(260, 520));
+        // Close
+        await tween(0, 12, rand(250, 550));
+        await new Promise(r => setTimeout(r, rand(100, 250)));
+        // Open
+        await tween(12, 0, rand(300, 650));
+        // Occasional double blink
+        if (Math.random() < 0.2) {
+          await new Promise(r => setTimeout(r, rand(180, 350)));
+          await tween(0, 10, rand(200, 400));
+          await new Promise(r => setTimeout(r, rand(80, 150)));
+          await tween(10, 0, rand(250, 500));
         }
       }
     };
@@ -57,101 +60,135 @@ function useApertureBlink(setAngle: React.Dispatch<React.SetStateAction<number>>
 }
 
 export function AIOmniIris({ width = 72 }: { width?: number }) {
-  const [angle, setAngle] = useState(72);
+  const [angle, setAngle] = useState(0);
   useApertureBlink(setAngle);
+  const s = width / 64;
 
   return (
     <View style={{ width, height: width }}>
-      <Svg width={width} height={width} viewBox="0 0 104 104">
+      <Svg width={width} height={width} viewBox="0 0 64 64">
+        <Circle cx="32" cy="32" r="30" fill="#091622" />
+        <Circle cx="32" cy="32" r="26" fill="#f5eecc" />
         <Defs>
-          <RadialGradient id="irisGrad" cx="52" cy="52" r="42" fx="52" fy="52">
-            <Stop offset="0%" stopColor="#fee229" stopOpacity="0.96" />
-            <Stop offset="50%" stopColor="#3d6aaa" stopOpacity="0.24" />
-            <Stop offset="100%" stopColor="#081623" stopOpacity="0.16" />
-          </RadialGradient>
-          <ClipPath id="irisClip">
-            <Circle cx="52" cy="52" r="42" />
+          <ClipPath id="iClip">
+            <Circle cx="32" cy="32" r="26" />
           </ClipPath>
         </Defs>
-        <G transform="translate(52,52)">
-          <Circle r={52} fill="#091622" />
-          <Circle r={42} fill="url(#irisGrad)" />
-          <G clipPath="url(#irisClip)">
+        <G clipPath="url(#iClip)">
+          <G transform="translate(32,32)">
             {BLADES.map(rot => (
-              <G key={rot} transform={`rotate(${rot})`}>
+              <G key={rot} transform={`rotate(${rot + angle})`}>
                 <Path
                   d={BLADE_PATH}
-                  fill="#2a6bb0"
-                  stroke="#ffffed"
-                  strokeWidth={1.3}
-                  rotation={angle}
-                  originX={0}
-                  originY={-30}
+                  fill="#1a2540"
+                  stroke="#3d6aaa"
+                  strokeWidth={0.5}
                 />
               </G>
             ))}
           </G>
-          <Circle r={44} fill="none" stroke="#091622" strokeWidth={8} />
-          <Circle r={52} fill="none" stroke="#ffffed" strokeWidth={2.4} />
         </G>
+        <Polygon
+          points="32,28 35.46,30 35.46,34 32,36 28.54,34 28.54,30"
+          fill="#fee229"
+          stroke="#3d6aaa"
+          strokeWidth={0.8}
+        />
+        <Circle cx="32" cy="32" r="26" fill="none" stroke="#3d6aaa" strokeWidth={2} />
+        <Circle cx="32" cy="32" r="30" fill="none" stroke="#3d6aaa" strokeWidth={1.5} />
       </Svg>
     </View>
   );
 }
 
-export function AIOmniLogo({ width = 280, height }: { width?: number; height?: number }) {
-  const [angle, setAngle] = useState(72);
+export function AIOmniLogo({ width = 280 }: { width?: number }) {
+  const [angle, setAngle] = useState(0);
   useApertureBlink(setAngle);
-  const actualHeight = height || Math.round(width * 0.36);
+
+  const h = Math.round(width * 0.42);
+  const vb = '0 0 300 126';
+
+  // Iris center position
+  const ix = 172;
+  const iy = 63;
+  const ir = 28; // iris outer radius
+  const iir = 22; // iris inner (cream) radius
+
+  // Scale blade path for this size
+  const LOGO_BLADE = 'M-4.8,-10.3 A11.2,11.2,0,0,1,4.8,-10.3 L1.8,-4 A4.3,4.3,0,0,0,-1.8,-4 Z';
 
   return (
-    <View style={{ width, height: actualHeight }}>
-      <Svg width={width} height={actualHeight} viewBox="0 0 280 102">
+    <View style={{ width, height: h, alignItems: 'center' }}>
+      <Svg width={width} height={h} viewBox={vb}>
         <Defs>
-          <RadialGradient id="logoGrad" cx="0.5" cy="0.5" r="0.6">
-            <Stop offset="0%" stopColor="#fff2ab" stopOpacity="0.92" />
-            <Stop offset="100%" stopColor="#f7d12c" stopOpacity="0.28" />
-          </RadialGradient>
-          <ClipPath id="logoIrisClip">
-            <Circle cx="162" cy="51" r="30" />
+          <ClipPath id="lClip">
+            <Circle cx={ix} cy={iy} r={iir} />
           </ClipPath>
         </Defs>
 
+        {/* Outer hex border */}
         <Polygon
-          points="68,10 212,10 268,51 212,92 68,92 12,51"
+          points="72,10 228,10 282,63 228,116 72,116 18,63"
           fill="none"
           stroke="#fee229"
-          strokeWidth={10}
+          strokeWidth={6}
           strokeLinejoin="round"
         />
 
-        <SvgText x="20" y="72" fontFamily="BebasNeue_400Regular" fontSize="70" fill="#fee229" letterSpacing="-1">
+        {/* AI text */}
+        <SvgText
+          x="52"
+          y="88"
+          fontFamily="BebasNeue_400Regular"
+          fontSize="72"
+          fill="#fee229"
+          letterSpacing={2}
+        >
           AI
         </SvgText>
 
-        <G transform="translate(162,51)">
-          <Circle r={30} fill="#091622" />
-          <Circle r={22} fill="url(#logoGrad)" />
-          <G clipPath="url(#logoIrisClip)">
+        {/* Iris — dark backing */}
+        <Circle cx={ix} cy={iy} r={ir} fill="#091622" />
+        {/* Cream disc */}
+        <Circle cx={ix} cy={iy} r={iir} fill="#f5eecc" />
+
+        {/* 6 blades clipped to iris */}
+        <G clipPath="url(#lClip)">
+          <G transform={`translate(${ix},${iy})`}>
             {BLADES.map(rot => (
-              <G key={rot} transform={`rotate(${rot})`}>
+              <G key={rot} transform={`rotate(${rot + angle})`}>
                 <Path
-                  d={BLADE_PATH}
-                  fill="#2a6bb0"
-                  stroke="#ffffed"
-                  strokeWidth={1.2}
-                  rotation={angle}
-                  originX={0}
-                  originY={-30}
+                  d={LOGO_BLADE}
+                  fill="#1a2540"
+                  stroke="#3d6aaa"
+                  strokeWidth={0.5}
                 />
               </G>
             ))}
           </G>
-          <Circle r={26} fill="none" stroke="#091622" strokeWidth={6} />
-          <Circle r={30} fill="none" stroke="#ffffed" strokeWidth={2} />
         </G>
 
-        <SvgText x="190" y="72" fontFamily="BebasNeue_400Regular" fontSize="44" fill="#fee229" letterSpacing="2">
+        {/* Gold hex pupil */}
+        <Polygon
+          points={`${ix},${iy - 4} ${ix + 3.46},${iy - 2} ${ix + 3.46},${iy + 2} ${ix},${iy + 4} ${ix - 3.46},${iy + 2} ${ix - 3.46},${iy - 2}`}
+          fill="#fee229"
+          stroke="#3d6aaa"
+          strokeWidth={0.8}
+        />
+
+        {/* Iris rim */}
+        <Circle cx={ix} cy={iy} r={iir} fill="none" stroke="#3d6aaa" strokeWidth={1.8} />
+        <Circle cx={ix} cy={iy} r={ir} fill="none" stroke="#3d6aaa" strokeWidth={1.5} />
+
+        {/* mni text */}
+        <SvgText
+          x="200"
+          y="88"
+          fontFamily="BebasNeue_400Regular"
+          fontSize="52"
+          fill="#fee229"
+          letterSpacing={3}
+        >
           mni
         </SvgText>
       </Svg>
