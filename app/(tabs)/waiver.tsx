@@ -7,6 +7,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI } from '../../services/ai';
 import { PositionPill } from '../components/Atoms';
+import { Icon } from '../components/AIOmniIcons';
 import { C, F, SP, SZ } from '../constants/tokens';
 
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K'];
@@ -117,9 +118,8 @@ Should I add off waivers? What's their upside? Be sharp, direct, under 80 words.
       setAdvice(text || 'No advice available for this player.');
     } catch (e: any) {
       console.log('Waiver AI error:', e);
-      // Handle proxy auth error gracefully
       if (e?.message?.includes('prompt_limit_reached')) {
-        setAdvice("You've used all your weekly prompts. Upgrade to Pro for unlimited AI advice.");
+        setAdvice('You have reached your weekly prompts. Upgrade to Pro for 75 prompts per week.');
       } else {
         setAdvice(`Could not load AI advice: ${e?.message || 'Unknown error'}. Check your connection and try again.`);
       }
@@ -131,10 +131,10 @@ Should I add off waivers? What's their upside? Be sharp, direct, under 80 words.
   return (
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Text style={styles.title}>🎯 Waiver Wire</Text>
-      </View>
-
-      <View style={styles.filters}>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>WAIVER WIRE</Text>
+          <Icon name="radar" size={20} color={C.blueDeep} />
+        </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           {POSITIONS.map(pos => (
             <TouchableOpacity
@@ -175,7 +175,7 @@ Should I add off waivers? What's their upside? Be sharp, direct, under 80 words.
               <View style={styles.playerInfo}>
                 <Text style={styles.playerName}>{player.first_name} {player.last_name}</Text>
                 <Text style={styles.playerTeam}>
-                  {player.team}{player.injury_status ? ` · ⚠ ${player.injury_status}` : ''}
+                  {player.team}{player.injury_status ? ` · ${player.injury_status}` : ''}
                 </Text>
               </View>
               <View style={styles.aiHint}>
@@ -208,7 +208,7 @@ Should I add off waivers? What's their upside? Be sharp, direct, under 80 words.
                 <PositionPill pos={selectedPlayer?.position ?? 'WR'} />
               </View>
               <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
-                <Text style={styles.closeBtnText}>✕</Text>
+                <Icon name="x" size={16} color={C.blueDeep} />
               </TouchableOpacity>
             </View>
 
@@ -235,6 +235,12 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: SP[3],
     paddingBottom: 12,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   title: {
     fontSize: SZ.xl,

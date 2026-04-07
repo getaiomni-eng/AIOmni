@@ -5,6 +5,7 @@ import {
   FlatList, Image, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
+import { Icon } from '../components/AIOmniIcons';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, F, SP, SZ, BEVEL } from '../constants/tokens';
@@ -22,6 +23,8 @@ const POS_COLORS: Record<string, string> = {
   QB: '#7b5ea7', RB: '#1e8c42', WR: '#2a7aaa',
   TE: '#b85a1a', K: '#6b7491',
 };
+
+const FORMATS: Format[] = ['PPR', 'HALF', 'STD'];
 
 // 2025 consensus rankings
 const SEED_PLAYERS: Player[] = [
@@ -154,7 +157,7 @@ export default function RankingsScreen() {
           <View style={styles.playerRight}>
             {mode === 'mine' && (
               <TouchableOpacity onPress={() => toggleDrafted(item)} style={styles.draftBtn}>
-                <Text style={[styles.draftTxt, isDrafted && styles.draftTxtOn]}>{isDrafted ? '✓' : '+'}</Text>
+                <Icon name={isDrafted ? 'check' : 'plus'} size={16} color={isDrafted ? C.mint : C.dim2} />
               </TouchableOpacity>
             )}
           </View>
@@ -180,7 +183,7 @@ export default function RankingsScreen() {
         <View style={styles.playerRight}>
           {mode === 'mine' && (
             <TouchableOpacity onPress={() => toggleDrafted(item)} style={styles.draftBtn}>
-              <Text style={[styles.draftTxt, isDrafted && styles.draftTxtOn]}>{isDrafted ? '✓' : '+'}</Text>
+              <Icon name={isDrafted ? 'check' : 'plus'} size={16} color={isDrafted ? C.mint : C.dim2} />
             </TouchableOpacity>
           )}
         </View>
@@ -194,33 +197,47 @@ export default function RankingsScreen() {
         <Text style={styles.eyebrow}>RANKINGS</Text>
         <View style={styles.titleRow}>
           <Text style={styles.title}>Rankings.</Text>
-          <TouchableOpacity onPress={() => setMode('mine')} style={[styles.myRankingsPill, mode === 'mine' && styles.myRankingsPillOn]}>
-            <Text style={[styles.myRankingsTxt, mode === 'mine' && styles.myRankingsTxtOn]}>My Rankings</Text>
-          </TouchableOpacity>
+          <View style={styles.modeRow}>
+            <TouchableOpacity onPress={() => setMode('community')} style={[styles.modeBtn, mode === 'community' && styles.modeBtnOn]}>
+              <Text style={[styles.modeTxt, mode === 'community' && styles.modeTxtOn]}>Community</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setMode('mine')} style={[styles.modeBtn, mode === 'mine' && styles.modeBtnOn]}>
+              <Text style={[styles.modeTxt, mode === 'mine' && styles.modeTxtOn]}>My Rankings</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={styles.filterRow}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-            {POSITIONS.map(pos => (
-              <TouchableOpacity
-                key={pos}
-                onPress={() => setPosition(pos)}
-                style={[styles.posBtn, position === pos && { backgroundColor: pos === 'ALL' ? C.blueDeep : POS_COLORS[pos] || C.blueDeep }]}
-              >
-                <Text style={[styles.posTxt, position === pos && styles.posTxtOn]}>{pos}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
 
-      {mode === 'mine' && draftMode && (
+        <View style={styles.searchRow}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search players or teams"
+            placeholderTextColor={C.dim2}
+            value={search}
+            onChangeText={setSearch}
+          />
+        </View>
+
+        <View style={styles.formatRow}>
+          {FORMATS.map(fmt => (
+            <TouchableOpacity
+              key={fmt}
+              onPress={() => setFormat(fmt)}
+              style={[styles.formatBtn, format === fmt && styles.formatBtnOn]}
+            >
+              <Text style={[styles.formatTxt, format === fmt && styles.formatTxtOn]}>{fmt}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {mode === 'mine' && (
         <View style={styles.editBar}>
           <TouchableOpacity onPress={resetMyRanks} style={styles.resetBtn}>
             <Text style={styles.resetTxt}>Reset to Consensus</Text>
           </TouchableOpacity>
           <Text style={styles.editHint}>Long press to drag & reorder</Text>
         </View>
-      )}
+        )}
+      </View>
 
       {mode === 'mine' && draftMode ? (
         <DraggableFlatList
@@ -330,6 +347,32 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     marginBottom: 12,
+  },
+  formatRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  formatBtn: {
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(88,131,191,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  formatBtnOn: {
+    borderColor: C.blueDeep,
+    backgroundColor: 'rgba(61,106,170,0.12)',
+  },
+  formatTxt: {
+    fontSize: SZ.sm,
+    fontFamily: F.mono,
+    color: C.dim2,
+  },
+  formatTxtOn: {
+    fontFamily: F.bold,
+    color: C.blueDeep,
   },
   posBtn: {
     backgroundColor: 'rgba(255,255,255,0.1)',

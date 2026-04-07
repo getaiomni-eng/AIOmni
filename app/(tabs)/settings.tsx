@@ -10,11 +10,12 @@ import { clearESPNCredentials, findMyESPNTeam, getESPNLeague, loadESPNCredential
 import { getCurrentTier, TIER_INFO } from '../../services/purchases';
 import { clearYahooTokens, exchangeYahooCode, getValidYahooToken, getYahooAuthURL } from '../../services/yahoo';
 import { Badge } from '../components/Atoms';
-import { AIOmniIris } from '../components/AIOmniLogo';
+import { AIOmniLogo } from '../components/AIOmniLogo';
+import { OrbAvatar } from '../components/OrbAvatar';
+import { Icon } from '../components/AIOmniIcons';
 import { C, F, SP, SZ, BEVEL } from '../constants/tokens';
 import { getRemainingPrompts } from '../utils/promptCounter';
 
-const LOGO         = require('../../assets/images/logo.png');
 const WEEKLY_LIMIT = 25;
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -65,7 +66,7 @@ export default function SettingsTab() {
       if (!u?.user_id) { Alert.alert('Not Found', 'Could not find that Sleeper account.'); return; }
       await AsyncStorage.setItem('sleeper_username', newUsername.trim());
       setUsername(newUsername.trim()); setShowAccountModal(false); setNewUsername('');
-      Alert.alert('✓ Updated', 'Sleeper account connected.');
+      Alert.alert('Updated', 'Sleeper account connected.');
     } catch { Alert.alert('Error', 'Could not connect to Sleeper.'); }
     finally { setLoading(false); }
   };
@@ -85,7 +86,7 @@ export default function SettingsTab() {
       await saveESPNCredentials(creds);
       await AsyncStorage.setItem('espn_league_ids', JSON.stringify([parseInt(espnLeagueId.trim())]));
       setEspnConnected(true); setEspnS2(''); setEspnSWID(''); setEspnLeagueId('');
-      Alert.alert('✓ ESPN Connected', data.settings?.name || 'League connected.');
+      Alert.alert('ESPN Connected', data.settings?.name || 'League connected.');
     } catch (e: any) { Alert.alert('Failed', e.message || 'Check your credentials.'); }
     finally { setLoading(false); }
   };
@@ -106,7 +107,7 @@ export default function SettingsTab() {
       WebBrowser.openBrowserAsync(authUrl, { showInRecents: true });
       const code = await codePromise;
       WebBrowser.dismissBrowser();
-      if (code) { await exchangeYahooCode(code); setYahooConnected(true); Alert.alert('✓ Yahoo Connected', 'Your Yahoo leagues will now appear on Home.'); }
+      if (code) { await exchangeYahooCode(code); setYahooConnected(true); Alert.alert('Yahoo Connected', 'Your Yahoo leagues will now appear on Home.'); }
       else Alert.alert('Yahoo Error', 'No auth code received. Try again.');
     } catch (e: any) { Alert.alert('Yahoo Error', e.message || 'Could not connect Yahoo.'); }
     finally { setLoading(false); }
@@ -124,13 +125,13 @@ export default function SettingsTab() {
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 12 }]} showsVerticalScrollIndicator={false}>
 
-        <Image source={LOGO} style={styles.logo} resizeMode="contain" />
+        <AIOmniLogo width={SCREEN_W} height={140} />
 
         {/* ── User card ── */}
         <View style={styles.card}>
           <View style={styles.cardShine} />
           <View style={styles.userRow}>
-            <AIOmniIris width={44} />
+            <OrbAvatar size={44} />
             <View style={{ flex: 1 }}>
               <Text style={styles.userName}>{user?.email ?? (username ? `@${username}` : 'Not signed in')}</Text>
               <Text style={[styles.userHandle, { color: tierInfo.color }]}>{tierInfo.label} tier</Text>
@@ -154,7 +155,11 @@ export default function SettingsTab() {
         {/* ── Auth CTA ── */}
         {!user && (
           <TouchableOpacity style={styles.authCta} onPress={() => router.replace('/onboarding')}>
-            <Text style={styles.authCtaTxt}>🔑  Create account to sync across devices →</Text>
+            <View style={styles.authCtaContent}>
+              <Icon name="key" size={18} color={C.gold} />
+              <Text style={styles.authCtaTxt}>Create account to sync across devices</Text>
+              <Icon name="chevron" size={18} color={C.dim2} />
+            </View>
           </TouchableOpacity>
         )}
 
@@ -188,14 +193,14 @@ export default function SettingsTab() {
         <View style={styles.menuCard}>
           <View style={styles.menuCardShine} />
           {[
-            { icon: '👤', label: 'Account',      sub: `@${username || 'tap to connect Sleeper'}`, onPress: () => setShowAccountModal(true) },
-            { icon: '🏈', label: 'My Platforms',  sub: platformSub,                               onPress: () => setShowPlatformModal(true) },
-            { icon: '🔔', label: 'Notifications', sub: 'All alerts on',                           onPress: () => {} },
-            { icon: '📊', label: 'Usage',         sub: `${remaining} of ${WEEKLY_LIMIT} prompts remaining`, onPress: () => {} },
-            { icon: '🔒', label: 'Privacy',       sub: 'Data never sold',                         onPress: () => {} },
+            { icon: 'person', label: 'Account',      sub: `@${username || 'tap to connect Sleeper'}`, onPress: () => setShowAccountModal(true) },
+            { icon: 'football', label: 'My Platforms',  sub: platformSub,                               onPress: () => setShowPlatformModal(true) },
+            { icon: 'bell', label: 'Notifications', sub: 'All alerts on',                           onPress: () => {} },
+            { icon: 'usage', label: 'Usage',         sub: `${remaining} of ${WEEKLY_LIMIT} prompts remaining`, onPress: () => {} },
+            { icon: 'lock', label: 'Privacy',       sub: 'Data never sold',                         onPress: () => {} },
           ].map((item, i) => (
             <TouchableOpacity key={item.label} style={[styles.menuRow, i > 0 && styles.menuBorder]} activeOpacity={0.7} onPress={item.onPress}>
-              <Text style={styles.menuIcon}>{item.icon}</Text>
+              <Icon name={item.icon as any} size={18} color={C.blueDeep} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.menuLabel}>{item.label}</Text>
                 <Text style={styles.menuSub}>{item.sub}</Text>
@@ -205,7 +210,7 @@ export default function SettingsTab() {
           ))}
           {user && (
             <TouchableOpacity style={[styles.menuRow, styles.menuBorder]} activeOpacity={0.7} onPress={handleSignOut}>
-              <Text style={styles.menuIcon}>🚪</Text>
+              <Icon name="lock" size={18} color="#a83040" />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.menuLabel, { color: '#a83040' }]}>Sign Out</Text>
                 <Text style={styles.menuSub}>{user.email}</Text>
@@ -291,7 +296,6 @@ export default function SettingsTab() {
 
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: SP[3], paddingBottom: 110 },
-  logo:   { width: SCREEN_W, height: 140, marginLeft: -SP[3], marginBottom: 20 },
 
   // Glass card
   card: {
@@ -306,6 +310,7 @@ const styles = StyleSheet.create({
   cardShine: { ...BEVEL.shine, zIndex:6 },
 
   authCta:    { backgroundColor: C.sageS, borderWidth: 1.5, borderColor: BORDER, borderRadius: 12, padding: 14, alignItems: 'center', marginBottom: 16 },
+  authCtaContent: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   authCtaTxt: { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.sm, letterSpacing: 0.5 },
 
   userRow:    { flexDirection: 'row', alignItems: 'center', gap: 13 },

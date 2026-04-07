@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { askAI } from "../../services/ai";
 import { findMyESPNTeam, formatESPNPosition, getESPNAllRosters, getESPNLeague, getESPNMatchups, getESPNStandings, getESPNTransactions, isESPNStarter, loadESPNCredentials } from '../../services/espn';
+import { Icon } from '../components/AIOmniIcons';
 import { getMyYahooTeam, getValidYahooToken, getYahooAllRosters, getYahooMatchups, getYahooStandings, getYahooTransactions } from '../../services/yahoo';
 import { C, F, R, SZ, BEVEL } from '../constants/tokens';
 
@@ -354,7 +355,12 @@ export default function LeagueScreen() {
       setAdvice(text);
     } catch (e: any) {
       clearTimeout(timeout);
-      setAdvice(e?.name === 'AbortError' ? 'Request timed out. Check your connection and try again.' : 'Could not load advice. Tap retry or try again in a moment.');
+      const message = e?.name === 'AbortError'
+        ? 'Request timed out. Check your connection and try again.'
+        : e?.message === 'prompt_limit_reached'
+          ? 'You have reached your weekly prompts. Upgrade to Pro for 75 prompts per week.'
+          : 'Could not load advice. Tap retry or try again in a moment.';
+      setAdvice(message);
     } finally { setAdviceLoading(false); }
   };
 
@@ -598,7 +604,7 @@ export default function LeagueScreen() {
                 </View>
               </View>
               <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}>
-                <Text style={styles.closeBtnText}>✕</Text>
+                <Icon name="x" size={16} color={C.blueDeep} />
               </TouchableOpacity>
             </View>
             {adviceLoading ? (

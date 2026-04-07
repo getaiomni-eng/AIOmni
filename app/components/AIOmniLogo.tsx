@@ -1,104 +1,98 @@
-// app/components/AIOmniLogo.tsx
-// v26 animated logo — aperture blink, hex pulse, color cycle
-// Uses react-native-svg (already in project via TabIcon)
-
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, ClipPath, Defs, G, Path, Polygon, RadialGradient, Stop, Text as SvgText } from 'react-native-svg';
 
-const BLADE = "M 0,0 L -28,-48.5 A 56,56 0 0,1 28,-48.5 Z";
-const ROTS  = [0, 60, 120, 180, 240, 300];
-const OPEN  = 70;
+const BLADES = [0, 60, 120, 180, 240, 300];
+const BLADE_PATH = 'M 0,0 L -20,-36 A 44,44 0 0,1 20,-36 Z';
 
-const ease = (t: number) => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
-const rand = (a: number, b: number) => a + Math.random() * (b - a);
+const ease = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 function useApertureBlink(setAngle: React.Dispatch<React.SetStateAction<number>>) {
-  const rafRef = useRef<any>(null);
-  const cancelRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
+  const active = useRef(true);
 
   useEffect(() => {
-    const tween = (from: number, to: number, ms: number): Promise<void> =>
-      new Promise(resolve => {
-        const t0 = Date.now();
-        function tick() {
-          if (cancelRef.current) return resolve();
-          const t = Math.min((Date.now() - t0) / ms, 1);
-          setAngle(from + (to - from) * ease(t));
-          if (t < 1) rafRef.current = requestAnimationFrame(tick);
-          else resolve();
+    active.current = true;
+
+    const tween = (from: number, to: number, duration: number) => new Promise<void>(resolve => {
+      const start = Date.now();
+      const tick = () => {
+        if (!active.current) return resolve();
+        const elapsed = Date.now() - start;
+        const t = Math.min(elapsed / duration, 1);
+        setAngle(from + (to - from) * ease(t));
+        if (t < 1) {
+          rafRef.current = requestAnimationFrame(tick);
+        } else {
+          resolve();
         }
-        rafRef.current = requestAnimationFrame(tick);
-      });
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    });
 
-    const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-
-    async function cycle() {
-      setAngle(OPEN);
-      while (!cancelRef.current) {
-        await wait(rand(2500, 6500));
-        if (cancelRef.current) break;
-        const wide = Math.random() < 0.2;
-        await tween(OPEN, 0, wide ? rand(700, 1200) : rand(350, 700));
-        await wait(wide ? rand(300, 600) : rand(100, 300));
-        await tween(0, OPEN, wide ? rand(800, 1400) : rand(400, 800));
-        if (Math.random() < 0.12) {
-          await wait(rand(200, 400));
-          await tween(OPEN, 0, rand(250, 450));
-          await wait(rand(80, 160));
-          await tween(0, OPEN, rand(350, 600));
+    const pulse = async () => {
+      while (active.current) {
+        await new Promise(r => setTimeout(r, rand(2200, 5200)));
+        if (!active.current) break;
+        await tween(72, 4, rand(280, 620));
+        await new Promise(r => setTimeout(r, rand(120, 260)));
+        await tween(4, 72, rand(320, 680));
+        if (Math.random() < 0.18) {
+          await new Promise(r => setTimeout(r, rand(200, 380)));
+          await tween(72, 4, rand(220, 420));
+          await new Promise(r => setTimeout(r, rand(90, 160)));
+          await tween(4, 72, rand(260, 520));
         }
       }
-    }
+    };
 
-    cancelRef.current = false;
-    cycle();
+    pulse();
+
     return () => {
-      cancelRef.current = true;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      active.current = false;
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
   }, [setAngle]);
 }
 
 export function AIOmniIris({ width = 72 }: { width?: number }) {
-  const [angle, setAngle] = useState(OPEN);
+  const [angle, setAngle] = useState(72);
   useApertureBlink(setAngle);
-  const height = width;
 
   return (
-    <View style={{ width, height }}>
-      <Svg width={width} height={height} viewBox="0 0 104 104">
+    <View style={{ width, height: width }}>
+      <Svg width={width} height={width} viewBox="0 0 104 104">
         <Defs>
           <RadialGradient id="irisGrad" cx="52" cy="52" r="42" fx="52" fy="52">
-            <Stop offset="0%" stopColor="#fee229" stopOpacity={0.98} />
-            <Stop offset="45%" stopColor="#3d6aaa" stopOpacity={0.35} />
-            <Stop offset="100%" stopColor="#0e1b2d" stopOpacity={0.1} />
+            <Stop offset="0%" stopColor="#fee229" stopOpacity="0.96" />
+            <Stop offset="50%" stopColor="#3d6aaa" stopOpacity="0.24" />
+            <Stop offset="100%" stopColor="#081623" stopOpacity="0.16" />
           </RadialGradient>
           <ClipPath id="irisClip">
-            <Circle cx={52} cy={52} r={42} />
+            <Circle cx="52" cy="52" r="42" />
           </ClipPath>
         </Defs>
         <G transform="translate(52,52)">
-          <Circle r={60} fill="#091622" />
+          <Circle r={52} fill="#091622" />
           <Circle r={42} fill="url(#irisGrad)" />
           <G clipPath="url(#irisClip)">
-            {ROTS.map(rot => (
+            {BLADES.map(rot => (
               <G key={rot} transform={`rotate(${rot})`}>
                 <Path
-                  d={BLADE}
+                  d={BLADE_PATH}
                   fill="#2a6bb0"
                   stroke="#ffffed"
                   strokeWidth={1.3}
                   rotation={angle}
                   originX={0}
-                  originY={-52}
+                  originY={-30}
                 />
               </G>
             ))}
           </G>
-          <Circle r={51} fill="none" stroke="#091622" strokeWidth={9} />
-          <Circle r={60} fill="none" stroke="#ffffed" strokeWidth={2.2} />
-          <Circle r={57.5} fill="none" stroke="#0a1e30" strokeWidth={1.3} />
+          <Circle r={44} fill="none" stroke="#091622" strokeWidth={8} />
+          <Circle r={52} fill="none" stroke="#ffffed" strokeWidth={2.4} />
         </G>
       </Svg>
     </View>
@@ -106,44 +100,60 @@ export function AIOmniIris({ width = 72 }: { width?: number }) {
 }
 
 export function AIOmniLogo({ width = 280, height }: { width?: number; height?: number }) {
-  const actualHeight = height || width * 0.5;
+  const [angle, setAngle] = useState(72);
+  useApertureBlink(setAngle);
+  const actualHeight = height || Math.round(width * 0.36);
 
   return (
     <View style={{ width, height: actualHeight }}>
-      <Svg width={width} height={actualHeight} viewBox="0 0 1040 520">
-        {/* Single outer hex with gold animated stroke */}
+      <Svg width={width} height={actualHeight} viewBox="0 0 280 102">
+        <Defs>
+          <RadialGradient id="logoGrad" cx="0.5" cy="0.5" r="0.6">
+            <Stop offset="0%" stopColor="#fff2ab" stopOpacity="0.92" />
+            <Stop offset="100%" stopColor="#f7d12c" stopOpacity="0.28" />
+          </RadialGradient>
+          <ClipPath id="logoIrisClip">
+            <Circle cx="162" cy="51" r="30" />
+          </ClipPath>
+        </Defs>
+
         <Polygon
-          points="310,50 490,154 490,366 310,470 130,366 130,154"
-          fill="none" stroke="#fee229" strokeWidth={28} strokeLinejoin="round"
+          points="68,10 212,10 268,51 212,92 68,92 12,51"
+          fill="none"
+          stroke="#fee229"
+          strokeWidth={10}
+          strokeLinejoin="round"
         />
 
-        {/* "AI" text in gold BebasNeue */}
-        <SvgText x="152" y="316" fontFamily="BebasNeue_400Regular" fontSize="142"
-          fill="#fee229" stroke="#fee229" strokeWidth="3">AI</SvgText>
+        <SvgText x="20" y="72" fontFamily="BebasNeue_400Regular" fontSize="70" fill="#fee229" letterSpacing="-1">
+          AI
+        </SvgText>
 
-        {/* Aperture O with 6 blades */}
-        <G transform="translate(410,260)">
-          <Circle r={60} fill="#091622" />
-          <Circle r={42} fill="#fee229" />
-          <G>
-            {[0, 60, 120, 180, 240, 300].map(rot => (
+        <G transform="translate(162,51)">
+          <Circle r={30} fill="#091622" />
+          <Circle r={22} fill="url(#logoGrad)" />
+          <G clipPath="url(#logoIrisClip)">
+            {BLADES.map(rot => (
               <G key={rot} transform={`rotate(${rot})`}>
                 <Path
-                  d="M 0,0 L -28,-48.5 A 56,56 0 0,1 28,-48.5 Z"
+                  d={BLADE_PATH}
                   fill="#2a6bb0"
                   stroke="#ffffed"
-                  strokeWidth={1.3}
+                  strokeWidth={1.2}
+                  rotation={angle}
+                  originX={0}
+                  originY={-30}
                 />
               </G>
             ))}
           </G>
-          <Circle r={51} fill="none" stroke="#091622" strokeWidth={18} />
-          <Circle r={60} fill="none" stroke="#ffffed" strokeWidth={3} />
+          <Circle r={26} fill="none" stroke="#091622" strokeWidth={6} />
+          <Circle r={30} fill="none" stroke="#ffffed" strokeWidth={2} />
         </G>
 
-        {/* "mni" text in gold after the O */}
-        <SvgText x="514" y="316" fontFamily="BebasNeue_400Regular" fontSize="88"
-          letterSpacing="2" fill="#fee229" stroke="#fee229" strokeWidth="3">mni</SvgText>
+        <SvgText x="190" y="72" fontFamily="BebasNeue_400Regular" fontSize="44" fill="#fee229" letterSpacing="2">
+          mni
+        </SvgText>
       </Svg>
     </View>
   );

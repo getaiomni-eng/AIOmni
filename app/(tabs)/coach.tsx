@@ -138,11 +138,11 @@ const VerdictCard: React.FC<{ text: string; color?: string }> = ({ text, color =
 );
 
 // ── Recommendation card (blue bevel — matches mockup) ───────
-const RecoCard: React.FC<{ emoji: string; title: string; body: string }> = ({ emoji, title, body }) => (
+const RecoCard: React.FC<{ icon: string; title: string; body: string }> = ({ icon, title, body }) => (
   <View style={styles.recoCard}>
     <View style={styles.bevelShine} />
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-      <Text style={{ fontSize: 14 }}>{emoji}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+      <Icon name={icon as any} size={16} color={C.blueDeep} />
       <Text style={styles.recoTitle}>{title}</Text>
     </View>
     <Text style={styles.recoBody}>{body}</Text>
@@ -180,12 +180,20 @@ const PLATFORM_COLOR: Record<string, string> = {
 type Message = { role: 'ai' | 'user'; text: string; isLoading?: boolean };
 const QUICK_PROMPTS = ['Start/Sit', 'Best Waiver', 'Trade Value', 'Matchup'];
 
+const mapRecoIcon = (symbol: string) => {
+  if (symbol.includes('⚡')) return 'lightning';
+  if (symbol.includes('🎯')) return 'target';
+  if (symbol.includes('📈')) return 'trending';
+  if (symbol.includes('⇄')) return 'swap';
+  return 'lightning';
+};
+
 const renderAIText = (text: string) =>
   text.split('\n').map((line, i) => {
     if (line.startsWith('__verdict__')) return <VerdictCard key={i} text={line.replace('__verdict__', '')} />;
     if (line.startsWith('__reco__')) {
       const parts = line.replace('__reco__', '').split('|');
-      return <RecoCard key={i} emoji={parts[0] ?? '⚡'} title={parts[1] ?? ''} body={parts[2] ?? ''} />;
+      return <RecoCard key={i} icon={mapRecoIcon(parts[0] ?? '')} title={parts[1] ?? ''} body={parts[2] ?? ''} />;
     }
     if (line.startsWith('__add__')) {
       const [, pos, name, team, detail] = line.split('|');

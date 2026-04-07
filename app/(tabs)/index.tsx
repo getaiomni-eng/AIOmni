@@ -14,6 +14,7 @@ import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../servic
 import { getValidYahooToken } from '../../services/yahoo';
 import { AIOmniLogo, AIOmniIris } from '../components/AIOmniLogo';
 import { Badge, SectionHeader } from '../components/Atoms';
+import { Icon } from '../components/AIOmniIcons';
 import { C, F, R, SP, SZ, BEVEL } from '../constants/tokens';
 import { incrementPrompt } from '../utils/promptCounter';
 
@@ -59,9 +60,9 @@ const FALLBACK_NEWS = [
 ];
 
 const FALLBACK_INSIGHTS = [
-  { emoji: '🎯', title: 'Start Barkley',  body: 'Dream matchup vs NYG — 32nd ranked run D. Ceiling 35+.',  tag: 'START',   color: C.sage },
-  { emoji: '⚠️', title: 'Watch Achane',   body: 'Listed Q — check 11:30am reports. Pollard on standby.',  tag: 'MONITOR', color: '#e8a84b' },
-  { emoji: '🔥', title: 'Add Shaheed',    body: '3 TDs in last 4 games. 78% target share with Drake.',    tag: 'HOT',     color: C.gold },
+  { icon: 'target', title: 'Start Barkley',  body: 'Dream matchup vs NYG — 32nd ranked run D. Ceiling 35+.',  tag: 'START',   color: C.sage },
+  { icon: 'alert', title: 'Watch Achane',   body: 'Listed Q — check 11:30am reports. Pollard on standby.',  tag: 'MONITOR', color: '#e8a84b' },
+  { icon: 'fire',   title: 'Add Shaheed',    body: '3 TDs in last 4 games. 78% target share with Drake.',    tag: 'HOT',     color: C.gold },
 ];
 
 // ── Bevel Card ────────────────────────────────────────────────
@@ -82,7 +83,7 @@ export default function HomeScreen() {
   const [loading,        setLoading]        = useState(true);
   const [refreshing,     setRefreshing]     = useState(false);
   const [insightIdx,     setInsightIdx]     = useState(0);
-  const [aiInsights,     setAiInsights]     = useState<{title:string;body:string;tag:string;color:string;emoji:string}[]>([]);
+  const [aiInsights,     setAiInsights]     = useState<{title:string;body:string;tag:string;color:string;icon:string}[]>([]);
   const [insightLoading, setInsightLoading] = useState(false);
   const [scoreIdx,       setScoreIdx]       = useState(0);
   const [news,           setNews]           = useState(FALLBACK_NEWS);
@@ -380,7 +381,10 @@ export default function HomeScreen() {
 
         {/* ── Live feed ── */}
         <View style={styles.newsHeaderRow}>
-          <Text style={styles.newsEye}>📡  LIVE FEED</Text>
+          <View style={styles.newsLabelRow}>
+            <Icon name="live" size={16} color={C.blueDeep} />
+            <Text style={styles.newsEye}>LIVE FEED</Text>
+          </View>
           <Text style={styles.newsHint}>← swipe →</Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
@@ -459,9 +463,10 @@ export default function HomeScreen() {
                     const ptsVal       = parseFloat((lg.pts ?? 0).toFixed(1));
                     return (
                       <BevelCard key={lg.id} style={[styles.scoreCardGrid, isNonSleeper && { borderColor: PLAT_BORDER(lg.platform) }]}>
-                        <Text style={styles.scoreEyeGrid}>
-                          {'⚡ WK '}{lg.week}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Icon name="lightning" size={14} color={C.blueDeep} />
+                          <Text style={styles.scoreEyeGrid}>WK {lg.week}</Text>
+                        </View>
                         <TouchableOpacity 
                           onPress={() => aiCoachActive ? openAiCoachModal(lg) : goToLeague(lg)} 
                           activeOpacity={0.8} 
@@ -500,7 +505,10 @@ export default function HomeScreen() {
           </>
         ) : (
           <BevelCard style={styles.emptyCard}>
-            <Text style={styles.emptyEye}>🏆  NO LEAGUES FOUND</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Icon name="trophy" size={16} color={C.gold} />
+              <Text style={styles.emptyEye}>NO LEAGUES FOUND</Text>
+            </View>
             <Text style={styles.emptyTxt}>Connect your Sleeper, ESPN, or Yahoo account in Settings to see your leagues.</Text>
             <TouchableOpacity onPress={() => router.push('/settings')} style={styles.emptyBtn}>
               <Text style={styles.emptyBtnTxt}>GO TO SETTINGS</Text>
@@ -527,8 +535,17 @@ export default function HomeScreen() {
 
         {/* AI Insights */}
         <View style={styles.insightsHeader}>
-          <Text style={styles.insightsEye}>🤖  AI INSIGHTS</Text>
-          <Text style={styles.insightsHint}>← swipe →</Text>
+          <View style={styles.newsLabelRow}>
+            <Icon name="brain" size={16} color={C.blueDeep} />
+            <Text style={styles.insightsEye}>AI INSIGHTS</Text>
+          </View>
+          <View style={styles.swipeHintRow}>
+            <View style={styles.swipeArrowLeft}>
+              <Icon name="chevron" size={14} color={C.dim2} />
+            </View>
+            <Text style={styles.insightsHint}>SWIPE</Text>
+            <Icon name="chevron" size={14} color={C.dim2} />
+          </View>
         </View>
         <ScrollView
           horizontal pagingEnabled showsHorizontalScrollIndicator={false}
@@ -540,7 +557,9 @@ export default function HomeScreen() {
           {displayInsights.map((insight, i) => (
             <BevelCard key={i} style={[styles.insightCard, { width: INSIGHT_W }]}>
               <View style={styles.insightTop}>
-                <Text style={styles.insightEmoji}>{insight.emoji}</Text>
+                <View style={styles.insightIconWrap}>
+                  <Icon name={insight.icon as any} size={18} color={insight.color} />
+                </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.insightTitle}>{insight.title}</Text>
                   <Text style={styles.insightBody}>{insight.body}</Text>
@@ -567,7 +586,7 @@ export default function HomeScreen() {
           <View style={styles.aiCoachModal}>
             <View style={styles.aiCoachModalShine} />
             <TouchableOpacity onPress={() => setSelectedLeague(null)} hitSlop={12}>
-              <Text style={styles.aiCoachModalClose}>✕</Text>
+              <Icon name="x" size={22} color={C.blueDeep} />
             </TouchableOpacity>
             <Text style={styles.aiCoachModalTitle}>{selectedLeague?.name}</Text>
             <View style={styles.aiCoachModalScores}>
@@ -606,6 +625,7 @@ const styles = StyleSheet.create({
   handleTxt: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 0.5 },
   gearBtn: { padding: 8, marginLeft: 8 },
   newsHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  newsLabelRow: { flexDirection: 'row', alignItems: 'center' },
   newsEye: { fontSize: 13, fontFamily: F.bold, color: C.blueDeep, letterSpacing: 2 },
   newsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
   newsChip: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12, padding: 12, borderWidth: 1.5, minWidth: 240 },
@@ -646,9 +666,12 @@ const styles = StyleSheet.create({
   emptyBtnTxt: { color: '#ffffff', fontSize: SZ.sm, fontFamily: F.bold, letterSpacing: 1 },
   insightsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   insightsEye: { fontSize: SZ.sm, fontFamily: F.mono, color: C.blueDeep, letterSpacing: 2 },
+  swipeHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  swipeArrowLeft: { transform: [{ rotate: '180deg' }] },
   insightsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
   insightCard: { ...BEVEL.card, padding: 18, backgroundColor: 'rgba(255,255,255,0.95)' },
-  insightTop: { flexDirection: 'row', marginBottom: 12 },
+  insightTop: { flexDirection: 'row', marginBottom: 12, alignItems: 'center' },
+  insightIconWrap: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', borderWidth: 1.25, borderColor: 'rgba(88,131,191,0.18)' },
   insightEmoji: { fontSize: SZ.xl },
   insightTitle: { fontSize: SZ.base, color: C.ink, fontFamily: F.bold, marginBottom: 4 },
   insightBody: { fontSize: SZ.sm, color: C.dim, lineHeight: 18 },

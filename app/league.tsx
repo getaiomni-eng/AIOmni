@@ -6,6 +6,7 @@ import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Text, Touchabl
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI } from "../services/ai";
 import { Badge, SectionHeader } from './components/Atoms';
+import { Icon } from './components/AIOmniIcons';
 import { Player, PlayerRow } from './components/PlayerRow';
 import { C, F, SP, SZ } from './constants/tokens';
 
@@ -193,7 +194,13 @@ export default function LeagueScreen() {
     try {
       const text = await askAI(`Fantasy football advice for ${leagueName} (${platform}, WK ${week}).\nPlayer: ${player.name} | ${player.pos} | ${player.team}${player.injured ? ' | INJURED' : ''}\nShould I start this player? Be direct, under 80 words.`);
       setAdvice(text || 'Could not load advice.');
-    } catch { setAdvice('Connection error. Try again.'); }
+    } catch (e: any) {
+      if (e?.message === 'prompt_limit_reached') {
+        setAdvice('You have reached your weekly prompts. Upgrade to Pro for 75 prompts per week.');
+      } else {
+        setAdvice('Connection error. Try again.');
+      }
+    }
     setAdviceLoading(false);
   };
 
@@ -348,10 +355,10 @@ export default function LeagueScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalName}>{advicePlayer?.name}</Text>
               <TouchableOpacity onPress={() => setAdvicePlayer(null)} style={styles.modalClose}>
-                <Text style={{ color:C.blueDeep, fontSize:14, fontFamily:F.bold }}>✕</Text>
+                <Icon name="x" size={18} color={C.blueDeep} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalMeta}>{advicePlayer?.pos} · {advicePlayer?.team}{advicePlayer?.injured ? ' · ⚠️ INJURED' : ''}</Text>
+            <Text style={styles.modalMeta}>{advicePlayer?.pos} · {advicePlayer?.team}{advicePlayer?.injured ? ' · INJURED' : ''}</Text>
             {adviceLoading ? (
               <View style={{ alignItems:'center', padding:20 }}>
                 <ActivityIndicator color={C.blueDeep} size="large" />

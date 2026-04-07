@@ -5,7 +5,6 @@ import Svg, {
   Text as SvgText,
 } from 'react-native-svg';
 import { C } from '../constants/tokens';
-import { AIOmniIris } from './AIOmniLogo';
 
 const AnimatedPolygon = Animated.createAnimatedComponent(Polygon);
 const AnimatedG       = Animated.createAnimatedComponent(G);
