@@ -7,9 +7,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI } from '../../services/ai';
 import { PositionPill } from '../components/Atoms';
-import { Icon } from '../components/AIOmniIcons';
 import { C, F, SP, SZ } from '../constants/tokens';
 
+const SURFACE  = 'rgba(255,255,255,0.90)';
+const BORDER   = 'rgba(88,131,191,0.32)';
+const BEVEL_HI = 'rgba(255,255,255,0.95)';
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K'];
 
 // Player photo with fallback
@@ -20,13 +22,13 @@ function PlayerPhoto({ playerId, size = 44 }: { playerId: string; size?: number 
     return (
       <Image
         source={{ uri: `https://sleepercdn.com/content/nfl/players/thumb/${playerId}.jpg` }}
-        style={[s, { backgroundColor: 'rgba(255,255,255,0.9)' }]}
+        style={[s, { backgroundColor: SURFACE }]}
         onError={() => setErr(true)}
       />
     );
   }
   return (
-    <View style={[s, { backgroundColor: C.sageS, alignItems:'center', justifyContent:'center', borderWidth:1.5, borderColor: 'rgba(88,131,191,0.18)' }]}>
+    <View style={[s, { backgroundColor: C.sageS, alignItems:'center', justifyContent:'center', borderWidth:1.5, borderColor:BORDER }]}>
       <Text style={{ fontSize: size * 0.35, color: C.dim2 }}>?</Text>
     </View>
   );
@@ -117,11 +119,11 @@ Should I add off waivers? What's their upside? Be sharp, direct, under 80 words.
       const text = await askAI(prompt, 200);
       setAdvice(text || 'No advice available for this player.');
     } catch (e: any) {
-      console.log('Waiver AI error:', e);
+      // Handle proxy auth error gracefully
       if (e?.message?.includes('prompt_limit_reached')) {
-        setAdvice('You have reached your weekly prompts. Upgrade to Pro for 75 prompts per week.');
+        setAdvice("You've used all your weekly prompts. Upgrade to Pro for unlimited AI advice.");
       } else {
-        setAdvice(`Could not load AI advice: ${e?.message || 'Unknown error'}. Check your connection and try again.`);
+        setAdvice('Could not load AI advice. Check your connection and try again.');
       }
     } finally {
       setAdviceLoading(false);
@@ -130,61 +132,69 @@ Should I add off waivers? What's their upside? Be sharp, direct, under 80 words.
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>WAIVER WIRE</Text>
-          <Icon name="radar" size={20} color={C.blueDeep} />
+      <View style={[styles.wrap, { paddingTop: insets.top + 12 }]}>
+
+        <View style={styles.header}>
+          <Text style={styles.title}>Waiver Wire</Text>
+          <Text style={styles.subtitle}>AI-POWERED PICKUP INTELLIGENCE</Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterRow}
+          contentContainerStyle={{ paddingHorizontal: SP[3], gap: 8 }}
+        >
           {POSITIONS.map(pos => (
             <TouchableOpacity
               key={pos}
+              style={[styles.filterBtn, selectedPosition === pos && { borderColor: C.blueDeep, backgroundColor: C.sageS }]}
               onPress={() => setSelectedPosition(pos)}
-              style={[styles.posBtn, selectedPosition === pos && styles.posBtnOn]}
             >
-              <Text style={[styles.posTxt, selectedPosition === pos && styles.posTxtOn]}>{pos}</Text>
+              <Text style={[styles.filterText, selectedPosition === pos && { color: C.blueDeep }]}>{pos}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
+
+        {loading ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color={C.blueDeep} size="large" />
+            <Text style={styles.loadingText}>LOADING AVAILABLE PLAYERS</Text>
+          </View>
+        ) : (
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingHorizontal: SP[3], paddingBottom: 40 }}
+          >
+            {filteredPlayers.map((player, index) => (
+              <TouchableOpacity
+                key={`${player.player_id || index}`}
+                activeOpacity={0.8}
+                onPress={() => handleAdvice(player)}
+              >
+                <View style={styles.playerCard}>
+                  <View style={styles.playerCardShine} />
+                  <Text style={styles.rankText}>#{index + 1}</Text>
+
+                  {/* Player photo */}
+                  <PlayerPhoto playerId={player.player_id} size={44} />
+
+                  <PositionPill pos={player.position} />
+                  <View style={styles.playerInfo}>
+                    <Text style={styles.playerName}>{player.first_name} {player.last_name}</Text>
+                    <Text style={styles.playerTeam}>
+                      {player.team}{player.injury_status ? ` · ⚠ ${player.injury_status}` : ''}
+                    </Text>
+                  </View>
+                  <View style={styles.aiHint}>
+                    <Text style={styles.aiHintText}>AI</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
       </View>
-
-      {loading ? (
-        <View style={styles.loadingBox}>
-          <ActivityIndicator color={C.blueDeep} size="large" />
-          <Text style={styles.loadingText}>Loading Available Players</Text>
-        </View>
-      ) : (
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-        >
-          {filteredPlayers.map((player, index) => (
-            <TouchableOpacity
-              key={`${player.player_id || index}`}
-              activeOpacity={0.8}
-              onPress={() => handleAdvice(player)}
-              style={styles.playerCard}
-            >
-              <View style={styles.playerCardShine} />
-              <Text style={styles.rankText}>#{index + 1}</Text>
-
-              <PlayerPhoto playerId={player.player_id} size={44} />
-
-              <PositionPill pos={player.position} />
-              <View style={styles.playerInfo}>
-                <Text style={styles.playerName}>{player.first_name} {player.last_name}</Text>
-                <Text style={styles.playerTeam}>
-                  {player.team}{player.injury_status ? ` · ${player.injury_status}` : ''}
-                </Text>
-              </View>
-              <View style={styles.aiHint}>
-                <Text style={styles.aiHintText}>AI</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
 
       {/* AI Advice Modal */}
       <Modal
@@ -208,7 +218,7 @@ Should I add off waivers? What's their upside? Be sharp, direct, under 80 words.
                 <PositionPill pos={selectedPlayer?.position ?? 'WR'} />
               </View>
               <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
-                <Icon name="x" size={16} color={C.blueDeep} />
+                <Text style={styles.closeBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
 
@@ -232,188 +242,45 @@ Should I add off waivers? What's their upside? Be sharp, direct, under 80 words.
 }
 
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: SP[3],
-    paddingBottom: 12,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  title: {
-    fontSize: SZ.xl,
-    fontFamily: F.bold,
-    color: "#ffffff",
-  },
-  filters: {
-    paddingHorizontal: SP[3],
-    paddingBottom: 12,
-  },
-  posBtn: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  posBtnOn: {
-    backgroundColor: C.blueDeep,
-  },
-  posTxt: {
-    fontSize: SZ.sm,
-    fontFamily: F.mono,
-    color: "#ffffff",
-  },
-  posTxtOn: {
-    color: "#ffffff",
-    fontFamily: F.bold,
-  },
-  loadingBox: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 14,
-  },
-  loadingText: {
-    fontFamily: F.mono,
-    color: "#ffffff",
-    fontSize: SZ.sm,
-    letterSpacing: 2,
-    opacity: 0.7,
-  },
-  list: {
-    paddingHorizontal: SP[3],
-    paddingBottom: 100,
-  },
+  wrap:        { flex: 1 },
+  header:      { paddingHorizontal: SP[3], paddingBottom: 12, marginBottom: 4 },
+  title:       { fontSize: SZ['2xl'], fontFamily: F.bold, color: C.ink },
+  subtitle:    { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim2, letterSpacing: 2, marginTop: 3 },
+
+  filterRow:   { flexGrow: 0, marginBottom: 12 },
+  filterBtn:   { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: BORDER, backgroundColor: SURFACE },
+  filterText:  { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs, letterSpacing: 1 },
+
+  loadingBox:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
+  loadingText: { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.xs, letterSpacing: 3, opacity: 0.7 },
+
   playerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(88,131,191,0.18)',
-    borderRadius: 14,
-    padding: 12,
-    position: 'relative',
-    overflow: 'hidden',
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8,
+    backgroundColor: SURFACE, borderWidth: 1.5, borderColor: BORDER,
+    borderRadius: 14, padding: 12, position: 'relative', overflow: 'hidden',
+    shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
   },
-  playerCardShine: {
-    position: 'absolute',
-    top: 0,
-    left: '8%',
-    right: '8%',
-    height: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    zIndex: 6,
-  },
-  rankText: {
-    fontFamily: F.mono,
-    color: C.dim2,
-    fontSize: SZ.xs,
-    width: 28,
-  },
-  playerInfo: {
-    flex: 1,
-  },
-  playerName: {
-    fontFamily: F.bold,
-    color: C.ink,
-    fontSize: SZ.sm,
-    marginBottom: 2,
-  },
-  playerTeam: {
-    fontFamily: F.mono,
-    color: C.dim2,
-    fontSize: SZ.xs,
-    letterSpacing: 0.5,
-  },
-  aiHint: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: C.goldBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: C.goldS,
-  },
-  aiHintText: {
-    fontFamily: F.mono,
-    color: C.blueDeep,
-    fontSize: SZ.xs,
-    letterSpacing: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(26,31,46,0.5)',
-    justifyContent: 'flex-end',
-    padding: SP[3],
-    paddingBottom: 40,
-  },
+  playerCardShine: { position: 'absolute', top: 0, left: '8%', right: '8%', height: 1.5, backgroundColor: BEVEL_HI, zIndex: 6 },
+
+  rankText:   { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, width: 28 },
+  playerInfo: { flex: 1 },
+  playerName: { fontFamily: F.bold, color: C.ink, fontSize: SZ.base, marginBottom: 2 },
+  playerTeam: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs, letterSpacing: 0.5 },
+  aiHint:     { width: 28, height: 28, borderRadius: 8, borderWidth: 1.5, borderColor: C.goldBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: C.goldS },
+  aiHintText: { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.xs - 1, letterSpacing: 1 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(26,31,46,0.5)', justifyContent: 'flex-end', padding: SP[3], paddingBottom: 40 },
   modalCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1.5,
-    borderColor: 'rgba(88,131,191,0.18)',
-    position: 'relative',
-    overflow: 'hidden',
+    backgroundColor: '#ffffff', borderRadius: 20, padding: 24,
+    borderWidth: 1.5, borderColor: BORDER, position: 'relative', overflow: 'hidden',
+    shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 12,
   },
-  modalShine: {
-    position: 'absolute',
-    top: 0,
-    left: '8%',
-    right: '8%',
-    height: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    zIndex: 6,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontFamily: F.bold,
-    color: C.ink,
-    fontSize: SZ.lg,
-    marginBottom: 2,
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: 'rgba(88,131,191,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: C.sageS,
-  },
-  closeBtnText: {
-    color: C.blueDeep,
-    fontSize: SZ.sm,
-    fontFamily: F.bold,
-  },
-  adviceText: {
-    fontFamily: F.mono,
-    color: C.ink,
-    fontSize: SZ.sm,
-    lineHeight: 24,
-    marginBottom: 20,
-  },
-  gotItBtn: {
-    backgroundColor: C.gold,
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-  },
-  gotItText: {
-    fontFamily: F.bold,
-    fontSize: SZ.sm,
-    color: C.ink,
-    letterSpacing: 2,
-  },
+  modalShine:  { position: 'absolute', top: 0, left: '8%', right: '8%', height: 1.5, backgroundColor: BEVEL_HI, zIndex: 6 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  modalTitle:  { fontFamily: F.bold, color: C.ink, fontSize: SZ.xl, marginBottom: 2 },
+  closeBtn:    { width: 32, height: 32, borderRadius: 10, borderWidth: 1.5, borderColor: BORDER, alignItems: 'center', justifyContent: 'center', backgroundColor: C.sageS },
+  closeBtnText:{ color: C.blueDeep, fontSize: SZ.base, fontFamily: F.bold },
+  adviceText:  { fontFamily: F.mono, color: C.ink, fontSize: SZ.md, lineHeight: 24, marginBottom: 20 },
+  gotItBtn:    { backgroundColor: C.gold, borderRadius: 12, padding: 14, alignItems: 'center' },
+  gotItText:   { fontFamily: F.bold, fontSize: SZ.base, color: C.ink, letterSpacing: 2 },
 });
