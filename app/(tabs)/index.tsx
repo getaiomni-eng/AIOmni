@@ -270,7 +270,7 @@ export default function HomeScreen() {
       setLeagues(allLeagues);
       const u = await AsyncStorage.getItem('sleeper_username');
       setUsername(u || '');
-      if (allLeagues.length > 0) fetchAIInsights(allLeagues[0]);
+      // disabled: was burning prompts on load
     } catch (e) { console.error('Load leagues error:', e); }
     setLoading(false);
   }, [selectedSeason]);
