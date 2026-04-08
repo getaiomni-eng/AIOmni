@@ -1,16 +1,17 @@
 // services/ai.ts
 // Calls Claude via Supabase Edge Function proxy
-// NEVER hardcode API keys here — key lives in Supabase secrets
+// NEVER hardcode Claude API key here — key lives in Supabase secrets
 
 import { supabase } from './supabase';
 
 const PROXY_URL = 'https://khoruzvsprxyocisuhet.supabase.co/functions/v1/claude-proxy';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtob3J1enZzcHJ4eW9jaXN1aGV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDc5MTEsImV4cCI6MjA5MDU4MzkxMX0.YUIDZOJJhUc0ubkQxB_pSyXeE_xjcrqY7jGmbttlfRw';
 
 export async function askAI(prompt: string, maxTokens = 512): Promise<string> {
   try {
-    // Build headers — only include Authorization if we have a real session
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
     };
 
     try {
@@ -35,26 +36,14 @@ export async function askAI(prompt: string, maxTokens = 512): Promise<string> {
     if (!res.ok) {
       const errBody = await res.text();
       console.error(`askAI HTTP ${res.status}:`, errBody);
-
-      if (res.status === 429) {
-        throw new Error('prompt_limit_reached');
-      }
+      if (res.status === 429) throw new Error('prompt_limit_reached');
       throw new Error(`AI request failed (${res.status})`);
     }
 
     const data = await res.json();
 
-    // Handle Claude API response format
-    if (data?.content?.[0]?.text) {
-      return data.content[0].text;
-    }
-
-    // Handle proxy wrapper format (if proxy wraps the response)
-    if (data?.text) {
-      return data.text;
-    }
-
-    // Handle error in response body
+    if (data?.content?.[0]?.text) return data.content[0].text;
+    if (data?.text) return data.text;
     if (data?.error) {
       console.error('askAI error in response:', data.error);
       throw new Error(data.error.message || data.error);

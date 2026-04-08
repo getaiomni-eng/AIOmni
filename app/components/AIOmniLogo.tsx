@@ -3,6 +3,9 @@ import { View } from 'react-native';
 import Svg, { Circle, ClipPath, Defs, G, Path, Polygon, Text as SvgText } from 'react-native-svg';
 
 const BLADES = [0, 60, 120, 180, 240, 300];
+
+// Blade geometry: outer radius 13, inner radius 5
+// Arc from -25° to +25° at outer, matching arc at inner
 const BLADE_PATH = 'M-5.57,-11.96 A13,13,0,0,1,5.57,-11.96 L2.14,-4.7 A5,5,0,0,0,-2.14,-4.7 Z';
 
 const ease = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -35,12 +38,9 @@ function useApertureBlink(setAngle: React.Dispatch<React.SetStateAction<number>>
       while (active.current) {
         await new Promise(r => setTimeout(r, rand(2500, 5500)));
         if (!active.current) break;
-        // Close
         await tween(0, 12, rand(250, 550));
         await new Promise(r => setTimeout(r, rand(100, 250)));
-        // Open
         await tween(12, 0, rand(300, 650));
-        // Occasional double blink
         if (Math.random() < 0.2) {
           await new Promise(r => setTimeout(r, rand(180, 350)));
           await tween(0, 10, rand(200, 400));
@@ -62,38 +62,42 @@ function useApertureBlink(setAngle: React.Dispatch<React.SetStateAction<number>>
 export function AIOmniIris({ width = 72 }: { width?: number }) {
   const [angle, setAngle] = useState(0);
   useApertureBlink(setAngle);
-  const s = width / 64;
 
   return (
     <View style={{ width, height: width }}>
       <Svg width={width} height={width} viewBox="0 0 64 64">
+        {/* Outer dark rim */}
         <Circle cx="32" cy="32" r="30" fill="#091622" />
+        {/* Cream disc */}
         <Circle cx="32" cy="32" r="26" fill="#f5eecc" />
         <Defs>
           <ClipPath id="iClip">
             <Circle cx="32" cy="32" r="26" />
           </ClipPath>
         </Defs>
+        {/* 6 blades — scaled for 64px viewBox: outer r=22, inner r=8 */}
         <G clipPath="url(#iClip)">
           <G transform="translate(32,32)">
             {BLADES.map(rot => (
               <G key={rot} transform={`rotate(${rot + angle})`}>
                 <Path
-                  d={BLADE_PATH}
+                  d="M-9.4,-20.2 A22,22,0,0,1,9.4,-20.2 L3.4,-7.5 A8,8,0,0,0,-3.4,-7.5 Z"
                   fill="#1a2540"
                   stroke="#3d6aaa"
-                  strokeWidth={0.5}
+                  strokeWidth={0.6}
                 />
               </G>
             ))}
           </G>
         </G>
+        {/* Gold hex pupil */}
         <Polygon
-          points="32,28 35.46,30 35.46,34 32,36 28.54,34 28.54,30"
+          points="32,26.5 35.8,29 35.8,35 32,37.5 28.2,35 28.2,29"
           fill="#fee229"
           stroke="#3d6aaa"
           strokeWidth={0.8}
         />
+        {/* Rims */}
         <Circle cx="32" cy="32" r="26" fill="none" stroke="#3d6aaa" strokeWidth={2} />
         <Circle cx="32" cy="32" r="30" fill="none" stroke="#3d6aaa" strokeWidth={1.5} />
       </Svg>
@@ -108,14 +112,14 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
   const h = Math.round(width * 0.42);
   const vb = '0 0 300 126';
 
-  // Iris center position
+  // Iris center
   const ix = 172;
   const iy = 63;
-  const ir = 28; // iris outer radius
-  const iir = 22; // iris inner (cream) radius
+  const ir = 28;  // outer rim
+  const iir = 24; // cream disc (bigger = more blade visible)
 
-  // Scale blade path for this size
-  const LOGO_BLADE = 'M-4.8,-10.3 A11.2,11.2,0,0,1,4.8,-10.3 L1.8,-4 A4.3,4.3,0,0,0,-1.8,-4 Z';
+  // Blade path scaled for logo iris: outer r=20, inner r=7
+  const LOGO_BLADE = 'M-8.6,-18.4 A20,20,0,0,1,8.6,-18.4 L3,-6.4 A7,7,0,0,0,-3,-6.4 Z';
 
   return (
     <View style={{ width, height: h, alignItems: 'center' }}>
@@ -170,13 +174,13 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
 
         {/* Gold hex pupil */}
         <Polygon
-          points={`${ix},${iy - 4} ${ix + 3.46},${iy - 2} ${ix + 3.46},${iy + 2} ${ix},${iy + 4} ${ix - 3.46},${iy + 2} ${ix - 3.46},${iy - 2}`}
+          points={`${ix},${iy - 5.5} ${ix + 4.8},${iy - 2.75} ${ix + 4.8},${iy + 2.75} ${ix},${iy + 5.5} ${ix - 4.8},${iy + 2.75} ${ix - 4.8},${iy - 2.75}`}
           fill="#fee229"
           stroke="#3d6aaa"
           strokeWidth={0.8}
         />
 
-        {/* Iris rim */}
+        {/* Iris rims */}
         <Circle cx={ix} cy={iy} r={iir} fill="none" stroke="#3d6aaa" strokeWidth={1.8} />
         <Circle cx={ix} cy={iy} r={ir} fill="none" stroke="#3d6aaa" strokeWidth={1.5} />
 

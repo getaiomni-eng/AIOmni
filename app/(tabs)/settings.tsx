@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Alert, Dimensions, Image, Linking, Modal, ScrollView,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
@@ -28,10 +28,26 @@ const PLATFORM_LOGOS: Record<string, any> = {
 };
 
 const TIERS = [
-  { key: 'rankings',      name: 'Rankings',      price: '$5.99/mo', yearly: '$49.99/yr', prompts: 'No AI Coach', color: '#6b7491' },
-  { key: 'pro',           name: 'Pro',           price: '$9.99/mo', yearly: '$89.99/yr', prompts: '75 prompts/wk', color: C.blueDeep },
-  { key: 'premium',       name: 'Premium',       price: '$14.99/mo', yearly: '$129.99/yr', prompts: '125 prompts/wk', color: '#fee229' },
-  { key: 'dynasty_elite', name: 'Dynasty Elite', price: '$19.99/mo', yearly: '$179.99/yr', prompts: 'Unlimited', color: '#7b5ea7' },
+  {
+    key: 'rankings', name: 'Rankings', price: '$5.99', yearly: '$49.99/yr',
+    prompts: 'Community rankings only', color: '#5883bf', icon: 'barchart' as const,
+    features: ['Live consensus rankings', 'Format filters (PPR/SF)', 'No AI Coach'],
+  },
+  {
+    key: 'pro', name: 'Pro', price: '$9.99', yearly: '$89.99/yr',
+    prompts: '75 prompts/week', color: '#3d6aaa', icon: 'lightning' as const,
+    features: ['AI Coach access', 'Draft Copilot', 'Trade Analyzer', '1 season memory'],
+  },
+  {
+    key: 'premium', name: 'Premium', price: '$14.99', yearly: '$129.99/yr',
+    prompts: '125 prompts/week', color: '#fee229', icon: 'crown' as const,
+    features: ['Everything in Pro', '2 season memory', 'Opponent Intel', 'Autopilot mode'],
+  },
+  {
+    key: 'dynasty_elite', name: 'Dynasty Elite', price: '$19.99', yearly: '$179.99/yr',
+    prompts: 'Unlimited', color: '#7b5ea7', icon: 'star' as const,
+    features: ['Everything in Premium', 'Unlimited prompts', 'College rankings', 'Rookie draft board'],
+  },
 ];
 
 export default function SettingsScreen() {
@@ -47,34 +63,41 @@ export default function SettingsScreen() {
   const [sleeperModalVisible, setSleeperModalVisible] = useState(false);
   const [sleeperInput, setSleeperInput] = useState('');
 
-  useEffect(() => {
-    (async () => {
-      const user = await getUser();
-      if (user) setEmail(user.email);
-      const stored = await AsyncStorage.getItem('sleeper_username');
-      if (stored) setUsername(stored);
-      setRemaining(await getRemainingPrompts());
+  const loadConnectionState = useCallback(async () => {
+    const user = await getUser();
+    if (user) setEmail(user.email);
+    const stored = await AsyncStorage.getItem('sleeper_username');
+    if (stored) setUsername(stored); else setUsername('');
+    setRemaining(await getRemainingPrompts());
 
-      const espnCreds = await loadESPNCredentials();
-      if (espnCreds) {
-        setEspnConnected(true);
-        const name = await AsyncStorage.getItem('espn_league_name');
-        if (name) setEspnLeagueName(name);
-      }
+    const espnCreds = await loadESPNCredentials();
+    if (espnCreds) {
+      setEspnConnected(true);
+      const name = await AsyncStorage.getItem('espn_league_name');
+      if (name) setEspnLeagueName(name);
+    } else {
+      setEspnConnected(false);
+      setEspnLeagueName('');
+    }
 
-      const yahooTokens = await loadYahooTokens();
-      if (yahooTokens) {
-        setYahooConnected(true);
-        try {
-          const token = await getValidYahooToken();
-          if (token) {
-            const leagues = await getYahooLeagues(token);
-            setYahooLeagueCount(leagues.length);
-          }
-        } catch {}
-      }
-    })();
+    const yahooTokens = await loadYahooTokens();
+    if (yahooTokens) {
+      setYahooConnected(true);
+      try {
+        const token = await getValidYahooToken();
+        if (token) {
+          const leagues = await getYahooLeagues(token);
+          setYahooLeagueCount(leagues.length);
+        }
+      } catch {}
+    } else {
+      setYahooConnected(false);
+      setYahooLeagueCount(0);
+    }
   }, []);
+
+  // Re-check every time screen gets focus (catches ESPN return)
+  useFocusEffect(useCallback(() => { loadConnectionState(); }, [loadConnectionState]));
 
   const handleConnectSleeper = async () => {
     const trimmed = sleeperInput.trim();
@@ -143,9 +166,7 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const handleOpenESPN = () => {
-    router.push('/espn-login');
-  };
+  const handleOpenESPN = () => { router.push('/espn-login'); };
 
   const handleSignOut = async () => {
     Alert.alert('Sign Out', 'This will sign you out and clear local league data.', [
@@ -186,10 +207,10 @@ export default function SettingsScreen() {
             </View>
             <View style={[styles.row, { borderBottomWidth: 0 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Icon name="person" size={22} color={C.blueDeep} />
-                <Text style={styles.rowLabel}>Username</Text>
+                <Icon name="football" size={22} color={C.blueDeep} />
+                <Text style={styles.rowLabel}>Sleeper</Text>
               </View>
-              <Text style={styles.rowValue}>{username ? `@${username}` : 'No Sleeper linked'}</Text>
+              <Text style={styles.rowValue}>{username ? `@${username}` : 'Not linked'}</Text>
             </View>
             <TouchableOpacity onPress={() => Alert.alert('Change Password', 'Use your email provider to change your password.')} style={styles.linkRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -206,8 +227,6 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>CONNECTED PLATFORMS</Text>
           <View style={styles.card}>
             <View style={styles.cardShine} />
-
-            {/* Sleeper */}
             <View style={styles.platformRow}>
               <Image source={PLATFORM_LOGOS.sleeper} style={styles.platformLogo} />
               <View style={{ flex: 1 }}>
@@ -224,13 +243,11 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               )}
             </View>
-
-            {/* ESPN */}
             <View style={styles.platformRow}>
               <Image source={PLATFORM_LOGOS.espn} style={styles.platformLogo} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.platformName}>ESPN</Text>
-                <Text style={styles.platformSub}>{espnLeagueName || 'Auto-login via browser'}</Text>
+                <Text style={styles.platformSub}>{espnConnected ? (espnLeagueName || 'Connected') : 'Auto-login via browser'}</Text>
               </View>
               {espnConnected ? (
                 <Text style={[styles.statusText, { color: C.mint }]}>✓ CONNECTED</Text>
@@ -240,8 +257,6 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               )}
             </View>
-
-            {/* Yahoo */}
             <View style={[styles.platformRow, { borderBottomWidth: 0 }]}>
               <Image source={PLATFORM_LOGOS.yahoo} style={styles.platformLogo} />
               <View style={{ flex: 1 }}>
@@ -277,17 +292,32 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* UPGRADE TIERS */}
+        {/* UPGRADE */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>UPGRADE</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 4, paddingRight: 12 }}>
             {TIERS.map(t => (
-              <TouchableOpacity key={t.key} onPress={() => router.push('/paywall')} style={[styles.tierCard, { borderColor: t.color + '60' }]}>
-                <View style={[styles.tierDot, { backgroundColor: t.color }]} />
+              <TouchableOpacity key={t.key} onPress={() => router.push('/paywall')} activeOpacity={0.85} style={[styles.tierCard, { borderColor: t.color + '80' }]}>
+                <View style={[styles.tierCardShine, { backgroundColor: t.color + '15' }]} />
+                <View style={[styles.tierIconWrap, { backgroundColor: t.color + '20', borderColor: t.color + '40' }]}>
+                  <Icon name={t.icon} size={20} color={t.color} />
+                </View>
                 <Text style={styles.tierName}>{t.name}</Text>
-                <Text style={styles.tierPrice}>{t.price}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+                  <Text style={[styles.tierPrice, { color: t.color === '#fee229' ? '#b87820' : t.color }]}>{t.price}</Text>
+                  <Text style={styles.tierPer}>/mo</Text>
+                </View>
                 <Text style={styles.tierYearly}>{t.yearly}</Text>
-                <Text style={styles.tierPrompts}>{t.prompts}</Text>
+                <View style={styles.tierLine} />
+                {t.features.map((f, i) => (
+                  <View key={i} style={styles.tierFeatureRow}>
+                    <Text style={[styles.tierBullet, { color: t.color === '#fee229' ? '#b87820' : t.color }]}>•</Text>
+                    <Text style={styles.tierFeature}>{f}</Text>
+                  </View>
+                ))}
+                <View style={[styles.tierBadge, { backgroundColor: t.color + '18', borderColor: t.color + '35' }]}>
+                  <Text style={[styles.tierBadgeText, { color: t.color === '#fee229' ? '#b87820' : t.color }]}>{t.prompts}</Text>
+                </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -320,11 +350,10 @@ export default function SettingsScreen() {
             <Text style={styles.signOutText}>SIGN OUT</Text>
           </View>
         </TouchableOpacity>
-
         <Text style={styles.footerText}>AIOmni · See everything. Know everyone. Win always.</Text>
       </ScrollView>
 
-      {/* Sleeper Username Modal */}
+      {/* Sleeper Modal */}
       <Modal visible={sleeperModalVisible} transparent animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSleeperModalVisible(false)}>
           <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
@@ -345,7 +374,7 @@ export default function SettingsScreen() {
                 <Text style={[styles.modalBtnText, { color: C.dim }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleConnectSleeper} style={[styles.modalBtn, { backgroundColor: C.blueDeep, flex: 1 }]}>
-                <Text style={[styles.modalBtnText, { color: '#ffffff' }]}>Connect</Text>
+                <Text style={[styles.modalBtnText, { color: '#fff' }]}>Connect</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -361,58 +390,48 @@ const styles = StyleSheet.create({
   backBtn: { marginBottom: 14 },
   backText: { fontFamily: F.mono, color: C.blueDeep, fontSize: 10, letterSpacing: 2 },
   title: { fontFamily: F.bold, fontSize: 36, color: C.ink, letterSpacing: 3 },
-
   section: { marginBottom: 22 },
   sectionTitle: { fontFamily: F.bold, color: C.dim2, fontSize: 13, letterSpacing: 2, marginBottom: 10 },
-  card: {
-    backgroundColor: SURFACE, borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: BORDER,
-    position: 'relative', overflow: 'hidden', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 18, elevation: 4,
-  },
+  card: { backgroundColor: SURFACE, borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: BORDER, position: 'relative', overflow: 'hidden', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 18, elevation: 4 },
   cardShine: { position: 'absolute', top: 0, left: '8%', right: '8%', height: 1.5, backgroundColor: BEVEL_HI, zIndex: 6 },
-
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(88,131,191,0.12)' },
-  rowLabel: { fontFamily: F.bold, color: C.dim2, fontSize: 16 },
+  rowLabel: { fontFamily: F.semibold, color: C.dim2, fontSize: 15 },
   rowValue: { fontFamily: F.mono, color: C.ink, fontSize: 12 },
-
   linkRow: { marginTop: 14 },
-  linkText: { fontFamily: F.bold, color: C.blueDeep, fontSize: SZ.sm, letterSpacing: 1.5 },
-
+  linkText: { fontFamily: F.semibold, color: C.blueDeep, fontSize: SZ.sm, letterSpacing: 1.5 },
   platformRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(88,131,191,0.12)' },
   platformLogo: { width: 36, height: 36, borderRadius: 10, borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
-  platformName: { fontFamily: F.outfit, color: C.ink, fontSize: SZ.base },
+  platformName: { fontFamily: F.semibold, color: C.ink, fontSize: SZ.base },
   platformSub: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm, marginTop: 2 },
   statusText: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm },
   connectBtnSmall: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: C.blueDeep },
-  connectBtnSmallText: { fontFamily: F.mono, color: '#ffffff', fontSize: SZ.xs, letterSpacing: 2 },
+  connectBtnSmallText: { fontFamily: F.mono, color: '#fff', fontSize: SZ.xs, letterSpacing: 2 },
   disconnectBtnSmall: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(168,48,64,0.12)' },
   disconnectBtnSmallText: { fontFamily: F.mono, color: '#a83040', fontSize: SZ.xs, letterSpacing: 2 },
-
   progressBar: { height: 4, backgroundColor: 'rgba(88,131,191,0.12)', borderRadius: 3, overflow: 'hidden', marginTop: 12, marginBottom: 10 },
   progressFill: { height: 4, backgroundColor: C.blueDeep },
   smallText: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, lineHeight: 16, marginBottom: 4 },
-
-  tierCard: {
-    backgroundColor: SURFACE, borderRadius: 14, borderWidth: 1.5, padding: 16, width: 150, alignItems: 'center',
-    shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 3,
-  },
-  tierDot: { width: 10, height: 10, borderRadius: 5, marginBottom: 8 },
-  tierName: { fontFamily: F.bold, color: C.ink, fontSize: 15, letterSpacing: 1, marginBottom: 4 },
-  tierPrice: { fontFamily: F.mono, color: C.blueDeep, fontSize: 14, marginBottom: 2 },
-  tierYearly: { fontFamily: F.mono, color: C.dim2, fontSize: 10, marginBottom: 6 },
-  tierPrompts: { fontFamily: F.mono, color: C.dim, fontSize: 10, letterSpacing: 0.5 },
-
+  tierCard: { backgroundColor: SURFACE, borderRadius: 18, borderWidth: 1.5, padding: 18, width: 180, shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.10, shadowRadius: 12, elevation: 3, position: 'relative', overflow: 'hidden' },
+  tierCardShine: { position: 'absolute', top: 0, left: 0, right: 0, height: 60, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+  tierIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, marginBottom: 10 },
+  tierName: { fontFamily: F.bold, color: C.ink, fontSize: 20, letterSpacing: 1, marginBottom: 6 },
+  tierPrice: { fontFamily: F.bold, fontSize: 26, letterSpacing: 0.5 },
+  tierPer: { fontFamily: F.mono, color: C.dim2, fontSize: 11 },
+  tierYearly: { fontFamily: F.mono, color: C.dim2, fontSize: 10, marginBottom: 10 },
+  tierLine: { height: 1, backgroundColor: 'rgba(88,131,191,0.12)', marginBottom: 10 },
+  tierFeatureRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginBottom: 4 },
+  tierBullet: { fontSize: 14, lineHeight: 16 },
+  tierFeature: { fontFamily: F.mono, color: C.dim, fontSize: 10, lineHeight: 16, flex: 1 },
+  tierBadge: { alignSelf: 'flex-start', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, marginTop: 10 },
+  tierBadgeText: { fontFamily: F.mono, fontSize: 10, letterSpacing: 0.5 },
   signOutBtn: { borderWidth: 1.5, borderColor: 'rgba(168,48,64,0.3)', borderRadius: 14, padding: 16, alignItems: 'center', marginVertical: 18, backgroundColor: 'rgba(168,48,64,0.05)' },
   signOutText: { fontFamily: F.mono, color: '#a83040', fontSize: SZ.sm, letterSpacing: 2 },
   footerText: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs, textAlign: 'center', letterSpacing: 1, marginBottom: 24 },
-
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#ffffff', borderRadius: 20, padding: 24, width: '85%' },
+  modalContent: { backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '85%' },
   modalTitle: { fontFamily: F.bold, color: C.ink, fontSize: 22, marginBottom: 4 },
   modalSub: { fontFamily: F.mono, color: C.dim2, fontSize: 12, marginBottom: 16 },
-  modalInput: {
-    backgroundColor: 'rgba(88,131,191,0.06)', borderRadius: 12, borderWidth: 1.5, borderColor: BORDER,
-    padding: 14, fontFamily: F.mono, fontSize: 16, color: C.ink, marginBottom: 16,
-  },
+  modalInput: { backgroundColor: 'rgba(88,131,191,0.06)', borderRadius: 12, borderWidth: 1.5, borderColor: BORDER, padding: 14, fontFamily: F.mono, fontSize: 16, color: C.ink, marginBottom: 16 },
   modalBtn: { borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, alignItems: 'center' },
-  modalBtnText: { fontFamily: F.bold, fontSize: 14, letterSpacing: 1 },
+  modalBtnText: { fontFamily: F.semibold, fontSize: 14, letterSpacing: 1 },
 });
