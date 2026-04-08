@@ -2,7 +2,6 @@
 // 25 prompts/week — resets Sunday noon
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
 import { getCurrentTier } from '../../services/purchases';
 
 const PROMPT_COUNT_KEY = 'prompt_count';
@@ -34,20 +33,16 @@ async function maybeReset(): Promise<void> {
   const now = Date.now();
 
   if (!resetTimeStr) {
-    // First time — set the first reset window
-    const tier = await getCurrentTier();
-    const limit = getPromptLimit(tier);
+    // First time — initialize used count to 0, set first reset window
     await AsyncStorage.setItem(PROMPT_RESET_KEY, getNextSundayNoon().toString());
-    await AsyncStorage.setItem(PROMPT_COUNT_KEY, limit.toString());
+    await AsyncStorage.setItem(PROMPT_COUNT_KEY, '0');
     return;
   }
 
   const resetTime = parseInt(resetTimeStr, 10);
   if (now >= resetTime) {
-    // Past reset time — wipe count and set next reset
-    const tier = await getCurrentTier();
-    const limit = getPromptLimit(tier);
-    await AsyncStorage.setItem(PROMPT_COUNT_KEY, limit.toString());
+    // Past reset time — reset used count to 0 and set next window
+    await AsyncStorage.setItem(PROMPT_COUNT_KEY, '0');
     await AsyncStorage.setItem(PROMPT_RESET_KEY, getNextSundayNoon().toString());
   }
 }
@@ -55,10 +50,10 @@ async function maybeReset(): Promise<void> {
 export async function getRemainingPrompts(): Promise<number> {
   const tier = await getCurrentTier();
   const limit = getPromptLimit(tier);
+  if (limit >= 999) return 999;
   await maybeReset();
   const countStr = await AsyncStorage.getItem(PROMPT_COUNT_KEY);
-  const used = parseInt(countStr || limit.toString(), 10);
-  if (limit >= 999) return 999;
+  const used = parseInt(countStr || '0', 10);
   return Math.max(0, limit - used);
 }
 

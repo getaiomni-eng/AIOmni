@@ -124,27 +124,25 @@ export const BEVEL = {
 // SpaceMono  → mono / data / labels
 // ─────────────────────────────────────────────
 export const F = {
-  // Display headings and app-wide body text
+  // Display headings
   bold:        'BebasNeue_400Regular',
   black:       'BebasNeue_400Regular',
   extrabold:   'BebasNeue_400Regular',
-
-  // Body text aliases now use BebasNeue for a unified font system
-  outfit:      'BebasNeue_400Regular',
-  semibold:    'BebasNeue_400Regular',
-
-  // Mono / data aliases now map to BebasNeue too
-  mono:        'BebasNeue_400Regular',
-  monoBold:    'BebasNeue_400Regular',
-
-  // Explicit named aliases
   bebas:       'BebasNeue_400Regular',
-  barlow:      'BebasNeue_400Regular',
-  barlowMd:    'BebasNeue_400Regular',
-  barlowSb:    'BebasNeue_400Regular',
-  barlowBd:    'BebasNeue_400Regular',
-  spaceMono:   'BebasNeue_400Regular',
-  spaceMonoBd: 'BebasNeue_400Regular',
+
+  // Body text — Barlow
+  outfit:      'Barlow_400Regular',
+  semibold:    'Barlow_600SemiBold',
+  barlow:      'Barlow_400Regular',
+  barlowMd:    'Barlow_400Regular',
+  barlowSb:    'Barlow_600SemiBold',
+  barlowBd:    'Barlow_600SemiBold',
+
+  // Mono / data — SpaceMono
+  mono:        'SpaceMono_400Regular',
+  monoBold:    'SpaceMono_700Bold',
+  spaceMono:   'SpaceMono_400Regular',
+  spaceMonoBd: 'SpaceMono_700Bold',
 } as const;
 
 // ─────────────────────────────────────────────

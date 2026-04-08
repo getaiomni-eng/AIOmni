@@ -34,6 +34,10 @@ type League = {
   pts?: number; opp?: number; week?: number; avatar?: string;
 };
 
+type NewsItem = {
+  source: string; headline: string; color: string; url?: string;
+};
+
 const PLAT_COLOR  = (p: Platform) => p === 'espn' ? ESPN_RED : p === 'yahoo' ? YAHOO_PURPLE : C.gold;
 const PLAT_BORDER = (p: Platform) => p === 'espn' ? ESPN_RED_BORDER : p === 'yahoo' ? YAHOO_PURPLE_BORDER : 'transparent';
 const PLAT_LABEL  = (p: Platform) => p === 'espn' ? 'ESPN' : p === 'yahoo' ? 'YAHOO' : 'SLEEPER';
@@ -52,7 +56,7 @@ function PlatformLogo({ platform, size = 64 }: { platform: Platform; avatar?: st
   );
 }
 
-const FALLBACK_NEWS = [
+const FALLBACK_NEWS: NewsItem[] = [
   { source: 'ROTOWIRE',   headline: 'Jaxon Smith-Njigba: 5th-year option picked up by SEA', color: '#4ab8a0' },
   { source: 'PFR',        headline: 'NFL Teams Higher On Their QBs Than Draft Pundits?',    color: '#e8a84b' },
   { source: 'CBS SPORTS', headline: 'Fantasy waiver wire pickups to target this week',       color: '#0055a5' },
@@ -65,8 +69,6 @@ const FALLBACK_INSIGHTS = [
   { icon: 'fire',   title: 'Add Shaheed',    body: '3 TDs in last 4 games. 78% target share with Drake.',    tag: 'HOT',     color: C.gold },
 ];
 
-// ── Bevel Card ────────────────────────────────────────────────
-// Matches mockup: cream gradient, blue bevel edges, gold inner glow
 const BevelCard: React.FC<{ style?: any; children: React.ReactNode; blue?: boolean }> = ({ style, children, blue }) => (
   <View style={[blue ? styles.bevelBlue : styles.bevelCard, style]}>
     <View style={styles.bevelShine} />
@@ -86,7 +88,7 @@ export default function HomeScreen() {
   const [aiInsights,     setAiInsights]     = useState<{title:string;body:string;tag:string;color:string;icon:string}[]>([]);
   const [insightLoading, setInsightLoading] = useState(false);
   const [scoreIdx,       setScoreIdx]       = useState(0);
-  const [news,           setNews]           = useState(FALLBACK_NEWS);
+  const [news,           setNews]           = useState<NewsItem[]>(FALLBACK_NEWS);
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['sleeper', 'espn', 'yahoo']);
   const [selectedSeason,    setSelectedSeason]    = useState('2025');
   const [aiCoachActive,     setAiCoachActive]     = useState(false);
@@ -98,7 +100,6 @@ export default function HomeScreen() {
 
   useEffect(() => { loadLeagues(); fetchNews(); }, [selectedSeason]);
 
-  // ── ALL DATA LOADING LOGIC UNCHANGED ──────────────────────
   const loadSleeperLeagues = async (year: string = '2025'): Promise<League[]> => {
     try {
       const u = await AsyncStorage.getItem('sleeper_username');
@@ -270,7 +271,6 @@ export default function HomeScreen() {
       setLeagues(allLeagues);
       const u = await AsyncStorage.getItem('sleeper_username');
       setUsername(u || '');
-      // disabled: was burning prompts on load
     } catch (e) { console.error('Load leagues error:', e); }
     setLoading(false);
   }, [selectedSeason]);
@@ -289,8 +289,8 @@ export default function HomeScreen() {
 
   const fetchNews = async () => {
     try {
-      const parseRSS = (xml: string, source: string, color: string): { source: string; headline: string; color: string; url?: string }[] => {
-        const items: typeof FALLBACK_NEWS = [];
+      const parseRSS = (xml: string, source: string, color: string): NewsItem[] => {
+        const items: NewsItem[] = [];
         const itemRegex = /<item>(.*?)<\/item>/gs;
         let match;
         while ((match = itemRegex.exec(xml)) !== null) {
@@ -298,7 +298,12 @@ export default function HomeScreen() {
           const titleMatch = itemXml.match(/<title>(.*?)<\/title>/);
           const linkMatch  = itemXml.match(/<link>(.*?)<\/link>/);
           if (titleMatch && items.length < 3) {
-            items.push({ source, headline: titleMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim(), color });
+            items.push({
+              source,
+              headline: titleMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim(),
+              color,
+              url: linkMatch?.[1]?.replace(/<!\[CDATA\[|\]\]>/g, '').trim(),
+            });
           }
         }
         return items;
@@ -308,14 +313,14 @@ export default function HomeScreen() {
         fetch('https://www.pro-football-reference.com/rss.xml').then(r => r.text()),
         fetch('https://www.cbssports.com/rss/headlines/nfl/').then(r => r.text()),
       ]);
-      const results: { source: string; headline: string; color: string; url?: string }[] = [];
+      const results: NewsItem[] = [];
       if (rotoRes.status === 'fulfilled') results.push(...parseRSS(rotoRes.value, 'ROTOWIRE',   '#4ab8a0'));
       if (pfrRes.status  === 'fulfilled') results.push(...parseRSS(pfrRes.value,  'PFR',        '#e8a84b'));
       if (cbsRes.status  === 'fulfilled') results.push(...parseRSS(cbsRes.value,  'CBS SPORTS', '#0055a5'));
       const roto = results.filter(n => n.source === 'ROTOWIRE');
       const pfr  = results.filter(n => n.source === 'PFR');
       const cbs  = results.filter(n => n.source === 'CBS SPORTS');
-      const interleaved: typeof results = [];
+      const interleaved: NewsItem[] = [];
       for (let i = 0; i < Math.max(roto.length, pfr.length, cbs.length); i++) {
         if (roto[i]) interleaved.push(roto[i]);
         if (pfr[i])  interleaved.push(pfr[i]);
@@ -379,7 +384,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Live feed ── */}
+        {/* ── Live feed — NOW CLICKABLE ── */}
         <View style={styles.newsHeaderRow}>
           <View style={styles.newsLabelRow}>
             <Icon name="live" size={16} color={C.blueDeep} />
@@ -389,13 +394,18 @@ export default function HomeScreen() {
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
           {news.map((n, i) => (
-            <View key={i} style={[styles.newsChip, { borderColor: n.color + '30' }]}>
+            <TouchableOpacity
+              key={i}
+              activeOpacity={0.7}
+              onPress={() => n.url ? Linking.openURL(n.url) : undefined}
+              style={[styles.newsChip, { borderColor: n.color + '30' }]}
+            >
               <View style={[styles.newsDot, { backgroundColor: n.color }]} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.newsSource, { color: n.color }]}>{n.source}</Text>
                 <Text style={styles.newsText} numberOfLines={2}>{n.headline}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
 
@@ -425,7 +435,6 @@ export default function HomeScreen() {
           </View>
           <TouchableOpacity
             onPress={() => {
-              // Show season selector
               const options = ['2025', '2024', '2023', '2022'];
               Alert.alert(
                 'Select Season',
@@ -453,7 +462,7 @@ export default function HomeScreen() {
           <>
             {(() => {
               const filteredLeagues = leagues.filter(lg => selectedPlatforms.includes(lg.platform));
-              const gridLeagues = filteredLeagues.slice(0, 4); // 2x2 grid
+              const gridLeagues = filteredLeagues.slice(0, 4);
               return (
                 <View style={styles.scoreGrid}>
                   {gridLeagues.map((lg, i) => {
@@ -467,9 +476,9 @@ export default function HomeScreen() {
                           <Icon name="lightning" size={14} color={C.blueDeep} />
                           <Text style={styles.scoreEyeGrid}>WK {lg.week}</Text>
                         </View>
-                        <TouchableOpacity 
-                          onPress={() => aiCoachActive ? openAiCoachModal(lg) : goToLeague(lg)} 
-                          activeOpacity={0.8} 
+                        <TouchableOpacity
+                          onPress={() => aiCoachActive ? openAiCoachModal(lg) : goToLeague(lg)}
+                          activeOpacity={0.8}
                           style={styles.leagueBtnGrid}
                         >
                           <View style={styles.leagueTopGrid}>
@@ -628,7 +637,7 @@ const styles = StyleSheet.create({
   newsLabelRow: { flexDirection: 'row', alignItems: 'center' },
   newsEye: { fontSize: 13, fontFamily: F.bold, color: C.blueDeep, letterSpacing: 2 },
   newsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
-  newsChip: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12, padding: 12, borderWidth: 1.5, minWidth: 240 },
+  newsChip: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12, padding: 12, borderWidth: 1.5, minWidth: 240, flexDirection: 'row', alignItems: 'flex-start' },
   newsDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8, marginTop: 2 },
   newsSource: { fontSize: 10, fontFamily: F.mono, fontWeight: '700', letterSpacing: 1, marginBottom: 2 },
   newsText: { fontSize: 13, color: C.ink, lineHeight: 18, fontFamily: F.outfit },
