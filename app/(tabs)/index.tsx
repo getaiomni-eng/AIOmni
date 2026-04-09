@@ -17,7 +17,7 @@ import { Badge, SectionHeader } from '../components/Atoms';
 import { Icon } from '../components/AIOmniIcons';
 import { C, F, R, SP, SZ, BEVEL } from '../constants/tokens';
 import { incrementPrompt } from '../utils/promptCounter';
-import { GoldScore, BlueScore } from '../components/GlowText';
+import { GoldScore, BlueScore, CardScore } from '../components/GlowText';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W    = SCREEN_W - SP[3] * 2;
@@ -495,12 +495,12 @@ export default function HomeScreen() {
                         <View style={styles.scoreRowGrid}>
                           <View style={styles.scoreBoxGrid}>
                             <Text style={styles.scoreLabelGrid}>YOU</Text>
-                            <GoldScore fontSize={22}>{ptsVal}</GoldScore>
+                            <CardScore fontSize={22}>{ptsVal}</CardScore>
                           </View>
                           <Text style={styles.scoreVsGrid}>VS</Text>
                           <View style={styles.scoreBoxGrid}>
                             <Text style={styles.scoreLabelGrid}>OPP</Text>
-                            <BlueScore fontSize={22}>{parseFloat((lg.opp ?? 0).toFixed(1))}</BlueScore>
+                            <CardScore fontSize={22}>{parseFloat((lg.opp ?? 0).toFixed(1))}</CardScore>
                           </View>
                         </View>
                       </BevelCard>
@@ -638,7 +638,7 @@ const styles = StyleSheet.create({
   newsLabelRow: { flexDirection: 'row', alignItems: 'center' },
   newsEye: { fontSize: 13, fontFamily: F.bold, color: C.blueDeep, letterSpacing: 2 },
   newsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
-  newsChip: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12, padding: 12, borderWidth: 1.5, minWidth: 240, flexDirection: 'row', alignItems: 'flex-start' },
+  newsChip: { backgroundColor: 'rgba(254,226,41,0.15)', borderRadius: 12, padding: 12, borderWidth: 1.5, borderColor: 'rgba(254,226,41,0.4)', minWidth: 240, flexDirection: 'row', alignItems: 'flex-start', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 4 },
   newsDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8, marginTop: 2 },
   newsSource: { fontSize: 10, fontFamily: F.mono, fontWeight: '700', letterSpacing: 1, marginBottom: 2 },
   newsText: { fontSize: 13, color: C.ink, lineHeight: 18, fontFamily: F.outfit },
@@ -654,20 +654,20 @@ const styles = StyleSheet.create({
   platformToggleText: { fontSize: SZ.sm, fontFamily: F.mono, color: C.blueDeep, letterSpacing: 0.5 },
   platformToggleTextOn: { color: C.blueDeep, fontFamily: F.bold },
   scoreGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  scoreCardGrid: { width: (SCREEN_W - SP[3] * 2 - 8) / 2, aspectRatio: 1.2 },
-  scoreEyeGrid: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, letterSpacing: 1.5, marginBottom: 8, textAlign: 'center' },
+  scoreCardGrid: { backgroundColor: "rgba(61,106,170,0.95)", borderColor: "#6a9ad4", borderTopColor: "rgba(255,255,255,0.2)", borderLeftColor: "rgba(255,255,255,0.12)", borderBottomColor: "#2a5588", borderRightColor: "#2a5588", shadowColor: "#fee229", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.25, shadowRadius: 14, elevation: 5, width: (SCREEN_W - SP[3] * 2 - 8) / 2, aspectRatio: 1.2 },
+  scoreEyeGrid: { fontSize: SZ.xs, fontFamily: F.mono, color: 'rgba(255,255,237,0.45)', letterSpacing: 1.5, marginBottom: 8, textAlign: 'center' },
   leagueBtnGrid: { marginBottom: 8 },
   leagueTopGrid: { flexDirection: 'row', alignItems: 'center' },
-  leagueNameGrid: { fontSize: SZ.sm, color: C.ink, fontFamily: F.bold },
-  leagueMetaGrid: { fontSize: SZ.xs, color: C.dim2, fontFamily: F.mono, marginTop: 2 },
-  leagueRankGrid: { fontSize: 13, color: '#3d6aaa', fontFamily: F.bold, textAlign: 'center', marginBottom: 4 },
+  leagueNameGrid: { fontSize: SZ.sm, color: '#ffffed', fontFamily: F.bold },
+  leagueMetaGrid: { fontSize: SZ.xs, color: 'rgba(255,255,237,0.5)', fontFamily: F.mono, marginTop: 2 },
+  leagueRankGrid: { fontSize: 13, color: '#fee229', fontFamily: F.bold, textAlign: 'center', marginBottom: 4 },
   scoreRowGrid: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   scoreBoxGrid: { alignItems: 'center', flex: 1 },
-  scoreLabelGrid: { fontSize: SZ.xs, color: C.dim2, fontFamily: F.mono, letterSpacing: 1, marginBottom: 2 },
+  scoreLabelGrid: { fontSize: SZ.xs, color: 'rgba(255,255,237,0.45)', fontFamily: F.mono, letterSpacing: 1, marginBottom: 2 },
   scoreNumGrid: { fontSize: 32, fontFamily: F.bold },
   scoreYou: { color: '#fee229' },
   scoreOpp: { color: '#5883bf' },
-  scoreVsGrid: { fontSize: SZ.md, color: C.dim2, fontFamily: F.bold, marginHorizontal: 8 },
+  scoreVsGrid: { fontSize: SZ.md, color: 'rgba(255,255,237,0.3)', fontFamily: F.bold, marginHorizontal: 8 },
   emptyScoreCard: { width: (SCREEN_W - SP[3] * 2 - 8) / 2, aspectRatio: 1.2, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   emptyCard: { ...BEVEL.card, padding: 24, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.92)' },
   emptyEye: { fontSize: SZ.sm, fontFamily: F.mono, color: C.blueDeep, letterSpacing: 2, marginBottom: 8 },
@@ -679,25 +679,25 @@ const styles = StyleSheet.create({
   swipeHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   swipeArrowLeft: { transform: [{ rotate: '180deg' }] },
   insightsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
-  insightCard: { ...BEVEL.card, padding: 18, backgroundColor: 'rgba(255,255,255,0.95)' },
+  insightCard: { padding: 18, backgroundColor: 'rgba(254,226,41,0.18)', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(254,226,41,0.5)', borderTopColor: 'rgba(255,255,255,0.6)', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 14, elevation: 5 },
   insightTop: { flexDirection: 'row', marginBottom: 12, alignItems: 'center' },
   insightIconWrap: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', borderWidth: 1.25, borderColor: 'rgba(88,131,191,0.18)' },
   insightEmoji: { fontSize: SZ.xl },
-  insightTitle: { fontSize: SZ.base, color: C.ink, fontFamily: F.bold, marginBottom: 4 },
+  insightTitle: { fontSize: SZ.base, color: '#1a1f2e', fontFamily: F.bold, marginBottom: 4 },
   insightBody: { fontSize: SZ.sm, color: C.dim, lineHeight: 18 },
   insightTag: { alignSelf: 'flex-start', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
   insightTagTxt: { fontSize: SZ.xs, fontFamily: F.mono, letterSpacing: 0.5 },
   insightDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 20 },
   insightDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.dim2 },
   insightDotOn: { backgroundColor: C.blueDeep },
-  aiCoachBar: { ...BEVEL.card, flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12, marginBottom: 16, position: 'relative', overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.92)' },
+  aiCoachBar: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12, marginBottom: 16, position: 'relative', overflow: 'hidden', backgroundColor: 'rgba(61,106,170,0.95)', borderRadius: 16, borderWidth: 1.5, borderColor: '#6a9ad4', borderTopColor: 'rgba(255,255,255,0.2)', borderBottomColor: '#2a5588', shadowColor: '#fee229', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.35, shadowRadius: 16, elevation: 6 },
   aiCoachBarActive: { backgroundColor: C.gold + '18', borderColor: C.gold + '40', shadowColor: C.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 },
   aiCoachBarShine: BEVEL.shine,
   aiCoachLeft: { width: 40, alignItems: 'center' },
   aiCoachOrb: { fontSize: SZ.xl, color: C.gold, fontFamily: F.bold },
   aiCoachCenter: { flex: 1 },
-  aiCoachLabel: { fontSize: SZ.sm, fontFamily: F.bold, color: C.ink, marginBottom: 2 },
-  aiCoachHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
+  aiCoachLabel: { fontSize: SZ.sm, fontFamily: F.bold, color: '#ffffed', marginBottom: 2 },
+  aiCoachHint: { fontSize: SZ.xs, fontFamily: F.mono, color: 'rgba(255,255,237,0.45)' },
   aiCoachModal: { backgroundColor: '#ffffff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, minHeight: 320, borderTopWidth: 1.5, borderLeftWidth: 1.5, borderRightWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)', position: 'relative', overflow: 'hidden', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 12 },
   aiCoachModalShine: BEVEL.shine,
   aiCoachModalClose: { fontSize: SZ.lg, fontFamily: F.bold, color: C.blueDeep, alignSelf: 'flex-end', marginBottom: 8 },

@@ -120,3 +120,20 @@ const s = StyleSheet.create({
 });
 
 export default GlowText;
+
+// Blue-on-gold variant — for blue card scores
+export function CardScore({ children, fontSize = 22, style }: { children: string | number; fontSize?: number; style?: any }) {
+  return (
+    <GlowText
+      fontSize={fontSize}
+      color="#3d6aaa"
+      strokeColor="#fee229"
+      strokeWidth={1.5}
+      glowColor="rgba(254,226,41,0.5)"
+      glowRadius={14}
+      style={style}
+    >
+      {children}
+    </GlowText>
+  );
+}

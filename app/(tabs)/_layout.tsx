@@ -8,7 +8,7 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          ...BEVEL.tabBar,
+          backgroundColor: '#3d6aaa', borderTopWidth: 1.5, borderTopColor: '#4a7bbb', shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 12,
           paddingTop: 8,
           paddingBottom: 10,
           height: 72,
@@ -20,8 +20,8 @@ export default function TabLayout() {
           textTransform: 'uppercase',
           marginTop: 2,
         },
-        tabBarActiveTintColor:   C.blueDeep,
-        tabBarInactiveTintColor: C.dim2,
+        tabBarActiveTintColor: '#fee229',
+        tabBarInactiveTintColor: 'rgba(255,255,237,0.45)',
         tabBarIconStyle: { marginBottom: 0 },
       }}
     >

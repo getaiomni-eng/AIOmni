@@ -104,7 +104,7 @@ export const BEVEL = {
     backgroundColor: C.glassShine,
     zIndex: 6,
   },
-  tabBar: {
+  tabBar: { backgroundColor: '#3d6aaa',
     backgroundColor: C.bgTop,
     borderTopWidth: 1.5,
     borderTopColor: C.glassShine,
