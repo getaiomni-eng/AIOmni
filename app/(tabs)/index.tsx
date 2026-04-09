@@ -495,12 +495,12 @@ export default function HomeScreen() {
                         <View style={styles.scoreRowGrid}>
                           <View style={styles.scoreBoxGrid}>
                             <Text style={styles.scoreLabelGrid}>YOU</Text>
-                            <GoldScore fontSize={28}>{ptsVal}</GoldScore>
+                            <GoldScore fontSize={22}>{ptsVal}</GoldScore>
                           </View>
                           <Text style={styles.scoreVsGrid}>VS</Text>
                           <View style={styles.scoreBoxGrid}>
                             <Text style={styles.scoreLabelGrid}>OPP</Text>
-                            <BlueScore fontSize={28}>{parseFloat((lg.opp ?? 0).toFixed(1))}</BlueScore>
+                            <BlueScore fontSize={22}>{parseFloat((lg.opp ?? 0).toFixed(1))}</BlueScore>
                           </View>
                         </View>
                       </BevelCard>
