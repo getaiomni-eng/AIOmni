@@ -35,13 +35,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="waiver"
-        options={{
-          title: 'Waiver',
-          tabBarIcon: ({ focused }) => <TabIcon name="waiver" focused={focused} size={32} />,
-        }}
-      />
-      <Tabs.Screen
         name="rankings"
         options={{
           title: 'Rankings',
@@ -62,6 +55,8 @@ export default function TabLayout() {
           tabBarIcon: ({ focused }) => <TabIcon name="coach" focused={focused} size={32} />,
         }}
       />
+      {/* Hidden screens — still routable but not in tab bar */}
+      <Tabs.Screen name="waiver"   options={{ href: null }} />
       <Tabs.Screen name="league"   options={{ href: null }} />
       <Tabs.Screen name="explore"  options={{ href: null }} />
       <Tabs.Screen name="settings" options={{ href: null }} />

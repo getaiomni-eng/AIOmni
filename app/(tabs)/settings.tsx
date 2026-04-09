@@ -28,26 +28,10 @@ const PLATFORM_LOGOS: Record<string, any> = {
 };
 
 const TIERS = [
-  {
-    key: 'rankings', name: 'Rankings', price: '$5.99', yearly: '$49.99/yr',
-    prompts: 'Community rankings only', color: '#5883bf', icon: 'barchart' as const,
-    features: ['Live consensus rankings', 'Format filters (PPR/SF)', 'No AI Coach'],
-  },
-  {
-    key: 'pro', name: 'Pro', price: '$9.99', yearly: '$89.99/yr',
-    prompts: '75 prompts/week', color: '#3d6aaa', icon: 'lightning' as const,
-    features: ['AI Coach access', 'Draft Copilot', 'Trade Analyzer', '1 season memory'],
-  },
-  {
-    key: 'premium', name: 'Premium', price: '$14.99', yearly: '$129.99/yr',
-    prompts: '125 prompts/week', color: '#fee229', icon: 'crown' as const,
-    features: ['Everything in Pro', '2 season memory', 'Opponent Intel', 'Autopilot mode'],
-  },
-  {
-    key: 'dynasty_elite', name: 'Dynasty Elite', price: '$19.99', yearly: '$179.99/yr',
-    prompts: 'Unlimited', color: '#7b5ea7', icon: 'star' as const,
-    features: ['Everything in Premium', 'Unlimited prompts', 'College rankings', 'Rookie draft board'],
-  },
+  { key: 'rankings', name: 'Rankings', price: '$5.99', yearly: '$49.99/yr', prompts: 'Community rankings only', color: '#5883bf', icon: 'barchart' as const, features: ['Live consensus rankings', 'Format filters (PPR/SF)', 'No AI Coach'] },
+  { key: 'pro', name: 'Pro', price: '$9.99', yearly: '$89.99/yr', prompts: '75 prompts/week', color: '#3d6aaa', icon: 'lightning' as const, features: ['AI Coach access', 'Draft Copilot', 'Trade Analyzer', '1 season memory'] },
+  { key: 'premium', name: 'Premium', price: '$14.99', yearly: '$129.99/yr', prompts: '125 prompts/week', color: '#fee229', icon: 'crown' as const, features: ['Everything in Pro', '2 season memory', 'Opponent Intel', 'Autopilot mode'] },
+  { key: 'dynasty_elite', name: 'Dynasty Elite', price: '$19.99', yearly: '$179.99/yr', prompts: 'Unlimited', color: '#7b5ea7', icon: 'star' as const, features: ['Everything in Premium', 'Unlimited prompts', 'College rankings', 'Rookie draft board'] },
 ];
 
 export default function SettingsScreen() {
@@ -69,34 +53,19 @@ export default function SettingsScreen() {
     const stored = await AsyncStorage.getItem('sleeper_username');
     if (stored) setUsername(stored); else setUsername('');
     setRemaining(await getRemainingPrompts());
-
     const espnCreds = await loadESPNCredentials();
     if (espnCreds) {
       setEspnConnected(true);
       const name = await AsyncStorage.getItem('espn_league_name');
       if (name) setEspnLeagueName(name);
-    } else {
-      setEspnConnected(false);
-      setEspnLeagueName('');
-    }
-
+    } else { setEspnConnected(false); setEspnLeagueName(''); }
     const yahooTokens = await loadYahooTokens();
     if (yahooTokens) {
       setYahooConnected(true);
-      try {
-        const token = await getValidYahooToken();
-        if (token) {
-          const leagues = await getYahooLeagues(token);
-          setYahooLeagueCount(leagues.length);
-        }
-      } catch {}
-    } else {
-      setYahooConnected(false);
-      setYahooLeagueCount(0);
-    }
+      try { const token = await getValidYahooToken(); if (token) { const leagues = await getYahooLeagues(token); setYahooLeagueCount(leagues.length); } } catch {}
+    } else { setYahooConnected(false); setYahooLeagueCount(0); }
   }, []);
 
-  // Re-check every time screen gets focus (catches ESPN return)
   useFocusEffect(useCallback(() => { loadConnectionState(); }, [loadConnectionState]));
 
   const handleConnectSleeper = async () => {
@@ -105,26 +74,28 @@ export default function SettingsScreen() {
     try {
       const res = await fetch(`https://api.sleeper.app/v1/user/${trimmed}`);
       const user = await res.json();
-      if (!user?.user_id) {
-        Alert.alert('Not Found', `Could not find Sleeper user "${trimmed}". Check spelling.`);
-        return;
-      }
+      if (!user?.user_id) { Alert.alert('Not Found', `Could not find Sleeper user "${trimmed}".`); return; }
       await AsyncStorage.setItem('sleeper_username', trimmed);
-      setUsername(trimmed);
-      setSleeperModalVisible(false);
-      setSleeperInput('');
+      setUsername(trimmed); setSleeperModalVisible(false); setSleeperInput('');
       Alert.alert('Sleeper Connected!', `Linked @${trimmed}. Your leagues will appear on the Home tab.`);
-    } catch {
-      Alert.alert('Error', 'Could not verify Sleeper username. Check your connection.');
-    }
+    } catch { Alert.alert('Error', 'Could not verify Sleeper username.'); }
   };
 
-  const handleDisconnectSleeper = () => {
-    Alert.alert('Disconnect Sleeper', `Remove @${username} from AIOmni?`, [
+  const handleDisconnect = (platform: 'sleeper' | 'espn' | 'yahoo') => {
+    const labels = { sleeper: 'Sleeper', espn: 'ESPN', yahoo: 'Yahoo' };
+    Alert.alert(`Disconnect ${labels[platform]}`, `Remove your ${labels[platform]} account from AIOmni?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Disconnect', style: 'destructive', onPress: async () => {
-        await AsyncStorage.removeItem('sleeper_username');
-        setUsername('');
+        if (platform === 'sleeper') {
+          await AsyncStorage.removeItem('sleeper_username');
+          setUsername('');
+        } else if (platform === 'espn') {
+          await AsyncStorage.multiRemove(['espn_s2', 'espn_swid', 'espn_league_ids', 'espn_league_name', 'espn_credentials']);
+          setEspnConnected(false); setEspnLeagueName('');
+        } else {
+          await clearYahooTokens();
+          setYahooConnected(false); setYahooLeagueCount(0);
+        }
       }},
     ]);
   };
@@ -140,44 +111,46 @@ export default function SettingsScreen() {
         if (code) {
           await exchangeYahooCode(code);
           const token = await getValidYahooToken();
-          if (token) {
-            const leagues = await getYahooLeagues(token);
-            setYahooLeagueCount(leagues.length);
-          }
+          if (token) { const leagues = await getYahooLeagues(token); setYahooLeagueCount(leagues.length); }
           setYahooConnected(true);
           Alert.alert('Yahoo Connected!', 'Your Yahoo leagues will now appear on the Home tab.');
         }
       }
-    } catch (err: any) {
-      Alert.alert('Yahoo Error', err?.message ?? 'Could not complete Yahoo connection.');
-    } finally {
-      setYahooLoading(false);
-    }
+    } catch (err: any) { Alert.alert('Yahoo Error', err?.message ?? 'Could not complete Yahoo connection.'); }
+    finally { setYahooLoading(false); }
   };
-
-  const handleDisconnectYahoo = async () => {
-    Alert.alert('Disconnect Yahoo', 'Remove your Yahoo account from AIOmni?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Disconnect', style: 'destructive', onPress: async () => {
-        await clearYahooTokens();
-        setYahooConnected(false);
-        setYahooLeagueCount(0);
-      }},
-    ]);
-  };
-
-  const handleOpenESPN = () => { router.push('/espn-login'); };
 
   const handleSignOut = async () => {
     Alert.alert('Sign Out', 'This will sign you out and clear local league data.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: async () => {
-        await signOut();
-        await AsyncStorage.removeItem('sleeper_username');
+        await signOut(); await AsyncStorage.removeItem('sleeper_username');
         router.replace('/onboarding');
       }},
     ]);
   };
+
+  const PlatformRow = ({ platform, name, subtitle, connected, onConnect, onDisconnect, loading: ld, isLast }: {
+    platform: string; name: string; subtitle: string; connected: boolean;
+    onConnect: () => void; onDisconnect: () => void; loading?: boolean; isLast?: boolean;
+  }) => (
+    <View style={[styles.platformRow, isLast && { borderBottomWidth: 0 }]}>
+      <Image source={PLATFORM_LOGOS[platform]} style={styles.platformLogo} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.platformName}>{name}</Text>
+        <Text style={styles.platformSub}>{subtitle}</Text>
+      </View>
+      {connected ? (
+        <TouchableOpacity onPress={onDisconnect} style={styles.disconnectBtn}>
+          <Text style={styles.disconnectBtnText}>DISCONNECT</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity onPress={onConnect} style={styles.connectBtn} disabled={ld}>
+          <Text style={styles.connectBtnText}>{ld ? 'CONNECTING' : 'CONNECT'}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 
   return (
     <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
@@ -193,189 +166,89 @@ export default function SettingsScreen() {
           <Text style={styles.title}>SETTINGS</Text>
         </View>
 
-        {/* ACCOUNT */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>ACCOUNT</Text>
-          <View style={styles.card}>
-            <View style={styles.cardShine} />
+          <View style={styles.card}><View style={styles.cardShine} />
             <View style={styles.row}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Icon name="person" size={22} color={C.blueDeep} />
-                <Text style={styles.rowLabel}>Email</Text>
-              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Icon name="person" size={22} color={C.blueDeep} /><Text style={styles.rowLabel}>Email</Text></View>
               <Text style={styles.rowValue}>{email || 'Not signed in'}</Text>
             </View>
             <View style={[styles.row, { borderBottomWidth: 0 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Icon name="football" size={22} color={C.blueDeep} />
-                <Text style={styles.rowLabel}>Sleeper</Text>
-              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Icon name="football" size={22} color={C.blueDeep} /><Text style={styles.rowLabel}>Sleeper</Text></View>
               <Text style={styles.rowValue}>{username ? `@${username}` : 'Not linked'}</Text>
             </View>
             <TouchableOpacity onPress={() => Alert.alert('Change Password', 'Use your email provider to change your password.')} style={styles.linkRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Icon name="key" size={18} color={C.gold} />
-                <Text style={styles.linkText}>Change password</Text>
-                <Icon name="chevron" size={20} color={C.dim2} />
-              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Icon name="key" size={18} color={C.gold} /><Text style={styles.linkText}>Change password</Text><Icon name="chevron" size={20} color={C.dim2} /></View>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* CONNECTED PLATFORMS */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>CONNECTED PLATFORMS</Text>
-          <View style={styles.card}>
-            <View style={styles.cardShine} />
-            <View style={styles.platformRow}>
-              <Image source={PLATFORM_LOGOS.sleeper} style={styles.platformLogo} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.platformName}>Sleeper</Text>
-                <Text style={styles.platformSub}>{username ? `@${username}` : 'Not connected'}</Text>
-              </View>
-              {username ? (
-                <TouchableOpacity onPress={handleDisconnectSleeper} style={styles.disconnectBtnSmall}>
-                  <Text style={styles.disconnectBtnSmallText}>DISCONNECT</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity onPress={() => setSleeperModalVisible(true)} style={styles.connectBtnSmall}>
-                  <Text style={styles.connectBtnSmallText}>CONNECT</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            <View style={styles.platformRow}>
-              <Image source={PLATFORM_LOGOS.espn} style={styles.platformLogo} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.platformName}>ESPN</Text>
-                <Text style={styles.platformSub}>{espnConnected ? (espnLeagueName || 'Connected') : 'Auto-login via browser'}</Text>
-              </View>
-              {espnConnected ? (
-                <Text style={[styles.statusText, { color: C.mint }]}>✓ CONNECTED</Text>
-              ) : (
-                <TouchableOpacity onPress={handleOpenESPN} style={styles.connectBtnSmall}>
-                  <Text style={styles.connectBtnSmallText}>CONNECT</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            <View style={[styles.platformRow, { borderBottomWidth: 0 }]}>
-              <Image source={PLATFORM_LOGOS.yahoo} style={styles.platformLogo} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.platformName}>Yahoo</Text>
-                <Text style={styles.platformSub}>{yahooConnected ? `${yahooLeagueCount} leagues connected` : 'OAuth sign-in'}</Text>
-              </View>
-              {yahooConnected ? (
-                <TouchableOpacity onPress={handleDisconnectYahoo} style={styles.disconnectBtnSmall}>
-                  <Text style={styles.disconnectBtnSmallText}>DISCONNECT</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity onPress={handleConnectYahoo} style={styles.connectBtnSmall} disabled={yahooLoading}>
-                  <Text style={styles.connectBtnSmallText}>{yahooLoading ? 'CONNECTING' : 'CONNECT'}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+          <View style={styles.card}><View style={styles.cardShine} />
+            <PlatformRow platform="sleeper" name="Sleeper" subtitle={username ? `@${username}` : 'Not connected'} connected={!!username} onConnect={() => setSleeperModalVisible(true)} onDisconnect={() => handleDisconnect('sleeper')} />
+            <PlatformRow platform="espn" name="ESPN" subtitle={espnConnected ? (espnLeagueName || 'Connected') : 'Auto-login via browser'} connected={espnConnected} onConnect={() => router.push('/espn-login')} onDisconnect={() => handleDisconnect('espn')} />
+            <PlatformRow platform="yahoo" name="Yahoo" subtitle={yahooConnected ? `${yahooLeagueCount} leagues connected` : 'OAuth sign-in'} connected={yahooConnected} onConnect={handleConnectYahoo} onDisconnect={() => handleDisconnect('yahoo')} loading={yahooLoading} isLast />
           </View>
         </View>
 
-        {/* WEEKLY USAGE */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>WEEKLY USAGE</Text>
-          <View style={styles.card}>
-            <View style={styles.cardShine} />
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Prompts remaining</Text>
-              <Text style={[styles.rowValue, { color: C.blueDeep }]}>{remaining}/25</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${Math.min(remaining, 25) * 4}%` }]} />
-            </View>
+          <View style={styles.card}><View style={styles.cardShine} />
+            <View style={styles.row}><Text style={styles.rowLabel}>Prompts remaining</Text><Text style={[styles.rowValue, { color: C.blueDeep }]}>{remaining}/25</Text></View>
+            <View style={styles.progressBar}><View style={[styles.progressFill, { width: `${Math.min(remaining, 25) * 4}%` }]} /></View>
             <Text style={styles.smallText}>Resets Sunday noon · Waivers run Wednesday</Text>
           </View>
         </View>
 
-        {/* UPGRADE */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>UPGRADE</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 4, paddingRight: 12 }}>
             {TIERS.map(t => (
               <TouchableOpacity key={t.key} onPress={() => router.push('/paywall')} activeOpacity={0.85} style={[styles.tierCard, { borderColor: t.color + '80' }]}>
-                <View style={[styles.tierCardShine, { backgroundColor: t.color + '15' }]} />
-                <View style={[styles.tierIconWrap, { backgroundColor: t.color + '20', borderColor: t.color + '40' }]}>
-                  <Icon name={t.icon} size={20} color={t.color} />
-                </View>
+                <View style={[styles.tierShine, { backgroundColor: t.color + '15' }]} />
+                <View style={[styles.tierIconWrap, { backgroundColor: t.color + '20', borderColor: t.color + '40' }]}><Icon name={t.icon} size={20} color={t.color} /></View>
                 <Text style={styles.tierName}>{t.name}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-                  <Text style={[styles.tierPrice, { color: t.color === '#fee229' ? '#b87820' : t.color }]}>{t.price}</Text>
-                  <Text style={styles.tierPer}>/mo</Text>
-                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}><Text style={[styles.tierPrice, { color: t.color === '#fee229' ? '#b87820' : t.color }]}>{t.price}</Text><Text style={styles.tierPer}>/mo</Text></View>
                 <Text style={styles.tierYearly}>{t.yearly}</Text>
                 <View style={styles.tierLine} />
-                {t.features.map((f, i) => (
-                  <View key={i} style={styles.tierFeatureRow}>
-                    <Text style={[styles.tierBullet, { color: t.color === '#fee229' ? '#b87820' : t.color }]}>•</Text>
-                    <Text style={styles.tierFeature}>{f}</Text>
-                  </View>
-                ))}
-                <View style={[styles.tierBadge, { backgroundColor: t.color + '18', borderColor: t.color + '35' }]}>
-                  <Text style={[styles.tierBadgeText, { color: t.color === '#fee229' ? '#b87820' : t.color }]}>{t.prompts}</Text>
-                </View>
+                {t.features.map((f, i) => (<View key={i} style={styles.tierFeatureRow}><Text style={[styles.tierBullet, { color: t.color === '#fee229' ? '#b87820' : t.color }]}>•</Text><Text style={styles.tierFeature}>{f}</Text></View>))}
+                <View style={[styles.tierBadge, { backgroundColor: t.color + '18', borderColor: t.color + '35' }]}><Text style={[styles.tierBadgeText, { color: t.color === '#fee229' ? '#b87820' : t.color }]}>{t.prompts}</Text></View>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
 
-        {/* APP */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>APP</Text>
-          <View style={styles.card}>
-            <View style={styles.cardShine} />
+          <View style={styles.card}><View style={styles.cardShine} />
             <View style={styles.row}><Text style={styles.rowLabel}>Version</Text><Text style={styles.rowValue}>1.0.0</Text></View>
             <View style={[styles.row, { borderBottomWidth: 0 }]}><Text style={styles.rowLabel}>Platforms</Text><Text style={styles.rowValue}>{`Sleeper${espnConnected ? ' · ESPN' : ''}${yahooConnected ? ' · Yahoo' : ''}`}</Text></View>
           </View>
         </View>
 
-        {/* SUPPORT */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>SUPPORT</Text>
-          <View style={styles.card}>
-            <View style={styles.cardShine} />
-            <TouchableOpacity onPress={() => Linking.openURL('mailto:getaiomni@gmail.com')}>
-              <Text style={styles.linkText}>Contact Support</Text>
-            </TouchableOpacity>
+          <View style={styles.card}><View style={styles.cardShine} />
+            <TouchableOpacity onPress={() => Linking.openURL('mailto:getaiomni@gmail.com')}><Text style={styles.linkText}>Contact Support</Text></TouchableOpacity>
           </View>
         </View>
 
         <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Icon name="lock" size={22} color={'#a83040'} />
-            <Text style={styles.signOutText}>SIGN OUT</Text>
-          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Icon name="lock" size={22} color={'#a83040'} /><Text style={styles.signOutText}>SIGN OUT</Text></View>
         </TouchableOpacity>
         <Text style={styles.footerText}>AIOmni · See everything. Know everyone. Win always.</Text>
       </ScrollView>
 
-      {/* Sleeper Modal */}
       <Modal visible={sleeperModalVisible} transparent animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSleeperModalVisible(false)}>
           <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
             <Text style={styles.modalTitle}>Connect Sleeper</Text>
             <Text style={styles.modalSub}>Enter your Sleeper username</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="e.g. PatrickTheGM"
-              placeholderTextColor={C.dim2}
-              value={sleeperInput}
-              onChangeText={setSleeperInput}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus
-            />
+            <TextInput style={styles.modalInput} placeholder="e.g. PatrickTheGM" placeholderTextColor={C.dim2} value={sleeperInput} onChangeText={setSleeperInput} autoCapitalize="none" autoCorrect={false} autoFocus />
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TouchableOpacity onPress={() => setSleeperModalVisible(false)} style={[styles.modalBtn, { backgroundColor: 'rgba(88,131,191,0.08)' }]}>
-                <Text style={[styles.modalBtnText, { color: C.dim }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleConnectSleeper} style={[styles.modalBtn, { backgroundColor: C.blueDeep, flex: 1 }]}>
-                <Text style={[styles.modalBtnText, { color: '#fff' }]}>Connect</Text>
-              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setSleeperModalVisible(false)} style={[styles.modalBtn, { backgroundColor: 'rgba(88,131,191,0.08)' }]}><Text style={[styles.modalBtnText, { color: C.dim }]}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity onPress={handleConnectSleeper} style={[styles.modalBtn, { backgroundColor: C.blueDeep, flex: 1 }]}><Text style={[styles.modalBtnText, { color: '#fff' }]}>Connect</Text></TouchableOpacity>
             </View>
           </View>
         </TouchableOpacity>
@@ -403,16 +276,15 @@ const styles = StyleSheet.create({
   platformLogo: { width: 36, height: 36, borderRadius: 10, borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)' },
   platformName: { fontFamily: F.semibold, color: C.ink, fontSize: SZ.base },
   platformSub: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm, marginTop: 2 },
-  statusText: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm },
-  connectBtnSmall: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: C.blueDeep },
-  connectBtnSmallText: { fontFamily: F.mono, color: '#fff', fontSize: SZ.xs, letterSpacing: 2 },
-  disconnectBtnSmall: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(168,48,64,0.12)' },
-  disconnectBtnSmallText: { fontFamily: F.mono, color: '#a83040', fontSize: SZ.xs, letterSpacing: 2 },
+  connectBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: C.blueDeep },
+  connectBtnText: { fontFamily: F.mono, color: '#fff', fontSize: SZ.xs, letterSpacing: 2 },
+  disconnectBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(168,48,64,0.12)' },
+  disconnectBtnText: { fontFamily: F.mono, color: '#a83040', fontSize: SZ.xs, letterSpacing: 2 },
   progressBar: { height: 4, backgroundColor: 'rgba(88,131,191,0.12)', borderRadius: 3, overflow: 'hidden', marginTop: 12, marginBottom: 10 },
   progressFill: { height: 4, backgroundColor: C.blueDeep },
   smallText: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, lineHeight: 16, marginBottom: 4 },
   tierCard: { backgroundColor: SURFACE, borderRadius: 18, borderWidth: 1.5, padding: 18, width: 180, shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.10, shadowRadius: 12, elevation: 3, position: 'relative', overflow: 'hidden' },
-  tierCardShine: { position: 'absolute', top: 0, left: 0, right: 0, height: 60, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+  tierShine: { position: 'absolute', top: 0, left: 0, right: 0, height: 60, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
   tierIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, marginBottom: 10 },
   tierName: { fontFamily: F.bold, color: C.ink, fontSize: 20, letterSpacing: 1, marginBottom: 6 },
   tierPrice: { fontFamily: F.bold, fontSize: 26, letterSpacing: 0.5 },
