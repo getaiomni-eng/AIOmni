@@ -17,6 +17,7 @@ import { Badge, SectionHeader } from '../components/Atoms';
 import { Icon } from '../components/AIOmniIcons';
 import { C, F, R, SP, SZ, BEVEL } from '../constants/tokens';
 import { incrementPrompt } from '../utils/promptCounter';
+import { GoldScore, BlueScore } from '../components/GlowText';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W    = SCREEN_W - SP[3] * 2;
@@ -494,12 +495,12 @@ export default function HomeScreen() {
                         <View style={styles.scoreRowGrid}>
                           <View style={styles.scoreBoxGrid}>
                             <Text style={styles.scoreLabelGrid}>YOU</Text>
-                            <Text style={[styles.scoreNumGrid, styles.scoreYou]}>{ptsVal}</Text>
+                            <GoldScore fontSize={28}>{ptsVal}</GoldScore>
                           </View>
                           <Text style={styles.scoreVsGrid}>VS</Text>
                           <View style={styles.scoreBoxGrid}>
                             <Text style={styles.scoreLabelGrid}>OPP</Text>
-                            <Text style={[styles.scoreNumGrid, styles.scoreOpp]}>{parseFloat((lg.opp ?? 0).toFixed(1))}</Text>
+                            <BlueScore fontSize={28}>{parseFloat((lg.opp ?? 0).toFixed(1))}</BlueScore>
                           </View>
                         </View>
                       </BevelCard>

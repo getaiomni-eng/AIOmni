@@ -22,9 +22,7 @@ export default function TabLayout() {
         },
         tabBarActiveTintColor:   C.blueDeep,
         tabBarInactiveTintColor: C.dim2,
-        tabBarIconStyle: {
-          marginBottom: 0,
-        },
+        tabBarIconStyle: { marginBottom: 0 },
       }}
     >
       <Tabs.Screen
@@ -55,7 +53,6 @@ export default function TabLayout() {
           tabBarIcon: ({ focused }) => <TabIcon name="coach" focused={focused} size={32} />,
         }}
       />
-      {/* Hidden screens — still routable but not in tab bar */}
       <Tabs.Screen name="waiver"   options={{ href: null }} />
       <Tabs.Screen name="league"   options={{ href: null }} />
       <Tabs.Screen name="explore"  options={{ href: null }} />
