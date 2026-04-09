@@ -97,7 +97,7 @@ export function AIOmniIris({ width = 72 }: { width?: number }) {
         <G clipPath="url(#iClip)">
           <G transform="translate(32,32)">
             {BLADES.map(rot => (
-              <G key={rot} transform={`rotate(${rot + angle})`}>
+              <G key={rot} transform={`rotate(${rot}) translate(0,-27.7) rotate(${angle}) translate(0,27.7)`}>
                 <Path d={BLADE} fill="#2a6bb0" stroke="#ffffed" strokeWidth={0.6} strokeLinejoin="round" />
               </G>
             ))}
@@ -201,7 +201,7 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
         <G clipPath="url(#lClip)">
           <G transform={`translate(${ix},${iy})`}>
             {BLADES.map(rot => (
-              <G key={rot} transform={`rotate(${rot + angle})`}>
+              <G key={rot} transform={`rotate(${rot}) translate(0,-16.2) rotate(${angle}) translate(0,16.2)`}>
                 <Path d={BLADE} fill="#2a6bb0" stroke="#ffffed" strokeWidth={0.4} strokeLinejoin="round" />
               </G>
             ))}

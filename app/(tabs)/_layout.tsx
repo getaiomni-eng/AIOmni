@@ -14,7 +14,7 @@ export default function TabLayout() {
           height: 72,
         },
         tabBarLabelStyle: {
-          fontFamily: 'SpaceMono_400Regular',
+          fontFamily: 'Bungee_400Regular',
           fontSize: 9,
           letterSpacing: 0.8,
           textTransform: 'uppercase',
