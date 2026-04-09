@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import Svg, { Circle, ClipPath, Defs, G, Path, Polygon, Text as SvgText } from 'react-native-svg';
+import Svg, {
+  Circle, ClipPath, Defs, G, Path, Polygon,
+  Text as SvgText, Rect,
+} from 'react-native-svg';
 
 const BLADES = [0, 60, 120, 180, 240, 300];
 
-// Blade geometry: outer radius 13, inner radius 5
-// Arc from -25° to +25° at outer, matching arc at inner
-const BLADE_PATH = 'M-5.57,-11.96 A13,13,0,0,1,5.57,-11.96 L2.14,-4.7 A5,5,0,0,0,-2.14,-4.7 Z';
+// v27 pie-sector blade: M 0,0 L -28,-48.5 A 56,56 0 0,1 28,-48.5 Z
+// These are large pie sectors radiating from center, clipped to iris circle
 
 const ease = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
@@ -18,29 +20,33 @@ function useApertureBlink(setAngle: React.Dispatch<React.SetStateAction<number>>
   useEffect(() => {
     active.current = true;
 
-    const tween = (from: number, to: number, duration: number) => new Promise<void>(resolve => {
-      const start = Date.now();
-      const tick = () => {
-        if (!active.current) return resolve();
-        const elapsed = Date.now() - start;
-        const t = Math.min(elapsed / duration, 1);
-        setAngle(from + (to - from) * ease(t));
-        if (t < 1) {
-          rafRef.current = requestAnimationFrame(tick);
-        } else {
-          resolve();
-        }
-      };
-      rafRef.current = requestAnimationFrame(tick);
-    });
+    const tween = (from: number, to: number, duration: number) =>
+      new Promise<void>(resolve => {
+        const start = Date.now();
+        const tick = () => {
+          if (!active.current) return resolve();
+          const elapsed = Date.now() - start;
+          const t = Math.min(elapsed / duration, 1);
+          setAngle(from + (to - from) * ease(t));
+          if (t < 1) {
+            rafRef.current = requestAnimationFrame(tick);
+          } else {
+            resolve();
+          }
+        };
+        rafRef.current = requestAnimationFrame(tick);
+      });
 
     const pulse = async () => {
       while (active.current) {
         await new Promise(r => setTimeout(r, rand(2500, 5500)));
         if (!active.current) break;
+        // Close
         await tween(0, 12, rand(250, 550));
         await new Promise(r => setTimeout(r, rand(100, 250)));
+        // Open
         await tween(12, 0, rand(300, 650));
+        // Occasional double blink
         if (Math.random() < 0.2) {
           await new Promise(r => setTimeout(r, rand(180, 350)));
           await tween(0, 10, rand(200, 400));
@@ -59,9 +65,15 @@ function useApertureBlink(setAngle: React.Dispatch<React.SetStateAction<number>>
   }, [setAngle]);
 }
 
+// ── Standalone Iris (for AI Coach bar, etc.) ──────────────────
 export function AIOmniIris({ width = 72 }: { width?: number }) {
   const [angle, setAngle] = useState(0);
   useApertureBlink(setAngle);
+
+  // 64x64 viewBox, iris clip r=26, center 32,32
+  // Scale from reference (r=42 clip): 26/42 = 0.619
+  // Blade: M 0,0 L -17.3,-30 A 34.7,34.7 0 0,1 17.3,-30 Z
+  const IRIS_BLADE = 'M0,0 L-17.3,-30 A34.7,34.7,0,0,1,17.3,-30 Z';
 
   return (
     <View style={{ width, height: width }}>
@@ -75,13 +87,13 @@ export function AIOmniIris({ width = 72 }: { width?: number }) {
             <Circle cx="32" cy="32" r="26" />
           </ClipPath>
         </Defs>
-        {/* 6 blades — scaled for 64px viewBox: outer r=22, inner r=8 */}
+        {/* 6 pie-sector blades */}
         <G clipPath="url(#iClip)">
           <G transform="translate(32,32)">
             {BLADES.map(rot => (
               <G key={rot} transform={`rotate(${rot + angle})`}>
                 <Path
-                  d="M-9.4,-20.2 A22,22,0,0,1,9.4,-20.2 L3.4,-7.5 A8,8,0,0,0,-3.4,-7.5 Z"
+                  d={IRIS_BLADE}
                   fill="#1a2540"
                   stroke="#3d6aaa"
                   strokeWidth={0.6}
@@ -92,7 +104,7 @@ export function AIOmniIris({ width = 72 }: { width?: number }) {
         </G>
         {/* Gold hex pupil */}
         <Polygon
-          points="32,26.5 35.8,29 35.8,35 32,37.5 28.2,35 28.2,29"
+          points="32,26 36.5,29 36.5,35 32,38 27.5,35 27.5,29"
           fill="#fee229"
           stroke="#3d6aaa"
           strokeWidth={0.8}
@@ -105,21 +117,47 @@ export function AIOmniIris({ width = 72 }: { width?: number }) {
   );
 }
 
+// ── Full Logo (home screen, settings header) ──────────────────
 export function AIOmniLogo({ width = 280 }: { width?: number }) {
   const [angle, setAngle] = useState(0);
+  const [pulseOpacity, setPulseOpacity] = useState(0);
   useApertureBlink(setAngle);
+
+  // Hex pulse animation
+  const pulseRef = useRef<number | null>(null);
+  const pulseActive = useRef(true);
+
+  useEffect(() => {
+    pulseActive.current = true;
+    let phase = 0;
+    const tick = () => {
+      if (!pulseActive.current) return;
+      phase += 0.03;
+      setPulseOpacity(Math.max(0, Math.sin(phase) * 0.4));
+      pulseRef.current = requestAnimationFrame(tick);
+    };
+    pulseRef.current = requestAnimationFrame(tick);
+    return () => {
+      pulseActive.current = false;
+      if (pulseRef.current !== null) cancelAnimationFrame(pulseRef.current);
+    };
+  }, []);
 
   const h = Math.round(width * 0.42);
   const vb = '0 0 300 126';
 
-  // Iris center
+  // Iris center & sizing
   const ix = 172;
   const iy = 63;
   const ir = 28;  // outer rim
-  const iir = 24; // cream disc (bigger = more blade visible)
+  const iir = 24; // cream disc / clip radius
 
-  // Blade path scaled for logo iris: outer r=20, inner r=7
-  const LOGO_BLADE = 'M-8.6,-18.4 A20,20,0,0,1,8.6,-18.4 L3,-6.4 A7,7,0,0,0,-3,-6.4 Z';
+  // Scale from reference (r=42 clip): 24/42 = 0.571
+  // Blade: M 0,0 L -16,-27.7 A 32,32 0 0,1 16,-27.7 Z
+  const LOGO_BLADE = 'M0,0 L-16,-27.7 A32,32,0,0,1,16,-27.7 Z';
+
+  // Hex points for outer border
+  const HEX = '72,10 228,10 282,63 228,116 72,116 18,63';
 
   return (
     <View style={{ width, height: h, alignItems: 'center' }}>
@@ -130,16 +168,26 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
           </ClipPath>
         </Defs>
 
-        {/* Outer hex border */}
+        {/* ── Hex pulse wave (breathes behind border) ── */}
         <Polygon
-          points="72,10 228,10 282,63 228,116 72,116 18,63"
+          points={HEX}
+          fill="none"
+          stroke="#fee229"
+          strokeWidth={12}
+          strokeLinejoin="round"
+          opacity={pulseOpacity}
+        />
+
+        {/* ── Outer hex border — gold ── */}
+        <Polygon
+          points={HEX}
           fill="none"
           stroke="#fee229"
           strokeWidth={6}
           strokeLinejoin="round"
         />
 
-        {/* AI text */}
+        {/* ── AI text ── */}
         <SvgText
           x="52"
           y="88"
@@ -151,12 +199,12 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
           AI
         </SvgText>
 
-        {/* Iris — dark backing */}
+        {/* ── Iris dark backing ── */}
         <Circle cx={ix} cy={iy} r={ir} fill="#091622" />
         {/* Cream disc */}
         <Circle cx={ix} cy={iy} r={iir} fill="#f5eecc" />
 
-        {/* 6 blades clipped to iris */}
+        {/* ── 6 pie-sector blades, clipped to iris ── */}
         <G clipPath="url(#lClip)">
           <G transform={`translate(${ix},${iy})`}>
             {BLADES.map(rot => (
@@ -172,19 +220,19 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
           </G>
         </G>
 
-        {/* Gold hex pupil */}
+        {/* ── Gold hex pupil ── */}
         <Polygon
-          points={`${ix},${iy - 5.5} ${ix + 4.8},${iy - 2.75} ${ix + 4.8},${iy + 2.75} ${ix},${iy + 5.5} ${ix - 4.8},${iy + 2.75} ${ix - 4.8},${iy - 2.75}`}
+          points={`${ix},${iy - 6} ${ix + 5.2},${iy - 3} ${ix + 5.2},${iy + 3} ${ix},${iy + 6} ${ix - 5.2},${iy + 3} ${ix - 5.2},${iy - 3}`}
           fill="#fee229"
           stroke="#3d6aaa"
           strokeWidth={0.8}
         />
 
-        {/* Iris rims */}
+        {/* ── Iris rims ── */}
         <Circle cx={ix} cy={iy} r={iir} fill="none" stroke="#3d6aaa" strokeWidth={1.8} />
         <Circle cx={ix} cy={iy} r={ir} fill="none" stroke="#3d6aaa" strokeWidth={1.5} />
 
-        {/* mni text */}
+        {/* ── mni text ── */}
         <SvgText
           x="200"
           y="88"

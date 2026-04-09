@@ -1,6 +1,5 @@
 // services/ai.ts
 // Calls Claude via Supabase Edge Function proxy
-// NEVER hardcode Claude API key here — key lives in Supabase secrets
 
 import { supabase } from './supabase';
 
@@ -9,19 +8,23 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 export async function askAI(prompt: string, maxTokens = 512): Promise<string> {
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_ANON_KEY,
-    };
+    // Always include apikey + Authorization for Supabase edge functions
+    let authToken = SUPABASE_ANON_KEY;
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
+        authToken = session.access_token;
       }
     } catch {
-      // No auth — continue as anonymous/free tier
+      // No auth — use anon key as fallback
     }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${authToken}`,
+    };
 
     const res = await fetch(PROXY_URL, {
       method: 'POST',
