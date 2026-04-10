@@ -17,7 +17,7 @@ import { Badge, SectionHeader } from '../components/Atoms';
 import { Icon } from '../components/AIOmniIcons';
 import { C, F, R, SP, SZ, BEVEL } from '../constants/tokens';
 import { incrementPrompt } from '../utils/promptCounter';
-import { GoldScore, BlueScore, CardScore } from '../components/GlowText';
+import { GlowText, GoldScore, BlueScore, CardScore } from '../components/GlowText';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W    = SCREEN_W - SP[3] * 2;
@@ -58,9 +58,9 @@ function PlatformLogo({ platform, size = 64 }: { platform: Platform; avatar?: st
 }
 
 const FALLBACK_NEWS: NewsItem[] = [
-  { source: 'ROTOWIRE',   headline: 'Jaxon Smith-Njigba: 5th-year option picked up by SEA', color: '#4ab8a0' },
-  { source: 'PFR',        headline: 'NFL Teams Higher On Their QBs Than Draft Pundits?',    color: '#e8a84b' },
-  { source: 'CBS SPORTS', headline: 'Fantasy waiver wire pickups to target this week',       color: '#0055a5' },
+  { source: 'ROTOWIRE', headline: 'Jaxon Smith-Njigba: 5th-year option picked up by SEA', color: '#4ab8a0', url: 'https://www.rotowire.com/football/player/jaxon-smith-njigba-15164' },
+  { source: 'PFR', headline: 'NFL Teams Higher On Their QBs Than Draft Pundits?', color: '#e8a84b', url: 'https://www.pro-football-reference.com' },
+  { source: 'CBS SPORTS', headline: 'Fantasy waiver wire pickups to target this week', color: '#0055a5', url: 'https://www.cbssports.com/fantasy/football/news/fantasy-football-waiver-wire' },
   { source: 'SLEEPER',    headline: 'Saquon Barkley approaches single-season rushing record', color: C.gold  },
 ];
 
@@ -381,7 +381,7 @@ export default function HomeScreen() {
             </View>
           ) : null}
           <TouchableOpacity onPress={() => router.push('/settings')} style={styles.gearBtn}>
-            <View style={{shadowColor:"#3d6aaa",shadowOffset:{width:0,height:0},shadowOpacity:0.6,shadowRadius:8}}><Ionicons name="settings-sharp" size={22} color={"#fee229"} /></View>
+            <View style={{shadowColor:"#3d6aaa",shadowOffset:{width:0,height:0},shadowOpacity:0.8,shadowRadius:14}}><Ionicons name="settings-sharp" size={22} color={"#fee229"} /></View>
           </TouchableOpacity>
         </View>
 
@@ -571,7 +571,7 @@ export default function HomeScreen() {
                   <Icon name={insight.icon as any} size={18} color={insight.color} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.insightTitle}>{insight.title}</Text>
+                  <GlowText fontSize={16} color="#fee229" strokeColor="#3d6aaa" strokeWidth={1.5} glowColor="rgba(61,106,170,0.5)" glowRadius={10}>{insight.title}</GlowText>
                   <Text style={styles.insightBody}>{insight.body}</Text>
                 </View>
               </View>
@@ -636,7 +636,7 @@ const styles = StyleSheet.create({
   gearBtn: { padding: 8, marginLeft: 8 },
   newsHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   newsLabelRow: { flexDirection: 'row', alignItems: 'center' },
-  newsEye: { fontSize: 16, fontFamily: F.bold, color: '#fee229', textShadowColor: 'rgba(61,106,170,0.6)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8, letterSpacing: 2 },
+  newsEye: { fontSize: 16, fontFamily: F.bold, color: '#fee229', textShadowColor: 'rgba(61,106,170,0.6)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 14, letterSpacing: 2 },
   newsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
   newsChip: { backgroundColor: '#fee229', borderRadius: 12, padding: 12, borderWidth: 1.5, borderColor: 'rgba(200,177,0,0.5)', minWidth: 240, flexDirection: 'row', alignItems: 'flex-start', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 3 },
   newsDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8, marginTop: 2 },
@@ -675,7 +675,7 @@ const styles = StyleSheet.create({
   emptyBtn: { backgroundColor: C.blueDeep, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 20 },
   emptyBtnTxt: { color: '#ffffff', fontSize: SZ.sm, fontFamily: F.bold, letterSpacing: 1 },
   insightsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  insightsEye: { fontSize: 16, fontFamily: F.bold, color: '#fee229', textShadowColor: 'rgba(61,106,170,0.6)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8, letterSpacing: 2 },
+  insightsEye: { fontSize: 16, fontFamily: F.bold, color: '#fee229', textShadowColor: 'rgba(61,106,170,0.6)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 14, letterSpacing: 2 },
   swipeHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   swipeArrowLeft: { transform: [{ rotate: '180deg' }] },
   insightsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
