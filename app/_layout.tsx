@@ -1,4 +1,5 @@
 import { Bungee_400Regular } from '@expo-google-fonts/bungee';
+import { BungeeInline_400Regular } from '@expo-google-fonts/bungee-inline';
 import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
@@ -24,12 +25,15 @@ export default Sentry.wrap(function RootLayout() {
   const [fontsLoaded] = useFonts({
     // ── Primary fonts ────────────────────────
     Bungee_400Regular,
+    BungeeInline_400Regular,
     SpaceMono_400Regular,
     SpaceMono_700Bold,
 
     // ── Legacy aliases — keeps all old hardcoded strings working ──
     'BebasNeue':               Bungee_400Regular,
+    BungeeInline_400Regular,
     'BebasNeue_400Regular':    Bungee_400Regular,
+    BungeeInline_400Regular,
     'Barlow_400Regular':       SpaceMono_400Regular,
     'Barlow_600SemiBold':      SpaceMono_700Bold,
     'SpaceMono':               SpaceMono_400Regular,
@@ -38,16 +42,21 @@ export default Sentry.wrap(function RootLayout() {
     'Outfit-Medium':           SpaceMono_400Regular,
     'Outfit-SemiBold':         SpaceMono_700Bold,
     'Outfit-Bold':             Bungee_400Regular,
+    BungeeInline_400Regular,
     'Outfit-Black':            Bungee_400Regular,
+    BungeeInline_400Regular,
     'DMMono-Regular':          SpaceMono_400Regular,
     'DMMono-Medium':           SpaceMono_700Bold,
     'Oswald_600SemiBold':      Bungee_400Regular,
+    BungeeInline_400Regular,
     'Oswald_700Bold':          Bungee_400Regular,
+    BungeeInline_400Regular,
     'Inter_400Regular':        SpaceMono_400Regular,
     'Inter_600SemiBold':       SpaceMono_700Bold,
     'JetBrainsMono_400Regular': SpaceMono_400Regular,
     'JetBrainsMono_700Bold':   SpaceMono_700Bold,
     'Orbitron_700Bold':        Bungee_400Regular,
+    BungeeInline_400Regular,
   });
 
   useEffect(() => {
