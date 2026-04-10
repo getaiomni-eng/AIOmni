@@ -7,9 +7,20 @@ import Svg, {
 
 const BLADES = [0, 60, 120, 180, 240, 300];
 const OPEN_ANGLE = 55;
+const HEX_COLORS = ['#fee229', '#3d6aaa', '#ffffed'];
+const CYCLE_MS = 2000;
 
 const ease = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
+
+function lerpColor(a: string, b: string, t: number): string {
+  const pa = [parseInt(a.slice(1,3),16), parseInt(a.slice(3,5),16), parseInt(a.slice(5,7),16)];
+  const pb = [parseInt(b.slice(1,3),16), parseInt(b.slice(3,5),16), parseInt(b.slice(5,7),16)];
+  const r = Math.round(pa[0] + (pb[0] - pa[0]) * t);
+  const g = Math.round(pa[1] + (pb[1] - pa[1]) * t);
+  const bl = Math.round(pa[2] + (pb[2] - pa[2]) * t);
+  return '#' + [r,g,bl].map(v => v.toString(16).padStart(2,'0')).join('');
+}
 
 function useApertureBlink(setAngle: React.Dispatch<React.SetStateAction<number>>) {
   const rafRef = useRef<number | null>(null);
@@ -48,6 +59,28 @@ function useApertureBlink(setAngle: React.Dispatch<React.SetStateAction<number>>
   }, [setAngle]);
 }
 
+function useColorCycle() {
+  const [color, setColor] = useState(HEX_COLORS[0]);
+  const active = useRef(true);
+  const rafRef = useRef<number | null>(null);
+  useEffect(() => {
+    active.current = true;
+    let idx = 0;
+    let t = 0;
+    const tick = () => {
+      if (!active.current) return;
+      t += 0.005;
+      if (t >= 1) { t = 0; idx = (idx + 1) % HEX_COLORS.length; }
+      const next = (idx + 1) % HEX_COLORS.length;
+      setColor(lerpColor(HEX_COLORS[idx], HEX_COLORS[next], ease(t)));
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { active.current = false; if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); };
+  }, []);
+  return color;
+}
+
 export function AIOmniIris({ width = 72 }: { width?: number }) {
   const [angle, setAngle] = useState(OPEN_ANGLE);
   useApertureBlink(setAngle);
@@ -79,6 +112,7 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
   const [angle, setAngle] = useState(OPEN_ANGLE);
   const [pulseScale, setPulseScale] = useState(0.04);
   const [pulseOpacity, setPulseOpacity] = useState(0);
+  const hexColor = useColorCycle();
   useApertureBlink(setAngle);
 
   const pulseRef = useRef<number | null>(null);
@@ -113,11 +147,11 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
           <ClipPath id="lClip"><Circle cx={ix} cy={iy} r={iClip} /></ClipPath>
         </Defs>
 
-        {/* Hex pulse — born small, expands to border, fades */}
+        {/* Hex pulse — born small, expands, fades */}
         <G transform="translate(110,70)">
           <Polygon
             points="0,-65 56.3,-32.5 56.3,32.5 0,65 -56.3,32.5 -56.3,-32.5"
-            fill="none" stroke="#fee229" strokeWidth={3} strokeLinejoin="round"
+            fill="none" stroke={hexColor} strokeWidth={3} strokeLinejoin="round"
             opacity={pulseOpacity}
             transform={`scale(${pulseScale})`}
           />
@@ -125,20 +159,18 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
 
         {/* Hex — black outline outside */}
         <Polygon points={HEX} fill="none" stroke="#1a1f2e" strokeWidth={8} strokeLinejoin="round" />
-        {/* Hex — gold main */}
-        <Polygon points={HEX} fill="none" stroke="#fee229" strokeWidth={5} strokeLinejoin="round" />
-        {/* Hex — black outline inside */}
-        <Polygon points={HEX} fill="none" stroke="#1a1f2e" strokeWidth={1.5} strokeLinejoin="round" />
+        {/* Hex — color cycling main stroke */}
+        <Polygon points={HEX} fill="none" stroke={hexColor} strokeWidth={5} strokeLinejoin="round" />
 
         {/* "A" — gold base layer */}
-        <SvgText x="58" y="95" fontFamily="Bungee_400Regular" fontSize="52" fill="#fee229" stroke="#fee229" strokeWidth={2} letterSpacing={1}>A</SvgText>
+        <SvgText x="58" y="95" fontFamily="Bungee_400Regular" fontSize="52" fill={hexColor} stroke={hexColor} strokeWidth={2} letterSpacing={1}>A</SvgText>
         {/* "A" — black inline overlay */}
-        <SvgText x="58" y="95" fontFamily="BungeeInline_400Regular" fontSize="52" fill="#1a1f2e" stroke="#fee229" strokeWidth={1} letterSpacing={1}>A</SvgText>
+        <SvgText x="58" y="95" fontFamily="BungeeInline_400Regular" fontSize="52" fill="#1a1f2e" stroke={hexColor} strokeWidth={1} letterSpacing={1}>A</SvgText>
 
         {/* "I" — gold base */}
-        <SvgText x="96" y="95" fontFamily="Bungee_400Regular" fontSize="52" fill="#fee229" stroke="#fee229" strokeWidth={2} letterSpacing={1}>I</SvgText>
+        <SvgText x="96" y="95" fontFamily="Bungee_400Regular" fontSize="52" fill={hexColor} stroke={hexColor} strokeWidth={2} letterSpacing={1}>I</SvgText>
         {/* "I" — black inline overlay */}
-        <SvgText x="96" y="95" fontFamily="BungeeInline_400Regular" fontSize="52" fill="#1a1f2e" stroke="#fee229" strokeWidth={1} letterSpacing={1}>I</SvgText>
+        <SvgText x="96" y="95" fontFamily="BungeeInline_400Regular" fontSize="52" fill="#1a1f2e" stroke={hexColor} strokeWidth={1} letterSpacing={1}>I</SvgText>
 
         {/* Iris — black center */}
         <Circle cx={ix} cy={iy} r={iOuter} fill="#091622" />
@@ -160,12 +192,11 @@ export function AIOmniLogo({ width = 280 }: { width?: number }) {
         <Circle cx={ix} cy={iy} r={17} fill="none" stroke="#091622" strokeWidth={6} />
         {/* Outer rim */}
         <Circle cx={ix} cy={iy} r={iOuter} fill="none" stroke="#ffffed" strokeWidth={1.2} />
-        <Circle cx={ix} cy={iy} r={14.5} fill="none" stroke="#1a3a5a" strokeWidth={0.4} />
 
         {/* "mni" — gold base */}
-        <SvgText x="178" y="90" fontFamily="Bungee_400Regular" fontSize="34" fill="#fee229" stroke="#fee229" strokeWidth={1.5} letterSpacing={2}>mni</SvgText>
+        <SvgText x="178" y="90" fontFamily="Bungee_400Regular" fontSize="34" fill={hexColor} stroke={hexColor} strokeWidth={1.5} letterSpacing={2}>mni</SvgText>
         {/* "mni" — black inline overlay */}
-        <SvgText x="178" y="90" fontFamily="BungeeInline_400Regular" fontSize="34" fill="#1a1f2e" stroke="#fee229" strokeWidth={0.8} letterSpacing={2}>mni</SvgText>
+        <SvgText x="178" y="90" fontFamily="BungeeInline_400Regular" fontSize="34" fill="#1a1f2e" stroke={hexColor} strokeWidth={0.8} letterSpacing={2}>mni</SvgText>
       </Svg>
     </View>
   );

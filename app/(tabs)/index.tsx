@@ -683,7 +683,7 @@ const styles = StyleSheet.create({
   insightTop: { flexDirection: 'row', marginBottom: 12, alignItems: 'center' },
   insightIconWrap: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', borderWidth: 1.25, borderColor: 'rgba(88,131,191,0.18)' },
   insightEmoji: { fontSize: SZ.xl },
-  insightTitle: { fontSize: SZ.base, color: '#fee229', textShadowColor: 'rgba(61,106,170,0.7)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8, fontFamily: F.bold, marginBottom: 4 },
+  insightTitle: { fontSize: SZ.base, color: '#3d6aaa', textShadowColor: 'rgba(61,106,170,0.7)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8, fontFamily: F.bold, marginBottom: 4 },
   insightBody: { fontSize: SZ.sm, color: C.dim, lineHeight: 18 },
   insightTag: { alignSelf: 'flex-start', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
   insightTagTxt: { fontSize: SZ.xs, fontFamily: F.mono, letterSpacing: 0.5 },
