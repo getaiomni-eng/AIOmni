@@ -297,7 +297,7 @@ export default function HomeScreen() {
         while ((match = itemRegex.exec(xml)) !== null) {
           const itemXml = match[1];
           const titleMatch = itemXml.match(/<title>(.*?)<\/title>/);
-          const linkMatch  = itemXml.match(/<link>(.*?)<\/link>/);
+          const linkMatch = itemXml.match(/<link>(.*?)<\/link>/) || itemXml.match(/<guid[^>]*>(http[^<]*)<\/guid>/);
           if (titleMatch && items.length < 3) {
             items.push({
               source,
@@ -638,7 +638,7 @@ const styles = StyleSheet.create({
   newsLabelRow: { flexDirection: 'row', alignItems: 'center' },
   newsEye: { fontSize: 16, fontFamily: F.bold, color: '#fee229', textShadowColor: 'rgba(61,106,170,0.6)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8, letterSpacing: 2 },
   newsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
-  newsChip: { backgroundColor: 'rgba(254,226,41,0.25)', borderRadius: 12, padding: 12, borderWidth: 1.5, borderColor: 'rgba(200,177,0,0.5)', minWidth: 240, flexDirection: 'row', alignItems: 'flex-start', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 4 },
+  newsChip: { backgroundColor: '#fee229', borderRadius: 12, padding: 12, borderWidth: 1.5, borderColor: 'rgba(200,177,0,0.5)', minWidth: 240, flexDirection: 'row', alignItems: 'flex-start', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 16, elevation: 4 },
   newsDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8, marginTop: 2 },
   newsSource: { fontSize: 10, fontFamily: F.mono, fontWeight: '700', letterSpacing: 1, marginBottom: 2 },
   newsText: { fontSize: 13, color: '#7a6a00', lineHeight: 18, fontFamily: F.outfit },
@@ -646,8 +646,8 @@ const styles = StyleSheet.create({
   loadingTxt: { fontSize: SZ.sm, color: C.dim2, marginTop: 12, fontFamily: F.mono },
   scoreCard: { ...BEVEL.card, padding: 18, backgroundColor: 'rgba(255,255,255,0.95)' },
   platformRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12 },
-  seasonPill: { backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 16, borderWidth: 1.5, borderColor: C.goldBorder, paddingHorizontal: 12, paddingVertical: 6 },
-  seasonPillText: { fontSize: 10, fontFamily: F.mono, color: C.ink, letterSpacing: 0.5 },
+  seasonPill: { backgroundColor: 'rgba(61,106,170,0.95)', borderRadius: 16, borderWidth: 2, borderColor: '#fee229', shadowColor: '#fee229', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 4, paddingHorizontal: 12, paddingVertical: 6 },
+  seasonPillText: { fontSize: 10, fontFamily: F.mono, color: '#fee229', textShadowColor: 'rgba(254,226,41,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6, letterSpacing: 0.5 },
   platformToggles: { flexDirection: 'row', gap: 8, flex: 1, justifyContent: 'center' },
   platformToggle: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 2, borderColor: 'rgba(255,255,237,0.2)', backgroundColor: 'rgba(61,106,170,0.95)' },
   platformToggleOn: { borderColor: C.blueDeep, borderWidth: 2 },
@@ -679,11 +679,11 @@ const styles = StyleSheet.create({
   swipeHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   swipeArrowLeft: { transform: [{ rotate: '180deg' }] },
   insightsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
-  insightCard: { padding: 18, backgroundColor: 'rgba(254,226,41,0.3)', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(254,226,41,0.5)', borderTopColor: 'rgba(255,255,255,0.6)', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 14, elevation: 5 },
+  insightCard: { padding: 18, backgroundColor: '#fee229', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(254,226,41,0.5)', borderTopColor: 'rgba(255,255,255,0.6)', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 18, elevation: 5 },
   insightTop: { flexDirection: 'row', marginBottom: 12, alignItems: 'center' },
   insightIconWrap: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', borderWidth: 1.25, borderColor: 'rgba(88,131,191,0.18)' },
   insightEmoji: { fontSize: SZ.xl },
-  insightTitle: { fontSize: SZ.base, color: '#7a6a00', fontFamily: F.bold, marginBottom: 4 },
+  insightTitle: { fontSize: SZ.base, color: '#fee229', textShadowColor: 'rgba(61,106,170,0.7)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8, fontFamily: F.bold, marginBottom: 4 },
   insightBody: { fontSize: SZ.sm, color: C.dim, lineHeight: 18 },
   insightTag: { alignSelf: 'flex-start', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
   insightTagTxt: { fontSize: SZ.xs, fontFamily: F.mono, letterSpacing: 0.5 },
