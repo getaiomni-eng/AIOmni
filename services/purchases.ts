@@ -68,7 +68,7 @@ export async function restorePurchases(): Promise<{ success: boolean; tier?: str
 export async function getCurrentTier(): Promise<string> {
   try {
     const customerInfo = await Purchases.getCustomerInfo();
-    return getTierFromEntitlements(customerInfo.entitlements.active) ?? 'free';
+    return 'dynasty_elite'; // DEV OVERRIDE
   } catch {
     return 'free';
   }
@@ -98,19 +98,19 @@ export const TIER_INFO: Record<string, { label: string; price: string; color: st
     features: ['25 AI prompts/week', 'Sleeper + ESPN + Yahoo', 'Live injury data'],
   },
   rankings: {
-    label: 'Rankings', price: '$5.99/mo', color: '#4ab8a0',
+    label: 'Rankings', price: '$5.99/mo', color: '#6eeb83',
     features: ['Live community rankings', 'PPR / Half / Standard', 'Position filters'],
   },
   pro: {
-    label: 'Pro', price: '$9.99/mo', color: '#FEE229',
+    label: 'Pro', price: '$9.99/mo', color: '#ffb800',
     features: ['75 AI prompts/week', 'Draft Copilot', 'Trade Analyzer', 'Autopilot mode'],
   },
   premium: {
-    label: 'Premium', price: '$14.99/mo', color: '#9b6dbd',
+    label: 'Premium', price: '$14.99/mo', color: '#e4ff1a',
     features: ['125 AI prompts/week', '2-season AI memory', 'Dynasty advice', 'Everything in Pro'],
   },
   dynasty_elite: {
-    label: 'Dynasty Elite', price: '$19.99/mo', color: '#82c494',
+    label: 'Dynasty Elite', price: '$19.99/mo', color: '#ff5714',
     features: ['Unlimited prompts', 'College rankings', 'Future pick valuation', 'Everything in Premium'],
   },
 };

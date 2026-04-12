@@ -19,7 +19,18 @@ export async function loadESPNCredentials(): Promise<ESPNCredentials | null> {
   const espnS2 = await AsyncStorage.getItem('espn_s2');
   const swid = await AsyncStorage.getItem('espn_swid');
   if (!espnS2 || !swid) return null;
-  return { espnS2, swid };
+  const leagueIdsStr = await AsyncStorage.getItem('espn_league_ids');
+  const teamName = await AsyncStorage.getItem('espn_team_name');
+  let leagueId: number | undefined;
+  if (leagueIdsStr) {
+    try {
+      const ids = JSON.parse(leagueIdsStr);
+      leagueId = Array.isArray(ids) ? ids[0] : parseInt(leagueIdsStr);
+    } catch {
+      leagueId = parseInt(leagueIdsStr);
+    }
+  }
+  return { espnS2, swid, leagueId, teamName: teamName ?? undefined };
 }
 
 export async function clearESPNCredentials() {

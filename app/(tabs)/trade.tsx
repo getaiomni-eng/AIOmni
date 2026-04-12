@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
+
 import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,9 +23,9 @@ const GRADE_COLOR: Record<Grade, string> = {
   'A+': '#1e8c42',
   A: '#1e8c42',
   'A-': '#1e8c42',
-  'B+': '#fee229',
-  B: '#fee229',
-  'B-': '#fee229',
+  'B+': '#ffb800',
+  B: '#ffb800',
+  'B-': '#ffb800',
   'C+': '#b87820',
   C: '#b87820',
   'C-': '#b87820',
@@ -86,7 +86,7 @@ export default function TradesScreen() {
   };
 
   return (
-    <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#0a1214' }}>
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: SP[3], paddingBottom: 80 }}
         showsVerticalScrollIndicator={false}
@@ -117,7 +117,7 @@ export default function TradesScreen() {
         </View>
 
         <View style={styles.inputCard}>
-          <Text style={styles.fieldLbl}>📤 YOU ARE GIVING</Text>
+          <Text style={styles.fieldLbl}>YOU ARE GIVING</Text>
           <TextInput
             value={giving}
             onChangeText={text => setGiving(text)}
@@ -135,7 +135,7 @@ export default function TradesScreen() {
         </View>
 
         <View style={[styles.inputCard, { marginBottom: 12 }]}> 
-          <Text style={styles.fieldLbl}>📥 YOU ARE RECEIVING</Text>
+          <Text style={styles.fieldLbl}>YOU ARE RECEIVING</Text>
           <TextInput
             value={getting}
             onChangeText={text => setGetting(text)}
@@ -222,7 +222,7 @@ export default function TradesScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   headline: {
-    color: C.ink,
+    color: '#f0f4f5',
     fontFamily: F.bold,
     fontSize: SZ['3xl'] - 2,
     lineHeight: 36,
@@ -245,9 +245,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 4,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: '#12252e',
     borderWidth: 1.5,
-    borderColor: 'rgba(88,131,191,0.34)',
+    borderColor: '#1a3542',
     marginBottom: 16,
   },
   toggleBtn: {
@@ -257,27 +257,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toggleBtnOn: {
-    backgroundColor: "#ffffff",
-    shadowColor: '#3d6aaa',
+    backgroundColor: '#1a3542',
+    shadowColor: '#1be7ff',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
     shadowRadius: 16,
     elevation: 4,
   },
-  toggleTxt: {
+  toggleTxt: { fontFamily: 'Audiowide_400Regular',
     fontFamily: F.mono,
     fontSize: SZ.xs,
     color: C.dim2,
   },
-  toggleTxtOn: {
-    color: C.ink,
+  toggleTxtOn: { fontFamily: 'Audiowide_400Regular',
+    color: '#f0f4f5',
     fontFamily: F.mono,
   },
   inputCard: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: '#12252e',
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: 'rgba(88,131,191,0.18)',
+    borderColor: '#1a3542',
     padding: 16,
     marginBottom: 12,
   },
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   },
   input: {
     minHeight: 110,
-    color: C.ink,
+    color: '#f0f4f5',
     fontFamily: F.mono,
     fontSize: SZ.sm,
     lineHeight: 20,
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   divLine: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(88,131,191,0.28)',
+    backgroundColor: '#12252e',
   },
   forTxt: {
     color: C.dim2,
@@ -320,16 +320,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   exCard: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: '#12252e',
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: 1.5,
-    borderColor: 'rgba(88,131,191,0.18)',
+    borderColor: '#1a3542',
     marginRight: 8,
   },
   exTxt: {
-    color: C.ink,
+    color: '#f0f4f5',
     fontFamily: F.mono,
     fontSize: SZ.sm,
   },
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: 'rgba(88,131,191,0.24)',
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: '#12252e',
   },
   analyzeBtnOn: {
     backgroundColor: C.blueDeep,
@@ -362,11 +362,11 @@ const styles = StyleSheet.create({
     color: "#ffffff",
   },
   resultCard: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: '#12252e',
     borderRadius: 16,
     padding: 18,
     borderWidth: 1.5,
-    borderColor: 'rgba(88,131,191,0.18)',
+    borderColor: '#1a3542',
     marginTop: 18,
   },
   resultCardShine: {
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     left: '10%',
     right: '10%',
     height: 2,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: '#12252e',
     borderRadius: 2,
   },
   gradeRow: {
@@ -384,13 +384,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   gradeBox: {
-    backgroundColor: 'rgba(217,253,243,0.8)',
+    backgroundColor: '#0f1c22',
     borderRadius: 14,
     padding: 14,
     alignItems: 'center',
   },
   gradeLbl: {
-    color: C.dim2,
+    color: '#7a9eaa',
     fontSize: SZ.xs,
     fontFamily: F.mono,
     letterSpacing: 1.2,
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   analysis: {
-    color: C.ink,
+    color: '#f0f4f5',
     fontSize: SZ.sm,
     lineHeight: 22,
     marginBottom: 12,
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   verdictTxt: {
-    color: C.ink,
+    color: '#f0f4f5',
     fontFamily: F.outfit,
     fontSize: SZ.sm,
   },

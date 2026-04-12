@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   injTxt:    { fontSize: SZ.xxs, fontFamily: F.mono, fontWeight: '700' },
   shd:       { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7 },
   sbar:      { width: 3, height: 14, borderRadius: 2 },
-  slbl:      { fontSize: SZ.xs, fontFamily: F.bold, color: C.blueDeep, letterSpacing: 2 },
+  slbl:      { fontSize: SZ.xs, fontFamily: F.bold, color: '#1be7ff', letterSpacing: 2 },
   sline:     { flex: 1, height: 1, backgroundColor: 'rgba(88,131,191,0.15)' },
   track:     { backgroundColor: 'rgba(88,131,191,0.10)', borderRadius: 2, overflow: 'hidden' },
   fill:      { height: '100%' as any, borderRadius: 2 },

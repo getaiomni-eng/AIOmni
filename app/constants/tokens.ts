@@ -1,153 +1,159 @@
-//  AIOmni Design Tokens v6
-//  Cream × Steel Blue × #FEE229 Gold  —  Light Theme
-//  Fonts: Bungee (headings/scores) · Space Mono (everything else)
+// AIOmni Design Tokens v7
+// Palette #6: Electric Aqua · Light Green · Neon Chartreuse · Amber Flame · Tiger Flame
+// Fonts: Audiowide (headings/scores/nav) + Space Grotesk (body/data)
+// Dark mode default, light mode toggle
 
-export const C = {
-  bgTop:       '#ffffed',
-  bgBot:       '#f0f0d0',
-  phone:       '#ffffed',
-  phone2:      '#f5f5d5',
-
-  glass:       'rgba(255,255,255,0.90)',
-  glassBorder: 'rgba(88,131,191,0.38)',
-  glassShine:  'rgba(255,255,255,0.95)',
-  surface:     'rgba(255,255,255,0.82)',
-  surfBorder:  'rgba(88,131,191,0.22)',
-  surfShine:   'rgba(255,255,255,0.90)',
-
-  ink:         '#1a1f2e',
-  ink2:        '#3a4255',
-  dim:         'rgba(26,31,46,0.70)',
-  dim2:        'rgba(26,31,46,0.42)',
-
-  gold:        '#fee229',
-  goldBright:  '#fee229',
-  goldS:       'rgba(254,226,41,0.22)',
-  goldG:       'rgba(254,226,41,0.40)',
-  goldBorder:  'rgba(254,226,41,0.50)',
-
-  sage:        '#5883bf',
-  sageS:       'rgba(88,131,191,0.10)',
-  sageG:       'rgba(88,131,191,0.22)',
-  sageBorder:  'rgba(88,131,191,0.28)',
-
-  blueDeep:    '#3d6aaa',
-  blueLight:   '#7aa3d4',
-
-  mint:        '#1e8c42',
-  mintS:       'rgba(30,140,66,0.12)',
-
-  qb: '#7b5ea7', qbBg: 'rgba(123,94,167,0.12)',
-  rb: '#1e8c42', rbBg: 'rgba(30,140,66,0.12)',
-  wr: '#2a7aaa', wrBg: 'rgba(42,122,170,0.12)',
-  te: '#b85a1a', teBg: 'rgba(184,90,26,0.12)',
-  k:  '#6b7491', kBg:  'rgba(107,116,145,0.10)',
-
-  amber:  '#b87820', amberS: 'rgba(184,120,32,0.15)',
-  mauve:  '#7b5ea7', mauveS: 'rgba(123,94,167,0.12)',
-  ocean:  '#3d6aaa', oceanS: 'rgba(61,106,170,0.12)',
-  rose:   '#a83040', roseS:  'rgba(168,48,64,0.12)',
+// ─── PALETTE ───────────────────────────────────────────────
+export const palette = {
+  aqua:       '#1be7ff',
+  green:      '#6eeb83',
+  chartreuse: '#e4ff1a',
+  amber:      '#ffb800',
+  flame:      '#ff5714',
 } as const;
 
+// ─── THEME TOKENS ──────────────────────────────────────────
+export const dark = {
+  bg:          '#0a1214',
+  surface:     '#0f1c22',
+  card:        '#12252e',
+  text:        '#f0f4f5',
+  textSub:     '#7a9eaa',
+  textMuted:   '#4a6a76',
+  border:      '#1a3542',
+  borderLight: '#14282f',
+  navBg:       '#0c1618',
+  inputBg:     '#0f1e25',
+} as const;
+
+export const light = {
+  bg:          '#f0f5f6',
+  surface:     '#e8eff1',
+  card:        '#ffffff',
+  text:        '#0a1a20',
+  textSub:     '#3a6070',
+  textMuted:   '#8aa4ae',
+  border:      '#d4dfe3',
+  borderLight: '#e4ecef',
+  navBg:       '#ffffff',
+  inputBg:     '#e8f0f2',
+} as const;
+
+// ─── BACKWARD COMPAT — C object maps to dark theme ────────
+// This lets old code using C.xxx keep working during migration
+export const C = {
+  // Backgrounds
+  bgTop:       dark.bg,
+  bgBot:       dark.bg,
+  phone:       dark.bg,
+  phone2:      dark.surface,
+
+  // Surfaces
+  glass:       dark.card,
+  glassBorder: dark.border,
+  glassShine:  dark.borderLight,
+  surface:     dark.surface,
+  surfBorder:  dark.border,
+  surfShine:   dark.borderLight,
+
+  // Text
+  ink:         dark.text,
+  ink2:        dark.textSub,
+  dim:         dark.textSub,
+  dim2:        dark.textMuted,
+
+  // Brand — map old gold/blue to new palette
+  gold:        palette.aqua,
+  goldBright:  palette.aqua,
+  goldS:       palette.aqua + '22',
+  goldG:       palette.aqua + '40',
+  goldBorder:  palette.aqua + '50',
+
+  sage:        palette.green,
+  sageS:       palette.green + '18',
+  sageG:       palette.green + '22',
+  sageBorder:  palette.green + '28',
+
+  blueDeep:    palette.aqua,
+  blueLight:   palette.aqua,
+
+  mint:        palette.green,
+  mintS:       palette.green + '18',
+
+  // Position colors
+  qb: '#a78bfa', qbBg: 'rgba(167,139,250,0.15)',
+  rb: palette.green, rbBg: palette.green + '15',
+  wr: palette.aqua, wrBg: palette.aqua + '15',
+  te: palette.amber, teBg: palette.amber + '15',
+  k:  dark.textMuted, kBg: dark.textMuted + '15',
+
+  // Signal colors
+  amber:  palette.amber,  amberS: palette.amber + '18',
+  mauve:  '#a78bfa',       mauveS: 'rgba(167,139,250,0.15)',
+  ocean:  palette.aqua,   oceanS: palette.aqua + '15',
+  rose:   palette.flame,  roseS:  palette.flame + '15',
+} as const;
+
+// ─── BEVEL — now flat cards ────────────────────────────────
 export const BEVEL = {
   card: {
-    backgroundColor: C.glass,
-    borderWidth: 1.5,
-    borderColor: C.glassBorder,
-    borderTopColor: C.glassShine,
-    borderLeftColor: C.surfShine,
-    borderBottomColor: C.sageBorder,
-    borderRightColor: C.sageBorder,
-    borderRadius: 16,
-    shadowColor: C.blueDeep,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10,
-    shadowRadius: 14,
-    elevation: 4,
+    backgroundColor: dark.card,
+    borderWidth: 1,
+    borderColor: dark.border,
+    borderRadius: 14,
   },
   blueCard: {
-    backgroundColor: C.oceanS,
-    borderWidth: 1.5,
-    borderColor: C.glassBorder,
-    borderTopColor: C.glassShine,
-    borderLeftColor: C.surfShine,
-    borderBottomColor: C.sageBorder,
-    borderRightColor: C.sageBorder,
-    borderRadius: 16,
-    shadowColor: C.blueDeep,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10,
-    shadowRadius: 14,
-    elevation: 4,
+    backgroundColor: dark.surface,
+    borderWidth: 1,
+    borderColor: dark.border,
+    borderRadius: 14,
   },
   goldCard: {
-    backgroundColor: 'rgba(254,226,41,0.15)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(254,226,41,0.5)',
-    borderTopColor: 'rgba(255,255,255,0.95)',
-    borderLeftColor: 'rgba(254,226,41,0.35)',
-    borderBottomColor: 'rgba(200,177,0,0.4)',
-    borderRightColor: 'rgba(200,177,0,0.3)',
-    borderRadius: 16,
-    shadowColor: '#fee229',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 6,
+    backgroundColor: palette.aqua + '10',
+    borderWidth: 1,
+    borderColor: palette.aqua + '25',
+    borderRadius: 14,
   },
   shine: {
-    position: 'absolute',
-    top: 0,
-    left: '8%',
-    right: '8%',
-    height: 1.5,
-    backgroundColor: C.glassShine,
-    zIndex: 6,
+    // No shine in v7 — keep the key so old references don't crash
+    position: 'absolute' as const,
+    top: 0, left: 0, right: 0, height: 0,
+    backgroundColor: 'transparent',
   },
-  tabBar: { backgroundColor: '#3d6aaa',
-    backgroundColor: C.bgTop,
-    borderTopWidth: 1.5,
-    borderTopColor: C.glassShine,
-    borderLeftColor: C.surfShine,
-    borderBottomColor: C.sageBorder,
-    borderRightColor: C.sageBorder,
-    shadowColor: C.blueDeep,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 12,
+  tabBar: {
+    backgroundColor: dark.navBg,
+    borderTopWidth: 1,
+    borderTopColor: dark.border,
   },
 } as const;
 
-// ─────────────────────────────────────────────
-// FONTS — Bungee (headings/scores) + Space Mono (everything else)
-// Matches landing page at getaiomni.com
-// ─────────────────────────────────────────────
+// ─── FONTS ─────────────────────────────────────────────────
 export const F = {
-  // Headings / display / scores
-  bold:       'Bungee_400Regular',
-  black:      'Bungee_400Regular',
-  extrabold:  'Bungee_400Regular',
-  score:      'Bungee_400Regular',
-  bebas:      'Bungee_400Regular',
+  // Headings / display / scores — Audiowide
+  bold:       'Audiowide_400Regular',
+  black:      'Audiowide_400Regular',
+  extrabold:  'Audiowide_400Regular',
+  score:      'Audiowide_400Regular',
+  bebas:      'Audiowide_400Regular',
 
-  // Body / everything else — Space Mono
-  outfit:     'SpaceMono_400Regular',
-  body:       'SpaceMono_400Regular',
-  bodyBold:   'SpaceMono_700Bold',
-  semibold:   'SpaceMono_700Bold',
-  barlow:     'SpaceMono_400Regular',
-  barlowMd:   'SpaceMono_400Regular',
-  barlowSb:   'SpaceMono_700Bold',
-  barlowBd:   'SpaceMono_700Bold',
+  // Body / everything else — Space Grotesk
+  outfit:     'SpaceGrotesk_400Regular',
+  body:       'SpaceGrotesk_400Regular',
+  bodyBold:   'SpaceGrotesk_700Bold',
+  semibold:   'SpaceGrotesk_600SemiBold',
+  barlow:     'SpaceGrotesk_400Regular',
+  barlowMd:   'SpaceGrotesk_500Medium',
+  barlowSb:   'SpaceGrotesk_600SemiBold',
+  barlowBd:   'SpaceGrotesk_700Bold',
 
-  // Mono / data — also Space Mono
-  mono:       'SpaceMono_400Regular',
-  monoBold:   'SpaceMono_700Bold',
-  spaceMono:   'SpaceMono_400Regular',
-  spaceMonoBd: 'SpaceMono_700Bold',
+  // Mono / data — Space Grotesk (it has monospaced DNA)
+  mono:       'SpaceGrotesk_400Regular',
+  monoBold:   'SpaceGrotesk_700Bold',
+  spaceMono:   'SpaceGrotesk_400Regular',
+  spaceMonoBd: 'SpaceGrotesk_700Bold',
 } as const;
 
+// ─── SIZES / RADII / SPACING ──────────────────────────────
 export const SZ = {
   xxs: 8, xs: 11, sm: 13, md: 15,
   base: 16, lg: 18, xl: 20,
@@ -162,20 +168,23 @@ export const SP = {
   1:4, 2:8, 3:12, 4:16, 5:20, 6:24, 8:32, 10:40, 12:48,
 } as const;
 
+// ─── SHADOWS — simplified ──────────────────────────────────
 export const shadow = {
-  glass:    { shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 6 },
-  card:     { shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.10, shadowRadius: 12, elevation: 3 },
-  goldGlow: { shadowColor: '#fee229', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5,  shadowRadius: 16, elevation: 8 },
-  blueGlow: { shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4,  shadowRadius: 14, elevation: 8 },
-  glow: (color: string, radius = 14, opacity = 0.45) => ({ shadowColor: color, shadowOffset: { width: 0, height: 0 }, shadowOpacity: opacity, shadowRadius: radius, elevation: 8 }),
+  glass:    { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 4 },
+  card:     { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.10, shadowRadius: 8, elevation: 2 },
+  goldGlow: { shadowColor: palette.aqua, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 4 },
+  blueGlow: { shadowColor: palette.aqua, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 4 },
+  glow: (color: string, radius = 12, opacity = 0.3) => ({
+    shadowColor: color, shadowOffset: { width: 0, height: 0 }, shadowOpacity: opacity, shadowRadius: radius, elevation: 4,
+  }),
 } as const;
 
 export const textShadow = {
-  hero: { textShadowColor: 'rgba(61,106,170,0.12)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
-  body: { textShadowColor: 'transparent', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 0 },
+  hero:   { textShadowColor: 'transparent', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 0 },
+  body:   { textShadowColor: 'transparent', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 0 },
   subtle: { textShadowColor: 'transparent', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 0 },
-  gold: { textShadowColor: 'rgba(254,226,41,0.6)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12 },
-  blue: { textShadowColor: 'rgba(61,106,170,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
+  gold:   { textShadowColor: 'transparent', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 0 },
+  blue:   { textShadowColor: 'transparent', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 0 },
 } as const;
 
 export const POS: Record<string, { color: string; bg: string }> = {
@@ -185,6 +194,53 @@ export const POS: Record<string, { color: string; bg: string }> = {
   TE:  { color: C.te,    bg: C.teBg   },
   K:   { color: C.k,     bg: C.kBg    },
   FLX: { color: C.rb,    bg: C.rbBg   },
-  BN:  { color: C.dim2,  bg: 'rgba(26,31,46,0.06)' },
+  BN:  { color: dark.textMuted, bg: dark.textMuted + '10' },
   DEF: { color: C.mauve, bg: C.mauveS },
+};
+
+// ─── OLD Colors export for any file still importing it ─────
+export const Colors = {
+  y:          palette.aqua,
+  yHot:       palette.chartreuse,
+  yGlow:      palette.aqua + '15',
+  yGlowHi:    palette.aqua + '28',
+  yGlowXl:    palette.aqua + '50',
+  void:       dark.bg,
+  background: dark.bg,
+  surface:    dark.surface,
+  surfaceHi:  dark.card,
+  border:     dark.border,
+  borderHi:   palette.aqua + '30',
+  white:      dark.text,
+  offW:       dark.textSub,
+  dim:        dark.textMuted,
+  dimLo:      dark.textMuted + '40',
+  ghost:      'rgba(255,255,255,0.05)',
+  ghost2:     'rgba(255,255,255,0.08)',
+  red:        palette.flame,
+  redG:       palette.flame + '18',
+  green:      palette.green,
+  greenG:     palette.green + '18',
+  amber:      palette.amber,
+  amberG:     palette.amber + '18',
+  purple:     '#a78bfa',
+  cyan:       palette.aqua,
+  pink:       palette.flame,
+  slate:      dark.textMuted,
+};
+
+export const PosColors: Record<string, string> = {
+  QB: '#a78bfa',
+  RB: palette.green,
+  WR: palette.aqua,
+  TE: palette.amber,
+  K:  palette.flame,
+  DST: dark.textMuted,
+};
+
+export const StatusColors: Record<string, string | null> = {
+  Active:       null,
+  Questionable: palette.amber,
+  Doubtful:     palette.flame,
+  Out:          palette.flame,
 };

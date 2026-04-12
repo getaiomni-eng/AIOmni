@@ -4,9 +4,9 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { signOut } from '../../services/auth';
-import { clearESPNCredentials } from '../../services/espn';
-import { dark, F, palette, SP } from '../constants/tokens';
+import { signOut } from '../services/auth';
+import { clearESPNCredentials } from '../services/espn';
+import { dark, F, palette, SP } from './constants/tokens';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -29,7 +29,7 @@ export default function SettingsScreen() {
     if (e) setEmail(e);
     const espn = await AsyncStorage.getItem('espn_s2');
     setEspnLinked(!!espn);
-    const yahoo = await AsyncStorage.getItem('yahoo_tokens');
+    const yahoo = await AsyncStorage.getItem('yahoo_access_token');
     setYahooLinked(!!yahoo);
   };
 
@@ -56,7 +56,7 @@ export default function SettingsScreen() {
   const handleDisconnectYahoo = () => {
     Alert.alert('Disconnect Yahoo', 'Remove Yahoo connection?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Disconnect', style: 'destructive', onPress: async () => { const { clearYahooTokens } = require('../../services/yahoo'); await clearYahooTokens(); setYahooLinked(false); } },
+      { text: 'Disconnect', style: 'destructive', onPress: async () => { await AsyncStorage.removeItem('yahoo_access_token'); setYahooLinked(false); } },
     ]);
   };
 
@@ -119,23 +119,7 @@ export default function SettingsScreen() {
             <Text style={s.rowLabel}>ESPN</Text>
             <Text style={[s.rowValue, { color: espnLinked ? palette.green : palette.amber }]}>{espnLinked ? 'Connected' : 'Connect →'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[s.row, { borderBottomWidth: 0 }]} onPress={yahooLinked ? handleDisconnectYahoo : async () => {
-              try {
-                const { getYahooAuthURL, exchangeYahooCode, getValidYahooToken } = require('../../services/yahoo');
-                const WebBrowser = require('expo-web-browser');
-                const authUrl = await getYahooAuthURL();
-                const result = await WebBrowser.openAuthSessionAsync(authUrl, 'aiomnifantasy://oauth/yahoo');
-                if (result.type === 'success' && result.url) {
-                  const parsed = new URL(result.url);
-                  const code = parsed.searchParams.get('code');
-                  if (code) {
-                    await exchangeYahooCode(code);
-                    setYahooLinked(true);
-                    Alert.alert('Yahoo Connected!', 'Your Yahoo leagues will appear on the Home tab.');
-                  }
-                }
-              } catch (err: any) { Alert.alert('Yahoo Error', err.message || 'Failed to connect'); }
-            }}>
+          <TouchableOpacity style={[s.row, { borderBottomWidth: 0 }]} onPress={yahooLinked ? handleDisconnectYahoo : async () => { const { getYahooAuthURL } = require('../services/yahoo'); const url = await getYahooAuthURL(); Linking.openURL(url); }}>
             <View style={[s.dot, { backgroundColor: '#7c3aed' }]} />
             <Text style={s.rowLabel}>Yahoo</Text>
             <Text style={[s.rowValue, { color: yahooLinked ? palette.green : palette.amber }]}>{yahooLinked ? 'Connected' : 'Connect →'}</Text>

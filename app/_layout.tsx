@@ -1,6 +1,11 @@
-import { Bungee_400Regular } from '@expo-google-fonts/bungee';
-import { BungeeInline_400Regular } from '@expo-google-fonts/bungee-inline';
-import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
+import { Audiowide_400Regular } from '@expo-google-fonts/audiowide';
+import {
+  SpaceGrotesk_300Light,
+  SpaceGrotesk_400Regular,
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold,
+  SpaceGrotesk_700Bold,
+} from '@expo-google-fonts/space-grotesk';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
 import { useFonts } from 'expo-font';
@@ -9,9 +14,9 @@ import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { exchangeYahooCode } from '../services/yahoo';
 import { getUser, getUserRow } from '../services/supabase';
-import { C } from './constants/tokens';
+import { exchangeYahooCode } from '../services/yahoo';
+import { dark } from './constants/tokens';
 
 Sentry.init({
   dsn: 'https://bff368e4055a1f51bda1b9464e0d2a39@o4511046397394944.ingest.us.sentry.io/4511046438158336',
@@ -23,40 +28,39 @@ export default Sentry.wrap(function RootLayout() {
   const router = useRouter();
 
   const [fontsLoaded] = useFonts({
-    // ── Primary fonts ────────────────────────
-    Bungee_400Regular,
-    BungeeInline_400Regular,
-    SpaceMono_400Regular,
-    SpaceMono_700Bold,
+    // ── V7 Primary fonts ─────────────────────
+    Audiowide_400Regular,
+    SpaceGrotesk_300Light,
+    SpaceGrotesk_400Regular,
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_600SemiBold,
+    SpaceGrotesk_700Bold,
 
     // ── Legacy aliases — keeps all old hardcoded strings working ──
-    'BebasNeue':               Bungee_400Regular,
-    BungeeInline_400Regular,
-    'BebasNeue_400Regular':    Bungee_400Regular,
-    BungeeInline_400Regular,
-    'Barlow_400Regular':       SpaceMono_400Regular,
-    'Barlow_600SemiBold':      SpaceMono_700Bold,
-    'SpaceMono':               SpaceMono_400Regular,
-    'SpaceMono-Bold':          SpaceMono_700Bold,
-    'Outfit':                  SpaceMono_400Regular,
-    'Outfit-Medium':           SpaceMono_400Regular,
-    'Outfit-SemiBold':         SpaceMono_700Bold,
-    'Outfit-Bold':             Bungee_400Regular,
-    BungeeInline_400Regular,
-    'Outfit-Black':            Bungee_400Regular,
-    BungeeInline_400Regular,
-    'DMMono-Regular':          SpaceMono_400Regular,
-    'DMMono-Medium':           SpaceMono_700Bold,
-    'Oswald_600SemiBold':      Bungee_400Regular,
-    BungeeInline_400Regular,
-    'Oswald_700Bold':          Bungee_400Regular,
-    BungeeInline_400Regular,
-    'Inter_400Regular':        SpaceMono_400Regular,
-    'Inter_600SemiBold':       SpaceMono_700Bold,
-    'JetBrainsMono_400Regular': SpaceMono_400Regular,
-    'JetBrainsMono_700Bold':   SpaceMono_700Bold,
-    'Orbitron_700Bold':        Bungee_400Regular,
-    BungeeInline_400Regular,
+    'Bungee_400Regular':       Audiowide_400Regular,
+    'BungeeInline_400Regular': Audiowide_400Regular,
+    'BebasNeue':               Audiowide_400Regular,
+    'BebasNeue_400Regular':    Audiowide_400Regular,
+    'Barlow_400Regular':       SpaceGrotesk_400Regular,
+    'Barlow_600SemiBold':      SpaceGrotesk_600SemiBold,
+    'SpaceMono_400Regular':    SpaceGrotesk_400Regular,
+    'SpaceMono_700Bold':       SpaceGrotesk_700Bold,
+    'SpaceMono':               SpaceGrotesk_400Regular,
+    'SpaceMono-Bold':          SpaceGrotesk_700Bold,
+    'Outfit':                  SpaceGrotesk_400Regular,
+    'Outfit-Medium':           SpaceGrotesk_500Medium,
+    'Outfit-SemiBold':         SpaceGrotesk_600SemiBold,
+    'Outfit-Bold':             SpaceGrotesk_700Bold,
+    'Outfit-Black':            Audiowide_400Regular,
+    'DMMono-Regular':          SpaceGrotesk_400Regular,
+    'DMMono-Medium':           SpaceGrotesk_500Medium,
+    'Oswald_600SemiBold':      Audiowide_400Regular,
+    'Oswald_700Bold':          Audiowide_400Regular,
+    'Inter_400Regular':        SpaceGrotesk_400Regular,
+    'Inter_600SemiBold':       SpaceGrotesk_600SemiBold,
+    'JetBrainsMono_400Regular': SpaceGrotesk_400Regular,
+    'JetBrainsMono_700Bold':   SpaceGrotesk_700Bold,
+    'Orbitron_700Bold':        Audiowide_400Regular,
   });
 
   useEffect(() => {
@@ -78,7 +82,6 @@ export default Sentry.wrap(function RootLayout() {
         const hasLeagues = hasSleeper || Boolean(espnIds) || Boolean(yahooTokens);
 
         if (false && !hasLeagues) {
-          router.replace('/auth' as any);
         } else {
           router.replace('/(tabs)');
         }
@@ -107,7 +110,7 @@ export default Sentry.wrap(function RootLayout() {
     return () => subscription.remove();
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: C.bgTop }} />;
+  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: dark.bg }} />;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -118,6 +121,9 @@ export default Sentry.wrap(function RootLayout() {
         <Stack.Screen name="paywall"    options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="settings"   options={{ headerShown: false }} />
         <Stack.Screen name="espn-login" options={{ headerShown: false }} />
+        <Stack.Screen name="settings-page" options={{ headerShown: false }} />
+        <Stack.Screen name="draft" options={{ headerShown: false }} />
+        <Stack.Screen name="league" options={{ headerShown: false }} />
       </Stack>
     </GestureHandlerRootView>
   );

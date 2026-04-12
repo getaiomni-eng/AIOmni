@@ -1,203 +1,100 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
-import Svg, {
-  Circle, ClipPath, Defs, G, Path, Polygon,
-  Text as SvgText,
-} from 'react-native-svg';
+// AIOmni Logo v7 — Spectrum C Mark
+// Static in-app, gap facing down, 15% gap
+// Usage:
+//   <AIOmniLogo size={40} />           — just the mark
+//   <AIOmniWordmark fontSize={22} />   — full AI●MNI wordmark
+//   <AIOmniIris width={32} />          — backward compat alias for mark
 
-const BLADES = [0, 60, 120, 180, 240, 300];
-const OPEN_ANGLE = 55;
-const HEX_COLORS = ['#fee229', '#3d6aaa', '#ffffed'];
-const CYCLE_MS = 2000;
+import React from 'react';
+import { Text, View } from 'react-native';
+import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 
-const ease = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-const rand = (min: number, max: number) => min + Math.random() * (max - min);
-
-function lerpColor(a: string, b: string, t: number): string {
-  const pa = [parseInt(a.slice(1,3),16), parseInt(a.slice(3,5),16), parseInt(a.slice(5,7),16)];
-  const pb = [parseInt(b.slice(1,3),16), parseInt(b.slice(3,5),16), parseInt(b.slice(5,7),16)];
-  const r = Math.round(pa[0] + (pb[0] - pa[0]) * t);
-  const g = Math.round(pa[1] + (pb[1] - pa[1]) * t);
-  const bl = Math.round(pa[2] + (pb[2] - pa[2]) * t);
-  return '#' + [r,g,bl].map(v => v.toString(16).padStart(2,'0')).join('');
+interface LogoProps {
+  size?: number;
 }
 
-function useApertureBlink(setAngle: React.Dispatch<React.SetStateAction<number>>) {
-  const rafRef = useRef<number | null>(null);
-  const active = useRef(true);
-  useEffect(() => {
-    active.current = true;
-    const tween = (from: number, to: number, duration: number) =>
-      new Promise<void>(resolve => {
-        const start = Date.now();
-        const tick = () => {
-          if (!active.current) return resolve();
-          const elapsed = Date.now() - start;
-          const t = Math.min(elapsed / duration, 1);
-          setAngle(from + (to - from) * ease(t));
-          if (t < 1) { rafRef.current = requestAnimationFrame(tick); } else { resolve(); }
-        };
-        rafRef.current = requestAnimationFrame(tick);
-      });
-    const pulse = async () => {
-      while (active.current) {
-        await new Promise(r => setTimeout(r, rand(2500, 6000)));
-        if (!active.current) break;
-        await tween(OPEN_ANGLE, 0, rand(350, 700));
-        await new Promise(r => setTimeout(r, rand(100, 300)));
-        await tween(0, OPEN_ANGLE, rand(400, 800));
-        if (Math.random() < 0.15) {
-          await new Promise(r => setTimeout(r, rand(200, 400)));
-          await tween(OPEN_ANGLE, 0, rand(250, 450));
-          await new Promise(r => setTimeout(r, rand(80, 160)));
-          await tween(0, OPEN_ANGLE, rand(350, 600));
-        }
-      }
-    };
-    pulse();
-    return () => { active.current = false; if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); };
-  }, [setAngle]);
-}
+export function AIOmniLogo({ size = 40, width }: LogoProps & { width?: number }) {
+  // Support old `width` prop for backward compat
+  const s = width ?? size;
+  const r = s * 0.38;
+  const sw = s * 0.09;
+  const circ = 2 * Math.PI * r;
+  const arc = circ * 0.85;
+  const gap = circ * 0.15;
+  const offset = circ * 0.625; // centers gap at bottom
 
-function useColorCycle() {
-  const [color, setColor] = useState(HEX_COLORS[0]);
-  const active = useRef(true);
-  const rafRef = useRef<number | null>(null);
-  useEffect(() => {
-    active.current = true;
-    let idx = 0;
-    let t = 0;
-    const tick = () => {
-      if (!active.current) return;
-      t += 0.005;
-      if (t >= 1) { t = 0; idx = (idx + 1) % HEX_COLORS.length; }
-      const next = (idx + 1) % HEX_COLORS.length;
-      setColor(lerpColor(HEX_COLORS[idx], HEX_COLORS[next], ease(t)));
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => { active.current = false; if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); };
-  }, []);
-  return color;
-}
-
-export function AIOmniIris({ width = 72 }: { width?: number }) {
-  const [angle, setAngle] = useState(OPEN_ANGLE);
-  useApertureBlink(setAngle);
-  const BLADE = 'M0,0 L-16,-27.7 A32,32,0,0,1,16,-27.7 Z';
-  const glowOpacity = 0.15 + (angle / OPEN_ANGLE) * 0.85;
   return (
-    <View style={{ width, height: width }}>
-      <Svg width={width} height={width} viewBox="0 0 64 64">
-        <Circle cx="32" cy="32" r="30" fill="#091622" />
-        <Circle cx="32" cy="32" r="24" fill="#fee229" opacity={glowOpacity} />
-        <Defs><ClipPath id="iClip"><Circle cx="32" cy="32" r="24" /></ClipPath></Defs>
-        <G clipPath="url(#iClip)">
-          <G transform="translate(32,32)">
-            {BLADES.map(rot => (
-              <G key={rot} transform={`rotate(${rot}) translate(0,-27.7) rotate(${angle}) translate(0,27.7)`}>
-                <Path d={BLADE} fill="#2a6bb0" stroke="#ffffed" strokeWidth={0.6} strokeLinejoin="round" />
-              </G>
-            ))}
-          </G>
-        </G>
-        <Circle cx="32" cy="32" r="29" fill="none" stroke="#091622" strokeWidth={10} />
-        <Circle cx="32" cy="32" r="30" fill="none" stroke="#ffffed" strokeWidth={1.5} />
-      </Svg>
+    <Svg width={s} height={s} viewBox={`0 0 ${s} ${s}`}>
+      <Defs>
+        <LinearGradient id="specGrad" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0%" stopColor="#1be7ff" />
+          <Stop offset="25%" stopColor="#6eeb83" />
+          <Stop offset="50%" stopColor="#e4ff1a" />
+          <Stop offset="75%" stopColor="#ffb800" />
+          <Stop offset="100%" stopColor="#ff5714" />
+        </LinearGradient>
+      </Defs>
+      <Circle
+        cx={s / 2}
+        cy={s / 2}
+        r={r}
+        fill="none"
+        stroke="url(#specGrad)"
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeDasharray={`${arc} ${gap}`}
+        strokeDashoffset={offset}
+      />
+    </Svg>
+  );
+}
+
+// Backward compat — old code imports AIOmniIris
+export function AIOmniIris({ width = 32 }: { width?: number }) {
+  return <AIOmniLogo size={width} />;
+}
+
+// Full wordmark: AI [Spectrum C] MNI
+interface WordmarkProps {
+  fontSize?: number;
+  color?: string;
+  mniOpacity?: number;
+}
+
+export function AIOmniWordmark({ fontSize = 22, color = '#f0f4f5', mniOpacity = 0.45 }: WordmarkProps) {
+  const oSize = fontSize * 1.15;
+  const overlap = oSize * 0.18;
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <Text style={{
+        fontFamily: 'Audiowide_400Regular',
+        fontSize,
+        color,
+        zIndex: 2,
+        letterSpacing: 0.5,
+      }}>AI</Text>
+      <View style={{
+        width: oSize,
+        height: oSize,
+        marginLeft: -overlap,
+        marginRight: -overlap,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1,
+      }}>
+        <AIOmniLogo size={oSize} />
+      </View>
+      <Text style={{
+        fontFamily: 'Audiowide_400Regular',
+        fontSize,
+        color,
+        opacity: mniOpacity,
+        zIndex: 2,
+        letterSpacing: 0.5,
+      }}>MNI</Text>
     </View>
   );
 }
 
-export function AIOmniLogo({ width = 280 }: { width?: number }) {
-  const [angle, setAngle] = useState(OPEN_ANGLE);
-  const [pulseScale, setPulseScale] = useState(0.04);
-  const [pulseOpacity, setPulseOpacity] = useState(0);
-  const hexColor = useColorCycle();
-  useApertureBlink(setAngle);
-
-  const pulseRef = useRef<number | null>(null);
-  const pulseActive = useRef(true);
-  useEffect(() => {
-    pulseActive.current = true;
-    let t = 0;
-    const tick = () => {
-      if (!pulseActive.current) return;
-      t += 0.008;
-      if (t > 1) t = 0;
-      setPulseScale(0.04 + t * 0.96);
-      setPulseOpacity(t < 0.5 ? t * 1.4 : Math.max(0, (1 - t) * 1.4));
-      pulseRef.current = requestAnimationFrame(tick);
-    };
-    pulseRef.current = requestAnimationFrame(tick);
-    return () => { pulseActive.current = false; if (pulseRef.current !== null) cancelAnimationFrame(pulseRef.current); };
-  }, []);
-
-  const h = Math.round(width * (140 / 340));
-  const vb = '0 0 340 140';
-  const HEX = '110,5 170,40 170,100 110,135 50,100 50,40';
-  const ix = 148, iy = 70;
-  const iOuter = 20, iClip = 14;
-  const BLADE = 'M0,0 L-9.3,-16.2 A18.7,18.7,0,0,1,9.3,-16.2 Z';
-  const glowOpacity = 0.15 + (angle / OPEN_ANGLE) * 0.85;
-
-  return (
-    <View style={{ width, height: h, alignItems: 'center' }}>
-      <Svg width={width} height={h} viewBox={vb}>
-        <Defs>
-          <ClipPath id="lClip"><Circle cx={ix} cy={iy} r={iClip} /></ClipPath>
-        </Defs>
-
-        {/* Hex pulse — born small, expands, fades */}
-        <G transform="translate(110,70)">
-          <Polygon
-            points="0,-65 56.3,-32.5 56.3,32.5 0,65 -56.3,32.5 -56.3,-32.5"
-            fill="none" stroke={hexColor} strokeWidth={3} strokeLinejoin="round"
-            opacity={pulseOpacity}
-            transform={`scale(${pulseScale})`}
-          />
-        </G>
-
-        {/* Hex — black outline outside */}
-        <Polygon points={HEX} fill="none" stroke="#1a1f2e" strokeWidth={8} strokeLinejoin="round" />
-        {/* Hex — color cycling main stroke */}
-        <Polygon points={HEX} fill="none" stroke={hexColor} strokeWidth={5} strokeLinejoin="round" />
-
-        {/* "A" — gold base layer */}
-        <SvgText x="58" y="95" fontFamily="Bungee_400Regular" fontSize="52" fill={hexColor} stroke={hexColor} strokeWidth={2} letterSpacing={1}>A</SvgText>
-        {/* "A" — black inline overlay */}
-        <SvgText x="58" y="95" fontFamily="BungeeInline_400Regular" fontSize="52" fill="#1a1f2e" stroke={hexColor} strokeWidth={1} letterSpacing={1}>A</SvgText>
-
-        {/* "I" — gold base */}
-        <SvgText x="96" y="95" fontFamily="Bungee_400Regular" fontSize="52" fill={hexColor} stroke={hexColor} strokeWidth={2} letterSpacing={1}>I</SvgText>
-        {/* "I" — black inline overlay */}
-        <SvgText x="96" y="95" fontFamily="BungeeInline_400Regular" fontSize="52" fill="#1a1f2e" stroke={hexColor} strokeWidth={1} letterSpacing={1}>I</SvgText>
-
-        {/* Iris — black center */}
-        <Circle cx={ix} cy={iy} r={iOuter} fill="#091622" />
-        {/* Gold glow orb */}
-        <Circle cx={ix} cy={iy} r={iClip} fill="#fee229" opacity={glowOpacity} />
-
-        {/* 6 blades — blue, cream stroke, pivot from outer edge */}
-        <G clipPath="url(#lClip)">
-          <G transform={`translate(${ix},${iy})`}>
-            {BLADES.map(rot => (
-              <G key={rot} transform={`rotate(${rot}) translate(0,-16.2) rotate(${angle}) translate(0,16.2)`}>
-                <Path d={BLADE} fill="#2a6bb0" stroke="#ffffed" strokeWidth={0.4} strokeLinejoin="round" />
-              </G>
-            ))}
-          </G>
-        </G>
-
-        {/* Dark annular ring */}
-        <Circle cx={ix} cy={iy} r={17} fill="none" stroke="#091622" strokeWidth={6} />
-        {/* Outer rim */}
-        <Circle cx={ix} cy={iy} r={iOuter} fill="none" stroke="#ffffed" strokeWidth={1.2} />
-
-        {/* "mni" — gold base */}
-        <SvgText x="178" y="90" fontFamily="Bungee_400Regular" fontSize="34" fill={hexColor} stroke={hexColor} strokeWidth={1.5} letterSpacing={2}>mni</SvgText>
-        {/* "mni" — black inline overlay */}
-        <SvgText x="178" y="90" fontFamily="BungeeInline_400Regular" fontSize="34" fill="#1a1f2e" stroke={hexColor} strokeWidth={0.8} letterSpacing={2}>mni</SvgText>
-      </Svg>
-    </View>
-  );
-}
+export default AIOmniLogo;

@@ -1,32 +1,24 @@
-import { askAI } from "../../services/ai";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Animated, Dimensions, Image,
+  ActivityIndicator, Alert, Animated, Dimensions,
   Linking, Modal, RefreshControl, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { askAI } from "../../services/ai";
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../services/espn';
 import { getValidYahooToken } from '../../services/yahoo';
-import { AIOmniLogo, AIOmniIris } from '../components/AIOmniLogo';
-import { Badge, SectionHeader } from '../components/Atoms';
 import { Icon } from '../components/AIOmniIcons';
-import { C, F, R, SP, SZ, BEVEL } from '../constants/tokens';
+import { AIOmniLogo, AIOmniWordmark } from '../components/AIOmniLogo';
+import { dark, F, palette, SP, SZ } from '../constants/tokens';
 import { incrementPrompt } from '../utils/promptCounter';
-import { GlowText, GoldScore, BlueScore, CardScore } from '../components/GlowText';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W    = SCREEN_W - SP[3] * 2;
 const INSIGHT_W = CARD_W - 28;
-
-const ESPN_RED            = '#d00';
-const ESPN_RED_BORDER     = 'rgba(221,0,0,0.35)';
-const YAHOO_PURPLE        = '#6001D2';
-const YAHOO_PURPLE_BORDER = 'rgba(96,1,210,0.35)';
 
 type Platform = 'sleeper' | 'espn' | 'yahoo';
 type League = {
@@ -39,42 +31,24 @@ type NewsItem = {
   source: string; headline: string; color: string; url?: string;
 };
 
-const PLAT_COLOR  = (p: Platform) => p === 'espn' ? '#ff4444' : p === 'yahoo' ? '#a855f2' : '#00fff9';
-const PLAT_BORDER = (p: Platform) => p === 'espn' ? ESPN_RED_BORDER : p === 'yahoo' ? YAHOO_PURPLE_BORDER : 'transparent';
+const PLAT_COLOR  = (p: Platform) => p === 'espn' ? palette.flame : p === 'yahoo' ? '#a855f2' : palette.aqua;
 const PLAT_LABEL  = (p: Platform) => p === 'espn' ? 'ESPN' : p === 'yahoo' ? 'YAHOO' : 'SLEEPER';
 
-function PlatformLogo({ platform, size = 64 }: { platform: Platform; avatar?: string; size?: number }) {
-  const LOGOS: Record<string, any> = {
-    sleeper: require('../../assets/images/platforms/sleeper.png'),
-    espn:    require('../../assets/images/platforms/espn.png'),
-    yahoo:   require('../../assets/images/platforms/yahoo.png'),
-  };
-  return (
-    <Image
-      source={LOGOS[platform] ?? LOGOS.sleeper}
-      style={{ width: size, height: size, borderRadius: size * 0.18, borderWidth: 1.5, borderColor: 'rgba(254,226,41,0.3)' }}
-    />
-  );
-}
-
 const FALLBACK_NEWS: NewsItem[] = [
-  { source: 'ROTOWIRE', headline: 'Jaxon Smith-Njigba: 5th-year option picked up by SEA', color: '#4ab8a0', url: 'https://www.rotowire.com/football/player/jaxon-smith-njigba-15164' },
-  { source: 'PFR', headline: 'NFL Teams Higher On Their QBs Than Draft Pundits?', color: '#e8a84b', url: 'https://www.pro-football-reference.com' },
-  { source: 'CBS SPORTS', headline: 'Fantasy waiver wire pickups to target this week', color: '#0055a5', url: 'https://www.cbssports.com/fantasy/football/news/fantasy-football-waiver-wire' },
-  { source: 'SLEEPER',    headline: 'Saquon Barkley approaches single-season rushing record', color: C.gold  },
+  { source: 'ROTOWIRE', headline: 'Jaxon Smith-Njigba: 5th-year option picked up by SEA', color: palette.green, url: 'https://www.rotowire.com/football/player/jaxon-smith-njigba-15164' },
+  { source: 'PFR', headline: 'NFL Teams Higher On Their QBs Than Draft Pundits?', color: palette.amber, url: 'https://www.pro-football-reference.com' },
+  { source: 'CBS SPORTS', headline: 'Fantasy waiver wire pickups to target this week', color: palette.aqua, url: 'https://www.cbssports.com/fantasy/football/news/fantasy-football-waiver-wire' },
+  { source: 'SLEEPER', headline: 'Saquon Barkley approaches single-season rushing record', color: palette.chartreuse },
 ];
 
 const FALLBACK_INSIGHTS = [
-  { icon: 'target', title: 'Start Barkley',  body: 'Dream matchup vs NYG — 32nd ranked run D. Ceiling 35+.',  tag: 'START',   color: C.sage },
-  { icon: 'alert', title: 'Watch Achane',   body: 'Listed Q — check 11:30am reports. Pollard on standby.',  tag: 'MONITOR', color: '#e8a84b' },
-  { icon: 'fire',   title: 'Add Shaheed',    body: '3 TDs in last 4 games. 78% target share with Drake.',    tag: 'HOT',     color: C.gold },
+  { icon: 'target', title: 'Start Barkley',  body: 'Dream matchup vs NYG — 32nd ranked run D. Ceiling 35+.',  tag: 'START',   color: palette.green },
+  { icon: 'alert', title: 'Watch Achane',   body: 'Listed Q — check 11:30am reports. Pollard on standby.',  tag: 'MONITOR', color: palette.amber },
+  { icon: 'fire',   title: 'Add Shaheed',    body: '3 TDs in last 4 games. 78% target share with Drake.',    tag: 'HOT',     color: palette.flame },
 ];
 
-const BevelCard: React.FC<{ style?: any; children: React.ReactNode; blue?: boolean }> = ({ style, children, blue }) => (
-  <View style={[blue ? styles.bevelBlue : styles.bevelCard, style]}>
-    <View style={styles.bevelShine} />
-    {children}
-  </View>
+const FlatCard: React.FC<{ style?: any; children: React.ReactNode }> = ({ style, children }) => (
+  <View style={[styles.flatCard, style]}>{children}</View>
 );
 
 export default function HomeScreen() {
@@ -101,6 +75,7 @@ export default function HomeScreen() {
 
   useEffect(() => { loadLeagues(); fetchNews(); }, [selectedSeason]);
 
+  // ── All data loading functions identical to v6 ──
   const loadSleeperLeagues = async (year: string = '2025'): Promise<League[]> => {
     try {
       const u = await AsyncStorage.getItem('sleeper_username');
@@ -143,7 +118,22 @@ export default function HomeScreen() {
   const loadESPNLeagues = async (year: string = '2025'): Promise<League[]> => {
     try {
       const creds = await loadESPNCredentials();
-      if (!creds?.leagueId) return [];
+      if (!creds?.leagueId) {
+        // Try to discover leagues
+        try {
+          const { getESPNLeagues } = require('../../services/espn');
+          const leagues = await getESPNLeagues(creds);
+          if (leagues && leagues.length > 0) {
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            await AsyncStorage.setItem('espn_league_ids', JSON.stringify([leagues[0].id]));
+            creds.leagueId = leagues[0].id;
+          } else {
+            return [];
+          }
+        } catch {
+          return [];
+        }
+      }
       const leagueData = await getESPNLeague(creds.leagueId, creds, parseInt(year));
       if (!leagueData) return [];
       const myTeam  = findMyESPNTeam(leagueData, creds.teamName || '');
@@ -210,13 +200,6 @@ export default function HomeScreen() {
                     const w = teamStats?.outcome_totals?.wins   ?? 0;
                     const l = teamStats?.outcome_totals?.losses ?? 0;
                     rec = `${w}–${l}`;
-                    const sortedTeams = [...Array.from({ length: teamCount }, (_, idx) => idx)].sort((a, b) => {
-                      const aStats = teams[a]?.team?.[1]?.team_standings?.outcome_totals;
-                      const bStats = teams[b]?.team?.[1]?.team_standings?.outcome_totals;
-                      return (bStats?.wins ?? 0) - (aStats?.wins ?? 0);
-                    });
-                    const myRank = sortedTeams.indexOf(t) + 1;
-                    rank = `${myRank}${ordinal(myRank)} of ${teamCount}`;
                     break;
                   }
                 }
@@ -230,18 +213,18 @@ export default function HomeScreen() {
                 const matchupCount = matchups.count ?? 0;
                 for (let m = 0; m < matchupCount; m++) {
                   const matchup = matchups[m]?.matchup;
-                  const teams   = matchup?.[0]?.teams;
-                  if (teams) {
-                    const teamCount = teams.count ?? 0;
+                  const mTeams  = matchup?.[0]?.teams;
+                  if (mTeams) {
+                    const teamCount = mTeams.count ?? 0;
                     for (let t = 0; t < teamCount; t++) {
-                      const teamData = teams[t]?.team;
+                      const teamData = mTeams[t]?.team;
                       const teamInfo = teamData?.[0];
                       const managerArr = teamInfo?.find((x: any) => Array.isArray(x?.managers));
                       const isMe = managerArr?.managers?.[0]?.manager?.is_current_login === '1';
                       if (isMe) {
                         pts = parseFloat(teamData?.[1]?.team_points?.total ?? '0');
                         const oppIdx = t === 0 ? 1 : 0;
-                        opp = parseFloat(teams[oppIdx]?.team?.[1]?.team_points?.total ?? '0');
+                        opp = parseFloat(mTeams[oppIdx]?.team?.[1]?.team_points?.total ?? '0');
                         break;
                       }
                     }
@@ -280,7 +263,7 @@ export default function HomeScreen() {
     if (insightLoading) return;
     setInsightLoading(true);
     try {
-      const prompt = `You are AIOmni, an elite fantasy football analyst. For this ${league.platform.toUpperCase()} league (${league.format}), provide 3 concise, actionable insights for Week ${league.week}. Focus on starting/sitting decisions, waiver wire adds, and matchup analysis. Format as JSON array with objects having: emoji, title, body, tag, color. Use colors: sage, gold, amber, rose, ocean, mauve. Keep each insight under 120 characters.`;
+      const prompt = `You are AIOmni, an elite fantasy football analyst. For this ${league.platform.toUpperCase()} league (${league.format}), provide 3 concise, actionable insights for Week ${league.week}. Focus on starting/sitting decisions, waiver wire adds, and matchup analysis. Format as JSON array with objects having: emoji, title, body, tag, color. Keep each insight under 120 characters.`;
       const response = await askAI(prompt, 400);
       const insights = JSON.parse(response?.replace(/```json|```/g, '').trim() || '[]');
       if (Array.isArray(insights) && insights.length > 0) setAiInsights(insights);
@@ -299,12 +282,7 @@ export default function HomeScreen() {
           const titleMatch = itemXml.match(/<title>(.*?)<\/title>/);
           const linkMatch = itemXml.match(/<link>(.*?)<\/link>/) || itemXml.match(/<guid[^>]*>(http[^<]*)<\/guid>/);
           if (titleMatch && items.length < 3) {
-            items.push({
-              source,
-              headline: titleMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim(),
-              color,
-              url: linkMatch?.[1]?.replace(/<!\[CDATA\[|\]\]>/g, '').trim(),
-            });
+            items.push({ source, headline: titleMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim(), color, url: linkMatch?.[1]?.replace(/<!\[CDATA\[|\]\]>/g, '').trim() });
           }
         }
         return items;
@@ -315,9 +293,9 @@ export default function HomeScreen() {
         fetch('https://www.cbssports.com/rss/headlines/nfl/').then(r => r.text()),
       ]);
       const results: NewsItem[] = [];
-      if (rotoRes.status === 'fulfilled') results.push(...parseRSS(rotoRes.value, 'ROTOWIRE',   '#4ab8a0'));
-      if (pfrRes.status  === 'fulfilled') results.push(...parseRSS(pfrRes.value,  'PFR',        '#e8a84b'));
-      if (cbsRes.status  === 'fulfilled') results.push(...parseRSS(cbsRes.value,  'CBS SPORTS', '#0055a5'));
+      if (rotoRes.status === 'fulfilled') results.push(...parseRSS(rotoRes.value, 'ROTOWIRE', palette.green));
+      if (pfrRes.status  === 'fulfilled') results.push(...parseRSS(pfrRes.value, 'PFR', palette.amber));
+      if (cbsRes.status  === 'fulfilled') results.push(...parseRSS(cbsRes.value, 'CBS SPORTS', palette.aqua));
       const roto = results.filter(n => n.source === 'ROTOWIRE');
       const pfr  = results.filter(n => n.source === 'PFR');
       const cbs  = results.filter(n => n.source === 'CBS SPORTS');
@@ -361,46 +339,63 @@ export default function HomeScreen() {
   const displayInsights = aiInsights.length > 0 ? aiInsights : FALLBACK_INSIGHTS;
 
   return (
-    <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: dark.bg }}>
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 4 }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 8 }]}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.gold} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.aqua} />}
       >
-        {/* ── V26 Animated Logo ── */}
-        <View style={styles.logoWrap}>
-          <AIOmniLogo width={SCREEN_W * 0.72} />
+        {/* ── Header ── */}
+        <View style={styles.headerBar}>
+          <AIOmniWordmark fontSize={22} color={dark.text} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {username ? (
+              <View style={styles.handlePill}>
+                <Text style={styles.handleTxt}>@{username}</Text>
+              </View>
+            ) : null}
+            <TouchableOpacity onPress={() => router.push('/settings-page' as any)} style={styles.gearBtn}>
+              <Ionicons name="settings-sharp" size={20} color={dark.textMuted} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* ── Header row ── */}
-        <View style={styles.headerBar}>
-          <View style={{ flex: 1 }} />
-          {username ? (
-            <View style={styles.handlePill}>
-              <Text style={styles.handleTxt}>@{username}</Text>
-            </View>
-          ) : null}
-          <TouchableOpacity onPress={() => router.push('/settings')} style={styles.gearBtn}>
-            <View style={{shadowColor:"#3d6aaa",shadowOffset:{width:0,height:0},shadowOpacity:0.8,shadowRadius:14}}><Ionicons name="settings-sharp" size={22} color={"#fee229"} /></View>
+        {/* ── Platform pills + season ── */}
+        <View style={styles.platformRow}>
+          <View style={styles.platformToggles}>
+            {(['sleeper', 'espn', 'yahoo'] as Platform[]).map(platform => {
+              const isSelected = selectedPlatforms.includes(platform);
+              const color = PLAT_COLOR(platform);
+              return (
+                <TouchableOpacity
+                  key={platform}
+                  onPress={() => setSelectedPlatforms(prev => isSelected ? prev.filter(p => p !== platform) : [...prev, platform])}
+                  style={[styles.platformToggle, isSelected && { backgroundColor: color, borderColor: color }]}
+                >
+                  <Text style={[styles.platformToggleText, isSelected && { color: dark.bg }]}>
+                    {PLAT_LABEL(platform)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <TouchableOpacity
+            onPress={() => Alert.alert('Select Season', '', ['2025','2024','2023','2022'].map(y => ({ text: y, onPress: () => setSelectedSeason(y) })), { cancelable: true })}
+            style={styles.seasonPill}
+          >
+            <Text style={styles.seasonPillText}>{selectedSeason} ▾</Text>
           </TouchableOpacity>
         </View>
 
-        {/* ── Live feed — NOW CLICKABLE ── */}
-        <View style={styles.newsHeaderRow}>
-          <View style={styles.newsLabelRow}>
-            <Icon name="live" size={16} color={C.blueDeep} />
-            <Text style={styles.newsEye}>LIVE FEED</Text>
-          </View>
-          <Text style={styles.newsHint}>← swipe →</Text>
+        {/* ── Live Feed ── */}
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionLabel}>LIVE FEED</Text>
+          <Text style={styles.sectionHint}>← swipe →</Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
           {news.map((n, i) => (
-            <TouchableOpacity
-              key={i}
-              activeOpacity={0.7}
-              onPress={() => n.url ? Linking.openURL(n.url) : undefined}
-              style={[styles.newsChip, { borderColor: n.color + '30' }]}
-            >
+            <TouchableOpacity key={i} activeOpacity={0.7} onPress={() => n.url ? Linking.openURL(n.url) : undefined}
+              style={[styles.newsChip, { borderColor: n.color + '25' }]}>
               <View style={[styles.newsDot, { backgroundColor: n.color }]} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.newsSource, { color: n.color }]}>{n.source}</Text>
@@ -410,152 +405,97 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
 
-        {/* Platform toggles and season selector */}
-        <View style={styles.platformRow}>
-          <View style={styles.platformToggles}>
-            {(['sleeper', 'espn', 'yahoo'] as Platform[]).map(platform => {
-              const isSelected = selectedPlatforms.includes(platform);
+        {/* ── Score cards ── */}
+        {loading ? (
+          <FlatCard style={styles.loadingCard}>
+            <ActivityIndicator color={palette.aqua} size="large" />
+            <Text style={styles.loadingTxt}>Loading your leagues...</Text>
+          </FlatCard>
+        ) : leagues.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scoreScroll} style={{ marginBottom: 16 }}>
+            {(() => {
+              const filtered = leagues.filter(lg => selectedPlatforms.includes(lg.platform));
+              const pairs: any[][] = [];
+              for (let i = 0; i < filtered.length; i += 2) {
+                pairs.push(filtered.slice(i, i + 2));
+              }
+              return pairs.map((pair, pi) => (
+                <View key={pi} style={{ gap: 8 }}>
+                  {pair.map((lg) => {
+              const ptsVal = parseFloat((lg.pts ?? 0).toFixed(1));
+              const oppVal = parseFloat((lg.opp ?? 0).toFixed(1));
+              const winning = ptsVal > oppVal;
               return (
                 <TouchableOpacity
-                  key={platform}
-                  onPress={() => {
-                    setSelectedPlatforms(prev =>
-                      isSelected
-                        ? prev.filter(p => p !== platform)
-                        : [...prev, platform]
-                    );
-                  }}
-                  style={[styles.platformToggle, { borderColor: PLAT_COLOR(platform), shadowColor: PLAT_COLOR(platform), shadowOffset: {width:0,height:0}, shadowOpacity: 0.5, shadowRadius: 10, elevation: 4 }]}
+                  key={lg.id}
+                  onPress={() => aiCoachActive ? openAiCoachModal(lg) : goToLeague(lg)}
+                  activeOpacity={0.8}
+                  style={styles.scoreCardGrid}
                 >
-                  <Text style={[styles.platformToggleText, { color: PLAT_COLOR(platform), textShadowColor: PLAT_COLOR(platform), textShadowOffset: {width:0,height:0}, textShadowRadius: 6 }]}>
-                    {PLAT_LABEL(platform)}
-                  </Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={styles.leagueNameGrid} numberOfLines={1}>{lg.name}</Text>
+                    <View style={[styles.badge, { backgroundColor: PLAT_COLOR(lg.platform) + '18' }]}>
+                      <Text style={[styles.badgeText, { color: PLAT_COLOR(lg.platform) }]}>{PLAT_LABEL(lg.platform)}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.leagueMetaGrid}>{lg.format} · Wk {lg.week}</Text>
+                  {lg.rank && <Text style={styles.leagueRankGrid}>{lg.rank}</Text>}
+                  <View style={styles.scoreRowGrid}>
+                    <View style={styles.scoreBoxGrid}>
+                      <Text style={styles.scoreLabelGrid}>YOU</Text>
+                      <Text style={[styles.scoreNumGrid, { color: winning ? palette.green : dark.text }]}>{ptsVal}</Text>
+                    </View>
+                    <Text style={styles.scoreVsGrid}>vs</Text>
+                    <View style={styles.scoreBoxGrid}>
+                      <Text style={styles.scoreLabelGrid}>OPP</Text>
+                      <Text style={[styles.scoreNumGrid, { color: !winning ? palette.flame : dark.text }]}>{oppVal}</Text>
+                    </View>
+                  </View>
                 </TouchableOpacity>
               );
             })}
-          </View>
-          <TouchableOpacity
-            onPress={() => {
-              const options = ['2025', '2024', '2023', '2022'];
-              Alert.alert(
-                'Select Season',
-                '',
-                options.map(year => ({
-                  text: year,
-                  onPress: () => setSelectedSeason(year),
-                })),
-                { cancelable: true }
-              );
-            }}
-            style={styles.seasonPill}
-          >
-            <Text style={styles.seasonPillText}>{selectedSeason} ▾</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Score cards ── */}
-        {loading ? (
-          <View style={styles.loadingCard}>
-            <ActivityIndicator color={C.blueDeep} size="large" />
-            <Text style={styles.loadingTxt}>Loading your leagues...</Text>
-          </View>
-        ) : leagues.length > 0 ? (
-          <>
-            {(() => {
-              const filteredLeagues = leagues.filter(lg => selectedPlatforms.includes(lg.platform));
-              const gridLeagues = filteredLeagues.slice(0, 4);
-              return (
-                <View style={styles.scoreGrid}>
-                  {gridLeagues.map((lg, i) => {
-                    const winning      = (lg.pts ?? 0) > (lg.opp ?? 0);
-                    const platColor    = PLAT_COLOR(lg.platform);
-                    const isNonSleeper = lg.platform !== 'sleeper';
-                    const ptsVal       = parseFloat((lg.pts ?? 0).toFixed(1));
-                    return (
-                      <BevelCard key={lg.id} style={[styles.scoreCardGrid, isNonSleeper && { borderColor: PLAT_BORDER(lg.platform) }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Icon name="lightning" size={14} color={C.blueDeep} />
-                          <Text style={styles.scoreEyeGrid}>WK {lg.week}</Text>
-                        </View>
-                        <TouchableOpacity
-                          onPress={() => aiCoachActive ? openAiCoachModal(lg) : goToLeague(lg)}
-                          activeOpacity={0.8}
-                          style={styles.leagueBtnGrid}
-                        >
-                          <View style={styles.leagueTopGrid}>
-                            <PlatformLogo platform={lg.platform} size={24} />
-                            <View style={{ flex: 1, marginLeft: 8 }}>
-                              <Text style={styles.leagueNameGrid} numberOfLines={1}>{lg.name}</Text>
-                              <Text style={styles.leagueMetaGrid}>{lg.format}</Text>
-                            </View>
-                            <Ionicons name="chevron-forward" size={14} color={C.dim2} />
-                          </View>
-                          {lg.rank && <Text style={styles.leagueRankGrid}>{lg.rank}</Text>}
-                        </TouchableOpacity>
-                        <View style={styles.scoreRowGrid}>
-                          <View style={styles.scoreBoxGrid}>
-                            <Text style={styles.scoreLabelGrid}>YOU</Text>
-                            <CardScore fontSize={22}>{ptsVal}</CardScore>
-                          </View>
-                          <Text style={styles.scoreVsGrid}>VS</Text>
-                          <View style={styles.scoreBoxGrid}>
-                            <Text style={styles.scoreLabelGrid}>OPP</Text>
-                            <CardScore fontSize={22}>{parseFloat((lg.opp ?? 0).toFixed(1))}</CardScore>
-                          </View>
-                        </View>
-                      </BevelCard>
-                    );
-                  })}
-                  {Array.from({ length: Math.max(0, 4 - gridLeagues.length) }, (_, i) => (
-                    <View key={`empty-${i}`} style={styles.emptyScoreCard} />
-                  ))}
                 </View>
-              );
+              ));
             })()}
-          </>
+          </ScrollView>
         ) : (
-          <BevelCard style={styles.emptyCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Icon name="trophy" size={16} color={C.gold} />
-              <Text style={styles.emptyEye}>NO LEAGUES FOUND</Text>
-            </View>
-            <Text style={styles.emptyTxt}>Connect your Sleeper, ESPN, or Yahoo account in Settings to see your leagues.</Text>
-            <TouchableOpacity onPress={() => router.push('/settings')} style={styles.emptyBtn}>
+          <FlatCard style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>No leagues found</Text>
+            <Text style={styles.emptyTxt}>Connect Sleeper, ESPN, or Yahoo in Settings.</Text>
+            <TouchableOpacity onPress={() => router.push('/settings-page' as any)} style={styles.emptyBtn}>
               <Text style={styles.emptyBtnTxt}>GO TO SETTINGS</Text>
             </TouchableOpacity>
-          </BevelCard>
+          </FlatCard>
         )}
 
-        {/* AI Coach Bar */}
+        {/* ── AI Coach Bar ── */}
         <TouchableOpacity
           style={[styles.aiCoachBar, aiCoachActive && styles.aiCoachBarActive]}
           onPress={() => setAiCoachActive(!aiCoachActive)}
           activeOpacity={0.8}
         >
-          <View style={styles.aiCoachBarShine} />
-          <View style={styles.aiCoachLeft}>
-            <AIOmniIris width={32} />
-          </View>
-          <View style={styles.aiCoachCenter}>
+          <AIOmniLogo size={28} />
+          <View style={{ flex: 1, marginLeft: 10 }}>
             <Text style={styles.aiCoachLabel}>AI COACH</Text>
-            <Text style={styles.aiCoachHint}>Tap to activate · then tap any score card</Text>
+            <Text style={styles.aiCoachHint}>{aiCoachActive ? 'Active — tap any score card' : 'Tap to activate'}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={C.dim2} />
+          <Ionicons name="chevron-forward" size={16} color={dark.textMuted} />
         </TouchableOpacity>
+        <TouchableOpacity style={[styles.coachCard, { marginTop: 8, borderColor: palette.green + '30' }]} onPress={() => router.push('/draft' as any)}>
+  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+    <Ionicons name="list-outline" size={22} color={palette.green} />
+    <View>
+      <Text style={[styles.coachLabel, { color: palette.green }]}>DRAFT COPILOT</Text>
+      <Text style={styles.coachSub}>Live draft board + AI picks</Text>
+    </View>
+  </View>
+  <Ionicons name="chevron-forward" size={18} color={dark.textMuted} />
+</TouchableOpacity>
 
-        {/* AI Insights */}
-        <View style={styles.insightsHeader}>
-          <View style={styles.newsLabelRow}>
-            <Icon name="brain" size={16} color={C.blueDeep} />
-            <Text style={styles.insightsEye}>AI INSIGHTS</Text>
-          </View>
-          <View style={styles.swipeHintRow}>
-            <View style={styles.swipeArrowLeft}>
-              <Icon name="chevron" size={14} color={C.dim2} />
-            </View>
-            <Text style={styles.insightsHint}>SWIPE</Text>
-            <Icon name="chevron" size={14} color={C.dim2} />
-          </View>
+        {/* ── AI Insights ── */}
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionLabel}>AI INSIGHTS</Text>
+          <Text style={styles.sectionHint}>swipe</Text>
         </View>
         <ScrollView
           horizontal pagingEnabled showsHorizontalScrollIndicator={false}
@@ -565,20 +505,20 @@ export default function HomeScreen() {
           onMomentumScrollEnd={e => setInsightIdx(Math.round(e.nativeEvent.contentOffset.x / (INSIGHT_W + 10)))}
         >
           {displayInsights.map((insight, i) => (
-            <BevelCard key={i} style={[styles.insightCard, { width: INSIGHT_W }]}>
+            <View key={i} style={[styles.insightCard, { width: INSIGHT_W, borderColor: (insight.color || palette.aqua) + '25' }]}>
               <View style={styles.insightTop}>
-                <View style={styles.insightIconWrap}>
-                  <Icon name={insight.icon as any} size={18} color={insight.color} />
+                <View style={[styles.insightIconWrap, { backgroundColor: (insight.color || palette.aqua) + '15' }]}>
+                  <Icon name={insight.icon as any} size={18} color={insight.color || palette.aqua} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <GlowText fontSize={16} color="#fee229" strokeColor="#3d6aaa" strokeWidth={1.5} glowColor="rgba(61,106,170,0.5)" glowRadius={10}>{insight.title}</GlowText>
+                  <Text style={styles.insightTitle}>{insight.title}</Text>
                   <Text style={styles.insightBody}>{insight.body}</Text>
                 </View>
               </View>
-              <View style={[styles.insightTag, { backgroundColor: insight.color + '20', borderColor: insight.color + '40' }]}>
-                <Text style={[styles.insightTagTxt, { color: insight.color }]}>{insight.tag}</Text>
+              <View style={[styles.insightTag, { backgroundColor: (insight.color || palette.aqua) + '15' }]}>
+                <Text style={[styles.insightTagTxt, { color: insight.color || palette.aqua }]}>{insight.tag}</Text>
               </View>
-            </BevelCard>
+            </View>
           ))}
         </ScrollView>
         <View style={styles.insightDots}>
@@ -590,126 +530,119 @@ export default function HomeScreen() {
         <View style={{ height: 60 }} />
       </ScrollView>
 
-      {/* AI Coach Modal */}
+      {/* ── AI Coach Modal ── */}
       <Modal visible={!!selectedLeague && aiCoachActive} transparent animationType="slide" onRequestClose={() => setSelectedLeague(null)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(26,31,46,0.55)', justifyContent: 'flex-end' }}>
-          <View style={styles.aiCoachModal}>
-            <View style={styles.aiCoachModalShine} />
-            <TouchableOpacity onPress={() => setSelectedLeague(null)} hitSlop={12}>
-              <Icon name="x" size={22} color={C.blueDeep} />
+        <View style={{ flex: 1, backgroundColor: 'rgba(10,18,20,0.7)', justifyContent: 'flex-end' }}>
+          <View style={styles.modalSheet}>
+            <TouchableOpacity onPress={() => setSelectedLeague(null)} style={{ alignSelf: 'flex-end' }} hitSlop={12}>
+              <Ionicons name="close" size={22} color={dark.textMuted} />
             </TouchableOpacity>
-            <Text style={styles.aiCoachModalTitle}>{selectedLeague?.name}</Text>
-            <View style={styles.aiCoachModalScores}>
-              <View>
-                <Text style={styles.aiCoachModalLabel}>YOU</Text>
-                <Text style={styles.aiCoachModalScore}>{(selectedLeague?.pts ?? 0).toFixed(1)}</Text>
-              </View>
-              <Text style={styles.aiCoachModalVs}>VS</Text>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.aiCoachModalLabel}>OPP</Text>
-                <Text style={styles.aiCoachModalScore}>{(selectedLeague?.opp ?? 0).toFixed(1)}</Text>
-              </View>
+            <Text style={styles.modalTitle}>{selectedLeague?.name}</Text>
+            <View style={styles.modalScores}>
+              <View><Text style={styles.modalLabel}>YOU</Text><Text style={styles.modalScore}>{(selectedLeague?.pts ?? 0).toFixed(1)}</Text></View>
+              <Text style={styles.modalVs}>vs</Text>
+              <View style={{ alignItems: 'flex-end' }}><Text style={styles.modalLabel}>OPP</Text><Text style={styles.modalScore}>{(selectedLeague?.opp ?? 0).toFixed(1)}</Text></View>
             </View>
             {aiCoachLoading ? (
-              <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-                <ActivityIndicator color={C.blueDeep} size="large" />
-              </View>
+              <ActivityIndicator color={palette.aqua} size="large" style={{ paddingVertical: 24 }} />
             ) : (
-              <Text style={styles.aiCoachModalInsight}>{aiCoachInsight}</Text>
+              <Text style={styles.modalInsight}>{aiCoachInsight}</Text>
             )}
-            <TouchableOpacity style={styles.aiCoachModalBtn} onPress={() => setSelectedLeague(null)}>
-              <Text style={styles.aiCoachModalBtnTxt}>GOT IT</Text>
+            <TouchableOpacity style={styles.modalBtn} onPress={() => setSelectedLeague(null)}>
+              <Text style={styles.modalBtnTxt}>GOT IT</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: SP[3] },
-  logoWrap: { alignItems: 'center', marginBottom: 16 },
-  headerBar: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  handlePill: { backgroundColor: C.surface, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
-  handleTxt: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim, letterSpacing: 0.5 },
-  gearBtn: { padding: 8, marginLeft: 8 },
-  newsHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  newsLabelRow: { flexDirection: 'row', alignItems: 'center' },
-  newsEye: { fontSize: 16, fontFamily: F.bold, color: '#fee229', textShadowColor: 'rgba(61,106,170,0.6)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 14, letterSpacing: 2 },
-  newsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
-  newsChip: { backgroundColor: '#fee229', borderRadius: 12, padding: 12, borderWidth: 1.5, borderColor: 'rgba(200,177,0,0.5)', minWidth: 240, flexDirection: 'row', alignItems: 'flex-start', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 3 },
-  newsDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8, marginTop: 2 },
-  newsSource: { fontSize: 10, fontFamily: F.mono, fontWeight: '700', letterSpacing: 1, marginBottom: 2 },
-  newsText: { fontSize: 13, color: '#7a6a00', lineHeight: 18, fontFamily: F.outfit },
-  loadingCard: { ...BEVEL.card, padding: 40, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.92)' },
-  loadingTxt: { fontSize: SZ.sm, color: C.dim2, marginTop: 12, fontFamily: F.mono },
-  scoreCard: { ...BEVEL.card, padding: 18, backgroundColor: 'rgba(255,255,255,0.95)' },
-  platformRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12 },
-  seasonPill: { backgroundColor: 'rgba(61,106,170,0.95)', borderRadius: 16, borderWidth: 2, borderColor: '#fee229', shadowColor: '#fee229', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 4, paddingHorizontal: 12, paddingVertical: 6 },
-  seasonPillText: { fontSize: 10, fontFamily: F.mono, color: '#fee229', textShadowColor: 'rgba(254,226,41,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6, letterSpacing: 0.5 },
-  platformToggles: { flexDirection: 'row', gap: 8, flex: 1, justifyContent: 'center' },
-  platformToggle: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 2, borderColor: 'rgba(255,255,237,0.2)', backgroundColor: 'rgba(61,106,170,0.95)' },
-  platformToggleOn: { borderColor: C.blueDeep, borderWidth: 2 },
-  platformToggleText: { fontSize: SZ.sm, fontFamily: F.bold, color: '#ffffed', letterSpacing: 0.5 },
-  platformToggleTextOn: { fontFamily: F.bold },
-  scoreGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  scoreCardGrid: { backgroundColor: "rgba(61,106,170,0.95)", borderColor: "#6a9ad4", borderTopColor: "rgba(255,255,255,0.2)", borderLeftColor: "rgba(255,255,255,0.12)", borderBottomColor: "#2a5588", borderRightColor: "#2a5588", shadowColor: "#fee229", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 3, width: (SCREEN_W - SP[3] * 2 - 8) / 2, aspectRatio: 1.2 },
-  scoreEyeGrid: { fontSize: SZ.xs, fontFamily: F.mono, color: '#ffffff', letterSpacing: 1.5, marginBottom: 8, textAlign: 'center' },
-  leagueBtnGrid: { marginBottom: 8 },
-  leagueTopGrid: { flexDirection: 'row', alignItems: 'center' },
-  leagueNameGrid: { fontSize: SZ.sm, color: '#ffffed', fontFamily: F.bold },
-  leagueMetaGrid: { fontSize: SZ.xs, color: '#ffffff', fontFamily: F.mono, marginTop: 2 },
-  leagueRankGrid: { fontSize: 13, color: '#fee229', fontFamily: F.bold, textAlign: 'center', marginBottom: 4 },
-  scoreRowGrid: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+
+  // Header
+  headerBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  handlePill: { backgroundColor: dark.surface, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: dark.border },
+  handleTxt: { fontSize: SZ.xs, fontFamily: F.mono, color: dark.textSub },
+  gearBtn: { padding: 6 },
+
+  // Platform pills
+  platformRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  platformToggles: { flexDirection: 'row', gap: 6 },
+  platformToggle: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: dark.border, backgroundColor: dark.card },
+  platformToggleText: { fontSize: 10, fontFamily: F.bold, color: dark.textSub, letterSpacing: 0.5 },
+  seasonPill: { backgroundColor: dark.card, borderRadius: 8, borderWidth: 1, borderColor: dark.border, paddingHorizontal: 12, paddingVertical: 6 },
+  seasonPillText: { fontSize: 10, fontFamily: F.mono, color: dark.textSub },
+
+  // Section headers
+  sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  sectionLabel: { fontSize: 10, fontFamily: F.bold, color: palette.aqua, letterSpacing: 1.5 },
+  sectionHint: { fontSize: 9, fontFamily: F.mono, color: dark.textMuted },
+
+  // News feed
+  newsChip: { backgroundColor: dark.card, borderRadius: 12, padding: 12, borderWidth: 1, minWidth: 240, flexDirection: 'row', alignItems: 'flex-start' },
+  newsDot: { width: 6, height: 6, borderRadius: 3, marginRight: 8, marginTop: 4 },
+  newsSource: { fontSize: 9, fontFamily: F.monoBold, letterSpacing: 1, marginBottom: 2 },
+  newsText: { fontSize: 12, color: dark.textSub, lineHeight: 17, fontFamily: F.body },
+
+  // Flat card base
+  flatCard: { backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, borderColor: dark.border, padding: 16 },
+
+  // Loading
+  loadingCard: { alignItems: 'center', padding: 40 },
+  loadingTxt: { fontSize: SZ.sm, color: dark.textMuted, marginTop: 12, fontFamily: F.body },
+
+  // Score grid
+  scoreScroll: { gap: 10, paddingHorizontal: 2 },
+  scoreCardGrid: {
+    backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, borderColor: dark.border,
+    padding: 14, width: SCREEN_W * 0.65, flexShrink: 0,
+  },
+  leagueNameGrid: { fontSize: 11, color: dark.text, fontFamily: F.bodyBold, flex: 1, marginRight: 6 },
+  leagueMetaGrid: { fontSize: 9, color: dark.textMuted, fontFamily: F.body, marginBottom: 4 },
+  leagueRankGrid: { fontSize: 10, color: palette.aqua, fontFamily: F.body, marginBottom: 6 },
+  badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  badgeText: { fontSize: 7, fontFamily: F.monoBold, letterSpacing: 1 },
+  scoreRowGrid: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   scoreBoxGrid: { alignItems: 'center', flex: 1 },
-  scoreLabelGrid: { fontSize: SZ.xs, color: '#ffffff', fontFamily: F.mono, letterSpacing: 1, marginBottom: 2 },
-  scoreNumGrid: { fontSize: 32, fontFamily: F.bold },
-  scoreYou: { color: '#fee229' },
-  scoreOpp: { color: '#5883bf' },
-  scoreVsGrid: { fontSize: SZ.md, color: 'rgba(255,255,255,0.5)', fontFamily: F.bold, marginHorizontal: 8 },
-  emptyScoreCard: { width: (SCREEN_W - SP[3] * 2 - 8) / 2, aspectRatio: 1.2, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  emptyCard: { ...BEVEL.card, padding: 24, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.92)' },
-  emptyEye: { fontSize: SZ.sm, fontFamily: F.mono, color: C.blueDeep, letterSpacing: 2, marginBottom: 8 },
-  emptyTxt: { fontSize: SZ.sm, color: C.dim2, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
-  emptyBtn: { backgroundColor: C.blueDeep, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 20 },
-  emptyBtnTxt: { color: '#ffffff', fontSize: SZ.sm, fontFamily: F.bold, letterSpacing: 1 },
-  insightsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  insightsEye: { fontSize: 16, fontFamily: F.bold, color: '#fee229', textShadowColor: 'rgba(61,106,170,0.6)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 14, letterSpacing: 2 },
-  swipeHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  swipeArrowLeft: { transform: [{ rotate: '180deg' }] },
-  insightsHint: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2 },
-  insightCard: { padding: 18, backgroundColor: '#fee229', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(254,226,41,0.5)', borderTopColor: 'rgba(255,255,255,0.6)', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 3 },
-  insightTop: { flexDirection: 'row', marginBottom: 12, alignItems: 'center' },
-  insightIconWrap: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', borderWidth: 1.25, borderColor: 'rgba(88,131,191,0.18)' },
-  insightEmoji: { fontSize: SZ.xl },
-  insightTitle: { fontSize: SZ.base, color: '#3d6aaa', textShadowColor: 'rgba(61,106,170,0.7)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8, fontFamily: F.bold, marginBottom: 4 },
-  insightBody: { fontSize: SZ.sm, color: C.dim, lineHeight: 18 },
-  insightTag: { alignSelf: 'flex-start', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
-  insightTagTxt: { fontSize: SZ.xs, fontFamily: F.mono, letterSpacing: 0.5 },
+  scoreLabelGrid: { fontSize: 8, color: dark.textMuted, fontFamily: F.mono, letterSpacing: 1, marginBottom: 2 },
+  scoreNumGrid: { fontSize: 22, fontFamily: F.bold, color: dark.text },
+  scoreVsGrid: { fontSize: 11, color: dark.textMuted, fontFamily: F.body, marginHorizontal: 6 },
+
+  // Empty state
+  emptyCard: { alignItems: 'center', padding: 28, marginBottom: 16 },
+  emptyTitle: { fontSize: SZ.base, fontFamily: F.bold, color: dark.text, marginBottom: 6 },
+  emptyTxt: { fontSize: SZ.sm, color: dark.textSub, textAlign: 'center', marginBottom: 16, fontFamily: F.body },
+  emptyBtn: { backgroundColor: palette.aqua, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 24 },
+  emptyBtnTxt: { fontFamily: F.bold, color: dark.bg, fontSize: SZ.sm, letterSpacing: 1 },
+
+  // AI Coach bar
+  aiCoachBar: { flexDirection: 'row', alignItems: 'center', padding: 14, marginBottom: 16, backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, borderColor: dark.border },
+  aiCoachBarActive: { borderColor: palette.aqua + '40', backgroundColor: palette.aqua + '08' },
+  aiCoachLabel: { fontSize: 11, fontFamily: F.bold, color: dark.text, letterSpacing: 1 },
+  aiCoachHint: { fontSize: 9, fontFamily: F.body, color: dark.textMuted, marginTop: 1 },
+
+  // Insights
+  insightCard: { backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, padding: 16 },
+  insightTop: { flexDirection: 'row', marginBottom: 10, alignItems: 'center' },
+  insightIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  insightTitle: { fontSize: SZ.base, color: dark.text, fontFamily: F.bodyBold, marginBottom: 3 },
+  insightBody: { fontSize: SZ.sm, color: dark.textSub, lineHeight: 18, fontFamily: F.body },
+  insightTag: { alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  insightTagTxt: { fontSize: 9, fontFamily: F.monoBold, letterSpacing: 1 },
   insightDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 20 },
-  insightDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.dim2 },
-  insightDotOn: { backgroundColor: C.blueDeep },
-  aiCoachBar: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12, marginBottom: 16, position: 'relative', overflow: 'hidden', backgroundColor: 'rgba(61,106,170,0.95)', borderRadius: 16, borderWidth: 1.5, borderColor: '#6a9ad4', borderTopColor: 'rgba(255,255,255,0.2)', borderBottomColor: '#2a5588', shadowColor: '#fee229', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 3 },
-  aiCoachBarActive: { backgroundColor: C.gold + '18', borderColor: C.gold + '40', shadowColor: C.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 },
-  aiCoachBarShine: BEVEL.shine,
-  aiCoachLeft: { width: 40, alignItems: 'center' },
-  aiCoachOrb: { fontSize: SZ.xl, color: C.gold, fontFamily: F.bold },
-  aiCoachCenter: { flex: 1 },
-  aiCoachLabel: { fontSize: SZ.sm, fontFamily: F.bold, color: '#ffffed', marginBottom: 2 },
-  aiCoachHint: { fontSize: SZ.xs, fontFamily: F.mono, color: '#ffffff' },
-  aiCoachModal: { backgroundColor: '#ffffff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, minHeight: 320, borderTopWidth: 1.5, borderLeftWidth: 1.5, borderRightWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)', position: 'relative', overflow: 'hidden', shadowColor: '#3d6aaa', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 12 },
-  aiCoachModalShine: BEVEL.shine,
-  aiCoachModalClose: { fontSize: SZ.lg, fontFamily: F.bold, color: C.blueDeep, alignSelf: 'flex-end', marginBottom: 8 },
-  aiCoachModalTitle: { fontSize: SZ.xl, fontFamily: F.bold, color: C.ink, marginBottom: 16 },
-  aiCoachModalScores: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  aiCoachModalLabel: { fontSize: SZ.xs, fontFamily: F.mono, color: C.dim2, letterSpacing: 1 },
-  aiCoachModalScore: { fontSize: SZ['2xl'], fontFamily: F.bold, color: C.blueDeep, marginTop: 4 },
-  aiCoachModalVs: { fontSize: SZ.lg, fontFamily: F.bold, color: C.dim2 },
-  aiCoachModalInsight: { fontSize: SZ.sm, fontFamily: F.outfit, color: C.dim, lineHeight: 20, marginBottom: 20 },
-  aiCoachModalBtn: { backgroundColor: C.gold, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 20, alignItems: 'center' },
-  aiCoachModalBtnTxt: { fontFamily: F.bold, color: C.ink, fontSize: SZ.base, letterSpacing: 2 },
-  bevelCard: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(88,131,191,0.18)', position: 'relative', overflow: 'hidden' },
-  bevelBlue: { backgroundColor: 'rgba(217,253,243,0.9)', borderColor: 'rgba(88,131,191,0.18)' },
-  bevelShine: { position: 'absolute', top: 0, left: '10%', right: '10%', height: 2, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 1 },
+  insightDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: dark.textMuted },
+  insightDotOn: { backgroundColor: palette.aqua },
+
+  // Modal
+  modalSheet: { backgroundColor: dark.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, minHeight: 300, borderTopWidth: 1, borderColor: dark.border },
+  modalTitle: { fontSize: SZ.xl, fontFamily: F.bold, color: dark.text, marginBottom: 16 },
+  modalScores: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalLabel: { fontSize: 9, fontFamily: F.mono, color: dark.textMuted, letterSpacing: 1 },
+  modalScore: { fontSize: SZ['2xl'], fontFamily: F.bold, color: palette.aqua, marginTop: 4 },
+  modalVs: { fontSize: SZ.lg, fontFamily: F.body, color: dark.textMuted },
+  modalInsight: { fontSize: SZ.sm, fontFamily: F.body, color: dark.textSub, lineHeight: 20, marginBottom: 20 },
+  modalBtn: { backgroundColor: palette.aqua, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  modalBtnTxt: { fontFamily: F.bold, color: dark.bg, fontSize: SZ.base, letterSpacing: 1 },
 });

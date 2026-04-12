@@ -7,9 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCurrentTier, getPackages, purchasePackage, restorePurchases } from '../services/purchases';
 import { C, F, R, SP, SZ } from './constants/tokens';
 
-const SURFACE  = 'rgba(255,255,255,0.90)';
-const BORDER   = 'rgba(88,131,191,0.32)';
-const BEVEL_HI = 'rgba(255,255,255,0.95)';
+const SURFACE  = '#12252e';
+const BORDER   = '#1a3542';
+const BEVEL_HI = 'transparent';
 
 type BillingCycle = 'monthly' | 'yearly';
 
@@ -187,7 +187,7 @@ export default function PaywallScreen() {
   const livePrice = getLivePrice();
 
   return (
-    <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
+    <LinearGradient colors={['#0a1214','#0a1214']} style={{ flex: 1 }}>
       <ScrollView
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}

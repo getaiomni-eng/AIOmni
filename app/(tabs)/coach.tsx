@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
+
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -21,8 +21,8 @@ import { C, F, R, SP, SZ } from '../constants/tokens';
 import { getRemainingPrompts, getResetTime, incrementPrompt } from '../utils/promptCounter';
 
 const WEEKLY_LIMIT = 25;
-const BORDER   = 'rgba(88,131,191,0.32)';
-const BEVEL_HI = 'rgba(255,255,255,0.95)';
+const BORDER   = '#1a3542';
+const BEVEL_HI = '#12252e';
 
 const FF_KNOWLEDGE = `
 FANTASY FOOTBALL FUNDAMENTALS (apply to every answer):
@@ -169,7 +169,7 @@ const PLATFORM_COLOR: Record<string, string> = {
 };
 
 type Message = { role: 'ai' | 'user'; text: string; isLoading?: boolean };
-const QUICK_PROMPTS = ['🎯 Start/Sit', '📈 Best waiver', '⇄ Trade value', '📊 Matchup'];
+const QUICK_PROMPTS = ['Start/Sit', 'Best waiver', 'Trade value', 'Matchup'];
 
 const renderAIText = (text: string) =>
   text.split('\n').map((line, i) => {
@@ -323,7 +323,7 @@ export default function CoachScreen() {
   const selectorColor = selectedLeague ? (PLATFORM_COLOR[selectedLeague.platform] ?? C.gold) : C.gold;
 
   return (
-    <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#0a1214' }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
         <View style={[styles.wrap, { paddingTop: insets.top + 8 }]}>
 
@@ -395,7 +395,7 @@ export default function CoachScreen() {
                 // AI bubble — cream bevel card (matches mockup)
                 <View key={i} style={styles.aiRow}>
                   <View style={styles.aiBubbleAvatar}>
-                    <Text style={{ fontSize: 12 }}>🤖</Text>
+                    <Text style={{ fontSize: 12 }}>◎</Text>
                   </View>
                   <View style={[styles.aiBubble, { maxWidth: '85%' }]}>
                     <View style={styles.bevelShine} />
@@ -477,7 +477,7 @@ export default function CoachScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
   // Header
   hdr:      { flexDirection:'row', alignItems:'center', gap:10, marginBottom:10 },
   logoAvatar: { width:44, height:44, borderRadius:12, backgroundColor: C.goldS, borderWidth:1.5, borderColor: C.goldBorder, alignItems:'center', justifyContent:'center', overflow:'hidden' },
-  title:    { fontSize:SZ.xl, fontFamily:F.bold, color:C.ink },
+  title:    { fontSize:SZ.xl, fontFamily:F.bold, color:'#f0f4f5' },
   subtitle: { fontSize:SZ.xs-1, fontFamily:F.mono, color:C.dim2, letterSpacing:0.8 },
   rightHdr: { flexDirection:'row', alignItems:'center', gap:6 },
   gearBtn:  { padding:4 },
@@ -517,19 +517,19 @@ const styles = StyleSheet.create({
     alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:2,
   },
   aiBubble: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: '#12252e',
     borderWidth: 1.5,
-    borderColor: 'rgba(88,131,191,0.32)',
-    borderTopColor: 'rgba(255,255,255,0.95)',
-    borderLeftColor: 'rgba(255,255,255,0.85)',
-    borderBottomColor: 'rgba(88,131,191,0.45)',
-    borderRightColor: 'rgba(88,131,191,0.28)',
+    borderColor: '#1a3542',
+    borderTopColor: '#12252e',
+    
+    
+    
     borderRadius: 14,
     borderTopLeftRadius: 4,
     padding: 11,
     position: 'relative',
     overflow: 'hidden',
-    shadowColor: '#3d6aaa',
+    shadowColor: '#1be7ff',
     shadowOffset: { width:0, height:2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -540,48 +540,48 @@ const styles = StyleSheet.create({
   // User bubble — gold card (matches mockup)
   userRow:    { flexDirection:'row', justifyContent:'flex-end' },
   userBubble: {
-    backgroundColor: '#fee229',
-    borderWidth: 1.5,
-    borderColor: 'rgba(200,170,0,0.6)',
-    borderTopColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: '#ffb800',
+    borderWidth: 1,
+    borderColor: 'rgba(255,184,0,0.4)',
+    borderTopColor: '#12252e',
     borderLeftColor: 'rgba(255,255,255,0.7)',
-    borderBottomColor: 'rgba(140,110,0,0.4)',
-    borderRightColor: 'rgba(140,110,0,0.2)',
+    borderBottomColor: '#1a3542',
+    borderRightColor: '#1a3542',
     borderRadius: 14,
     borderTopRightRadius: 4,
     padding: 11,
     maxWidth: '80%',
     position: 'relative',
     overflow: 'hidden',
-    shadowColor: '#c9b100',
+    shadowColor: '#000',
     shadowOffset: { width:0, height:3 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 3,
   },
-  userBubbleShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:'rgba(255,255,255,0.98)', zIndex:6 },
-  userTxt:    { fontSize:SZ.md, color:C.ink, lineHeight:20, fontFamily:F.outfit },
+  userBubbleShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:'#1a3542', zIndex:6 },
+  userTxt:    { fontSize:SZ.md, color:'#0a1214', lineHeight:20, fontFamily:F.body },
 
-  aiTxt:    { fontSize:SZ.md, color:C.ink, lineHeight:20, fontFamily:F.outfit },
-  aiBold:   { fontSize:SZ.md, fontFamily:F.semibold, color:C.blueDeep, lineHeight:20 },
+  aiTxt:    { fontSize:SZ.md, color:'#f0f4f5', lineHeight:20, fontFamily:F.outfit },
+  aiBold:   { fontSize:SZ.md, fontFamily:F.semibold, color:'#1be7ff', lineHeight:20 },
 
   // Verdict card
   verdict:    { borderLeftWidth:2, borderRadius:9, padding:9, marginTop:7 },
   verdictEye: { fontSize:SZ.xs-2, fontFamily:F.mono, letterSpacing:1, marginBottom:2 },
-  verdictTxt: { fontSize:SZ.sm+1, fontFamily:F.semibold, color:C.ink },
+  verdictTxt: { fontSize:SZ.sm+1, fontFamily:F.semibold, color:'#f0f4f5' },
 
   // Recommendation card — blue (matches mockup)
   recoCard: {
-    backgroundColor: '#4d7abf',
+    backgroundColor: '#0f1c22',
     borderRadius: 12,
     borderTopLeftRadius: 4,
     padding: 11,
     marginTop: 7,
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.35)',
-    borderTopColor: 'rgba(255,255,255,0.6)',
+    borderTopColor: '#0f1c22',
     borderBottomColor: 'rgba(20,45,100,0.5)',
-    shadowColor: '#3d6aaa',
+    shadowColor: '#1be7ff',
     shadowOffset: { width:0, height:4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -589,28 +589,28 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
-  recoTitle: { fontSize:SZ.sm, fontFamily:F.bold, color:'#fee229', letterSpacing:0.5 },
-  recoBody:  { fontSize:SZ.sm, fontFamily:F.outfit, color:'rgba(255,255,237,0.85)', lineHeight:18, marginTop:2 },
+  recoTitle: { fontSize:SZ.sm, fontFamily:F.bold, color:'#ffb800', letterSpacing:0.5 },
+  recoBody:  { fontSize:SZ.sm, fontFamily:F.outfit, color:'#7a9eaa', lineHeight:18, marginTop:2 },
 
   // Add player card
-  addCard:   { flexDirection:'row', alignItems:'center', gap:8, backgroundColor:'rgba(255,255,255,0.9)', borderWidth:1.5, borderColor:BORDER, borderRadius:10, padding:8, marginTop:7 },
-  addName:   { fontSize:SZ.md, fontFamily:F.bold, color:C.ink },
+  addCard:   { flexDirection:'row', alignItems:'center', gap:8, backgroundColor:'#12252e', borderWidth:1.5, borderColor:BORDER, borderRadius:10, padding:8, marginTop:7 },
+  addName:   { fontSize:SZ.md, fontFamily:F.bold, color:'#f0f4f5' },
   addSub:    { fontSize:SZ.sm, fontFamily:F.mono, color:C.dim2 },
   addBtn:    { backgroundColor:C.sageS, borderWidth:1.5, borderColor:C.sageBorder, borderRadius:7, paddingHorizontal:8, paddingVertical:4 },
   addBtnTxt: { fontSize:SZ.sm, fontFamily:F.mono, color:C.blueDeep, fontWeight:'700' },
 
   // Input
   inputWrap: { paddingTop:8 },
-  inputRow:  { flexDirection:'row', alignItems:'center', gap:7, backgroundColor:'rgba(255,255,255,0.92)', borderWidth:1.5, borderColor:BORDER, borderTopColor:'rgba(255,255,255,0.95)', borderRadius:18, paddingLeft:13, paddingRight:4, paddingVertical:4 },
-  input:     { flex:1, fontSize:SZ.md, color:C.ink, paddingVertical:8, fontFamily:F.outfit },
+  inputRow:  { flexDirection:'row', alignItems:'center', gap:7, backgroundColor:'#12252e', borderWidth:1.5, borderColor:BORDER, borderTopColor:'#12252e', borderRadius:18, paddingLeft:13, paddingRight:4, paddingVertical:4 },
+  input:     { flex:1, fontSize:SZ.md, color:'#f0f4f5', paddingVertical:8, fontFamily:F.outfit },
   sendBtn:   { width:34, height:34, backgroundColor:C.gold, borderRadius:10, alignItems:'center', justifyContent:'center' },
   sendBtnOff:{ backgroundColor:C.goldS },
-  sendArrow: { fontSize:14, fontFamily:F.bold, color:C.ink },
+  sendArrow: { fontSize:14, fontFamily:F.bold, color:'#f0f4f5' },
 
   // Picker modal — cream theme
-  pickerOverlay:  { flex:1, backgroundColor:'rgba(26,31,46,0.55)', justifyContent:'flex-end' },
+  pickerOverlay:  { flex:1, backgroundColor:'rgba(10,18,20,0.7)', justifyContent:'flex-end' },
   pickerSheet: {
-    backgroundColor:'#ffffff',
+    backgroundColor:'#12252e',
     borderTopLeftRadius:20, borderTopRightRadius:20,
     paddingTop:12, paddingBottom:32, paddingHorizontal:20,
     borderTopWidth:1.5, borderLeftWidth:1.5, borderRightWidth:1.5,
@@ -622,9 +622,9 @@ const styles = StyleSheet.create({
   pickerSub:      { fontFamily:F.mono, color:C.dim2, fontSize:SZ.sm, lineHeight:18, marginBottom:16 },
   pickerDivider:  { height:1, backgroundColor:BORDER, marginVertical:8 },
   pickerRow:      { flexDirection:'row', alignItems:'center', gap:10, paddingVertical:13, paddingHorizontal:12, borderRadius:12, marginBottom:4 },
-  pickerRowActive:{ backgroundColor:'rgba(88,131,191,0.08)' },
+  pickerRowActive:{ backgroundColor:'#0f1c22' },
   pickerDot:      { width:8, height:8, borderRadius:4, flexShrink:0 },
-  pickerRowLabel: { fontFamily:F.bold, color:C.ink, fontSize:SZ.base },
+  pickerRowLabel: { fontFamily:F.bold, color:'#f0f4f5', fontSize:SZ.base },
   pickerRowSub:   { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs-1, marginTop:2, letterSpacing:0.4 },
   pickerClose:    { marginTop:12, alignItems:'center', paddingVertical:14, borderRadius:12, borderWidth:1.5, borderColor:BORDER },
   pickerCloseTxt: { fontFamily:F.mono, color:C.dim2, fontSize:SZ.sm, letterSpacing:1.5 },

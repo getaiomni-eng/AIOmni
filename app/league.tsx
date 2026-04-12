@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -10,12 +10,12 @@ import { Icon } from './components/AIOmniIcons';
 import { Player, PlayerRow } from './components/PlayerRow';
 import { C, F, SP, SZ } from './constants/tokens';
 
-const SURFACE  = '#ffffff';
-const BORDER   = 'rgba(88,131,191,0.18)';
-const BEVEL_HI = 'rgba(255,255,255,0.95)';
-const BEVEL_LO = 'rgba(88,131,191,0.45)';
-const BEVEL_RT = 'rgba(88,131,191,0.28)';
-const SHADOW   = '#3d6aaa';
+const SURFACE  = '#12252e';
+const BORDER   = '#1a3542';
+const BEVEL_HI = 'transparent';
+const BEVEL_LO = '#1a3542';
+const BEVEL_RT = '#1a3542';
+const SHADOW   = '#000';
 
 const TABS = ['ROSTER','STANDINGS','MATCHUP','WAIVERS','ACTIVITY'] as const;
 type Tab = typeof TABS[number];
@@ -207,17 +207,17 @@ export default function LeagueScreen() {
   const winning = myScore > oppScore;
 
   const LeagueAvatar = () => {
-    const platformLogos: Record<string, any> = {
-      sleeper: require('../assets/images/platforms/sleeper.png'),
-      espn:    require('../assets/images/platforms/espn.png'),
-      yahoo:   require('../assets/images/platforms/yahoo.png'),
-    };
-    const logo = platformLogos[platform] ?? platformLogos.sleeper;
-    return <Image source={logo} style={styles.avatar} />;
+    const color = platform === 'espn' ? '#e52534' : platform === 'yahoo' ? '#7c3aed' : '#00FFF9';
+    const letter = platform === 'espn' ? 'E' : platform === 'yahoo' ? 'Y' : 'S';
+    return (
+      <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: color + '18', borderWidth: 1, borderColor: color + '40', alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontFamily: 'Audiowide_400Regular', fontSize: 16, color }}>{letter}</Text>
+      </View>
+    );
   };
 
   return (
-    <LinearGradient colors={['#ffffed','#f0f0d0']} style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#0a1214' }}>
       <View style={[styles.wrap, { paddingTop: insets.top + 8 }]}>
 
         {/* Header */}
@@ -235,7 +235,7 @@ export default function LeagueScreen() {
         {/* Tabs */}
         <View style={styles.tabRow}>
           {TABS.map(t => (
-            <TouchableOpacity key={t} style={[styles.tab, tab === t && { borderBottomColor: '#fee229', borderBottomWidth: 2 }]} onPress={() => setTab(t)}>
+            <TouchableOpacity key={t} style={[styles.tab, tab === t && { borderBottomColor: '#1be7ff', borderBottomWidth: 2 }]} onPress={() => setTab(t)}>
               <Text style={[styles.tabTxt, tab === t && { color: C.blueDeep, fontFamily: F.bold }]}>{t}</Text>
             </TouchableOpacity>
           ))}
@@ -266,7 +266,7 @@ export default function LeagueScreen() {
                     <View style={styles.standCardShine} />
                     <View style={styles.standRow}>
                       <View style={{ width:26, alignItems:'center' }}>
-                        <Text style={[styles.rankNum, { color: i < 3 ? '#fee229' : '#3d6aaa' }]}>{s.rank}</Text>
+                        <Text style={[styles.rankNum, { color: i < 3 ? '#ffb800' : '#1be7ff' }]}>{s.rank}</Text>
                       </View>
                       <View style={{ flex:1 }}>
                         <View style={{ flexDirection:'row', alignItems:'center', gap:5 }}>
@@ -290,18 +290,18 @@ export default function LeagueScreen() {
                   <View style={styles.scoreRow}>
                     <View>
                       <Text style={styles.teamLbl}>{leagueName.toUpperCase().slice(0,12)}</Text>
-                      <Text style={[styles.scoreNum, { color: '#fee229', fontSize: 48 }]}>{myScore.toFixed(2)}</Text>
+                      <Text style={[styles.scoreNum, { color: '#6eeb83', fontSize: 48 }]}>{myScore.toFixed(2)}</Text>
                       <Text style={styles.youOpp}>YOU</Text>
                     </View>
                     <Text style={styles.vsLbl}>VS</Text>
                     <View style={{ alignItems:'flex-end' }}>
                       <Text style={styles.teamLbl}>Opponent</Text>
-                      <Text style={[styles.scoreNum, { color: '#5883bf', fontSize: 32 }]}>{oppScore.toFixed(2)}</Text>
+                      <Text style={[styles.scoreNum, { color: '#1be7ff', fontSize: 32 }]}>{oppScore.toFixed(2)}</Text>
                       <Text style={styles.youOpp}>OPP</Text>
                     </View>
                   </View>
-                  <View style={[styles.winPill, { backgroundColor: winning ? '#fee229'+'20' : '#5883bf'+'20', borderColor: winning ? '#fee229'+'40' : '#5883bf'+'40' }]}>
-                    <Text style={{ color: winning ? '#fee229' : '#5883bf', fontFamily:F.bold, fontSize:SZ.base }}>
+                  <View style={[styles.winPill, { backgroundColor: winning ? '#ffb800'+'20' : '#1be7ff'+'20', borderColor: winning ? '#ffb800'+'40' : '#1be7ff'+'40' }]}>
+                    <Text style={{ color: winning ? '#ffb800' : '#1be7ff', fontFamily:F.bold, fontSize:SZ.base }}>
                       {winning ? 'WINNING ✓' : 'TRAILING ✗'}
                     </Text>
                   </View>
@@ -349,7 +349,7 @@ export default function LeagueScreen() {
 
       {/* Advice Modal */}
       <Modal visible={!!advicePlayer} transparent animationType="slide" onRequestClose={() => setAdvicePlayer(null)}>
-        <View style={{ flex:1, backgroundColor:'rgba(26,31,46,0.55)', justifyContent:'flex-end' }}>
+        <View style={{ flex:1, backgroundColor:'rgba(10,18,20,0.7)', justifyContent:'flex-end' }}>
           <View style={styles.modalCard}>
             <View style={styles.modalShine} />
             <View style={styles.modalHeader}>
@@ -373,7 +373,7 @@ export default function LeagueScreen() {
           </View>
         </View>
       </Modal>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -383,36 +383,36 @@ const styles = StyleSheet.create({
   hdr:         { flexDirection:'row', alignItems:'center', gap:10, marginBottom:10, paddingTop:4 },
   back:        { fontSize:SZ.sm, color:C.blueDeep, fontFamily:F.mono, letterSpacing:1 },
   avatar:      { width:36, height:36, borderRadius:18, borderWidth:1.5, borderColor:C.goldBorder },
-  lName:       { fontSize:SZ.base, fontFamily:F.bold, color:C.ink },
+  lName:       { fontSize:SZ.base, fontFamily:F.bold, color:'#f0f4f5' },
   lSub:        { fontSize:SZ.xs, fontFamily:F.mono, color:C.dim2 },
   platBadge:   { borderRadius:8, paddingHorizontal:10, paddingVertical:4, borderWidth:1.5 },
   platBadgeTxt:{ fontSize:SZ.xs, fontFamily:F.mono, fontWeight:'700', letterSpacing:1 },
 
   // Tabs — underline style
-  tabRow: { flexDirection:'row', backgroundColor: '#ffffed', borderBottomWidth:1, borderBottomColor:'rgba(88,131,191,0.15)', marginBottom:8 },
+  tabRow: { flexDirection:'row', backgroundColor: '#0a1214', borderBottomWidth:1, borderBottomColor:'#1a3542', marginBottom:8 },
   tab:    { flex:1, paddingVertical:9, alignItems:'center', borderBottomWidth:2, borderBottomColor:'transparent' },
   tabTxt: { fontSize:SZ.xxs+1, fontFamily:F.mono, color:C.dim2, letterSpacing:0.5 },
 
   // Standings card
   standCard: {
-    backgroundColor: SURFACE, borderRadius: 12, padding: 14, marginBottom: 6,
+    backgroundColor: '#12252e', borderRadius: 12, padding: 14, marginBottom: 6,
     borderWidth: 1.5, borderTopColor: BEVEL_HI, borderBottomColor: BEVEL_LO, borderLeftColor: BORDER, borderRightColor: BEVEL_RT,
     shadowColor: SHADOW, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 4,
   },
-  standCardShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  standCardShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:'transparent', zIndex:6 },
   standRow:  { flexDirection:'row', alignItems:'center', gap:9 },
-  rankNum:   { fontSize:SZ.lg, fontFamily:F.bold, color:'#3d6aaa' },
-  standName: { fontSize:SZ.base, fontFamily:F.bold, color:C.ink },
+  rankNum:   { fontSize:SZ.lg, fontFamily:F.bold, color:'#1be7ff' },
+  standName: { fontSize:SZ.base, fontFamily:F.bold, color:'#f0f4f5' },
   standPts:  { fontSize:SZ.sm, fontFamily:F.mono, color:C.dim2, marginTop:1 },
-  standRec:  { fontSize:SZ.base, fontFamily:F.bold, color:C.ink },
+  standRec:  { fontSize:SZ.base, fontFamily:F.bold, color:'#f0f4f5' },
 
   // Matchup hero
   matchupHeroCard: {
-    backgroundColor: SURFACE, borderRadius: 16, padding: 20, marginBottom: 12,
+    backgroundColor: '#12252e', borderRadius: 16, padding: 20, marginBottom: 12,
     borderWidth: 1.5, borderTopColor: BEVEL_HI, borderBottomColor: BEVEL_LO, borderLeftColor: BORDER, borderRightColor: BEVEL_RT,
     shadowColor: SHADOW, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 4,
   },
-  matchupHeroShine:{ position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  matchupHeroShine:{ position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:'transparent', zIndex:6 },
   wkLbl:    { fontSize:SZ.xs, fontFamily:F.mono, color:C.dim2, textAlign:'center', marginBottom:12, letterSpacing:1 },
   scoreRow: { flexDirection:'row', justifyContent:'space-between', alignItems:'center' },
   teamLbl:  { fontSize:SZ.xs, fontFamily:F.mono, color:C.dim2, marginBottom:2 },
@@ -423,36 +423,36 @@ const styles = StyleSheet.create({
 
   // All matchups row
   matchupRow: {
-    backgroundColor: SURFACE, borderRadius: 12, padding: 12, marginBottom: 6,
+    backgroundColor: '#12252e', borderRadius: 12, padding: 12, marginBottom: 6,
     flexDirection: 'row', alignItems: 'center', gap: 8,
     borderWidth: 1.5, borderTopColor: BEVEL_HI, borderBottomColor: BEVEL_LO, borderLeftColor: BORDER, borderRightColor: BEVEL_RT,
     shadowColor: SHADOW, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 4,
   },
-  matchupRowShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  matchupRowShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:'transparent', zIndex:6 },
   matchupName:  { fontSize:SZ.sm, fontFamily:F.bold, color:C.dim2 },
-  matchupScore: { fontSize:SZ.lg, fontFamily:F.bold, color:C.ink, marginTop:2 },
+  matchupScore: { fontSize:SZ.lg, fontFamily:F.bold, color:'#f0f4f5', marginTop:2 },
 
   // Waiver card
   waiverCard: {
-    backgroundColor: SURFACE, borderRadius: 12, marginBottom: 7,
+    backgroundColor: '#12252e', borderRadius: 12, marginBottom: 7,
     borderWidth: 1.5, borderTopColor: BEVEL_HI, borderBottomColor: BEVEL_LO, borderLeftColor: BORDER, borderRightColor: BEVEL_RT,
     shadowColor: SHADOW, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 4,
   },
-  waiverCardShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  waiverCardShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:'transparent', zIndex:6 },
 
   // Advice modal
   modalCard: {
-    backgroundColor: '#ffffff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    backgroundColor: '#12252e', borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: 24, minHeight: 260, borderTopWidth: 1.5, borderLeftWidth: 1.5, borderRightWidth: 1.5,
     borderTopColor: BEVEL_HI, borderBottomColor: BEVEL_LO, borderLeftColor: BORDER, borderRightColor: BEVEL_RT,
     shadowColor: SHADOW, shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 12,
   },
-  modalShine:  { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  modalShine:  { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:'transparent', zIndex:6 },
   modalHeader: { flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:4 },
-  modalName:   { fontFamily:F.bold, color:C.ink, fontSize:SZ['2xl'] },
+  modalName:   { fontFamily:F.bold, color:'#f0f4f5', fontSize:SZ['2xl'] },
   modalClose:  { width:32, height:32, borderRadius:8, borderWidth:1.5, borderColor:BORDER, alignItems:'center', justifyContent:'center', backgroundColor:C.sageS },
   modalMeta:   { fontFamily:F.mono, color:C.dim2, fontSize:SZ.sm, marginBottom:16 },
   modalAdvice: { fontFamily:F.outfit, color:C.dim, fontSize:SZ.sm, lineHeight:20, marginBottom:20 },
   modalBtn:    { backgroundColor:C.gold, borderRadius:12, padding:14, alignItems:'center' },
-  modalBtnTxt: { fontFamily:F.bold, color:C.ink, fontSize:SZ.base, letterSpacing:2 },
+  modalBtnTxt: { fontFamily:F.bold, color:'#f0f4f5', fontSize:SZ.base, letterSpacing:2 },
 });

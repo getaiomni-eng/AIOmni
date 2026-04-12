@@ -3,13 +3,13 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState } from 'react';
 import { signInWithEmail, signUpWithEmail, resetPassword } from '../services/auth';
-import { LinearGradient } from 'expo-linear-gradient';
+
 import { C, F, SZ, R, SP } from './constants/tokens';
 import { KeyboardAvoidingView, Platform, View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 
-const SURFACE  = 'rgba(255,255,255,0.92)';
-const BORDER   = 'rgba(88,131,191,0.32)';
-const BEVEL_HI = 'rgba(255,255,255,0.95)';
+const SURFACE  = '#12252e';
+const BORDER   = '#1a3542';
+const BEVEL_HI = 'transparent';
 
 type Mode = 'signin' | 'signup' | 'reset';
 
@@ -57,7 +57,7 @@ export default function AuthScreen() {
   const btnLabel = mode === 'signin' ? 'SIGN IN'         : mode === 'signup' ? 'CREATE ACCOUNT'  : 'SEND RESET EMAIL';
 
   return (
-    <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: "#0a1214" }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={[styles.wrap, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]}>
 
@@ -148,7 +148,7 @@ export default function AuthScreen() {
           </Text>
         </View>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -156,18 +156,18 @@ const styles = StyleSheet.create({
   wrap: { flex: 1, paddingHorizontal: SP[3], justifyContent: 'center' },
 
   logoBlock: { alignItems: 'center', marginBottom: 36 },
-  logoText:  { fontFamily: F.bold, fontSize: 52, color: C.blueDeep, letterSpacing: 4, marginBottom: 8 },
-  logoSub:   { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm, textAlign: 'center', letterSpacing: 0.5 },
+  logoText:  { fontFamily: F.bold, fontSize: 52, color: '#6eeb83', letterSpacing: 4, marginBottom: 8 },
+  logoSub:   { fontFamily: F.mono, color: '#4a6a76', fontSize: SZ.sm, textAlign: 'center', letterSpacing: 0.5 },
 
   card: {
-    backgroundColor: SURFACE,
+    backgroundColor: '#12252e',
     borderRadius: R.lg,
     padding: 24,
     borderWidth: 1.5,
-    borderColor: BORDER,
+    borderColor: '#1a3542',
     overflow: 'hidden',
     position: 'relative',
-    shadowColor: '#3d6aaa',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.12,
     shadowRadius: 20,
@@ -175,41 +175,41 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   cardShine:  { position: 'absolute', top: 0, left: '8%', right: '8%', height: 1.5, backgroundColor: BEVEL_HI, zIndex: 6 },
-  cardAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, backgroundColor: C.blueDeep },
-  cardTitle:  { fontFamily: F.bold, fontSize: SZ['2xl'], color: C.ink, letterSpacing: 2, marginBottom: 20, marginTop: 8 },
+  cardAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, backgroundColor: '#ffb800' },
+  cardTitle:  { fontFamily: F.bold, fontSize: SZ['2xl'], color: '#f0f4f5', letterSpacing: 2, marginBottom: 20, marginTop: 8 },
 
-  label: { fontFamily: F.mono, fontSize: SZ.xs, color: C.dim2, letterSpacing: 1.5, marginBottom: 6 },
+  label: { fontFamily: F.mono, fontSize: SZ.xs, color: '#4a6a76', letterSpacing: 1.5, marginBottom: 6 },
   input: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0f1c22',
     borderWidth: 1.5,
-    borderColor: BORDER,
+    borderColor: '#1a3542',
     borderRadius: R.sm,
     paddingHorizontal: 14,
     paddingVertical: 13,
     fontFamily: F.outfit,
     fontSize: SZ.base,
-    color: C.ink,
+    color: '#f0f4f5',
     marginBottom: 16,
   },
 
-  errorTxt:   { fontFamily: F.mono, color: '#a83040', fontSize: SZ.sm, marginBottom: 12, lineHeight: 18 },
-  successTxt: { fontFamily: F.mono, color: C.mint,    fontSize: SZ.sm, marginBottom: 12, lineHeight: 18 },
+  errorTxt:   { fontFamily: F.mono, color: '#ff5714', fontSize: SZ.sm, marginBottom: 12, lineHeight: 18 },
+  successTxt: { fontFamily: F.mono, color: '#6eeb83',    fontSize: SZ.sm, marginBottom: 12, lineHeight: 18 },
 
   submitBtn: {
-    backgroundColor: C.gold,
+    backgroundColor: '#ffb800',
     borderRadius: R.sm,
     padding: 16,
     alignItems: 'center',
     marginBottom: 20,
     marginTop: 4,
   },
-  submitTxt: { fontFamily: F.mono, color: '#ffffff', fontSize: SZ.base, letterSpacing: 2 },
+  submitTxt: { fontFamily: F.mono, color: '#0a1214', fontSize: SZ.base, letterSpacing: 2 },
 
   switchRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 2 },
-  switchTxt: { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.sm },
-  divider:   { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm },
+  switchTxt: { fontFamily: F.mono, color: '#6eeb83', fontSize: SZ.sm },
+  divider:   { fontFamily: F.mono, color: '#4a6a76', fontSize: SZ.sm },
 
   skipBtn:   { alignItems: 'center', paddingVertical: 14 },
-  skipTxt:   { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm },
-  finePrint: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, textAlign: 'center', lineHeight: 16, opacity: 0.6, marginTop: 8 },
+  skipTxt:   { fontFamily: F.mono, color: '#4a6a76', fontSize: SZ.sm },
+  finePrint: { fontFamily: F.mono, color: '#4a6a76', fontSize: SZ.xs - 1, textAlign: 'center', lineHeight: 16, opacity: 0.6, marginTop: 8 },
 });
