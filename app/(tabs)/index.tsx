@@ -481,16 +481,7 @@ export default function HomeScreen() {
           </View>
           <Ionicons name="chevron-forward" size={16} color={dark.textMuted} />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.coachCard, { marginTop: 8, borderColor: palette.green + '30' }]} onPress={() => router.push('/draft' as any)}>
-  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-    <Ionicons name="list-outline" size={22} color={palette.green} />
-    <View>
-      <Text style={[styles.coachLabel, { color: palette.green }]}>DRAFT COPILOT</Text>
-      <Text style={styles.coachSub}>Live draft board + AI picks</Text>
-    </View>
-  </View>
-  <Ionicons name="chevron-forward" size={18} color={dark.textMuted} />
-</TouchableOpacity>
+
 
         {/* ── AI Insights ── */}
         <View style={styles.sectionRow}>

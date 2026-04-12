@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -7,15 +7,15 @@ import { askAI } from "../../services/ai";
 import { findMyESPNTeam, formatESPNPosition, getESPNAllRosters, getESPNLeague, getESPNMatchups, getESPNStandings, getESPNTransactions, isESPNStarter, loadESPNCredentials } from '../../services/espn';
 import { Icon } from '../components/AIOmniIcons';
 import { getMyYahooTeam, getValidYahooToken, getYahooAllRosters, getYahooMatchups, getYahooStandings, getYahooTransactions } from '../../services/yahoo';
-import { C, F, R, SZ, BEVEL } from '../constants/tokens';
+import { C, F, R, SZ, BEVEL, dark, palette } from '../constants/tokens';
 
 // ── Cream theme card constants ──────────────────────────────────────────────
-const SURFACE     = 'rgba(255,255,255,0.88)';
-const BORDER      = 'rgba(88,131,191,0.32)';
-const DIM_BORDER  = 'rgba(88,131,191,0.14)';
-const BEVEL_HI    = 'rgba(255,255,255,0.95)';
-const BEVEL_LO    = 'rgba(88,131,191,0.28)';
-const INNER_GLOW  = 'rgba(254,226,41,0.10)';
+const SURFACE     = '#12252e';
+const BORDER      = '#1a3542';
+const DIM_BORDER  = '#14282f';
+const BEVEL_HI    = '#14282f';
+const BEVEL_LO    = '#1a3542';
+const INNER_GLOW  = 'rgba(27,231,255,0.06)';
 
 const POS_COLORS: Record<string, string> = {
   QB: '#7b5ea7', RB: '#1e8c42', WR: '#2a7aaa', TE: '#b85a1a',
@@ -409,7 +409,7 @@ export default function LeagueScreen() {
   ] as const;
 
   return (
-    <LinearGradient colors={[C.bgTop, C.bgBot]} style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#0a1214' }}>
 
       {/* ── Header ── */}
       <View style={styles.header}>
@@ -654,21 +654,21 @@ export default function LeagueScreen() {
           </View>
         </View>
       </Modal>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header:            { paddingTop: 56, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: DIM_BORDER, gap: 10, backgroundColor: 'rgba(255,255,237,0.85)' },
+  header:            { paddingTop: 56, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: DIM_BORDER, gap: 10, backgroundColor: '#7a9eaa' },
   backBtn:           { paddingRight: 4 },
   backText:          { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.xs, letterSpacing: 1.5 },
   headerCenter:      { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  leagueName:        { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg, maxWidth: 180 },
+  leagueName:        { fontFamily: F.bold, color: '#f0f4f5', fontSize: SZ.lg, maxWidth: 180 },
   leagueSub:         { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 1.5, marginTop: 1 },
   platformBadge:     { borderRadius: R.xs, paddingHorizontal: 8, paddingVertical: 4 },
   platformBadgeText: { fontFamily: F.mono, fontSize: SZ.xs - 1, letterSpacing: 1.5, fontWeight: '700' },
 
-  tabScroll: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: DIM_BORDER, backgroundColor: 'rgba(255,255,237,0.9)' },
+  tabScroll: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: DIM_BORDER, backgroundColor: '#0a1214' },
   tabRow:    { paddingHorizontal: 8, flexDirection: 'row', gap: 8 },
   tabBtn:    { paddingVertical: 10, paddingHorizontal: 14, borderRadius: R.sm, borderWidth: 1.5, borderColor: C.glassBorder, borderTopColor: C.glassShine, borderLeftColor: C.surfShine, borderBottomColor: C.sageBorder, borderRightColor: C.sageBorder, backgroundColor: C.glass },
   tabText:   { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 1.5 },
@@ -707,7 +707,7 @@ const styles = StyleSheet.create({
   diamondText: { fontFamily: F.mono, fontSize: 7, fontWeight: '700', transform: [{ rotate: '-45deg' }], letterSpacing: 0.3 },
 
   playerInfoCol: { flex: 1, paddingVertical: 10, paddingRight: 8 },
-  playerName:    { fontFamily: F.bold, color: C.ink, fontSize: SZ.base, letterSpacing: 0.3, lineHeight: 20 },
+  playerName:    { fontFamily: F.bold, color: '#f0f4f5', fontSize: SZ.base, letterSpacing: 0.3, lineHeight: 20 },
   playerMeta:    { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
   playerTeam:    { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
   metaDot:       { color: C.dim2, fontSize: SZ.xs },
@@ -726,10 +726,10 @@ const styles = StyleSheet.create({
   },
   standingRank:       { fontFamily: F.bold, color: C.dim2, fontSize: SZ['2xl'], width: 32 },
   standingInfo:       { flex: 1 },
-  standingName:       { fontFamily: F.bold, color: C.ink, fontSize: SZ.md, marginBottom: 2 },
+  standingName:       { fontFamily: F.bold, color: '#f0f4f5', fontSize: SZ.md, marginBottom: 2 },
   standingPts:        { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
   standingRecord:     { alignItems: 'flex-end', marginRight: 8 },
-  standingRecordText: { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg },
+  standingRecordText: { fontFamily: F.bold, color: '#f0f4f5', fontSize: SZ.lg },
   standingStreak:     { fontFamily: F.mono, fontSize: SZ.xs - 1, fontWeight: '700', marginTop: 2 },
   standingArrow:      { color: C.dim2, fontSize: SZ.xl },
 
@@ -746,9 +746,9 @@ const styles = StyleSheet.create({
   // ── Scores: gold fill + blue stroke — same treatment as mockup ──
   matchupScore: {
     fontFamily: F.mono, fontWeight: '700', fontSize: SZ['5xl'],
-    color: '#fee229',
+    color: '#ffb800',
     // RN text stroke via text shadow layering (best available on iOS)
-    textShadowColor: '#3d6aaa',
+    textShadowColor: '#1be7ff',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 1,
     letterSpacing: -1.5, lineHeight: 44,
@@ -763,7 +763,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
   },
   allMatchupTeam:  { fontFamily: F.outfit, color: C.dim2, fontSize: SZ.md },
-  allMatchupScore: { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg, marginTop: 2 },
+  allMatchupScore: { fontFamily: F.bold, color: '#f0f4f5', fontSize: SZ.lg, marginTop: 2 },
   allMatchupVs:    { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs, marginHorizontal: 8 },
 
   // Waivers
@@ -793,24 +793,24 @@ const styles = StyleSheet.create({
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(26,31,46,0.55)', justifyContent: 'flex-end' },
   modalCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#12252e',
     borderTopLeftRadius: R.lg, borderTopRightRadius: R.lg,
     padding: 24, minHeight: 280,
     borderTopWidth: 1.5, borderLeftWidth: 1.5, borderRightWidth: 1.5,
     borderColor: BORDER, overflow: 'hidden',
-    shadowColor: '#3d6aaa', shadowOffset:{width:0,height:-4}, shadowOpacity:0.12, shadowRadius:20, elevation:12,
+    shadowColor: '#1be7ff', shadowOffset:{width:0,height:-4}, shadowOpacity:0.12, shadowRadius:20, elevation:12,
   },
   modalCardShine:    { ...BEVEL.shine, zIndex: 6 },
   modalTopAccent:    { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
   modalHeader:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  modalPlayerName:   { fontFamily: F.bold, color: C.ink, fontSize: SZ['2xl'], letterSpacing: 0.5 },
+  modalPlayerName:   { fontFamily: F.bold, color: '#f0f4f5', fontSize: SZ['2xl'], letterSpacing: 0.5 },
   modalPosBadge:     { paddingHorizontal: 10, paddingVertical: 3, borderRadius: R.xs, alignSelf: 'flex-start', marginTop: 6 },
   modalPosBadgeText: { fontFamily: F.mono, fontSize: SZ.xs - 1, color: '#ffffff', letterSpacing: 1 },
   closeBtn:          { width: 32, height: 32, borderRadius: R.xs, borderWidth: 1.5, borderColor: BORDER, alignItems: 'center', justifyContent: 'center', backgroundColor: C.sageS },
   closeBtnText:      { color: C.blueDeep, fontSize: 14, fontFamily: F.bold },
   loadingAdvice:     { alignItems: 'center', padding: 24, gap: 14 },
   loadingAdviceText: { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.xs, letterSpacing: 3, opacity: 0.7 },
-  adviceText:        { fontFamily: F.outfit, color: C.ink, fontSize: SZ.md, lineHeight: 24, marginBottom: 20 },
+  adviceText:        { fontFamily: F.outfit, color: '#f0f4f5', fontSize: SZ.md, lineHeight: 24, marginBottom: 20 },
   gotItBtn:          { borderRadius: R.sm, padding: 16, alignItems: 'center', marginTop: 8 },
   gotItText:         { fontFamily: F.bold, fontSize: SZ.lg, letterSpacing: 2, color: '#1a1f2e' },
 });
