@@ -32,13 +32,17 @@ function assignTier(rank: number): number {
 export async function fetchSleeperADP(): Promise<RankedPlayer[]> {
   try {
     const cached = await AsyncStorage.getItem('sleeper_players_cache');
+    const cacheTime = await AsyncStorage.getItem('sleeper_players_cache_ts');
+    const cacheAge = cacheTime ? Date.now() - parseInt(cacheTime) : Infinity;
+    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
     let players: any = {};
-    if (cached) {
+    if (cached && cacheAge < CACHE_TTL) {
       players = JSON.parse(cached);
     } else {
       const res = await fetch('https://api.sleeper.app/v1/players/nfl');
       players = await res.json();
       await AsyncStorage.setItem('sleeper_players_cache', JSON.stringify(players));
+      await AsyncStorage.setItem('sleeper_players_cache_ts', String(Date.now()));
     }
 
     const eligible = Object.entries(players)
@@ -56,7 +60,14 @@ export async function fetchSleeperADP(): Promise<RankedPlayer[]> {
         team: p.team,
         searchRank: p.search_rank,
       }))
-      .sort((a, b) => a.searchRank - b.searchRank)
+      .sort((a, b) => {
+        // Weight search_rank by position scarcity
+        // QBs flood the top of search_rank due to popularity — push them down
+        const posWeight: Record<string, number> = { QB: 1.4, RB: 1.0, WR: 1.0, TE: 1.15, K: 2.0 };
+        const aScore = a.searchRank * (posWeight[a.position] || 1.0);
+        const bScore = b.searchRank * (posWeight[b.position] || 1.0);
+        return aScore - bScore;
+      })
       .slice(0, 200);
 
     return eligible.map((p, i) => ({
@@ -82,7 +93,7 @@ export async function fetchESPNADP(): Promise<RankedPlayer[]> {
     // ESPN fantasy player rankings endpoint
     const res = await fetch(
       'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2025/segments/0/leagues/0?view=kona_player_info',
-      { headers: { 'x-fantasy-filter': JSON.stringify({ players: { limit: 200, sortPercOwned: { sortPriority: 1, sortAsc: false } } }) } }
+      { headers: { 'x-fantasy-filter': JSON.stringify({ players: { limit: 200, sortDraftRanks: { sortPriority: 1, sortAsc: true, value: "STANDARD" } } }) } }
     );
     if (!res.ok) return [];
     const data = await res.json();
@@ -171,6 +182,10 @@ export async function fetchBaseRankings(source: RankingsSource): Promise<RankedP
 
 
 // ── AIOmni AI Rankings — synthesized from all sources ───────
+export async function fetchBlendedConsensus(): Promise<RankedPlayer[]> {
+  return fetchAIOmniRankings();
+}
+
 export async function fetchAIOmniRankings(): Promise<RankedPlayer[]> {
   // Pull from all available sources in parallel
   const [sleeper, espn, yahoo] = await Promise.allSettled([

@@ -280,6 +280,10 @@ export default function RankingsScreen() {
     const custom = await getCustomRankings(format);
     if (custom && custom.length > 0) {
       setMyRanks(custom);
+    } else {
+      // No saved rankings — initialize with SEED so drag-and-drop has something to work with
+      setMyRanks([...SEED]);
+      await saveCustomRankings([...SEED], format);
     }
   };
 

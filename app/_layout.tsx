@@ -12,10 +12,12 @@ import { useFonts } from 'expo-font';
 import * as Linking from 'expo-linking';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getUser, getUserRow } from '../services/supabase';
 import { exchangeYahooCode } from '../services/yahoo';
+import { updatePassword } from '../services/auth';
+import { initPurchases } from '../services/purchases';
 import { dark } from './constants/tokens';
 
 Sentry.init({
@@ -70,10 +72,12 @@ export default Sentry.wrap(function RootLayout() {
       try {
         const user = await getUser();
         if (!user) {
+          await initPurchases();
           router.replace('/onboarding' as any);
           return;
         }
         Sentry.setUser({ id: user.id, email: user.email });
+        await initPurchases(user.id);
 
         const row = await getUserRow();
         const hasSleeper = Boolean(row?.sleeper_username);
@@ -93,6 +97,39 @@ export default Sentry.wrap(function RootLayout() {
 
     const handleDeepLink = async (event: { url: string }) => {
       const url = event.url;
+
+      // ── Password reset callback ──
+      if (url.includes('auth/reset') || url.includes('type=recovery')) {
+        // Supabase auto-sets the session from the recovery token in the URL
+        // Prompt user for new password
+        setTimeout(() => {
+          Alert.prompt(
+            'Set New Password',
+            'Enter your new password:',
+            async (newPw) => {
+              if (!newPw || newPw.length < 6) {
+                Alert.alert('Error', 'Password must be at least 6 characters.');
+                return;
+              }
+              try {
+                const res = await updatePassword(newPw);
+                if (res.success) {
+                  Alert.alert('Password Updated', 'You can now sign in with your new password.');
+                  router.replace('/(tabs)');
+                } else {
+                  Alert.alert('Error', res.error ?? 'Failed to update password.');
+                }
+              } catch (e: any) {
+                Alert.alert('Error', e.message ?? 'Something went wrong.');
+              }
+            },
+            'secure-text'
+          );
+        }, 500);
+        return;
+      }
+
+      // ── Yahoo OAuth callback ──
       if (!url.includes('oauth/yahoo')) return;
       const parsed = Linking.parse(url);
       const code   = parsed.queryParams?.code as string;

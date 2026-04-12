@@ -1,5 +1,4 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
 import TabIcon from '../components/TabIcon';
 import { dark, palette } from '../constants/tokens';
 
@@ -39,9 +38,7 @@ export default function TabLayout() {
         name="draft"
         options={{
           title: 'Draft',
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.4 }}>📋</Text>
-          ),
+          tabBarIcon: ({ focused }) => <TabIcon name="draft" focused={focused} size={26} />,
         }}
       />
       <Tabs.Screen

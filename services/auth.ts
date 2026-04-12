@@ -41,7 +41,15 @@ export async function signOut(): Promise<void> {
 export async function resetPassword(email: string): Promise<{
   success: boolean; error?: string;
 }> {
-  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: 'aiomnifantasy://auth/reset' });
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+export async function updatePassword(newPassword: string): Promise<{
+  success: boolean; error?: string;
+}> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) return { success: false, error: error.message };
   return { success: true };
 }
