@@ -245,10 +245,15 @@ export default function RankingsScreen() {
   }, [format]);
 
   const loadCommunityRankings = async () => {
+    setLoading(true);
     try {
       const data = await fetchBlendedConsensus();
       if (data.length > 0) setCommunityData(data);
-    } catch {}
+    } catch (e) {
+      console.log('fetchBlendedConsensus error:', e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleProspectsTab = async () => {
