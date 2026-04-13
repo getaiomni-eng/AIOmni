@@ -51,7 +51,7 @@ Never compare players across different leagues — each league is scored indepen
 
 type LeagueContext = {
   name: string; platform: string; format: string;
-  record: string; rank: string; roster: string[]; week: number;
+  record: string; rank: string; roster: string[]; week: number; season: number;
 };
 
 function getPaywallMessage(resetStr: string): string {
@@ -94,9 +94,9 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
           const p = playerMap[id];
           return p ? `${p.first_name} ${p.last_name} (${p.position})` : id;
         });
-        return { name: l.name, platform: 'Sleeper', format: fmt, record: `${wins}–${losses}`, rank: rankIdx >= 0 ? `${rankIdx + 1} of ${rosters.length}` : 'unknown', roster: rosterNames, week };
+        return { name: l.name, platform: 'Sleeper', format: fmt, record: `${wins}–${losses}`, rank: rankIdx >= 0 ? `${rankIdx + 1} of ${rosters.length}` : 'unknown', roster: rosterNames, week, season: parseInt(l.season) || 2025 };
       } catch {
-        return { name: l.name, platform: 'Sleeper', format: fmt, record: '?', rank: '?', roster: [], week };
+        return { name: l.name, platform: 'Sleeper', format: fmt, record: '?', rank: '?', roster: [], week, season: parseInt(l.season) || 2025 };
       }
     }));
   } catch { return []; }
@@ -123,7 +123,7 @@ async function loadESPNContext(): Promise<LeagueContext[]> {
       const posMap: Record<number, string> = { 1:'QB', 2:'RB', 3:'WR', 4:'TE', 5:'K', 16:'DEF' };
       return `${player?.fullName ?? 'Unknown'} (${posMap[player?.defaultPositionId] ?? 'FLEX'})`;
     });
-    return [{ name: leagueData.settings?.name ?? 'ESPN League', platform: 'ESPN', format: fmt, record: `${wins}–${losses}`, rank: rankIdx >= 0 ? `${rankIdx + 1} of ${teams.length}` : 'unknown', roster: rosterNames, week }];
+    return [{ name: leagueData.settings?.name ?? 'ESPN League', platform: 'ESPN', format: fmt, record: `${wins}–${losses}`, rank: rankIdx >= 0 ? `${rankIdx + 1} of ${teams.length}` : 'unknown', roster: rosterNames, week, season: 2025 }];
   } catch { return []; }
 }
 
@@ -132,7 +132,7 @@ function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueConte
   if (targets.length === 0) return `${BASE_SYSTEM}\n\nNo leagues loaded yet.`;
   const leagueBlocks = targets.map(l => `
 League: ${l.name} (${l.platform} · ${l.format})
-Record: ${l.record} · Rank: ${l.rank} · Week: ${l.week}
+Record: ${l.record} · Rank: ${l.rank} · Season: ${l.season} · Week: ${l.week}
 Roster: ${l.roster.length > 0 ? l.roster.join(', ') : 'Not loaded'}
 `).join('\n---\n');
   const focusNote  = selectedLeague ? `\n\nThe user has focused on ONE league: ${selectedLeague.name}. All advice should be specific to this league's scoring format and roster.` : '';

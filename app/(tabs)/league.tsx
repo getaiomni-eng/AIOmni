@@ -530,7 +530,7 @@ export default function LeagueScreen() {
                 <>
                   <Text style={[styles.sectionLabel, { marginTop: 24 }]}>ALL MATCHUPS</Text>
                   {matchup.allMatchups.map((m: any, i: number) => (
-                    <View key={i} style={[styles.allMatchupRow, m.isMyMatchup && { borderColor: PLATFORM_COLOR, borderWidth: 1.5 }]}>
+                    <TouchableOpacity key={i} activeOpacity={0.7} style={[styles.allMatchupRow, m.isMyMatchup && { borderColor: PLATFORM_COLOR, borderWidth: 1.5 }]}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.allMatchupTeam} numberOfLines={1}>{m.team1}</Text>
                         <Text style={styles.allMatchupScore}>{m.team1Points?.toFixed(2)}</Text>
@@ -540,7 +540,7 @@ export default function LeagueScreen() {
                         <Text style={styles.allMatchupTeam} numberOfLines={1}>{m.team2}</Text>
                         <Text style={styles.allMatchupScore}>{m.team2Points?.toFixed(2)}</Text>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   ))}
                 </>
               )}

@@ -70,10 +70,11 @@ export default Sentry.wrap(function RootLayout() {
 
     (async () => {
       try {
-        const user = await getUser();
+        let user = null;
+        try { user = await getUser(); } catch {}
         if (!user) {
-          await initPurchases();
-          router.replace('/onboarding' as any);
+          try { await initPurchases(); } catch {}
+          router.replace('/(tabs)' as any);
           return;
         }
         Sentry.setUser({ id: user.id, email: user.email });
