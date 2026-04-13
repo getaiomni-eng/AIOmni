@@ -68,8 +68,17 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
     if (!Array.isArray(leagues)) return [];
     const state        = await (await fetch('https://api.sleeper.app/v1/state/nfl')).json();
     const week         = state.leg || state.display_week || 17;
-    const playerMapRaw = await AsyncStorage.getItem('sleeper_player_map');
-    const playerMap    = playerMapRaw ? JSON.parse(playerMapRaw) : {};
+    let playerMap: Record<string, any> = {};
+    const cached = await AsyncStorage.getItem('sleeper_players_cache');
+    if (cached) {
+      playerMap = JSON.parse(cached);
+    } else {
+      try {
+        const res = await fetch('https://api.sleeper.app/v1/players/nfl');
+        playerMap = await res.json();
+        await AsyncStorage.setItem('sleeper_players_cache', JSON.stringify(playerMap));
+      } catch { console.log('Failed to fetch Sleeper players'); }
+    }
     return Promise.all(leagues.slice(0, 6).map(async (l: any): Promise<LeagueContext> => {
       const isPPR = l.scoring_settings?.rec > 0;
       const isSF  = (l.roster_positions || []).includes('SUPER_FLEX');
@@ -230,9 +239,10 @@ export default function CoachScreen() {
       setAllLeagues(all);
       setContextReady(true);
 
-      const limit   = currentTier === 'dynasty_elite' ? 999 : currentTier === 'premium' ? 125 : currentTier === 'pro' ? 75 : 25;
+      const limitNum = currentTier === 'dynasty_elite' ? Infinity : currentTier === 'premium' ? 125 : currentTier === 'pro' ? 75 : 25;
+      const limit = limitNum;
       const greeting = all.length > 0
-        ? `Hey — ${all.length} league${all.length > 1 ? 's' : ''} loaded. ${rem} of ${limit} prompts remaining this week. What do you need?`
+        ? `Hey — ${all.length} league${all.length > 1 ? 's' : ''} loaded. ${limitNum === Infinity ? '∞' : rem + ' of ' + limitNum} prompts remaining this week. What do you need?`
         : `Hey — connect your Sleeper username or ESPN account in Settings to get started.`;
       setMessages([{ role: 'ai', text: greeting }]);
     })();
@@ -339,8 +349,8 @@ export default function CoachScreen() {
             </View>
             <View style={styles.rightHdr}>
               <View style={[styles.promptCounter, { borderColor: promptColor + '55', backgroundColor: promptColor + '12' }]}>
-                <Text style={[styles.promptCountNum, { color: promptColor }]}>{remaining}</Text>
-                <Text style={[styles.promptCountLbl, { color: promptColor }]}>/{WEEKLY_LIMIT}</Text>
+                <Text style={[styles.promptCountNum, { color: promptColor }]}>{remaining > 900 ? '∞' : remaining}</Text>
+                <Text style={[styles.promptCountLbl, { color: promptColor }]}>{remaining > 900 ? '' : '/' + WEEKLY_LIMIT}</Text>
               </View>
               <View style={styles.liveDot}>
                 <View style={[styles.livePulse, !contextReady && { backgroundColor: C.gold }]} />
