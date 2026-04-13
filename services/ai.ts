@@ -1,6 +1,7 @@
 // services/ai.ts
 // Calls Claude via Supabase Edge Function proxy
 
+import { NFL_DATA_DICTIONARY } from './nflDataDictionary';
 import { supabase } from './supabase';
 
 const PROXY_URL = 'https://khoruzvsprxyocisuhet.supabase.co/functions/v1/claude-proxy';
@@ -32,7 +33,7 @@ export async function askAI(prompt: string, maxTokens = 512): Promise<string> {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: maxTokens,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{ role: 'user', content: prompt + '\n\n' + NFL_DATA_DICTIONARY }],
       }),
     });
 

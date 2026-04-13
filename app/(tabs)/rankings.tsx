@@ -16,9 +16,9 @@ import {
     saveCustomRankings,
     setSelectedBase,
 } from '../../services/rankingsData';
+import { fetchDedupedProspects } from '../../services/rankingsData';
 import type { ScoringFormat } from '../../services/rankingsData';
 import { applyFormatAdjustments } from '../../services/rankingsData';
-import { supabase } from '../../services/supabase';
 import { getCurrentTier } from '../../services/purchases';
 import { F, SP, dark, palette } from '../constants/tokens';
 
@@ -263,12 +263,8 @@ export default function RankingsScreen() {
     if (prospects.length === 0) {
       setProspectsLoading(true);
       try {
-        const { data } = await supabase
-          .from('college_prospects')
-          .select('*')
-          .order('consensus_rank', { ascending: true })
-          .limit(200);
-        if (data) setProspects(data);
+        const data = await fetchDedupedProspects(2026);
+        if (data.length > 0) setProspects(data);
       } catch {}
       setProspectsLoading(false);
     }

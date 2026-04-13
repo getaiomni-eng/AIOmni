@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { askAI } from "../../services/ai";
 import { findMyESPNTeam, formatESPNPosition, getESPNAllRosters, getESPNLeague, getESPNMatchups, getESPNStandings, getESPNTransactions, isESPNStarter, loadESPNCredentials } from '../../services/espn';
 import { Icon } from '../components/AIOmniIcons';
@@ -90,16 +91,20 @@ function LeagueAvatar({ avatarId, size = 36 }: { avatarId: string; size?: number
     );
   }
 
-  const spin = rot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center', backgroundColor: C.goldS, borderWidth: 1.5, borderColor: C.goldBorder, borderRadius: R.xs }}>
-      {[0.85, 0.6, 0.35].map((scale, i) => (
-        <View key={i} style={{ position: 'absolute', width: size * scale, height: size * scale, borderRadius: size * scale / 2, borderWidth: 1, borderColor: `rgba(61,106,170,${0.18 - i * 0.04})` }} />
-      ))}
-      <View style={{ position: 'absolute', width: size * 0.7, height: 1, backgroundColor: C.goldBorder }} />
-      <View style={{ position: 'absolute', width: 1, height: size * 0.7, backgroundColor: C.goldBorder }} />
-      <Animated.View style={{ position: 'absolute', width: (size / 2) * 0.8, height: 1, backgroundColor: C.gold, left: size / 2, top: size / 2 - 0.5, transformOrigin: 'left center', transform: [{ rotate: spin }], opacity: 0.8 }} />
-      <Animated.View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: C.gold, opacity: pulse }} />
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} viewBox="0 0 64 64">
+        <Defs>
+          <SvgLinearGradient id="specLeague" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0%" stopColor="#ff5714" />
+            <Stop offset="25%" stopColor="#ffb800" />
+            <Stop offset="50%" stopColor="#e4ff1a" />
+            <Stop offset="75%" stopColor="#6eeb83" />
+            <Stop offset="100%" stopColor="#1be7ff" />
+          </SvgLinearGradient>
+        </Defs>
+        <Circle cx="32" cy="32" r="22" fill="none" stroke="url(#specLeague)" strokeWidth={4} strokeLinecap="round" strokeDasharray="125 14" />
+      </Svg>
     </View>
   );
 }
@@ -659,7 +664,7 @@ export default function LeagueScreen() {
 }
 
 const styles = StyleSheet.create({
-  header:            { paddingTop: 56, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: DIM_BORDER, gap: 10, backgroundColor: '#7a9eaa' },
+  header:            { paddingTop: 56, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: DIM_BORDER, gap: 10, backgroundColor: '#0a1214' },
   backBtn:           { paddingRight: 4 },
   backText:          { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.xs, letterSpacing: 1.5 },
   headerCenter:      { flex: 1, flexDirection: 'row', alignItems: 'center' },
