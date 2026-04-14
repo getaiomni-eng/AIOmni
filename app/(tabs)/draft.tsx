@@ -159,8 +159,8 @@ export default function DraftCopilotScreen() {
   const fetchSleeperPicks = async (leagueId: string, userId: string) => {
     try {
       const [rostersRes, tradedRes] = await Promise.all([
-        fetch(`https://api.sleeper.app/v1/league/\${leagueId}/rosters`),
-        fetch(`https://api.sleeper.app/v1/league/\${leagueId}/traded_picks`),
+        fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`),
+        fetch(`https://api.sleeper.app/v1/league/${leagueId}/traded_picks`),
       ]);
       const rosters = await rostersRes.json();
       const tradedPicks = await tradedRes.json();
@@ -202,7 +202,7 @@ export default function DraftCopilotScreen() {
       for (let rd = 1; rd <= totalRounds; rd++) {
         if (!lostRounds.has(rd)) {
           const pickNum = String(myPosition).padStart(2, '0');
-          picks.push({ round: rd, pick: myPosition, label: `\${rd}.\${pickNum}` });
+          picks.push({ round: rd, pick: myPosition, label: `${rd}.${pickNum}` });
         }
       }
 
@@ -210,7 +210,7 @@ export default function DraftCopilotScreen() {
       for (const ap of acquiredPicks) {
         const fromPos = positionMap.get(ap.fromRosterId) || 1;
         const pickNum = String(fromPos).padStart(2, '0');
-        picks.push({ round: ap.round, pick: fromPos, label: `\${ap.round}.\${pickNum}` });
+        picks.push({ round: ap.round, pick: fromPos, label: `${ap.round}.${pickNum}` });
       }
 
       // Sort by round then pick
@@ -542,7 +542,7 @@ function SetupWizard({
                       Math.min(data.rounds || 15, 6),
                       data.teamCount || 12,
                       data.draftType || 'snake'
-                    ).map((p, i) => `R\${i + 1}: #\${p}`).join('  ·  ') + ((data.rounds || 15) > 6 ? '  ...' : '')
+                    ).map((p, i) => `R${i + 1}: #${p}`).join('  ·  ') + ((data.rounds || 15) > 6 ? '  ...' : '')
                 }
               </Text>
             </View>

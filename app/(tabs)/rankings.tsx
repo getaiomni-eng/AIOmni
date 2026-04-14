@@ -11,6 +11,7 @@ import {
     RankedPlayer,
     RankingsSource,
     fetchBaseRankings,
+    fetchBlendedConsensus,
     getCustomRankings,
     getSelectedBase,
     saveCustomRankings,
