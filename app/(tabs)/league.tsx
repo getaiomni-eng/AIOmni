@@ -604,7 +604,7 @@ export default function LeagueScreen() {
                           </View>
                         </View>
                       )}
-                    </TouchableOpacity>
+                    </View>
                   ))}
                 </>
               )}
