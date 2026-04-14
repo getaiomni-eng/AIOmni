@@ -423,7 +423,7 @@ function SetupWizard({
                         });
                       }
                     } catch {}
-
+                    onFetchPicks(lg.league_id);
                   }}
                 >
                   <Text style={styles.leagueName}>{lg.name}</Text>
