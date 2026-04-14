@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const ESPN_BASE = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl';
-export const ESPN_SEASON = 2025;
+export const ESPN_SEASON = new Date().getFullYear();
 
 export interface ESPNCredentials {
   espnS2: string;

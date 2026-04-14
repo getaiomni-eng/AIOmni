@@ -3,6 +3,7 @@
 // Sleeper: auto-sync live picks | ESPN/Yahoo/Offline: companion mode
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getNFLSeason } from '../../services/season';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -141,7 +142,8 @@ export default function DraftCopilotScreen() {
         try {
           const userRes = await fetch(`https://api.sleeper.app/v1/user/${username}`);
           const user = await userRes.json();
-          const leaguesRes = await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/2025`);
+          const draftSeason = await getNFLSeason();
+          const leaguesRes = await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/${draftSeason}`);
           const leagues = await leaguesRes.json();
           setSleeperLeagues(leagues || []);
         } catch (e) {

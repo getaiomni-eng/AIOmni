@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getNFLSeason, getAvailableSeasons } from '../../services/season';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -65,7 +66,7 @@ export default function HomeScreen() {
   const [scoreIdx,       setScoreIdx]       = useState(0);
   const [news,           setNews]           = useState<NewsItem[]>(FALLBACK_NEWS);
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['sleeper', 'espn', 'yahoo']);
-  const [selectedSeason,    setSelectedSeason]    = useState('2025');
+  const [selectedSeason,    setSelectedSeason]    = useState(String(new Date().getFullYear()));
   const [aiCoachActive,     setAiCoachActive]     = useState(false);
   const [selectedLeague,    setSelectedLeague]    = useState<League | null>(null);
   const [aiCoachLoading,    setAiCoachLoading]    = useState(false);
@@ -76,7 +77,7 @@ export default function HomeScreen() {
   useEffect(() => { loadLeagues(); fetchNews(); }, [selectedSeason]);
 
   // ── All data loading functions identical to v6 ──
-  const loadSleeperLeagues = async (year: string = '2025'): Promise<League[]> => {
+  const loadSleeperLeagues = async (year: string = String(new Date().getFullYear())): Promise<League[]> => {
     try {
       const u = await AsyncStorage.getItem('sleeper_username');
       if (!u) return [];
@@ -115,7 +116,7 @@ export default function HomeScreen() {
     } catch (e) { return []; }
   };
 
-  const loadESPNLeagues = async (year: string = '2025'): Promise<League[]> => {
+  const loadESPNLeagues = async (year: string = String(new Date().getFullYear())): Promise<League[]> => {
     try {
       const creds = await loadESPNCredentials();
       if (!creds?.leagueId) {
@@ -153,7 +154,7 @@ export default function HomeScreen() {
     } catch (e) { return []; }
   };
 
-  const loadYahooLeagues = async (year: string = '2025'): Promise<League[]> => {
+  const loadYahooLeagues = async (year: string = String(new Date().getFullYear())): Promise<League[]> => {
     try {
       const token = await getValidYahooToken();
       if (!token) return [];
@@ -380,7 +381,7 @@ export default function HomeScreen() {
             })}
           </View>
           <TouchableOpacity
-            onPress={() => Alert.alert('Select Season', '', ['2025','2024','2023','2022'].map(y => ({ text: y, onPress: () => setSelectedSeason(y) })), { cancelable: true })}
+            onPress={() => { const seasons = getAvailableSeasons(); Alert.alert('Select Season', '', seasons.map(y => ({ text: y, onPress: () => setSelectedSeason(y) })), { cancelable: true }); }}
             style={styles.seasonPill}
           >
             <Text style={styles.seasonPillText}>{selectedSeason} ▾</Text>

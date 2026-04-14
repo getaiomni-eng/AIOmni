@@ -170,7 +170,7 @@ function getESPNTeamAbbr(id: number): string {
 export async function fetchESPNADP(): Promise<RankedPlayer[]> {
   try {
     const res = await fetch(
-      'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2025/segments/0/leagues/0?view=kona_player_info',
+      'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2026/segments/0/leagues/0?view=kona_player_info',
       { headers: { 'x-fantasy-filter': JSON.stringify({ players: { limit: 200, sortDraftRanks: { sortPriority: 1, sortAsc: true, value: "STANDARD" } } }) } }
     );
     if (!res.ok) return [];

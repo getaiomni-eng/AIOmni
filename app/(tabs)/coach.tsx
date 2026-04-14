@@ -19,6 +19,7 @@ import { PositionPill } from '../components/Atoms';
 import { AIOmniLogo } from '../components/AIOmniLogo';
 import { C, F, R, SP, SZ } from '../constants/tokens';
 import { getRemainingPrompts, getResetTime, incrementPrompt } from '../utils/promptCounter';
+import { getNFLSeason } from '../../services/season';
 
 const WEEKLY_LIMIT = 25;
 const BORDER   = '#1a3542';
@@ -64,7 +65,8 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
     if (!username) return [];
     const user = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
     if (!user?.user_id) return [];
-    const leagues = await (await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/2025`)).json();
+    const currentSeason = await getNFLSeason();
+    const leagues = await (await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/${currentSeason}`)).json();
     if (!Array.isArray(leagues)) return [];
     const state        = await (await fetch('https://api.sleeper.app/v1/state/nfl')).json();
     const week         = state.leg || state.display_week || 17;

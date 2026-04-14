@@ -128,6 +128,7 @@ export default function LeagueScreen() {
   const [waiverLoading,      setWaiverLoading]      = useState(false);
   const [selectedPosition,   setSelectedPosition]   = useState('ALL');
   const [matchup,            setMatchup]            = useState<any>(null);
+  const [expandedMatchup, setExpandedMatchup] = useState<number | null>(null);
   const [standings,          setStandings]          = useState<TeamStanding[]>([]);
   const [standingsLoading,   setStandingsLoading]   = useState(false);
   const [otherRosters,       setOtherRosters]       = useState<OtherRoster[]>([]);
@@ -159,6 +160,33 @@ export default function LeagueScreen() {
     const db = await (await fetch('https://api.sleeper.app/v1/players/nfl')).json();
     setPlayersDb(db);
     return db;
+  };
+
+
+  const resolvePlayerName = (id: string): { name: string; pos: string } => {
+    const p = playersDb[id];
+    if (p) return { name: p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim(), pos: p.position || '' };
+    return { name: id, pos: '' };
+  };
+
+  const StarterBreakdown = ({ starters, points, label }: { starters: string[]; points: number[]; label: string }) => {
+    if (!starters || starters.length === 0) return null;
+    return (
+      <View style={{ marginTop: 8 }}>
+        <Text style={{ fontFamily: F.mono, fontSize: 9, color: C.dim2, letterSpacing: 1.5, marginBottom: 6 }}>{label}</Text>
+        {starters.map((id: string, idx: number) => {
+          const { name, pos } = resolvePlayerName(id);
+          const pts = points[idx] ?? 0;
+          return (
+            <View key={id + idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, borderBottomWidth: 0.5, borderBottomColor: '#1a3542' }}>
+              <Text style={{ fontFamily: F.mono, fontSize: 9, color: C.dim2, width: 28 }}>{pos}</Text>
+              <Text style={{ fontFamily: F.body, fontSize: 12, color: '#f0f4f5', flex: 1 }} numberOfLines={1}>{name}</Text>
+              <Text style={{ fontFamily: F.bold, fontSize: 12, color: pts > 15 ? C.mint : pts > 8 ? '#f0f4f5' : '#7a9eaa' }}>{pts.toFixed(1)}</Text>
+            </View>
+          );
+        })}
+      </View>
+    );
   };
 
   const fetchSleeperRoster = async () => {
@@ -279,9 +307,21 @@ export default function LeagueScreen() {
           if (seen.has(m.matchup_id)) return;
           seen.add(m.matchup_id);
           const opp = matchups.find((x: any) => x.matchup_id === m.matchup_id && x.roster_id !== m.roster_id);
-          allMatchups.push({ team1: getUsername(m.roster_id), team1Points: m.points || 0, team2: opp ? getUsername(opp.roster_id) : 'BYE', team2Points: opp?.points || 0, isMyMatchup: m.roster_id === myRoster.roster_id || opp?.roster_id === myRoster.roster_id });
+          allMatchups.push({
+            team1: getUsername(m.roster_id), team1Points: m.points || 0,
+            team1Starters: m.starters || [], team1StarterPoints: m.starters_points || [],
+            team2: opp ? getUsername(opp.roster_id) : 'BYE', team2Points: opp?.points || 0,
+            team2Starters: opp?.starters || [], team2StarterPoints: opp?.starters_points || [],
+            isMyMatchup: m.roster_id === myRoster.roster_id || opp?.roster_id === myRoster.roster_id,
+          });
         });
-        setMatchup({ myTeam: getUsername(myRoster.roster_id), myPoints: myMatchup?.points || 0, opponentTeam: opponent ? getUsername(opponent.roster_id) : 'TBD', opponentPoints: opponent?.points || 0, week, allMatchups });
+        setMatchup({
+          myTeam: getUsername(myRoster.roster_id), myPoints: myMatchup?.points || 0,
+          myStarters: myMatchup?.starters || [], myStarterPoints: myMatchup?.starters_points || [],
+          opponentTeam: opponent ? getUsername(opponent.roster_id) : 'TBD', opponentPoints: opponent?.points || 0,
+          oppStarters: opponent?.starters || [], oppStarterPoints: opponent?.starters_points || [],
+          week, allMatchups,
+        });
       }
     } catch (err) { console.error(err); }
   };
@@ -525,21 +565,45 @@ export default function LeagueScreen() {
                     {matchup.myPoints > matchup.opponentPoints ? 'WINNING ✓' : matchup.myPoints < matchup.opponentPoints ? 'LOSING ✗' : 'TIED'}
                   </Text>
                 </View>
+                <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <StarterBreakdown starters={matchup.myStarters} points={matchup.myStarterPoints} label="YOUR STARTERS" />
+                  </View>
+                  <View style={{ width: 1, backgroundColor: '#1a3542' }} />
+                  <View style={{ flex: 1 }}>
+                    <StarterBreakdown starters={matchup.oppStarters} points={matchup.oppStarterPoints} label="OPP STARTERS" />
+                  </View>
+                </View>
               </View>
               {matchup.allMatchups?.length > 0 && (
                 <>
                   <Text style={[styles.sectionLabel, { marginTop: 24 }]}>ALL MATCHUPS</Text>
                   {matchup.allMatchups.map((m: any, i: number) => (
-                    <TouchableOpacity key={i} activeOpacity={0.7} style={[styles.allMatchupRow, m.isMyMatchup && { borderColor: PLATFORM_COLOR, borderWidth: 1.5 }]}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.allMatchupTeam} numberOfLines={1}>{m.team1}</Text>
-                        <Text style={styles.allMatchupScore}>{m.team1Points?.toFixed(2)}</Text>
-                      </View>
-                      <Text style={styles.allMatchupVs}>vs</Text>
-                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                        <Text style={styles.allMatchupTeam} numberOfLines={1}>{m.team2}</Text>
-                        <Text style={styles.allMatchupScore}>{m.team2Points?.toFixed(2)}</Text>
-                      </View>
+                    <View key={i}>
+                      <TouchableOpacity activeOpacity={0.7} onPress={() => { getPlayersDb(); setExpandedMatchup(expandedMatchup === i ? null : i); }} style={[styles.allMatchupRow, m.isMyMatchup && { borderColor: PLATFORM_COLOR, borderWidth: 1.5 }, expandedMatchup === i && { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, marginBottom: 0 }]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.allMatchupTeam} numberOfLines={1}>{m.team1}</Text>
+                          <Text style={styles.allMatchupScore}>{m.team1Points?.toFixed(2)}</Text>
+                        </View>
+                        <Text style={styles.allMatchupVs}>{expandedMatchup === i ? '▾' : 'vs'}</Text>
+                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                          <Text style={styles.allMatchupTeam} numberOfLines={1}>{m.team2}</Text>
+                          <Text style={styles.allMatchupScore}>{m.team2Points?.toFixed(2)}</Text>
+                        </View>
+                      </TouchableOpacity>
+                      {expandedMatchup === i && (
+                        <View style={{ backgroundColor: '#0f1c22', borderWidth: 1, borderTopWidth: 0, borderColor: '#1a3542', borderBottomLeftRadius: 10, borderBottomRightRadius: 10, paddingHorizontal: 12, paddingBottom: 12, marginBottom: 10 }}>
+                          <View style={{ flexDirection: 'row', gap: 12 }}>
+                            <View style={{ flex: 1 }}>
+                              <StarterBreakdown starters={m.team1Starters} points={m.team1StarterPoints} label={m.team1} />
+                            </View>
+                            <View style={{ width: 1, backgroundColor: '#1a3542' }} />
+                            <View style={{ flex: 1 }}>
+                              <StarterBreakdown starters={m.team2Starters} points={m.team2StarterPoints} label={m.team2} />
+                            </View>
+                          </View>
+                        </View>
+                      )}
                     </TouchableOpacity>
                   ))}
                 </>
