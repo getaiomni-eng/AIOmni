@@ -113,6 +113,7 @@ export default function DraftCopilotScreen() {
   });
   const [draftState, setDraftState] = useState<DraftState | null>(null);
   const [sleeperLeagues, setSleeperLeagues] = useState<any[]>([]);
+  const [sleeperPicks, setSleeperPicks] = useState<string[] | null>(null);
   const [espnLeagues, setEspnLeagues] = useState<any[]>([]);
   const [yahooLeagues, setYahooLeagues] = useState<any[]>([]);
 
@@ -149,9 +150,78 @@ export default function DraftCopilotScreen() {
         } catch (e) {
           console.error('Failed to load Sleeper leagues:', e);
         }
+        setSleeperPicks(null);
       })();
     }
   }, [setupData.platform]);
+
+
+  const fetchSleeperPicks = async (leagueId: string, userId: string) => {
+    try {
+      const [rostersRes, tradedRes] = await Promise.all([
+        fetch(`https://api.sleeper.app/v1/league/\${leagueId}/rosters`),
+        fetch(`https://api.sleeper.app/v1/league/\${leagueId}/traded_picks`),
+      ]);
+      const rosters = await rostersRes.json();
+      const tradedPicks = await tradedRes.json();
+      const myRoster = rosters.find((r: any) => r.owner_id === userId);
+      if (!myRoster) return;
+
+      const myRosterId = myRoster.roster_id;
+      const season = await getNFLSeason();
+      const totalRounds = setupData.rounds || 4;
+
+      // Build draft order from standings (worst record = pick 1)
+      const draftOrder = [...rosters].sort((a: any, b: any) => {
+        const aW = a.settings?.wins ?? 0, bW = b.settings?.wins ?? 0;
+        if (aW !== bW) return aW - bW;
+        return (a.settings?.fpts ?? 0) - (b.settings?.fpts ?? 0);
+      });
+      const positionMap = new Map<number, number>();
+      draftOrder.forEach((r: any, i: number) => positionMap.set(r.roster_id, i + 1));
+
+      // Track traded picks for this season
+      const lostRounds = new Set<number>();
+      const acquiredPicks: { round: number; fromRosterId: number }[] = [];
+
+      for (const tp of tradedPicks) {
+        if (String(tp.season) !== season) continue;
+        if (tp.roster_id === myRosterId && tp.owner_id !== myRosterId) {
+          lostRounds.add(tp.round);
+        }
+        if (tp.owner_id === myRosterId) {
+          acquiredPicks.push({ round: tp.round, fromRosterId: tp.roster_id });
+        }
+      }
+
+      // Build final pick list with pick numbers (e.g. "4.10")
+      const myPosition = positionMap.get(myRosterId) || 1;
+      const picks: { round: number; pick: number; label: string }[] = [];
+
+      // Own picks that weren't traded away
+      for (let rd = 1; rd <= totalRounds; rd++) {
+        if (!lostRounds.has(rd)) {
+          const pickNum = String(myPosition).padStart(2, '0');
+          picks.push({ round: rd, pick: myPosition, label: `\${rd}.\${pickNum}` });
+        }
+      }
+
+      // Acquired picks with the original team's draft position
+      for (const ap of acquiredPicks) {
+        const fromPos = positionMap.get(ap.fromRosterId) || 1;
+        const pickNum = String(fromPos).padStart(2, '0');
+        picks.push({ round: ap.round, pick: fromPos, label: `\${ap.round}.\${pickNum}` });
+      }
+
+      // Sort by round then pick
+      picks.sort((a, b) => a.round !== b.round ? a.round - b.round : a.pick - b.pick);
+
+      setSleeperPicks(picks.length > 0 ? picks.map(p => p.label) : null);
+    } catch (e) {
+      console.log('fetchSleeperPicks error:', e);
+      setSleeperPicks(null);
+    }
+  };
 
   const handleStartDraft = useCallback(() => {
     const settings: DraftSettings = {
@@ -202,6 +272,16 @@ export default function DraftCopilotScreen() {
           step={setupStep}
           data={setupData}
           sleeperLeagues={sleeperLeagues}
+          sleeperPicks={sleeperPicks}
+          onFetchPicks={(lid: string) => {
+            (async () => {
+              const username = await AsyncStorage.getItem('sleeper_username');
+              if (username) {
+                const u = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
+                fetchSleeperPicks(lid, u.user_id);
+              }
+            })();
+          }}
           onUpdate={(updates) => setSetupData(prev => ({ ...prev, ...updates }))}
           onNext={() => {
             const steps: SetupStep[] = ['platform', 'league', 'position', 'confirm'];
@@ -246,11 +326,13 @@ export default function DraftCopilotScreen() {
 // ═══════════════════════════════════════════════════════════
 
 function SetupWizard({
-  step, data, sleeperLeagues, onUpdate, onNext, onBack, onStart,
+  step, data, sleeperLeagues, sleeperPicks, onFetchPicks, onUpdate, onNext, onBack, onStart,
 }: {
   step: SetupStep;
   data: Partial<SetupData>;
   sleeperLeagues: any[];
+  sleeperPicks: string[] | null;
+  onFetchPicks: (leagueId: string) => void;
   onUpdate: (u: Partial<SetupData>) => void;
   onNext: () => void;
   onBack: () => void;
@@ -341,6 +423,7 @@ function SetupWizard({
                         });
                       }
                     } catch {}
+
                   }}
                 >
                   <Text style={styles.leagueName}>{lg.name}</Text>
@@ -448,17 +531,19 @@ function SetupWizard({
             ))}
           </View>
 
-          {data.myDraftSlot && (
+          {(data.myDraftSlot || sleeperPicks) && (
             <View style={styles.pickPreview}>
               <Text style={styles.pickPreviewTitle}>YOUR PICKS</Text>
               <Text style={styles.pickPreviewText}>
-                {getAllPicksForSlot(
-                  data.myDraftSlot,
-                  Math.min(data.rounds || 15, 6),
-                  data.teamCount || 12,
-                  data.draftType || 'snake'
-                ).map((p, i) => `R${i + 1}: #${p}`).join('  ·  ')}
-                {(data.rounds || 15) > 6 ? '  ...' : ''}
+                {sleeperPicks
+                  ? sleeperPicks.join('  ·  ')
+                  : getAllPicksForSlot(
+                      data.myDraftSlot || 1,
+                      Math.min(data.rounds || 15, 6),
+                      data.teamCount || 12,
+                      data.draftType || 'snake'
+                    ).map((p, i) => `R\${i + 1}: #\${p}`).join('  ·  ') + ((data.rounds || 15) > 6 ? '  ...' : '')
+                }
               </Text>
             </View>
           )}
