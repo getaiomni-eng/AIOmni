@@ -391,6 +391,66 @@ export async function fetchNCAAStandings(conference = 'all-conf'): Promise<any> 
 
 // ─── CFBD DRAFT PROSPECTS ───────────────────────────────────
 
+
+// ─── 2026 PROSPECT SEED (fallback when CFBD is down) ────────
+
+const PROSPECT_SEED_2026: CollegeProspect[] = [
+  { id: 'p01', name: 'Travis Hunter', school: 'Colorado', position: 'WR', year: '2026', height: '6-1', weight: 185, grade: 98 },
+  { id: 'p02', name: 'Cam Ward', school: 'Miami', position: 'QB', year: '2026', height: '6-2', weight: 223, grade: 96 },
+  { id: 'p03', name: 'Shedeur Sanders', school: 'Colorado', position: 'QB', year: '2026', height: '6-2', weight: 215, grade: 95 },
+  { id: 'p04', name: 'Abdul Carter', school: 'Penn State', position: 'EDGE', year: '2026', height: '6-3', weight: 252, grade: 95 },
+  { id: 'p05', name: 'Mason Graham', school: 'Michigan', position: 'DT', year: '2026', height: '6-3', weight: 318, grade: 94 },
+  { id: 'p06', name: 'Tetairoa McMillan', school: 'Arizona', position: 'WR', year: '2026', height: '6-5', weight: 212, grade: 94 },
+  { id: 'p07', name: 'Will Johnson', school: 'Michigan', position: 'CB', year: '2026', height: '6-2', weight: 202, grade: 93 },
+  { id: 'p08', name: 'Ashton Jeanty', school: 'Boise State', position: 'RB', year: '2026', height: '5-9', weight: 215, grade: 93 },
+  { id: 'p09', name: 'Mykel Williams', school: 'Georgia', position: 'EDGE', year: '2026', height: '6-5', weight: 265, grade: 92 },
+  { id: 'p10', name: 'Kelvin Banks Jr.', school: 'Texas', position: 'OT', year: '2026', height: '6-4', weight: 324, grade: 92 },
+  { id: 'p11', name: 'Luther Burden III', school: 'Missouri', position: 'WR', year: '2026', height: '5-11', weight: 208, grade: 91 },
+  { id: 'p12', name: 'Will Campbell', school: 'LSU', position: 'OT', year: '2026', height: '6-6', weight: 323, grade: 91 },
+  { id: 'p13', name: 'Malaki Starks', school: 'Georgia', position: 'S', year: '2026', height: '6-1', weight: 205, grade: 90 },
+  { id: 'p14', name: 'James Pearce Jr.', school: 'Tennessee', position: 'EDGE', year: '2026', height: '6-5', weight: 243, grade: 90 },
+  { id: 'p15', name: 'Tyler Warren', school: 'Penn State', position: 'TE', year: '2026', height: '6-6', weight: 260, grade: 89 },
+  { id: 'p16', name: 'Colston Loveland', school: 'Michigan', position: 'TE', year: '2026', height: '6-5', weight: 245, grade: 89 },
+  { id: 'p17', name: 'Jalon Walker', school: 'Georgia', position: 'LB', year: '2026', height: '6-2', weight: 245, grade: 88 },
+  { id: 'p18', name: 'Nick Singleton', school: 'Penn State', position: 'RB', year: '2026', height: '6-0', weight: 224, grade: 88 },
+  { id: 'p19', name: 'Emeka Egbuka', school: 'Ohio State', position: 'WR', year: '2026', height: '6-1', weight: 206, grade: 87 },
+  { id: 'p20', name: 'Nic Scourton', school: 'Texas A&M', position: 'EDGE', year: '2026', height: '6-4', weight: 280, grade: 87 },
+  { id: 'p21', name: 'Jalen Milroe', school: 'Alabama', position: 'QB', year: '2026', height: '6-2', weight: 225, grade: 86 },
+  { id: 'p22', name: 'Derrick Harmon', school: 'Oregon', position: 'DT', year: '2026', height: '6-5', weight: 310, grade: 86 },
+  { id: 'p23', name: 'Kenneth Grant', school: 'Michigan', position: 'DT', year: '2026', height: '6-3', weight: 339, grade: 85 },
+  { id: 'p24', name: 'Matthew Golden', school: 'Texas', position: 'WR', year: '2026', height: '6-0', weight: 195, grade: 85 },
+  { id: 'p25', name: 'Tre Harris', school: 'Ole Miss', position: 'WR', year: '2026', height: '6-3', weight: 210, grade: 84 },
+  { id: 'p26', name: 'Omarion Hampton', school: 'North Carolina', position: 'RB', year: '2026', height: '6-0', weight: 220, grade: 84 },
+  { id: 'p27', name: 'Shemar Stewart', school: 'Texas A&M', position: 'EDGE', year: '2026', height: '6-6', weight: 270, grade: 83 },
+  { id: 'p28', name: 'Cameron Williams', school: 'Texas', position: 'OT', year: '2026', height: '6-5', weight: 335, grade: 83 },
+  { id: 'p29', name: 'Donovan Ezeiruaku', school: 'Boston College', position: 'EDGE', year: '2026', height: '6-2', weight: 250, grade: 82 },
+  { id: 'p30', name: 'Quinn Ewers', school: 'Texas', position: 'QB', year: '2026', height: '6-2', weight: 210, grade: 82 },
+  { id: 'p31', name: 'Tyleik Williams', school: 'Ohio State', position: 'DT', year: '2026', height: '6-3', weight: 290, grade: 81 },
+  { id: 'p32', name: 'Benjamin Morrison', school: 'Notre Dame', position: 'CB', year: '2026', height: '6-0', weight: 190, grade: 81 },
+  { id: 'p33', name: 'Carson Beck', school: 'Georgia', position: 'QB', year: '2026', height: '6-4', weight: 230, grade: 80 },
+  { id: 'p34', name: 'Shavon Revel Jr.', school: 'East Carolina', position: 'CB', year: '2026', height: '6-3', weight: 195, grade: 80 },
+  { id: 'p35', name: 'Grey Zabel', school: 'North Dakota State', position: 'OG', year: '2026', height: '6-5', weight: 305, grade: 79 },
+  { id: 'p36', name: 'Isaiah Bond', school: 'Texas', position: 'WR', year: '2026', height: '5-11', weight: 180, grade: 79 },
+  { id: 'p37', name: 'Josh Simmons', school: 'Ohio State', position: 'OT', year: '2026', height: '6-5', weight: 310, grade: 78 },
+  { id: 'p38', name: 'Jihaad Campbell', school: 'Alabama', position: 'LB', year: '2026', height: '6-3', weight: 244, grade: 78 },
+  { id: 'p39', name: 'Deone Walker', school: 'Kentucky', position: 'DT', year: '2026', height: '6-6', weight: 345, grade: 77 },
+  { id: 'p40', name: 'Landon Jackson', school: 'Arkansas', position: 'EDGE', year: '2026', height: '6-7', weight: 275, grade: 77 },
+  { id: 'p41', name: 'Princely Umanmielen', school: 'Ole Miss', position: 'EDGE', year: '2026', height: '6-4', weight: 260, grade: 76 },
+  { id: 'p42', name: 'Tyler Booker', school: 'Alabama', position: 'OG', year: '2026', height: '6-5', weight: 325, grade: 76 },
+  { id: 'p43', name: 'Jaylin Noel', school: 'Iowa State', position: 'WR', year: '2026', height: '5-11', weight: 200, grade: 75 },
+  { id: 'p44', name: 'Trey Amos', school: 'Ole Miss', position: 'CB', year: '2026', height: '6-1', weight: 195, grade: 75 },
+  { id: 'p45', name: 'Kalel Mullings', school: 'Michigan', position: 'RB', year: '2026', height: '6-1', weight: 228, grade: 74 },
+  { id: 'p46', name: 'Cam Skattebo', school: 'Arizona State', position: 'RB', year: '2026', height: '5-10', weight: 218, grade: 74 },
+  { id: 'p47', name: 'Jack Sawyer', school: 'Ohio State', position: 'EDGE', year: '2026', height: '6-4', weight: 260, grade: 73 },
+  { id: 'p48', name: 'Garrett Nussmeier', school: 'LSU', position: 'QB', year: '2026', height: '6-2', weight: 210, grade: 73 },
+  { id: 'p49', name: 'Wyatt Milum', school: 'West Virginia', position: 'OT', year: '2026', height: '6-6', weight: 315, grade: 72 },
+  { id: 'p50', name: 'Maxwell Hairston', school: 'Kentucky', position: 'CB', year: '2026', height: '6-1', weight: 190, grade: 72 },
+];
+
+
+// ─── 2026 PROSPECT SEED (fallback when CFBD is down) ────────
+
+
 export async function fetchCFBDProspects(year = 2026): Promise<CollegeProspect[]> {
   if (!CFBD_API_KEY) return [];
   try {
@@ -713,10 +773,10 @@ export async function fetchWalterFootballNews(): Promise<{ title: string; link?:
 // ─── DEDUP: Remove drafted players from prospects ───────────
 
 export async function fetchDedupedProspects(year = 2026): Promise<CollegeProspect[]> {
-  const [prospects, sleeperPlayers] = await Promise.all([
-    fetchCFBDProspects(year),
-    getSleeperPlayers(),
-  ]);
+  let prospects = await fetchCFBDProspects(year);
+  // Fallback to seed if CFBD is down
+  if (prospects.length === 0) prospects = [...PROSPECT_SEED_2026];
+  const sleeperPlayers = await getSleeperPlayers();
 
   // Build a set of normalized NFL player names from Sleeper
   const nflNames = new Set<string>();
