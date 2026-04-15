@@ -94,7 +94,7 @@ export default Sentry.wrap(function RootLayout() {
         }
       } catch (err) {
         console.error('Session check error', err);
-        router.replace('/onboarding' as any);
+        router.replace('/auth' as any);
       }
     })();
 

@@ -418,12 +418,24 @@ function SetupWizard({
                     try {
                       const draft = await findActiveDraft(lg.league_id);
                       if (draft) {
-                        onUpdate({
+                        const draftUpdates: any = {
                           draftId: draft.draft_id,
                           draftType: draft.type as DraftType,
                           rounds: draft.settings?.rounds || 15,
                           teamCount: draft.settings?.teams || lg.total_rosters || 12,
-                        });
+                        };
+                        if (draft.draft_order) {
+                          const username = await AsyncStorage.getItem('sleeper_username');
+                          if (username) {
+                            try {
+                              const uRes = await fetch('https://api.sleeper.app/v1/user/' + username);
+                              const u = await uRes.json();
+                              const slot = draft.draft_order[u.user_id];
+                              if (slot) draftUpdates.myDraftSlot = slot;
+                            } catch {}
+                          }
+                        }
+                        onUpdate(draftUpdates);
                       }
                     } catch {}
                     onFetchPicks(lg.league_id);

@@ -474,6 +474,7 @@ export default function RankingsScreen() {
             ListHeaderComponent={Header}
             contentContainerStyle={{ paddingHorizontal: SP[3], paddingBottom: 100 }}
             showsVerticalScrollIndicator={false}
+            getItemLayout={(_, index) => ({ length: 82, offset: 82 * index, index })}
           />
         ) : (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: SP[3], paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
