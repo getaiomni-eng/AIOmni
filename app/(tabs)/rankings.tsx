@@ -18,6 +18,7 @@ import {
     setSelectedBase,
 } from '../../services/rankingsData';
 import { fetchDedupedProspects } from '../../services/rankingsData';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ScoringFormat } from '../../services/rankingsData';
 import { applyFormatAdjustments } from '../../services/rankingsData';
 import { getCurrentTier } from '../../services/purchases';
@@ -236,6 +237,9 @@ export default function RankingsScreen() {
   const [prospects, setProspects] = useState<any[]>([]);
   const [prospectsLoading, setProspectsLoading] = useState(false);
   const [prospectsGated, setProspectsGated] = useState(false);
+  const [leagues, setLeagues] = useState<{id: string; name: string}[]>([]);
+  const [selectedLeagueId, setSelectedLeagueId] = useState<string | undefined>(undefined);
+  const [selectedLeagueName, setSelectedLeagueName] = useState<string>('All Leagues');
   const [selectedBase, setSelectedBaseState] = useState<RankingsSource | null>(null);
   const [baseModalVisible, setBaseModalVisible] = useState(false);
   const [changeModalVisible, setChangeModalVisible] = useState(false);
@@ -243,6 +247,7 @@ export default function RankingsScreen() {
   useEffect(() => {
     loadSavedState();
     loadCommunityRankings();
+    loadLeagues();
   }, [format]);
 
   const loadCommunityRankings = async () => {
@@ -257,9 +262,39 @@ export default function RankingsScreen() {
     }
   };
 
+  const loadLeagues = async () => {
+    try {
+      const username = await AsyncStorage.getItem('sleeper_username');
+      if (!username) return;
+      const userRes = await fetch('https://api.sleeper.app/v1/user/' + username);
+      const user = await userRes.json();
+      const leaguesRes = await fetch('https://api.sleeper.app/v1/user/' + user.user_id + '/leagues/nfl/2025');
+      const data = await leaguesRes.json();
+      if (Array.isArray(data)) {
+        setLeagues([
+          { id: '', name: 'All Leagues' },
+          ...data.map((l: any) => ({ id: l.league_id, name: l.name })),
+        ]);
+      }
+    } catch (e) { console.log('loadLeagues error:', e); }
+  };
+
+  const handleLeagueChange = async (leagueId: string, leagueName: string) => {
+    setSelectedLeagueId(leagueId || undefined);
+    setSelectedLeagueName(leagueName);
+    // Reload custom rankings for this league
+    const custom = await getCustomRankings(format, leagueId || undefined);
+    if (custom && custom.length > 0) {
+      setMyRanks(custom);
+    } else {
+      setMyRanks([...SEED]);
+      await saveCustomRankings([...SEED], format, leagueId || undefined);
+    }
+  };
+
   const handleProspectsTab = async () => {
     const tier = await getCurrentTier();
-    if (tier !== 'dynasty_elite' && tier !== 'premium') {
+    if (tier === 'free') {
       setProspectsGated(true);
       setMode('prospects');
       return;
@@ -279,13 +314,13 @@ export default function RankingsScreen() {
   const loadSavedState = async () => {
     const base = await getSelectedBase();
     setSelectedBaseState(base);
-    const custom = await getCustomRankings(format);
+    const custom = await getCustomRankings(format, selectedLeagueId);
     if (custom && custom.length > 0) {
       setMyRanks(custom);
     } else {
       // No saved rankings — initialize with SEED so drag-and-drop has something to work with
       setMyRanks([...SEED]);
-      await saveCustomRankings([...SEED], format);
+      await saveCustomRankings([...SEED], format, selectedLeagueId);
     }
   };
 
@@ -302,7 +337,7 @@ export default function RankingsScreen() {
       } else {
         // Fallback to seed if API fails
         setMyRanks([...SEED]);
-        await saveCustomRankings([...SEED], format);
+        await saveCustomRankings([...SEED], format, selectedLeagueId);
         await setSelectedBase(source);
         setSelectedBaseState(source);
       }
@@ -326,10 +361,10 @@ export default function RankingsScreen() {
 
   const saveMyRanks = (ranks: RankedPlayer[]) => {
     setMyRanks(ranks);
-    saveCustomRankings(ranks, format);
+    saveCustomRankings(ranks, format, selectedLeagueId);
   };
 
-  const resetToConsensus = () => { setMyRanks([...SEED]); saveCustomRankings([...SEED], format); };
+  const resetToConsensus = () => { setMyRanks([...SEED]); saveCustomRankings([...SEED], format, selectedLeagueId); };
 
   const rawData = mode === 'mine' ? myRanks : communityData;
   const formatAdjusted = applyFormatAdjustments(rawData, format as ScoringFormat);
@@ -466,7 +501,7 @@ export default function RankingsScreen() {
             <View style={{ alignItems: 'center', paddingTop: 60, paddingHorizontal: 20 }}>
               <Text style={{ fontFamily: F.bold, fontSize: 22, color: dark.text, textAlign: 'center', letterSpacing: 1, marginBottom: 12 }}>DYNASTY ELITE</Text>
               <Text style={{ fontFamily: F.body, fontSize: 14, color: dark.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
-                College prospect rankings filtered through your dynasty scoring format. Requires Dynasty Elite subscription.
+                College prospect rankings filtered through your dynasty scoring format. Requires Rankings subscription ($2.99/mo).
               </Text>
               <TouchableOpacity 
                 style={{ backgroundColor: palette.flame, borderRadius: 14, paddingHorizontal: 32, paddingVertical: 16 }}

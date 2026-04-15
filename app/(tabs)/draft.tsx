@@ -24,6 +24,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { askAI } from '../../services/ai';
 import {
     DEFAULT_PLAYER_DB,
+    loadLivePlayerDB,
     DraftPick,
     DraftSettings, DraftState,
     DraftType,
@@ -223,7 +224,7 @@ export default function DraftCopilotScreen() {
     }
   };
 
-  const handleStartDraft = useCallback(() => {
+  const handleStartDraft = useCallback(async () => {
     const settings: DraftSettings = {
       platform: setupData.platform!,
       leagueId: setupData.leagueId || 'offline',
@@ -238,7 +239,9 @@ export default function DraftCopilotScreen() {
       rosterSlots: setupData.rosterSlots!,
       scoringSettings: setupData.scoringSettings,
     };
-    const state = createInitialDraftState(settings, [...DEFAULT_PLAYER_DB]);
+    // Load live ADP data (falls back to static DB if offline)
+      const liveDB = await loadLivePlayerDB();
+      const state = createInitialDraftState(settings, liveDB);
     state.status = 'drafting';
     setDraftState(state);
     setPhase('draft');

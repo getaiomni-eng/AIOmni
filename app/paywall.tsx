@@ -1,409 +1,417 @@
-import { LinearGradient } from 'expo-linear-gradient';
+// app/paywall.tsx
+// AIOmni Paywall — Free / Rankings ($2.99) / Pro ($9.99)
+
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { PurchasesPackage } from 'react-native-purchases';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getCurrentTier, getPackages, purchasePackage, restorePurchases } from '../services/purchases';
-import { C, F, R, SP, SZ } from './constants/tokens';
-
-const SURFACE  = '#12252e';
-const BORDER   = '#1a3542';
-const BEVEL_HI = 'transparent';
+import {
+  getCurrentTier,
+  getPackages,
+  purchasePackage,
+  restorePurchases,
+  TIER_INFO,
+} from '../services/purchases';
 
 type BillingCycle = 'monthly' | 'yearly';
 
-// Static tier metadata — prices shown are fallbacks if RC packages not loaded
-const TIERS = [
-  {
-    id: 'rankings', name: 'RANKINGS',
-    monthly: '$5.99',  yearly: '$49.99',
-    leagueMonthly: '$4.99', leagueYearly: '$39.99',
-    color: '#2a7aaa', badge: null,
-    // RevenueCat package identifier suffixes
-    monthlyId: 'rankings_monthly', yearlyId: 'rankings_yearly',
-    features: [
-      'Community consensus rankings — 500+ players',
-      'Position-by-position breakdown',
-      'PPR / Half / Standard filters',
-      'Trending up/down alerts',
-    ],
-  },
-  {
-    id: 'pro', name: 'PRO',
-    monthly: '$9.99',  yearly: '$89.99',
-    leagueMonthly: '$7.99', leagueYearly: '$69.99',
-    color: C.gold, badge: 'MOST POPULAR',
-    monthlyId: 'pro_monthly', yearlyId: 'pro_yearly',
-    features: [
-      '75 AI Coach prompts per week',
-      'Full league settings analysis',
-      'Draft Copilot — real-time pick advice',
-      'Trade Analyzer — A to F grades',
-      'Waiver Wire intelligence',
-      '1 season AI memory',
-    ],
-  },
-  {
-    id: 'premium', name: 'PREMIUM',
-    monthly: '$14.99', yearly: '$129.99',
-    leagueMonthly: '$12.99', leagueYearly: '$109.99',
-    color: '#7b5ea7', badge: null,
-    monthlyId: 'premium_monthly', yearlyId: 'premium_yearly',
-    features: [
-      'Everything in Pro',
-      '125 AI Coach prompts per week',
-      '2 full seasons of AI memory',
-      'Adaptive Trash Talk engine',
-      'Opponent deep-dive weekly',
-      'Autopilot lineup setting',
-    ],
-  },
-  {
-    id: 'dynasty', name: 'DYNASTY ELITE',
-    monthly: '$19.99', yearly: '$179.99',
-    leagueMonthly: '$16.99', leagueYearly: '$149.99',
-    color: '#1e8c42', badge: 'DYNASTY',
-    monthlyId: 'dynasty_monthly', yearlyId: 'dynasty_yearly',
-    features: [
-      'Everything in Premium',
-      'Live college football rankings',
-      'Future pick grade engine',
-      'Personalized rookie draft board',
-      'Dynasty-specific AI memory',
-      '75 prompts per week',
-    ],
-  },
-];
-
-function yearlySavings(monthly: string, yearly: string): string {
-  const saved = Math.round(parseFloat(monthly.replace('$','')) * 12 - parseFloat(yearly.replace('$','')));
-  return `Save $${saved}`;
-}
+const BG = '#0a1214';
+const CARD = '#12252e';
+const BORDER = '#1a3542';
+const TEXT = '#f0f4f5';
+const SUB = '#7a9eaa';
+const AMBER = '#ffb800';
+const AQUA = '#1be7ff';
 
 export default function PaywallScreen() {
-  const router  = useRouter();
-  const insets  = useSafeAreaInsets();
-
-  const [selected,    setSelected]    = useState('pro');
-  const [billing,     setBilling]     = useState<BillingCycle>('monthly');
-  const [packages,    setPackages]    = useState<PurchasesPackage[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [purchasing,  setPurchasing]  = useState(false);
-  const [restoring,   setRestoring]   = useState(false);
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [packages, setPackages] = useState<PurchasesPackage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [purchasing, setPurchasing] = useState(false);
   const [currentTier, setCurrentTier] = useState('free');
-
-  const selectedTier  = TIERS.find(t => t.id === selected) || TIERS[1];
-  const displayPrice  = billing === 'yearly' ? selectedTier.yearly  : selectedTier.monthly;
-  const leaguePrice   = billing === 'yearly' ? selectedTier.leagueYearly : selectedTier.leagueMonthly;
-  const perMonth      = billing === 'yearly'
-    ? `$${(parseFloat(selectedTier.yearly.replace('$','')) / 12).toFixed(2)}/mo`
-    : null;
+  const [billing, setBilling] = useState<BillingCycle>('monthly');
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      try {
-        const [pkgs, tier] = await Promise.all([getPackages(), getCurrentTier()]);
-        setPackages(pkgs);
-        setCurrentTier(tier);
-      } catch {}
+      const [pkgs, tier] = await Promise.all([getPackages(), getCurrentTier()]);
+      setPackages(pkgs);
+      setCurrentTier(tier);
       setLoading(false);
     })();
   }, []);
 
-  // Exact product IDs from RevenueCat / App Store Connect
-  const PRODUCT_ID_MAP: Record<string, Record<string, string>> = {
-    rankings: { monthly: 'com.getaiomni.rankings.monthly', yearly: 'com.getaiomni.rankings.yearly' },
-    pro:      { monthly: 'com.getaiomni.pro.monthly',      yearly: 'com.getaiomni.pro.yearly'      },
-    premium:  { monthly: 'com.getaiomni.premium.monthly',  yearly: 'com.getaiomni.premium.yearly'  },
-    dynasty:  { monthly: 'com.getaiomni.dynasty.monthly',  yearly: 'com.getaiomni.dynasty.yearly'  },
+  const findPackage = (keyword: string, cycle: BillingCycle): PurchasesPackage | undefined => {
+    return packages.find((p) => {
+      const id = p.product.identifier.toLowerCase();
+      return id.includes(keyword) && id.includes(cycle === 'yearly' ? 'yearly' : 'monthly');
+    });
   };
 
-  const findPackage = (): PurchasesPackage | null => {
-    const targetId = PRODUCT_ID_MAP[selectedTier.id]?.[billing];
-    if (!targetId) return null;
-    return packages.find(p => p.product.identifier === targetId) ?? null;
-  };
-
-  // Get live price from RevenueCat package if available
-  const getLivePrice = (): string => {
-    const pkg = findPackage();
-    return pkg?.product.priceString ?? displayPrice;
-  };
-
-  const handlePurchase = async () => {
-    if (purchasing) return;
-    const pkg = findPackage();
-
+  const handlePurchase = async (tier: string) => {
+    const pkg = findPackage(tier === 'rankings' ? 'rankings' : 'pro', billing);
     if (!pkg) {
-      // RC packages not loaded — open App Store directly as fallback
-      Alert.alert(
-        'Purchase Unavailable',
-        'Could not connect to the App Store. Check your connection and try again.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Not Available', 'This subscription is not available right now. Please try again later.');
       return;
     }
-
     setPurchasing(true);
-    try {
-      const result = await purchasePackage(pkg);
-      if (result.success) {
-        Alert.alert(
-          '🎉 Welcome to ' + selectedTier.name + '!',
-          'Your subscription is active.',
-          [{ text: 'Let\'s Go', onPress: () => router.back() }]
-        );
-      } else if (result.error !== 'cancelled') {
-        Alert.alert('Purchase Failed', result.error ?? 'Something went wrong. Try again.');
-      }
-      // If cancelled — do nothing, stay on paywall
-    } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Purchase failed. Try again.');
-    } finally {
-      setPurchasing(false);
+    const result = await purchasePackage(pkg);
+    setPurchasing(false);
+    if (result.success) {
+      setCurrentTier(result.tier ?? tier);
+      Alert.alert('Welcome!', `You're now on the ${TIER_INFO[tier]?.label ?? tier} plan.`, [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
     }
   };
 
   const handleRestore = async () => {
-    if (restoring) return;
-    setRestoring(true);
-    try {
-      const result = await restorePurchases();
-      if (result.success && result.tier && result.tier !== 'free') {
-        Alert.alert('✓ Restored', `${result.tier.replace('_',' ')} subscription restored.`, [{ text: 'Great', onPress: () => router.back() }]);
-      } else {
-        Alert.alert('Nothing to Restore', 'No active subscriptions found for this Apple ID.');
-      }
-    } catch {
-      Alert.alert('Error', 'Could not restore purchases. Try again.');
-    } finally {
-      setRestoring(false);
+    setPurchasing(true);
+    const result = await restorePurchases();
+    setPurchasing(false);
+    if (result.success && result.tier) {
+      setCurrentTier(result.tier);
+      Alert.alert('Restored', `Welcome back! You're on the ${TIER_INFO[result.tier]?.label} plan.`);
+    } else {
+      Alert.alert('No Purchases Found', 'No previous subscriptions were found for this account.');
     }
   };
 
-  const isActive = currentTier === selected;
-  const livePrice = getLivePrice();
+  const tierOrder: Array<'free' | 'rankings' | 'pro'> = ['free', 'rankings', 'pro'];
 
   return (
-    <LinearGradient colors={['#0a1214','#0a1214']} style={{ flex: 1 }}>
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 40 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.logoText}>AIOmni</Text>
-          <Text style={styles.headline}>PICK YOUR EDGE</Text>
-          <Text style={styles.subheadline}>Every tier unlocks a smarter version of your season.</Text>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+          <Text style={styles.closeBtn}>✕</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>Choose Your Plan</Text>
+        <View style={{ width: 28 }} />
+      </View>
+
+      {/* Billing Toggle */}
+      <View style={styles.toggleRow}>
+        <TouchableOpacity
+          style={[styles.toggleBtn, billing === 'monthly' && styles.toggleActive]}
+          onPress={() => setBilling('monthly')}
+        >
+          <Text style={[styles.toggleText, billing === 'monthly' && styles.toggleTextActive]}>
+            Monthly
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.toggleBtn, billing === 'yearly' && styles.toggleActive]}
+          onPress={() => setBilling('yearly')}
+        >
+          <Text style={[styles.toggleText, billing === 'yearly' && styles.toggleTextActive]}>
+            Yearly
+          </Text>
+          <Text style={styles.saveBadge}>SAVE 30%</Text>
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={AQUA} size="large" />
         </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+        >
+          {tierOrder.map((tierKey) => {
+            const info = TIER_INFO[tierKey];
+            const isCurrent = currentTier === tierKey;
+            const isUpgrade =
+              tierOrder.indexOf(tierKey as any) > tierOrder.indexOf(currentTier as any);
+            const isPro = tierKey === 'pro';
+            const accentColor = isPro ? AMBER : tierKey === 'rankings' ? AQUA : SUB;
 
-        {/* Loading state */}
-        {loading ? (
-          <View style={{ alignItems: 'center', padding: 20 }}>
-            <ActivityIndicator color={C.blueDeep} />
-            <Text style={{ fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs, marginTop: 8, letterSpacing: 1 }}>LOADING PRICES...</Text>
-          </View>
-        ) : null}
+            const price =
+              tierKey === 'free'
+                ? 'Free'
+                : billing === 'yearly'
+                ? info.yearlyPrice
+                : info.price;
 
-        {/* Billing toggle */}
-        <View style={styles.billingToggle}>
-          <TouchableOpacity
-            style={[styles.billingBtn, billing === 'monthly' && styles.billingBtnOn]}
-            onPress={() => setBilling('monthly')}
-          >
-            <Text style={[styles.billingTxt, billing === 'monthly' && styles.billingTxtOn]}>MONTHLY</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.billingBtn, billing === 'yearly' && styles.billingBtnOn]}
-            onPress={() => setBilling('yearly')}
-          >
-            <Text style={[styles.billingTxt, billing === 'yearly' && styles.billingTxtOn]}>YEARLY</Text>
-            <View style={styles.savingsBadge}>
-              <Text style={styles.savingsTxt}>{yearlySavings(selectedTier.monthly, selectedTier.yearly)}</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Tier tabs */}
-        <View style={styles.tierRow}>
-          {TIERS.map(tier => {
-            const pkg = packages.find(p =>
-              p.product.identifier.includes(tier.id) &&
-              p.product.identifier.includes(billing === 'yearly' ? 'yearly' : 'monthly')
-            );
-            const price = pkg?.product.priceString ?? (billing === 'yearly' ? tier.yearly : tier.monthly);
             return (
-              <TouchableOpacity
-                key={tier.id}
-                style={[styles.tierTab, selected === tier.id && { borderColor: tier.color, backgroundColor: tier.color + '18' }]}
-                onPress={() => setSelected(tier.id)}
+              <View
+                key={tierKey}
+                style={[
+                  styles.card,
+                  isPro && styles.cardHighlighted,
+                  isCurrent && styles.cardCurrent,
+                ]}
               >
-                {tier.badge && <Text style={[styles.tierBadge, { color: tier.color }]}>{tier.badge}</Text>}
-                <Text style={[styles.tierName,  selected === tier.id && { color: tier.color }]}>{tier.name}</Text>
-                <Text style={[styles.tierPrice, selected === tier.id && { color: tier.color }]}>{price}</Text>
-                {billing === 'yearly' && (
-                  <Text style={[styles.tierPerMonth, selected === tier.id && { color: tier.color + 'aa' }]}>
-                    ${(parseFloat(tier.yearly.replace('$','')) / 12).toFixed(2)}/mo
-                  </Text>
+                {isPro && (
+                  <View style={styles.popularBadge}>
+                    <Text style={styles.popularText}>MOST POPULAR</Text>
+                  </View>
                 )}
-              </TouchableOpacity>
+
+                <View style={styles.cardHeader}>
+                  <Text style={[styles.tierName, { color: accentColor }]}>{info.label}</Text>
+                  <Text style={styles.price}>{price}</Text>
+                  {tierKey !== 'free' && billing === 'yearly' && (
+                    <Text style={styles.perMonth}>
+                      {tierKey === 'rankings' ? '~$2.08/mo' : '~$7.50/mo'}
+                    </Text>
+                  )}
+                </View>
+
+                <Text style={styles.promptBadge}>
+                  {info.promptLabel} AI prompts
+                </Text>
+
+                <View style={styles.featureList}>
+                  {info.features.map((f, i) => (
+                    <View key={i} style={styles.featureRow}>
+                      <Text style={[styles.checkmark, { color: accentColor }]}>✓</Text>
+                      <Text style={styles.featureText}>{f}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {isCurrent ? (
+                  <View style={[styles.actionBtn, { backgroundColor: '#1a3542' }]}>
+                    <Text style={[styles.actionText, { color: SUB }]}>Current Plan</Text>
+                  </View>
+                ) : tierKey === 'free' ? null : isUpgrade ? (
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: accentColor }]}
+                    onPress={() => handlePurchase(tierKey)}
+                    disabled={purchasing}
+                  >
+                    {purchasing ? (
+                      <ActivityIndicator color="#0a1214" size="small" />
+                    ) : (
+                      <Text style={[styles.actionText, { color: '#0a1214' }]}>
+                        Upgrade to {info.label}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             );
           })}
-        </View>
 
-        {/* Detail card */}
-        <View style={[styles.detailCard, { borderColor: selectedTier.color + '55' }]}>
-          <View style={styles.detailCardShine} />
-          <View style={[styles.detailAccent, { backgroundColor: selectedTier.color }]} />
-          <View style={styles.detailHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.detailName, { color: selectedTier.color }]}>{selectedTier.name}</Text>
-              <Text style={styles.detailLeagueRate}>
-                {leaguePrice}/{billing === 'yearly' ? 'yr' : 'mo'} per person when full league joins
-              </Text>
-            </View>
-            <View style={styles.detailPriceBox}>
-              <Text style={[styles.detailPrice, { color: selectedTier.color }]}>{livePrice}</Text>
-              <Text style={styles.detailPer}>/{billing === 'yearly' ? 'yr' : 'mo'}</Text>
-            </View>
-          </View>
+          {/* Restore */}
+          <TouchableOpacity style={styles.restoreBtn} onPress={handleRestore}>
+            <Text style={styles.restoreText}>Restore Purchases</Text>
+          </TouchableOpacity>
 
-          {perMonth && (
-            <View style={[styles.perMonthPill, { backgroundColor: selectedTier.color + '18', borderColor: selectedTier.color + '44' }]}>
-              <Text style={[styles.perMonthTxt, { color: selectedTier.color }]}>
-                {perMonth} · {yearlySavings(selectedTier.monthly, selectedTier.yearly)} vs monthly
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.divider} />
-          {selectedTier.features.map((f, i) => (
-            <View key={i} style={styles.featureRow}>
-              <Text style={[styles.featureCheck, { color: selectedTier.color }]}>✓</Text>
-              <Text style={styles.featureText}>{f}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* CTA — disabled if already on this tier */}
-        <TouchableOpacity
-          style={[
-            styles.subscribeBtn,
-            { backgroundColor: isActive ? 'rgba(88,131,191,0.2)' : selectedTier.color },
-            (purchasing || loading) && { opacity: 0.7 },
-          ]}
-          onPress={isActive ? undefined : handlePurchase}
-          disabled={isActive || purchasing || loading}
-        >
-          {purchasing ? (
-            <ActivityIndicator color={C.ink} />
-          ) : (
-            <Text style={[styles.subscribeBtnText, { color: isActive ? C.dim2 : (selectedTier.id === 'pro' ? '#1a1208' : '#ffffff') }]}>
-              {isActive
-                ? '✓ CURRENT PLAN'
-                : `UPGRADE TO ${selectedTier.name} — ${livePrice}/${billing === 'yearly' ? 'YR' : 'MO'} →`}
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        {/* League note */}
-        <View style={[styles.leagueNote, { borderLeftColor: selectedTier.color, borderColor: selectedTier.color + '30' }]}>
-          <Text style={styles.leagueNoteText}>
-            💡 Get your whole league on AIOmni and everyone pays {leaguePrice}/{billing === 'yearly' ? 'yr' : 'mo'} instead of {livePrice}/{billing === 'yearly' ? 'yr' : 'mo'}.
+          <Text style={styles.legal}>
+            Payment is charged to your Apple ID account. Subscriptions automatically renew unless
+            cancelled at least 24 hours before the end of the current period. Manage subscriptions
+            in Settings → Apple ID → Subscriptions.
           </Text>
-        </View>
-
-        {/* Add-on */}
-        <View style={styles.addonCard}>
-          <View style={styles.addonCardShine} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.addonName}>Community Rankings Add-On</Text>
-            <Text style={styles.addonDesc}>Add rankings to any paid tier.</Text>
-          </View>
-          <Text style={[styles.addonPrice, { color: C.gold }]}>$0.99/mo</Text>
-        </View>
-
-        {/* Restore + dismiss */}
-        <TouchableOpacity onPress={handleRestore} disabled={restoring} style={{ marginBottom: 8 }}>
-          <Text style={styles.restore}>
-            {restoring ? 'Restoring...' : 'Restore Purchases'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.dismiss}>Maybe later</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.finePrint}>
-          {billing === 'yearly' ? 'Billed annually.' : 'Billed monthly.'} Subscriptions auto-renew. Cancel anytime in App Store settings. Payment charged to Apple ID at confirmation.
-        </Text>
-      </ScrollView>
-    </LinearGradient>
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: SP[3] },
-
-  header:      { alignItems:'center', paddingBottom:24, borderBottomWidth:1, borderBottomColor:BORDER, marginBottom:20 },
-  logoText:    { fontFamily:F.bold, fontSize:42, color:C.blueDeep, letterSpacing:3, marginBottom:10 },
-  headline:    { fontFamily:F.bold, fontSize:28, color:C.ink, letterSpacing:3, marginBottom:8 },
-  subheadline: { fontFamily:F.mono, color:C.dim2, fontSize:SZ.md, textAlign:'center', lineHeight:22 },
-
-  billingToggle: { flexDirection:'row', backgroundColor:SURFACE, borderRadius:14, padding:3, marginBottom:16, borderWidth:1.5, borderColor:BORDER },
-  billingBtn:    { flex:1, paddingVertical:9, borderRadius:11, alignItems:'center', position:'relative' },
-  billingBtnOn:  { backgroundColor:C.blueDeep },
-  billingTxt:    { fontFamily:F.mono, fontSize:SZ.xs, color:C.dim2, letterSpacing:1.5 },
-  billingTxtOn:  { color:'#ffffff' },
-  savingsBadge:  { position:'absolute', top:-8, right:8, backgroundColor:C.gold, borderRadius:100, paddingHorizontal:6, paddingVertical:2 },
-  savingsTxt:    { fontFamily:F.mono, fontSize:8, color:C.ink, letterSpacing:0.5 },
-
-  tierRow:     { flexDirection:'row', gap:6, marginBottom:18 },
-  tierTab:     { flex:1, backgroundColor:SURFACE, borderRadius:R.sm, padding:8, alignItems:'center', borderWidth:1.5, borderColor:BORDER },
-  tierBadge:   { fontFamily:F.mono, fontSize:6, letterSpacing:0.5, marginBottom:2 },
-  tierName:    { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs, letterSpacing:0.8, marginBottom:2 },
-  tierPrice:   { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs-1 },
-  tierPerMonth:{ fontFamily:F.mono, color:C.dim2, fontSize:7, marginTop:1, opacity:0.7 },
-
-  detailCard: {
-    backgroundColor:SURFACE, borderRadius:R.md, padding:20, marginBottom:16,
-    borderWidth:1.5, overflow:'hidden', position:'relative',
-    shadowColor:'#3d6aaa', shadowOffset:{width:0,height:6}, shadowOpacity:0.12, shadowRadius:18, elevation:6,
+  container: {
+    flex: 1,
+    backgroundColor: BG,
   },
-  detailCardShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
-  detailAccent:    { position:'absolute', top:0, left:0, right:0, height:3 },
-  detailHeader:    { flexDirection:'row', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12, marginTop:8 },
-  detailName:      { fontFamily:F.bold, fontSize:SZ['2xl'], letterSpacing:2, marginBottom:4 },
-  detailLeagueRate:{ fontFamily:F.mono, color:C.dim2, fontSize:SZ.sm, maxWidth:200, lineHeight:18 },
-  detailPriceBox:  { flexDirection:'row', alignItems:'flex-end' },
-  detailPrice:     { fontFamily:F.bold, fontSize:SZ['5xl'], letterSpacing:-1, lineHeight:44 },
-  detailPer:       { fontFamily:F.mono, color:C.dim2, fontSize:SZ.md, marginBottom:6, marginLeft:2 },
-  perMonthPill:    { borderRadius:100, borderWidth:1, paddingHorizontal:12, paddingVertical:5, alignSelf:'flex-start', marginBottom:14 },
-  perMonthTxt:     { fontFamily:F.mono, fontSize:SZ.xs, letterSpacing:0.5 },
-  divider:         { height:1, backgroundColor:BORDER, marginBottom:14 },
-  featureRow:      { flexDirection:'row', alignItems:'flex-start', marginBottom:9 },
-  featureCheck:    { fontFamily:F.mono, fontSize:SZ.sm, marginRight:10, marginTop:2 },
-  featureText:     { fontFamily:F.mono, color:C.dim2, fontSize:SZ.md, flex:1, lineHeight:22 },
-
-  subscribeBtn:     { borderRadius:R.sm, padding:18, alignItems:'center', marginBottom:12 },
-  subscribeBtnText: { fontFamily:F.mono, fontSize:SZ.base, letterSpacing:2 },
-
-  leagueNote:     { backgroundColor:SURFACE, borderRadius:R.sm, padding:14, marginBottom:14, borderLeftWidth:3, borderWidth:1 },
-  leagueNoteText: { fontFamily:F.mono, color:C.dim2, fontSize:SZ.sm, lineHeight:20 },
-
-  addonCard: {
-    backgroundColor:SURFACE, borderRadius:R.sm, padding:16, marginBottom:20,
-    flexDirection:'row', alignItems:'center', borderWidth:1.5, borderColor:BORDER,
-    position:'relative', overflow:'hidden',
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
   },
-  addonCardShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
-  addonName:  { fontFamily:F.outfit, color:C.ink, fontSize:SZ.md, marginBottom:4 },
-  addonDesc:  { fontFamily:F.mono, color:C.dim2, fontSize:SZ.sm },
-  addonPrice: { fontFamily:F.mono, fontSize:SZ.xl, letterSpacing:1 },
+  closeBtn: {
+    fontSize: 20,
+    color: SUB,
+    fontWeight: '600',
+  },
+  title: {
+    fontFamily: 'BebasNeue',
+    fontSize: 22,
+    color: TEXT,
+    letterSpacing: 1,
+  },
 
-  restore:   { fontFamily:F.mono, color:C.blueDeep, textAlign:'center', fontSize:SZ.sm, paddingVertical:8 },
-  dismiss:   { fontFamily:F.mono, color:C.dim2, textAlign:'center', fontSize:SZ.md, paddingVertical:8, marginBottom:14 },
-  finePrint: { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs-1, textAlign:'center', lineHeight:16, opacity:0.6 },
+  // Toggle
+  toggleRow: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    backgroundColor: CARD,
+    borderRadius: 12,
+    padding: 3,
+  },
+  toggleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleActive: {
+    backgroundColor: '#1a3542',
+  },
+  toggleText: {
+    fontFamily: 'Barlow',
+    fontSize: 14,
+    color: SUB,
+    fontWeight: '600',
+  },
+  toggleTextActive: {
+    color: TEXT,
+  },
+  saveBadge: {
+    fontFamily: 'SpaceMono',
+    fontSize: 9,
+    color: AMBER,
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+
+  loadingWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  scroll: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+
+  // Cards
+  card: {
+    backgroundColor: CARD,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 20,
+    marginBottom: 14,
+  },
+  cardHighlighted: {
+    borderColor: AMBER,
+    borderWidth: 1.5,
+  },
+  cardCurrent: {
+    borderColor: AQUA,
+    borderWidth: 1.5,
+  },
+  popularBadge: {
+    position: 'absolute',
+    top: -10,
+    right: 16,
+    backgroundColor: AMBER,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  popularText: {
+    fontFamily: 'SpaceMono',
+    fontSize: 9,
+    color: '#0a1214',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+
+  cardHeader: {
+    marginBottom: 12,
+  },
+  tierName: {
+    fontFamily: 'BebasNeue',
+    fontSize: 20,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  price: {
+    fontFamily: 'SpaceMono',
+    fontSize: 24,
+    color: TEXT,
+    fontWeight: '700',
+  },
+  perMonth: {
+    fontFamily: 'SpaceMono',
+    fontSize: 11,
+    color: SUB,
+    marginTop: 2,
+  },
+  promptBadge: {
+    fontFamily: 'SpaceMono',
+    fontSize: 11,
+    color: AMBER,
+    backgroundColor: 'rgba(255,184,0,0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 14,
+    overflow: 'hidden',
+  },
+
+  featureList: {
+    marginBottom: 16,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  checkmark: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginRight: 8,
+    marginTop: 1,
+  },
+  featureText: {
+    fontFamily: 'Barlow',
+    fontSize: 14,
+    color: TEXT,
+    flex: 1,
+    lineHeight: 20,
+  },
+
+  actionBtn: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  actionText: {
+    fontFamily: 'BebasNeue',
+    fontSize: 16,
+    letterSpacing: 1,
+    fontWeight: '700',
+  },
+
+  restoreBtn: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginTop: 4,
+  },
+  restoreText: {
+    fontFamily: 'Barlow',
+    fontSize: 14,
+    color: AQUA,
+    textDecorationLine: 'underline',
+  },
+  legal: {
+    fontFamily: 'Barlow',
+    fontSize: 10,
+    color: SUB,
+    textAlign: 'center',
+    lineHeight: 15,
+    marginTop: 8,
+    paddingHorizontal: 10,
+  },
 });

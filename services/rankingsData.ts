@@ -6,6 +6,7 @@
 // All free. No paid APIs required.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { syncRankingsToCloud, loadRankingsFromCloud } from './userSync';
 
 // ─── TYPES ──────────────────────────────────────────────────
 
@@ -737,8 +738,12 @@ export async function setSelectedBase(source: RankingsSource): Promise<void> {
   await AsyncStorage.setItem('rankings_base_source', source);
 }
 
-export async function getCustomRankings(format: string = 'PPR'): Promise<RankedPlayer[] | null> {
-  const val = await AsyncStorage.getItem('my_custom_rankings_' + format);
+export async function getCustomRankings(format: string = 'PPR', leagueId?: string): Promise<RankedPlayer[] | null> {
+  // Try cloud first for cross-device sync
+  const cloudData = await loadRankingsFromCloud(leagueId ? format + '_' + leagueId : format);
+  if (cloudData && cloudData.length > 0) return cloudData;
+  const localKey = leagueId ? 'my_custom_rankings_' + format + '_' + leagueId : 'my_custom_rankings_' + format;
+  const val = await AsyncStorage.getItem(localKey);
   if (!val) {
     const legacy = await AsyncStorage.getItem('my_custom_rankings_v7');
     if (legacy) return JSON.parse(legacy);
@@ -747,8 +752,12 @@ export async function getCustomRankings(format: string = 'PPR'): Promise<RankedP
   try { return JSON.parse(val); } catch { return null; }
 }
 
-export async function saveCustomRankings(rankings: RankedPlayer[], format: string = 'PPR'): Promise<void> {
-  await AsyncStorage.setItem('my_custom_rankings_' + format, JSON.stringify(rankings));
+export async function saveCustomRankings(rankings: RankedPlayer[], format: string = 'PPR', leagueId?: string): Promise<void> {
+  const key = leagueId ? 'my_custom_rankings_' + format + '_' + leagueId : 'my_custom_rankings_' + format;
+  await AsyncStorage.setItem(key, JSON.stringify(rankings));
+  const tsKey = leagueId ? 'rankings_ts_' + format + '_' + leagueId : 'rankings_ts_' + format;
+  await AsyncStorage.setItem(tsKey, Date.now().toString());
+  syncRankingsToCloud(rankings, leagueId ? format + '_' + leagueId : format); // fire and forget
 }
 // ─── WALTERFOOTBALL RSS ─────────────────────────────────────
 

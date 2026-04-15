@@ -18,6 +18,7 @@ import { getUser, getUserRow } from '../services/supabase';
 import { exchangeYahooCode } from '../services/yahoo';
 import { updatePassword } from '../services/auth';
 import { initPurchases } from '../services/purchases';
+import { pullCloudDataOnLogin } from '../services/userSync';
 import { dark } from './constants/tokens';
 
 Sentry.init({
@@ -79,6 +80,7 @@ export default Sentry.wrap(function RootLayout() {
         }
         Sentry.setUser({ id: user.id, email: user.email });
         await initPurchases(user.id);
+        await pullCloudDataOnLogin();
 
         const row = await getUserRow();
         const hasSleeper = Boolean(row?.sleeper_username);

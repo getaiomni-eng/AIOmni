@@ -1,22 +1,22 @@
 // app/utils/promptCounter.ts
-// 25 prompts/week — resets Sunday noon
+// Tier-aware prompt system:
+//   Free:     10 prompts LIFETIME (non-renewing)
+//   Rankings: 20 prompts/week (resets Sunday noon)
+//   Pro:      40 prompts/week (resets Sunday noon)
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCurrentTier } from '../../services/purchases';
+import { syncPromptUsageToCloud } from '../../services/userSync';
 
 const PROMPT_COUNT_KEY = 'prompt_count';
 const PROMPT_RESET_KEY = 'prompt_reset_time';
+const FREE_LIFETIME_KEY = 'free_lifetime_used';
 
-function getPromptLimit(tier: string): number {
-  switch (tier) {
-    case 'free': return 25;
-    case 'rankings': return 0;
-    case 'pro': return 75;
-    case 'premium': return 125;
-    case 'dynasty_elite': return 999;
-    default: return 25;
-  }
-}
+const LIMITS: Record<string, number> = {
+  free: 10,       // lifetime, never resets
+  rankings: 20,   // per week
+  pro: 40,        // per week
+};
 
 function getNextSundayNoon(): number {
   const now = new Date();
@@ -28,12 +28,12 @@ function getNextSundayNoon(): number {
   return next.getTime();
 }
 
-async function maybeReset(): Promise<void> {
+// Weekly reset — only applies to paid tiers
+async function maybeResetWeekly(): Promise<void> {
   const resetTimeStr = await AsyncStorage.getItem(PROMPT_RESET_KEY);
   const now = Date.now();
 
   if (!resetTimeStr) {
-    // First time — initialize used count to 0, set first reset window
     await AsyncStorage.setItem(PROMPT_RESET_KEY, getNextSundayNoon().toString());
     await AsyncStorage.setItem(PROMPT_COUNT_KEY, '0');
     return;
@@ -41,7 +41,6 @@ async function maybeReset(): Promise<void> {
 
   const resetTime = parseInt(resetTimeStr, 10);
   if (now >= resetTime) {
-    // Past reset time — reset used count to 0 and set next window
     await AsyncStorage.setItem(PROMPT_COUNT_KEY, '0');
     await AsyncStorage.setItem(PROMPT_RESET_KEY, getNextSundayNoon().toString());
   }
@@ -49,35 +48,91 @@ async function maybeReset(): Promise<void> {
 
 export async function getRemainingPrompts(): Promise<number> {
   const tier = await getCurrentTier();
-  const limit = getPromptLimit(tier);
-  if (limit >= 999) return 999;
-  await maybeReset();
+  const limit = LIMITS[tier] ?? LIMITS.free;
+
+  if (tier === 'free') {
+    // Lifetime — read from separate key, never resets
+    const usedStr = await AsyncStorage.getItem(FREE_LIFETIME_KEY);
+    const used = parseInt(usedStr || '0', 10);
+    return Math.max(0, limit - used);
+  }
+
+  // Paid tiers — weekly reset
+  await maybeResetWeekly();
   const countStr = await AsyncStorage.getItem(PROMPT_COUNT_KEY);
   const used = parseInt(countStr || '0', 10);
   return Math.max(0, limit - used);
 }
 
-export async function canSendPrompt(): Promise<boolean> {
+export async function getPromptLimit(): Promise<number> {
   const tier = await getCurrentTier();
-  if (getPromptLimit(tier) >= 999) return true;
+  return LIMITS[tier] ?? LIMITS.free;
+}
+
+export async function canSendPrompt(): Promise<boolean> {
   const remaining = await getRemainingPrompts();
   return remaining > 0;
 }
 
 export async function incrementPrompt(): Promise<void> {
   const tier = await getCurrentTier();
-  const limit = getPromptLimit(tier);
-  if (limit >= 999) return;
-  await maybeReset();
+
+  if (tier === 'free') {
+    const usedStr = await AsyncStorage.getItem(FREE_LIFETIME_KEY);
+    const used = parseInt(usedStr || '0', 10);
+    const newUsed = used + 1;
+    await AsyncStorage.setItem(FREE_LIFETIME_KEY, newUsed.toString());
+    syncPromptUsageToCloud(newUsed); // fire and forget
+    return;
+  }
+
+  // Paid tiers — weekly counter
+  await maybeResetWeekly();
   const countStr = await AsyncStorage.getItem(PROMPT_COUNT_KEY);
   const used = parseInt(countStr || '0', 10);
   await AsyncStorage.setItem(PROMPT_COUNT_KEY, (used + 1).toString());
 }
 
-export async function getResetTime(): Promise<Date> {
+export async function getResetTime(): Promise<Date | null> {
+  const tier = await getCurrentTier();
+  if (tier === 'free') return null; // no reset for free — lifetime
   const resetTimeStr = await AsyncStorage.getItem(PROMPT_RESET_KEY);
-  if (!resetTimeStr) {
-    return new Date(getNextSundayNoon());
-  }
+  if (!resetTimeStr) return null;
   return new Date(parseInt(resetTimeStr, 10));
+}
+
+// Returns display-friendly info for the prompt counter UI
+export async function getPromptDisplayInfo(): Promise<{
+  remaining: number;
+  limit: number;
+  tier: string;
+  isLifetime: boolean;
+  resetLabel: string;
+}> {
+  const tier = await getCurrentTier();
+  const remaining = await getRemainingPrompts();
+  const limit = LIMITS[tier] ?? LIMITS.free;
+  const isLifetime = tier === 'free';
+
+  let resetLabel = '';
+  if (isLifetime) {
+    resetLabel = remaining > 0 ? `${remaining} free prompts remaining` : 'Free prompts used — upgrade for more';
+  } else {
+    const resetTime = await getResetTime();
+    if (resetTime) {
+      const now = new Date();
+      const diff = resetTime.getTime() - now.getTime();
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      if (days > 0) {
+        resetLabel = `Resets in ${days}d ${hours}h`;
+      } else if (hours > 0) {
+        resetLabel = `Resets in ${hours}h`;
+      } else {
+        resetLabel = 'Resets soon';
+      }
+    }
+  }
+
+  return { remaining, limit, tier, isLifetime, resetLabel };
 }

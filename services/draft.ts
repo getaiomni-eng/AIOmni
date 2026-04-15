@@ -4,6 +4,7 @@
 // ESPN / Yahoo / Offline: companion mode (manual pick tracking)
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchBlendedConsensus, fetchSleeperADP } from './rankingsData';
 
 const SLEEPER_BASE = 'https://api.sleeper.app/v1';
 
@@ -392,6 +393,38 @@ ${question ? `USER QUESTION: ${question}` : 'Who should I draft with my next pic
 
 // ─── PLAYER DATABASE (2025 ADP) ─────────────────────────────
 // This is a starter set. In production, pull from nfl_data_py or Sleeper ADP.
+
+// ─── LIVE PLAYER DB (replaces static data with real ADP) ────
+const BYE_WEEKS_2026: Record<string, number> = {
+  ARI: 11, ATL: 12, BAL: 14, BUF: 12, CAR: 7, CHI: 7, CIN: 12,
+  CLE: 9, DAL: 7, DEN: 14, DET: 5, GB: 10, HOU: 14, IND: 14,
+  JAX: 12, KC: 6, LAC: 5, LAR: 6, LV: 10, MIA: 6, MIN: 9,
+  NE: 14, NO: 12, NYG: 11, NYJ: 12, PHI: 5, PIT: 9, SEA: 10,
+  SF: 9, TB: 11, TEN: 5, WAS: 14,
+};
+
+export async function loadLivePlayerDB(): Promise<PlayerInfo[]> {
+  try {
+    const ranked = await fetchBlendedConsensus();
+    if (ranked.length === 0) return [...DEFAULT_PLAYER_DB];
+
+    return ranked.map((p, i) => ({
+      id: p.id,
+      name: p.name,
+      position: p.position,
+      team: p.team,
+      adp: parseFloat(p.adp) || (i + 1),
+      byeWeek: BYE_WEEKS_2026[p.team] ?? 0,
+      tier: p.tier,
+      rank: p.rank,
+      isDrafted: false,
+    }));
+  } catch (e) {
+    console.log('loadLivePlayerDB fallback to static:', e);
+    return [...DEFAULT_PLAYER_DB];
+  }
+}
+
 // Tier 1 = elite, Tier 2 = strong starter, Tier 3 = solid, Tier 4 = depth
 
 export const DEFAULT_PLAYER_DB: PlayerInfo[] = [
