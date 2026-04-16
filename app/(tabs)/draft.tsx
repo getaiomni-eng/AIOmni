@@ -240,7 +240,24 @@ export default function DraftCopilotScreen() {
       scoringSettings: setupData.scoringSettings,
     };
     // Load live ADP data (falls back to static DB if offline)
-      const liveDB = await loadLivePlayerDB();
+      let liveDB = await loadLivePlayerDB();
+      // Exclude players already on user's roster in this league
+      if (settings.platform === 'sleeper' && settings.leagueId && settings.leagueId !== 'offline') {
+        try {
+          const username = await AsyncStorage.getItem('sleeper_username');
+          if (username) {
+            const uRes = await fetch('https://api.sleeper.app/v1/user/' + username);
+            const u = await uRes.json();
+            const rostersRes = await fetch('https://api.sleeper.app/v1/league/' + settings.leagueId + '/rosters');
+            const rosters = await rostersRes.json();
+            const myRoster = rosters.find((r: any) => r.owner_id === u.user_id);
+            if (myRoster?.players) {
+              const rosterSet = new Set(myRoster.players.map(String));
+              liveDB = liveDB.map(p => rosterSet.has(p.id) ? { ...p, isDrafted: true } : p);
+            }
+          }
+        } catch (e) { console.log('roster filter error:', e); }
+      }
       const state = createInitialDraftState(settings, liveDB);
     state.status = 'drafting';
     setDraftState(state);

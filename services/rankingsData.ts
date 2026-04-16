@@ -6,6 +6,7 @@
 // All free. No paid APIs required.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabase';
 import { syncRankingsToCloud, loadRankingsFromCloud } from './userSync';
 
 // ─── TYPES ──────────────────────────────────────────────────
@@ -67,7 +68,22 @@ function assignTier(rank: number): number {
 }
 
 const NCAA_API_BASE = 'https://ncaa-api.henrygd.me';
-const CFBD_API_KEY  = 'FXYJqCTsSGNxj67UAcWxd6pDdgYZ15hvXE/WscfGOnUW09lvRDEvZe/xngs/bMuo';
+
+// ─── CFBD PROXY (key lives in Supabase secrets) ────────────
+async function cfbdProxy(endpoint: string, params?: Record<string, string>): Promise<any> {
+  try {
+    const { data, error } = await supabase.functions.invoke('cfbd-proxy', {
+      body: { endpoint, params },
+    });
+    if (error) throw error;
+    return data;
+  } catch (e) {
+    console.log('cfbdProxy error:', e);
+    return [];
+  }
+}
+
+// CFBD API key moved to Supabase Edge Function — never stored client-side
 
 // ─── SLEEPER ────────────────────────────────────────────────
 
@@ -453,14 +469,9 @@ const PROSPECT_SEED_2026: CollegeProspect[] = [
 
 
 export async function fetchCFBDProspects(year = 2026): Promise<CollegeProspect[]> {
-  if (!CFBD_API_KEY) return [];
+  // CFBD calls go through server-side proxy
   try {
-    const res = await fetch(
-      `https://api.collegefootballdata.com/draft/prospects?year=${year}`,
-      { headers: { Authorization: `Bearer ${CFBD_API_KEY}` } }
-    );
-    if (!res.ok) return [];
-    const data = await res.json();
+    const data = await cfbdProxy('/recruiting/players', { year: String(year) });
     return (data ?? []).slice(0, 100).map((p: any, i: number) => ({
       id: String(p.id ?? i),
       name: p.name ?? 'Unknown',
@@ -480,14 +491,9 @@ export async function fetchCFBDProspects(year = 2026): Promise<CollegeProspect[]
 }
 
 export async function fetchCFBDCollegeStats(year = 2025): Promise<any[]> {
-  if (!CFBD_API_KEY) return [];
+  // CFBD calls go through server-side proxy
   try {
-    const res = await fetch(
-      `https://api.collegefootballdata.com/stats/player/season?year=${year}&category=receiving`,
-      { headers: { Authorization: `Bearer ${CFBD_API_KEY}` } }
-    );
-    if (!res.ok) return [];
-    return await res.json();
+    return await cfbdProxy('/stats/player/season', { year: String(year), category: 'receiving' });
   } catch { return []; }
 }
 

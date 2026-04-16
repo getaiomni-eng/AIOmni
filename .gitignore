@@ -44,3 +44,15 @@ app-example
 
 # Local Netlify folder
 .netlify
+
+# ─── Security: never commit these ────────────────────────────
+.env
+.env.local
+.env.production
+*.p8
+*.p12
+*.key
+*.pem
+serviceAccountKey.json
+google-services.json
+GoogleService-Info.plist

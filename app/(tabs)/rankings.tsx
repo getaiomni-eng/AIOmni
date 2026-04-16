@@ -605,7 +605,7 @@ const s = StyleSheet.create({
   tierLabel:  { fontFamily: F.bold, fontSize: 14, letterSpacing: 3, color: palette.green },
 
   // Card
-  card:       { backgroundColor: dark.card, borderRadius: 16, borderWidth: 1, borderColor: dark.border, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  card:       { backgroundColor: dark.card, borderRadius: 16, borderWidth: 1, borderColor: dark.border, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10, height: 74 },
   cardActive: { borderColor: palette.green + '40', transform: [{ scale: 1.02 }] },
   rank:       { fontFamily: F.bold, fontSize: 28, color: palette.green, width: 30, textAlign: 'center' },
   info:       { flex: 1, minWidth: 0 },
