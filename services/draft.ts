@@ -403,25 +403,70 @@ const BYE_WEEKS_2026: Record<string, number> = {
   SF: 9, TB: 11, TEN: 5, WAS: 14,
 };
 
-export async function loadLivePlayerDB(): Promise<PlayerInfo[]> {
-  try {
-    const ranked = await fetchBlendedConsensus();
-    if (ranked.length === 0) return [...DEFAULT_PLAYER_DB];
+export type DraftMode = 'startup' | 'rookie' | 'redraft';
 
-    return ranked.map((p, i) => ({
-      id: p.id,
-      name: p.name,
-      position: p.position,
-      team: p.team,
-      adp: parseFloat(p.adp) || (i + 1),
-      byeWeek: BYE_WEEKS_2026[p.team] ?? 0,
-      tier: p.tier,
-      rank: p.rank,
-      isDrafted: false,
-    }));
+/** Loads player DB based on draft mode.
+ *  - 'rookie'  -> prospects only (dynasty rookie drafts)
+ *  - 'startup' -> NFL players + prospects merged (dynasty startup)
+ *  - 'redraft' -> NFL players only (default)
+ */
+export async function loadLivePlayerDB(mode: DraftMode = 'redraft'): Promise<PlayerInfo[]> {
+  try {
+    if (mode === 'rookie') {
+      const prospects = await fetchProspectDB();
+      return prospects.length > 0 ? prospects : [...DEFAULT_PLAYER_DB];
+    }
+
+    const ranked = await fetchBlendedConsensus();
+    const nflPlayers: PlayerInfo[] = ranked.length === 0
+      ? [...DEFAULT_PLAYER_DB]
+      : ranked.map((p, i) => ({
+          id: p.id,
+          name: p.name,
+          position: p.position,
+          team: p.team,
+          adp: parseFloat(p.adp) || (i + 1),
+          byeWeek: BYE_WEEKS_2026[p.team] ?? 0,
+          tier: p.tier,
+          rank: p.rank,
+          isDrafted: false,
+        }));
+
+    if (mode === 'startup') {
+      const prospects = await fetchProspectDB();
+      const startIdx = nflPlayers.length;
+      return [
+        ...nflPlayers,
+        ...prospects.map((p, i) => ({ ...p, adp: startIdx + i + 1, rank: startIdx + i + 1 }))
+      ];
+    }
+
+    return nflPlayers;
   } catch (e) {
     console.log('loadLivePlayerDB fallback to static:', e);
     return [...DEFAULT_PLAYER_DB];
+  }
+}
+
+async function fetchProspectDB(): Promise<PlayerInfo[]> {
+  try {
+    const { fetchDedupedProspects } = await import('./rankingsData');
+    const list = await fetchDedupedProspects();
+    if (!list || list.length === 0) return [];
+    return list.slice(0, 80).map((p: any, i: number) => ({
+      id: 'prospect-' + (p.id || i),
+      name: p.name,
+      position: p.position || 'WR',
+      team: p.school || p.team || 'CFB',
+      adp: i + 1,
+      byeWeek: 0,
+      tier: Math.floor(i / 12) + 1,
+      rank: i + 1,
+      isDrafted: false,
+    }));
+  } catch (e) {
+    console.log('fetchProspectDB error:', e);
+    return [];
   }
 }
 
