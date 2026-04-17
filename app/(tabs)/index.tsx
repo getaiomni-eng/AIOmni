@@ -119,6 +119,7 @@ export default function HomeScreen() {
   const loadESPNLeagues = async (year: string = String(new Date().getFullYear())): Promise<League[]> => {
     try {
       const creds = await loadESPNCredentials();
+      if (!creds) return [];
       if (!creds?.leagueId) {
         // Try to discover leagues
         try {
@@ -135,6 +136,7 @@ export default function HomeScreen() {
           return [];
         }
       }
+      if (!creds.leagueId) return [];
       const leagueData = await getESPNLeague(creds.leagueId, creds, parseInt(year));
       if (!leagueData) return [];
       const myTeam  = findMyESPNTeam(leagueData, creds.teamName || '');

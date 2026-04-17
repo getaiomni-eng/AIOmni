@@ -240,29 +240,29 @@ export default function DraftCopilotScreen() {
       scoringSettings: setupData.scoringSettings,
     };
     // Load live ADP data (falls back to static DB if offline)
-            // Auto-detect draft mode: only rookie if explicitly linear + 5 or fewer rounds + no starters
-      // Only startup if 28+ roster slots (true dynasty startup, not just deep benches)
+      const isDynasty = (setupData as any).isDynasty === true;
       const totalSlots = settings.rosterSlots?.length ?? 0;
       const draftMode: 'startup' | 'rookie' | 'redraft' =
-        settings.draftType === 'linear' && settings.rounds <= 5 && totalSlots <= 6
-          ? 'rookie'
-          : totalSlots >= 28
-            ? 'startup'
-            : 'redraft';
+        isDynasty && settings.rounds <= 6 ? 'rookie'
+        : isDynasty && settings.rounds >= 15 ? 'startup'
+        : settings.draftType === 'linear' && settings.rounds <= 5 && totalSlots <= 8 ? 'rookie'
+        : 'redraft';
       let liveDB = await loadLivePlayerDB(draftMode);
-      // Exclude players already on user's roster in this league
       if (settings.platform === 'sleeper' && settings.leagueId && settings.leagueId !== 'offline') {
         try {
-          const username = await AsyncStorage.getItem('sleeper_username');
-          if (username) {
-            const uRes = await fetch('https://api.sleeper.app/v1/user/' + username);
-            const u = await uRes.json();
-            const rostersRes = await fetch('https://api.sleeper.app/v1/league/' + settings.leagueId + '/rosters');
-            const rosters = await rostersRes.json();
-            const myRoster = rosters.find((r: any) => r.owner_id === u.user_id);
-            if (myRoster?.players) {
-              const rosterSet = new Set(myRoster.players.map(String));
-              liveDB = liveDB.map(p => rosterSet.has(p.id) ? { ...p, isDrafted: true } : p);
+          const rostersRes = await fetch('https://api.sleeper.app/v1/league/' + settings.leagueId + '/rosters');
+          const rosters = await rostersRes.json();
+          const allRostered = new Set<string>();
+          for (const r of rosters || []) {
+            if (Array.isArray(r?.players)) {
+              for (const pid of r.players) allRostered.add(String(pid));
+            }
+          }
+          if (allRostered.size > 0) {
+            if (draftMode === 'rookie' || draftMode === 'startup') {
+              liveDB = liveDB.filter(p => !allRostered.has(p.id));
+            } else {
+              liveDB = liveDB.map(p => allRostered.has(p.id) ? { ...p, isDrafted: true } : p);
             }
           }
         } catch (e) { console.log('roster filter error:', e); }
@@ -439,7 +439,8 @@ function SetupWizard({
                       scoringFormat: (lg.scoring_settings?.rec === 1 ? 'ppr' : lg.scoring_settings?.rec === 0.5 ? 'half' : 'standard'),
                       rosterSlots: lg.roster_positions || ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN'],
                       scoringSettings: lg.scoring_settings,
-                    });
+                      isDynasty: lg.settings?.type === 2 || !!lg.previous_league_id,
+                    } as any);
                     // Try to find an active draft
                     try {
                       const draft = await findActiveDraft(lg.league_id);

@@ -265,13 +265,11 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   toggleTxt: { fontFamily: 'Audiowide_400Regular',
-    fontFamily: F.mono,
     fontSize: SZ.xs,
     color: C.dim2,
   },
   toggleTxtOn: { fontFamily: 'Audiowide_400Regular',
     color: '#f0f4f5',
-    fontFamily: F.mono,
   },
   inputCard: {
     backgroundColor: '#12252e',

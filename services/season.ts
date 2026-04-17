@@ -10,13 +10,18 @@ export async function getNFLSeason(): Promise<string> {
   try {
     const state = await (await fetch('https://api.sleeper.app/v1/state/nfl')).json();
     cachedSeason = state.season || String(new Date().getFullYear());
-    await AsyncStorage.setItem('nfl_season', cachedSeason);
-    return cachedSeason;
+    if (cachedSeason) {
+      await AsyncStorage.setItem('nfl_season', cachedSeason);
+      return cachedSeason;
+    }
   } catch {
     const saved = await AsyncStorage.getItem('nfl_season');
     cachedSeason = saved || String(new Date().getFullYear());
     return cachedSeason;
   }
+  // Fallback if API returned but season was falsy
+  cachedSeason = String(new Date().getFullYear());
+  return cachedSeason;
 }
 
 export async function getNFLWeek(): Promise<number> {

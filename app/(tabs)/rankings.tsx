@@ -18,6 +18,7 @@ import {
     saveCustomRankings,
     setSelectedBase,
 } from '../../services/rankingsData';
+import { getConsensusRankings, invalidateConsensusCache } from '../../services/rankingsCache';
 import { fetchDedupedProspects } from '../../services/rankingsData';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ScoringFormat } from '../../services/rankingsData';
@@ -254,10 +255,10 @@ export default function RankingsScreen() {
   const loadCommunityRankings = async () => {
     setLoading(true);
     try {
-      const data = await fetchBlendedConsensus();
+      const data = await getConsensusRankings();
       if (data.length > 0) setCommunityData(data);
     } catch (e) {
-      console.log('fetchBlendedConsensus error:', e);
+      console.log('getConsensusRankings error:', e);
     } finally {
       setLoading(false);
     }
@@ -283,11 +284,16 @@ export default function RankingsScreen() {
   const handleLeagueChange = async (leagueId: string, leagueName: string) => {
     setSelectedLeagueId(leagueId || undefined);
     setSelectedLeagueName(leagueName);
-    // Reload custom rankings for this league
     const custom = await getCustomRankings(format, leagueId || undefined);
     if (custom && custom.length > 0) {
-      setMyRanks(custom);
-    } else {
+      setMyRanks(custom); return;
+    }
+    try {
+      const live = await getConsensusRankings();
+      const seed = live.length > 0 ? live : [...SEED];
+      setMyRanks(seed);
+      await saveCustomRankings(seed, format, leagueId || undefined);
+    } catch {
       setMyRanks([...SEED]);
       await saveCustomRankings([...SEED], format, leagueId || undefined);
     }
@@ -318,8 +324,14 @@ export default function RankingsScreen() {
     const custom = await getCustomRankings(format, selectedLeagueId);
     if (custom && custom.length > 0) {
       setMyRanks(custom);
-    } else {
-      // No saved rankings — initialize with SEED so drag-and-drop has something to work with
+      return;
+    }
+    try {
+      const live = await getConsensusRankings();
+      const seed = live.length > 0 ? live : [...SEED];
+      setMyRanks(seed);
+      await saveCustomRankings(seed, format, selectedLeagueId);
+    } catch {
       setMyRanks([...SEED]);
       await saveCustomRankings([...SEED], format, selectedLeagueId);
     }
@@ -365,10 +377,26 @@ export default function RankingsScreen() {
     saveCustomRankings(ranks, format, selectedLeagueId);
   };
 
-  const resetToConsensus = () => { setMyRanks([...SEED]); saveCustomRankings([...SEED], format, selectedLeagueId); };
+  const resetToConsensus = async () => {
+    try {
+      invalidateConsensusCache();
+      // Clear both local AND cloud copy so stale Supabase data doesn't override
+      const localKey = selectedLeagueId ? 'my_custom_rankings_' + format + '_' + selectedLeagueId : 'my_custom_rankings_' + format;
+      await AsyncStorage.removeItem(localKey);
+      await AsyncStorage.removeItem('my_custom_rankings_v7');
+      const live = await getConsensusRankings(true);
+      const seed = live.length > 0 ? live : [...SEED];
+      setMyRanks(seed);
+      await saveCustomRankings(seed, format, selectedLeagueId);
+    } catch (e) {
+      console.log('reset error:', e);
+      setMyRanks([...SEED]);
+      await saveCustomRankings([...SEED], format, selectedLeagueId);
+    }
+  };
 
   const rawData = mode === 'mine' ? myRanks : communityData;
-  const formatAdjusted = applyFormatAdjustments(rawData, format as ScoringFormat);
+  const formatAdjusted = mode === 'mine' ? rawData : applyFormatAdjustments(rawData, format as ScoringFormat);
   const filtered = formatAdjusted.filter(p =>
     (position === 'ALL' || p.position === position) &&
     (!search || p.name.toLowerCase().includes(search.toLowerCase()) || p.team.toLowerCase().includes(search.toLowerCase()))
@@ -400,7 +428,8 @@ export default function RankingsScreen() {
     const next = [...myRanks];
     const [moved] = next.splice(curIdx, 1);
     next.splice(newIdx, 0, moved);
-    saveMyRanks(next);
+    const renumbered = next.map((p, i) => ({ ...p, rank: i + 1 }));
+    saveMyRanks(renumbered);
     setMovePlayer(null);
   };
 

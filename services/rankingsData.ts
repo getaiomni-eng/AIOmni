@@ -778,9 +778,10 @@ export async function fetchWalterFootballNews(): Promise<{ title: string; link?:
 // ─── DEDUP: Remove drafted players from prospects ───────────
 
 export async function fetchDedupedProspects(year = 2026): Promise<CollegeProspect[]> {
-  let prospects = await fetchCFBDProspects(year);
-  // Fallback to seed if CFBD is down
-  if (prospects.length === 0) prospects = [...PROSPECT_SEED_2026];
+  // Use curated NFL draft prospect list (PROSPECT_SEED_2026).
+  // CFBD's /recruiting/players returns HIGH SCHOOL recruits committing to college —
+  // wrong pool for NFL dynasty rookie drafts. Swap in a real NFL prospects source later.
+  const prospects = [...PROSPECT_SEED_2026];
   const sleeperPlayers = await getSleeperPlayers();
 
   // Build a set of normalized NFL player names from Sleeper

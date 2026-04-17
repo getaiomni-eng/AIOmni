@@ -4,7 +4,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { dark, light } from "./tokens";
 
 type Mode = "auto" | "dark" | "light";
-type Theme = typeof dark;
+export type Theme = {
+  bg: string;
+  surface: string;
+  card: string;
+  text: string;
+  textSub: string;
+  textMuted: string;
+  border: string;
+  borderLight: string;
+  navBg: string;
+  inputBg: string;
+};
 
 const ThemeContext = createContext<{
   theme: Theme;

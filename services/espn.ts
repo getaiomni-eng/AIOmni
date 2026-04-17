@@ -133,3 +133,69 @@ export async function getESPNMatchups(leagueId: number, creds: any): Promise<any
 }
 export async function getESPNTransactions(leagueId: number, creds: any): Promise<any[]> { return []; }
 export async function getESPNAllRosters(leagueId: number, creds: any): Promise<any[]> { return []; }
+
+// ─── FREE AGENTS ────────────────────────────────────────────
+// Pulls unrostered players from an ESPN league using the kona_player_info view.
+// The x-fantasy-filter header narrows to FA/WA status with a position filter.
+
+export interface ESPNFreeAgent {
+  id: string;
+  name: string;
+  position: string;
+  team: string;
+  injuryStatus?: string | null;
+  percentOwned?: number;
+  percentStarted?: number;
+}
+
+const ESPN_PRO_TEAMS: Record<number, string> = {
+  1:'ATL',2:'BUF',3:'CHI',4:'CIN',5:'CLE',6:'DAL',7:'DEN',8:'DET',
+  9:'GB',10:'TEN',11:'IND',12:'KC',13:'LV',14:'LAR',15:'MIA',16:'MIN',
+  17:'NE',18:'NO',19:'NYG',20:'NYJ',21:'PHI',22:'ARI',23:'PIT',24:'LAC',
+  25:'SF',26:'SEA',27:'TB',28:'WSH',29:'CAR',30:'JAX',33:'BAL',34:'HOU',
+};
+
+export async function getESPNFreeAgents(
+  leagueId: number,
+  creds: ESPNCredentials,
+  limit: number = 150,
+  year: number = ESPN_SEASON
+): Promise<ESPNFreeAgent[]> {
+  const filter = {
+    players: {
+      filterStatus: { value: ['FREEAGENT', 'WAIVERS'] },
+      filterSlotIds: { value: [0, 2, 4, 6, 16, 17, 23] }, // QB/RB/WR/TE/DST/K/FLEX
+      limit,
+      sortPercOwned: { sortPriority: 1, sortAsc: false },
+    },
+  };
+
+  try {
+    const url = `${ESPN_BASE}/seasons/${year}/segments/0/leagues/${leagueId}?view=kona_player_info`;
+    const res = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `espn_s2=${creds.espnS2}; SWID=${creds.swid}`,
+        'x-fantasy-filter': JSON.stringify(filter),
+      },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const raw = data.players ?? [];
+    return raw.map((entry: any) => {
+      const p = entry.player ?? {};
+      return {
+        id: String(p.id ?? entry.id ?? ''),
+        name: p.fullName ?? 'Unknown',
+        position: ESPN_POSITIONS[p.defaultPositionId] ?? '?',
+        team: ESPN_PRO_TEAMS[p.proTeamId] ?? 'FA',
+        injuryStatus: p.injuryStatus && p.injuryStatus !== 'ACTIVE' ? p.injuryStatus : null,
+        percentOwned: p.ownership?.percentOwned ?? 0,
+        percentStarted: p.ownership?.percentStarted ?? 0,
+      };
+    });
+  } catch (e) {
+    console.log('getESPNFreeAgents error:', e);
+    return [];
+  }
+}
