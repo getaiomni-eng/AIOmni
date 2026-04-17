@@ -21,7 +21,7 @@ import { C, F, R, SP, SZ } from '../constants/tokens';
 import { getRemainingPrompts, getResetTime, incrementPrompt } from '../utils/promptCounter';
 import { getNFLSeason } from '../../services/season';
 
-const WEEKLY_LIMIT = 25;
+// Prompt limits are tier-aware — see getPromptDisplayInfo()
 const BORDER   = '#1a3542';
 const BEVEL_HI = '#12252e';
 
@@ -56,7 +56,7 @@ type LeagueContext = {
 };
 
 function getPaywallMessage(resetStr: string): string {
-  return `You've used all ${WEEKLY_LIMIT} weekly prompts. Resets ${resetStr}.\n\n__verdict__Upgrade to Pro for unlimited prompts → getaiomni.com`;
+  return `You've used all your prompts. Resets ${resetStr}.\n\n__verdict__Upgrade for more prompts → getaiomni.com`;
 }
 
 async function loadSleeperContext(): Promise<LeagueContext[]> {
@@ -209,7 +209,7 @@ export default function CoachScreen() {
   const [allLeagues,     setAllLeagues]     = useState<LeagueContext[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<LeagueContext | null>(null);
   const [pickerVisible,  setPickerVisible]  = useState(false);
-  const [remaining,      setRemaining]      = useState(WEEKLY_LIMIT);
+  const [remaining,      setRemaining]      = useState(10);
   const [tier,           setTier]           = useState('free');
 
   const systemPromptRef = useRef<string>(BASE_SYSTEM);
@@ -352,7 +352,7 @@ export default function CoachScreen() {
             <View style={styles.rightHdr}>
               <View style={[styles.promptCounter, { borderColor: promptColor + '55', backgroundColor: promptColor + '12' }]}>
                 <Text style={[styles.promptCountNum, { color: promptColor }]}>{remaining > 900 ? '∞' : remaining}</Text>
-                <Text style={[styles.promptCountLbl, { color: promptColor }]}>{remaining > 900 ? '' : '/' + WEEKLY_LIMIT}</Text>
+                <Text style={[styles.promptCountLbl, { color: promptColor }]}>{remaining > 900 ? '' : '/40'}</Text>
               </View>
               <View style={styles.liveDot}>
                 <View style={[styles.livePulse, !contextReady && { backgroundColor: C.gold }]} />

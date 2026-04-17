@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator, Image, Modal, ScrollView, StyleSheet,
     Text, TextInput, TouchableOpacity, View,
+  FlatList,
 } from 'react-native';
-import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
+
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -113,15 +114,15 @@ function PlayerPhoto({ playerId, size = 48 }: { playerId: string; size?: number 
   );
 }
 
-function PlayerCard({ player, index, drag, isActive, isDrag }: {
-  player: RankedPlayer; index: number; drag?: () => void; isActive?: boolean; isDrag: boolean;
+function PlayerCard({ player, index, onChangeRank }: {
+  player: RankedPlayer; index: number; onChangeRank?: (p: RankedPlayer) => void;
 }) {
   const posStyle = POS_COLORS[player.position] || POS_COLORS.K;
   const consensus = Math.max(50, 100 - index * 2.5);
   const isTop3 = index < 3;
 
   return (
-    <View style={[s.card, isActive && s.cardActive]}>
+    <View style={s.card}>
       <Text style={[s.rank, isTop3 && { color: palette.amber }]}>{index + 1}</Text>
       <PlayerPhoto playerId={player.id} size={48} />
       <View style={s.info}>
@@ -137,9 +138,9 @@ function PlayerCard({ player, index, drag, isActive, isDrag }: {
         </View>
       </View>
       <View style={s.rightCol}>
-        {isDrag ? (
-          <TouchableOpacity onLongPress={drag} delayLongPress={100} style={s.dragHandle}>
-            <Text style={s.dragIcon}>≡</Text>
+        {onChangeRank ? (
+          <TouchableOpacity onPress={() => onChangeRank(player)} style={s.rankChangeBtn}>
+            <Text style={s.rankChangeTxt}>CHANGE</Text>
           </TouchableOpacity>
         ) : (
           <>
@@ -380,13 +381,32 @@ export default function RankingsScreen() {
     grouped[grouped.length - 1].players.push({ ...p, rank: i + 1 });
   });
 
-  const renderDragItem = useCallback(({ item, drag, isActive, getIndex }: RenderItemParams<RankedPlayer>) => (
-    <ScaleDecorator>
-      <TouchableOpacity onLongPress={drag} disabled={isActive} delayLongPress={150}>
-        <PlayerCard player={item} index={getIndex?.() ?? 0} drag={drag} isActive={isActive} isDrag={true} />
-      </TouchableOpacity>
-    </ScaleDecorator>
-  ), []);
+  const [movePlayer, setMovePlayer] = useState<RankedPlayer | null>(null);
+  const [moveRank, setMoveRank] = useState('');
+
+  const openMoveModal = (player: RankedPlayer) => {
+    setMovePlayer(player);
+    const idx = myRanks.findIndex(p => p.id === player.id);
+    setMoveRank(String(idx + 1));
+  };
+
+  const confirmMove = () => {
+    if (!movePlayer) return;
+    const target = parseInt(moveRank, 10);
+    if (isNaN(target) || target < 1) { setMovePlayer(null); return; }
+    const curIdx = myRanks.findIndex(p => p.id === movePlayer.id);
+    if (curIdx === -1) { setMovePlayer(null); return; }
+    const newIdx = Math.min(Math.max(target - 1, 0), myRanks.length - 1);
+    const next = [...myRanks];
+    const [moved] = next.splice(curIdx, 1);
+    next.splice(newIdx, 0, moved);
+    saveMyRanks(next);
+    setMovePlayer(null);
+  };
+
+  const renderRow = useCallback(({ item, index }: { item: RankedPlayer; index: number }) => (
+    <PlayerCard player={item} index={index} onChangeRank={openMoveModal} />
+  ), [myRanks]);
 
   const baseLabel = selectedBase
     ? BASE_SOURCES.find(s => s.key === selectedBase)?.label ?? selectedBase
@@ -432,7 +452,7 @@ export default function RankingsScreen() {
 
       <View style={s.hintRow}>
         <Text style={s.hint}>CONSENSUS · SLEEPER + ESPN + YAHOO</Text>
-        <Text style={s.hint}>{mode === 'mine' ? 'LONG PRESS TO DRAG' : 'ADP'}</Text>
+        <Text style={s.hint}>{mode === 'mine' ? 'TAP CHANGE TO REORDER' : 'ADP'}</Text>
       </View>
 
       {mode === 'mine' && (
@@ -466,16 +486,43 @@ export default function RankingsScreen() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ flex: 1, backgroundColor: dark.bg }}>
         {mode === 'mine' && myRanks.length > 0 ? (
-          <DraggableFlatList
+          <>
+          <FlatList
             data={filtered}
-            onDragEnd={({ data }) => saveMyRanks(data)}
             keyExtractor={item => item.id}
-            renderItem={renderDragItem}
+            renderItem={renderRow}
             ListHeaderComponent={Header}
             contentContainerStyle={{ paddingHorizontal: SP[3], paddingBottom: 100 }}
             showsVerticalScrollIndicator={false}
-            getItemLayout={(_, index) => ({ length: 82, offset: 82 * index, index })}
           />
+
+          <Modal visible={!!movePlayer} transparent animationType="fade" onRequestClose={() => setMovePlayer(null)}>
+            <TouchableOpacity style={s.moveBg} activeOpacity={1} onPress={() => setMovePlayer(null)}>
+              <View style={s.moveCard}>
+                <Text style={s.moveTitle}>MOVE PLAYER</Text>
+                <Text style={s.moveName}>{movePlayer?.name}</Text>
+                <Text style={s.moveLabel}>New rank</Text>
+                <TextInput
+                  style={s.moveInput}
+                  value={moveRank}
+                  onChangeText={setMoveRank}
+                  keyboardType="number-pad"
+                  autoFocus
+                  selectTextOnFocus
+                  maxLength={4}
+                />
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity style={s.moveBtnCancel} onPress={() => setMovePlayer(null)}>
+                    <Text style={s.moveBtnCancelTxt}>CANCEL</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.moveBtnConfirm} onPress={confirmMove}>
+                    <Text style={s.moveBtnConfirmTxt}>MOVE</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+          </>
         ) : (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: SP[3], paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
             <Header />
@@ -488,7 +535,7 @@ export default function RankingsScreen() {
                 </View>
                 {group.players.map((p) => (
                   <View key={p.id}>
-                    <PlayerCard player={p} index={filtered.findIndex(fp => fp.id === p.id)} isDrag={false} />
+                    <PlayerCard player={p} index={filtered.findIndex(fp => fp.id === p.id)} />
                   </View>
                 ))}
               </React.Fragment>
@@ -619,8 +666,18 @@ const s = StyleSheet.create({
   rightCol:   { alignItems: 'flex-end', gap: 3, flexShrink: 0 },
   adp:        { fontFamily: F.body, fontSize: 9, color: dark.textMuted, letterSpacing: 0.5 },
   trend:      { fontFamily: F.body, fontSize: 10, fontWeight: '700' },
-  dragHandle: { width: 36, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: dark.surface, borderRadius: 8 },
-  dragIcon:   { fontSize: 22, color: palette.green, fontWeight: '700' },
+  rankChangeBtn: { paddingHorizontal: 10, paddingVertical: 7, backgroundColor: palette.green + '18', borderRadius: 8, borderWidth: 1, borderColor: palette.green + '44' },
+  rankChangeTxt: { fontFamily: F.bold, fontSize: 9, color: palette.green, letterSpacing: 1.2 },
+  moveBg:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  moveCard:  { backgroundColor: dark.card, borderRadius: 18, padding: 24, width: '100%', maxWidth: 340, borderWidth: 1, borderColor: dark.border },
+  moveTitle: { fontFamily: F.bold, fontSize: 10, color: palette.green, letterSpacing: 2, marginBottom: 8 },
+  moveName:  { fontFamily: F.bold, fontSize: 20, color: dark.text, marginBottom: 18 },
+  moveLabel: { fontFamily: F.body, fontSize: 10, color: dark.textMuted, letterSpacing: 1.5, marginBottom: 6 },
+  moveInput: { backgroundColor: dark.surface, borderRadius: 10, borderWidth: 1, borderColor: dark.border, fontFamily: F.bold, fontSize: 24, color: dark.text, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 18, textAlign: 'center' },
+  moveBtnCancel: { flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: 'center', backgroundColor: dark.surface, borderWidth: 1, borderColor: dark.border },
+  moveBtnConfirm:{ flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: 'center', backgroundColor: palette.green },
+  moveBtnCancelTxt: { fontFamily: F.bold, fontSize: 11, color: dark.textMuted, letterSpacing: 1.5 },
+  moveBtnConfirmTxt:{ fontFamily: F.bold, fontSize: 11, color: '#0a1214', letterSpacing: 1.5 },
 
   // Modals
   modalOverlay:  { flex: 1, backgroundColor: 'rgba(10,18,20,0.7)', justifyContent: 'flex-end' },

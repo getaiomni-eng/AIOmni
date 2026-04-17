@@ -240,13 +240,15 @@ export default function DraftCopilotScreen() {
       scoringSettings: setupData.scoringSettings,
     };
     // Load live ADP data (falls back to static DB if offline)
-            // Auto-detect draft mode from settings
+            // Auto-detect draft mode: only rookie if explicitly linear + 5 or fewer rounds + no starters
+      // Only startup if 28+ roster slots (true dynasty startup, not just deep benches)
+      const totalSlots = settings.rosterSlots?.length ?? 0;
       const draftMode: 'startup' | 'rookie' | 'redraft' =
-        settings.draftType === 'linear' && settings.rounds <= 6
-          ? 'rookie'                                          // short linear = rookie draft
-          : (settings.rosterSlots?.length ?? 0) > 20
-            ? 'startup'                                       // huge roster = dynasty startup
-            : 'redraft';                                      // default
+        settings.draftType === 'linear' && settings.rounds <= 5 && totalSlots <= 6
+          ? 'rookie'
+          : totalSlots >= 28
+            ? 'startup'
+            : 'redraft';
       let liveDB = await loadLivePlayerDB(draftMode);
       // Exclude players already on user's roster in this league
       if (settings.platform === 'sleeper' && settings.leagueId && settings.leagueId !== 'offline') {
