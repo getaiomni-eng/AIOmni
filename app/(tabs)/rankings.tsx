@@ -404,9 +404,9 @@ export default function RankingsScreen() {
     setMovePlayer(null);
   };
 
-  const renderRow = useCallback(({ item, index }: { item: RankedPlayer; index: number }) => (
+  const renderRow = ({ item, index }: { item: RankedPlayer; index: number }) => (
     <PlayerCard player={item} index={index} onChangeRank={openMoveModal} />
-  ), [myRanks]);
+  );
 
   const baseLabel = selectedBase
     ? BASE_SOURCES.find(s => s.key === selectedBase)?.label ?? selectedBase
