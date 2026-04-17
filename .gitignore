@@ -56,3 +56,4 @@ app-example
 serviceAccountKey.json
 google-services.json
 GoogleService-Info.plist
+scripts/patches/
