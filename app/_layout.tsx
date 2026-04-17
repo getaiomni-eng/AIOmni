@@ -80,7 +80,7 @@ export default Sentry.wrap(function RootLayout() {
         }
         Sentry.setUser({ id: user.id, email: user.email });
         await initPurchases(user.id);
-        await pullCloudDataOnLogin();
+        try { await pullCloudDataOnLogin(); } catch (e) { console.log('Cloud sync skipped:', e); }
 
         const row = await getUserRow();
         const hasSleeper = Boolean(row?.sleeper_username);

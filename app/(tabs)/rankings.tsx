@@ -547,7 +547,7 @@ export default function RankingsScreen() {
         {mode === 'prospects' && (
           prospectsGated ? (
             <View style={{ alignItems: 'center', paddingTop: 60, paddingHorizontal: 20 }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 22, color: dark.text, textAlign: 'center', letterSpacing: 1, marginBottom: 12 }}>DYNASTY ELITE</Text>
+              <Text style={{ fontFamily: F.bold, fontSize: 22, color: dark.text, textAlign: 'center', letterSpacing: 1, marginBottom: 12 }}>PROSPECT RANKINGS</Text>
               <Text style={{ fontFamily: F.body, fontSize: 14, color: dark.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
                 College prospect rankings filtered through your dynasty scoring format. Requires Rankings subscription ($2.99/mo).
               </Text>
@@ -555,7 +555,7 @@ export default function RankingsScreen() {
                 style={{ backgroundColor: palette.flame, borderRadius: 14, paddingHorizontal: 32, paddingVertical: 16 }}
                 onPress={() => router.push('/paywall' as any)}
               >
-                <Text style={{ fontFamily: F.bold, fontSize: 14, color: dark.bg, letterSpacing: 2 }}>UPGRADE TO DYNASTY ELITE</Text>
+                <Text style={{ fontFamily: F.bold, fontSize: 14, color: dark.bg, letterSpacing: 2 }}>UPGRADE TO RANKINGS</Text>
               </TouchableOpacity>
             </View>
           ) : prospectsLoading ? (
