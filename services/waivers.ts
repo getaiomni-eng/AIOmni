@@ -94,27 +94,39 @@ async function fetchSleeperFreeAgents(leagueId: string): Promise<AvailablePlayer
     const results: AvailablePlayer[] = [];
     const added = new Set<string>();
 
-    // Pass 1: trending, unrostered, active skill positions
+    // Helper: is this player currently on an NFL roster and not retired/injured-long-term?
+    const isLive = (p: any): boolean => {
+      if (!p) return false;
+      if (p.active === false) return false;
+      if (p.status === 'Retired' || p.status === 'Inactive' || p.status === 'NFL') {
+        // Sleeper sometimes marks retirees with status='Inactive'
+        return false;
+      }
+      // Must be on an NFL team (DEF is always fine)
+      if (p.position !== 'DEF' && !p.team) return false;
+      return true;
+    };
+
+    // Pass 1: trending, unrostered, live, skill positions
     for (const t of trendingRes || []) {
       const p = allPlayers[t.player_id];
       if (!p || rostered.has(t.player_id) || added.has(t.player_id)) continue;
       if (!['QB','RB','WR','TE','K','DEF'].includes(p.position)) continue;
-      if (!p.team && p.position !== 'DEF') continue;
+      if (!isLive(p)) continue;
       results.push(normalizeSleeperPlayer(t.player_id, p, t.count));
       added.add(t.player_id);
       if (results.length >= 150) break;
     }
 
-    // Pass 2: fill from search_rank sorted pool
+    // Pass 2: fill from search_rank sorted pool — LIVE players only
     if (results.length < 150) {
       const ranked = Object.entries(allPlayers)
         .filter(([pid, p]: any) =>
           !rostered.has(pid) &&
           !added.has(pid) &&
           ['QB','RB','WR','TE','K','DEF'].includes(p.position) &&
-          (p.team || p.position === 'DEF') &&
-          p.search_rank && p.search_rank < 500 &&
-          p.active !== false
+          isLive(p) &&
+          p.search_rank && p.search_rank < 500
         )
         .sort(([, a]: any, [, b]: any) => (a.search_rank ?? 9999) - (b.search_rank ?? 9999))
         .slice(0, 150 - results.length);

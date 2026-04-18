@@ -53,10 +53,29 @@ export default function TradesScreen() {
 
   const analyzeTrade = async () => {
     try {
-      const prompt = `Respond ONLY with a JSON object, no markdown. Format: { youReceiveGrade: 'A', youGiveGrade: 'B+', verdict: '...', analysis: '...' }`;
+      const prompt = `You are AIOmni, expert fantasy football trade analyst.
+Format: ${format.toUpperCase()}
+
+YOU ARE GIVING UP:
+${giving}
+
+YOU ARE RECEIVING:
+${getting}
+
+Grade EACH side of the trade on an A+ to F scale based on ${format === 'dynasty' ? 'dynasty value (age, contract, future production)' : 'rest-of-season value for redraft'}.
+Consider: positional value, injury status, depth chart, schedule, ${format === 'dynasty' ? 'age curves and rookie contracts' : 'weekly upside and floor'}.
+
+Respond with ONLY a valid JSON object, no markdown, no code fences. Use this exact shape:
+{"youReceiveGrade": "<letter grade>", "youGiveGrade": "<letter grade>", "verdict": "<accept/decline/consider in one short sentence>", "analysis": "<2-3 sentences explaining the grades, who wins, and why>"}`;
       const response = await askAI(prompt, 550);
       console.log('Raw AI response:', response);
-      const clean = response.replace(/```json|```/g, '').trim();
+      // Strip code fences and any pre/post text before the JSON
+      let clean = response.replace(/```json|```/g, '').trim();
+      const jsonStart = clean.indexOf('{');
+      const jsonEnd = clean.lastIndexOf('}');
+      if (jsonStart >= 0 && jsonEnd > jsonStart) {
+        clean = clean.slice(jsonStart, jsonEnd + 1);
+      }
       try {
         const parsed = JSON.parse(clean);
         setYouReceiveGrade(parsed.youReceiveGrade);
@@ -65,7 +84,8 @@ export default function TradesScreen() {
         setAnalysis(parsed.analysis);
       } catch(e) {
         console.log('Parse error:', e);
-        setVerdict(clean.slice(0, 200));
+        setVerdict('Could not parse response. Try again.');
+        setAnalysis(response.slice(0, 300));
       }
     } catch (error) {
       setVerdict('Analysis timed out. Try again.');

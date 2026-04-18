@@ -605,27 +605,28 @@ export async function fetchBlendedConsensus(): Promise<RankedPlayer[]> {
     const mid = Math.floor(sorted.length / 2);
     const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 
-    // Base score: lower median = better (invert for sorting)
-    let score = 600 - Math.min(median, 500);
+    // Base score: ADP dominates. Lower ADP = much higher score.
+    // Using log-scaled inversion so #1 vs #10 gap is much larger than #100 vs #110.
+    let score = 1000 - (Math.log(Math.max(median, 1)) * 80);
 
-    // Confidence bonus: more sources = more reliable
-    score += (p.sourceCount - 1) * 3;
+    // Confidence bonus: more sources = slight edge (tiebreaker only)
+    score += (p.sourceCount - 1) * 2;
 
-    // Trending momentum
+    // Trending momentum: subtle tiebreaker, capped so it can't override ADP
     const adds  = trendAddMap.get(p.id) ?? 0;
     const drops = trendDropMap.get(p.id) ?? 0;
-    if (adds > 0)  score += Math.log10(adds + 1) * 15;
-    if (drops > 0) score -= Math.log10(drops + 1) * 10;
+    if (adds > 0)  score += Math.min(Math.log10(adds + 1) * 4, 15);
+    if (drops > 0) score -= Math.min(Math.log10(drops + 1) * 3, 12);
 
-    // ESPN leader bonus
+    // ESPN leader bonus: tiny boost, can't override ADP order
     const leaderData = leaderMap.get(p.name.toLowerCase());
     if (leaderData && leaderData.value > 0) {
-      score += Math.min(leaderData.value * 0.1, 50);
+      score += Math.min(leaderData.value * 0.02, 8);
     }
 
-    // Snap share bonus
+    // Snap share bonus: capped
     const snap = snapMap.get(p.name.toLowerCase());
-    if (snap && snap > 50) score += (snap - 50) * 0.3;
+    if (snap && snap > 50) score += Math.min((snap - 50) * 0.1, 8);
 
     // Injury penalty
     const inj = injuryMap.get(p.name.toLowerCase());

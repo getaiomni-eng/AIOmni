@@ -413,8 +413,35 @@ export type DraftMode = 'startup' | 'rookie' | 'redraft';
 export async function loadLivePlayerDB(mode: DraftMode = 'redraft'): Promise<PlayerInfo[]> {
   try {
     if (mode === 'rookie') {
-      const prospects = await fetchProspectDB();
-      return prospects.length > 0 ? prospects : [...DEFAULT_PLAYER_DB];
+      // Rookie/short-round dynasty drafts: merge prospects with NFL free agents,
+      // since these drafts may include incoming rookies AND cut veterans the league
+      // chooses to draft from. Prospects first (usually top picks), then NFL pool.
+      const [prospects, ranked] = await Promise.all([
+        fetchProspectDB(),
+        fetchBlendedConsensus(),
+      ]);
+
+      const nflAsPlayerInfo: PlayerInfo[] = ranked.map((p, i) => ({
+        id: p.id,
+        name: p.name,
+        position: p.position,
+        team: p.team,
+        adp: parseFloat(p.adp) || (i + 1),
+        byeWeek: BYE_WEEKS_2026[p.team] ?? 0,
+        tier: p.tier,
+        rank: p.rank,
+        isDrafted: false,
+      }));
+
+      if (prospects.length === 0 && nflAsPlayerInfo.length === 0) return [...DEFAULT_PLAYER_DB];
+      if (prospects.length === 0) return nflAsPlayerInfo;
+
+      // Merge: prospects 1-N, then NFL starting at N+1
+      const pLen = prospects.length;
+      return [
+        ...prospects,
+        ...nflAsPlayerInfo.map((p, i) => ({ ...p, adp: pLen + i + 1, rank: pLen + i + 1 })),
+      ];
     }
 
     const ranked = await fetchBlendedConsensus();
