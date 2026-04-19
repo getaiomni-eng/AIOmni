@@ -242,10 +242,12 @@ export default function DraftCopilotScreen() {
     // Load live ADP data (falls back to static DB if offline)
       const isDynasty = (setupData as any).isDynasty === true;
       const totalSlots = settings.rosterSlots?.length ?? 0;
+      // Conservative detection: rookie mode ONLY if league is known dynasty.
+      // Non-dynasty leagues default to redraft regardless of draft format —
+      // a short linear draft in a redraft league just means mock/snake drafts.
       const draftMode: 'startup' | 'rookie' | 'redraft' =
         isDynasty && settings.rounds <= 6 ? 'rookie'
         : isDynasty && settings.rounds >= 15 ? 'startup'
-        : settings.draftType === 'linear' && settings.rounds <= 5 && totalSlots <= 8 ? 'rookie'
         : 'redraft';
       let liveDB = await loadLivePlayerDB(draftMode);
       if (settings.platform === 'sleeper' && settings.leagueId && settings.leagueId !== 'offline') {

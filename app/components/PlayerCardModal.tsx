@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { fetchRotoWireNFL, findNewsForPlayer, RotoWireItem } from '../../services/rotowire';
+import { findNewsForPlayer, NewsItem as FeedNewsItem } from '../../services/newsFeed';
 import { getPlayerByPlatformId, NFLPlayer, getPlayerSeasonStats, getLastNGames, getCurrentStatsSeason, PlayerSeason, WeeklyStat } from '../../services/nflPlayers';
 import TabIcon from './TabIcon';
 
@@ -86,7 +86,7 @@ export default function PlayerCardModal({ visible, player, platform, onClose, on
   const [seasonStats, setSeasonStats] = useState<PlayerSeason | null>(null);
   const [recentGames, setRecentGames] = useState<WeeklyStat[]>([]);
   const [statsLoading, setStatsLoading] = useState(false);
-  const [news, setNews] = useState<RotoWireItem[]>([]);
+  const [news, setNews] = useState<FeedNewsItem[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
 
   // Load bio + news when modal opens
@@ -102,28 +102,10 @@ export default function PlayerCardModal({ visible, player, platform, onClose, on
       .catch(() => { if (!cancelled) setBio(null); })
       .finally(() => { if (!cancelled) setBioLoading(false); });
 
-    // News — Rotowire RSS, filtered to this player
+    // News — pulls from all 6 RSS sources via consolidated news feed
     setNewsLoading(true);
-    fetchRotoWireNFL()
-      .then(items => {
-        if (cancelled) return;
-        // Find up to 3 items mentioning this player
-        const matches: RotoWireItem[] = [];
-        const lowerName = player.name.toLowerCase();
-        const lastName = player.name.split(' ').pop()?.toLowerCase() ?? '';
-        for (const item of items) {
-          const itemPlayer = item.player.toLowerCase();
-          if (
-            itemPlayer === lowerName ||
-            (lastName && itemPlayer.endsWith(lastName)) ||
-            (item.headline.toLowerCase().includes(lowerName))
-          ) {
-            matches.push(item);
-            if (matches.length >= 3) break;
-          }
-        }
-        setNews(matches);
-      })
+    findNewsForPlayer(player.name, 3)
+      .then(items => { if (!cancelled) setNews(items); })
       .catch(() => { if (!cancelled) setNews([]); })
       .finally(() => { if (!cancelled) setNewsLoading(false); });
 
@@ -266,7 +248,7 @@ export default function PlayerCardModal({ visible, player, platform, onClose, on
                 <View key={idx} style={s.newsCard}>
                   <View style={s.newsHeader}>
                     <View style={s.newsSourceDot} />
-                    <Text style={s.newsSource}>ROTOWIRE</Text>
+                    <Text style={s.newsSource}>{item.sourceTag}</Text>
                     <Text style={s.newsAge}>{item.age}</Text>
                   </View>
                   <Text style={s.newsHeadline}>{item.headline}</Text>

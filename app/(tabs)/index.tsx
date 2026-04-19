@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchNewsFeed, FeedByTab, NewsTab, NewsItem as FeedNewsItem } from '../../services/newsFeed';
 import { getNFLSeason, getAvailableSeasons } from '../../services/season';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -64,7 +65,8 @@ export default function HomeScreen() {
   const [aiInsights,     setAiInsights]     = useState<{title:string;body:string;tag:string;color:string;icon:string}[]>([]);
   const [insightLoading, setInsightLoading] = useState(false);
   const [scoreIdx,       setScoreIdx]       = useState(0);
-  const [news,           setNews]           = useState<NewsItem[]>(FALLBACK_NEWS);
+  const [feed, setFeed] = useState<FeedByTab>({ SLEEPER: [], NEWS: [], INJURIES: [], TRADES: [], all: [] });
+  const [newsTab, setNewsTab] = useState<NewsTab>('NEWS');
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['sleeper', 'espn', 'yahoo']);
   const [selectedSeason,    setSelectedSeason]    = useState(String(new Date().getFullYear()));
   const [aiCoachActive,     setAiCoachActive]     = useState(false);
@@ -74,7 +76,7 @@ export default function HomeScreen() {
 
   const scoreAnims = useRef(Array.from({ length: 12 }, () => new Animated.Value(0))).current;
 
-  useEffect(() => { loadLeagues(); fetchNews(); }, [selectedSeason]);
+  useEffect(() => { loadLeagues(); loadNewsFeed(); }, [selectedSeason]);
 
   // ── All data loading functions identical to v6 ──
   const loadSleeperLeagues = async (year: string = String(new Date().getFullYear())): Promise<League[]> => {
@@ -274,42 +276,13 @@ export default function HomeScreen() {
     setInsightLoading(false);
   };
 
-  const fetchNews = async () => {
+  const loadNewsFeed = async (forceRefresh = false) => {
     try {
-      const parseRSS = (xml: string, source: string, color: string): NewsItem[] => {
-        const items: NewsItem[] = [];
-        const itemRegex = /<item>(.*?)<\/item>/gs;
-        let match;
-        while ((match = itemRegex.exec(xml)) !== null) {
-          const itemXml = match[1];
-          const titleMatch = itemXml.match(/<title>(.*?)<\/title>/);
-          const linkMatch = itemXml.match(/<link>(.*?)<\/link>/) || itemXml.match(/<guid[^>]*>(http[^<]*)<\/guid>/);
-          if (titleMatch && items.length < 3) {
-            items.push({ source, headline: titleMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim(), color, url: linkMatch?.[1]?.replace(/<!\[CDATA\[|\]\]>/g, '').trim() });
-          }
-        }
-        return items;
-      };
-      const [rotoRes, pfrRes, cbsRes] = await Promise.allSettled([
-        fetch('https://www.rotowire.com/rss/current.xml').then(r => r.text()),
-        fetch('https://www.pro-football-reference.com/rss.xml').then(r => r.text()),
-        fetch('https://www.cbssports.com/rss/headlines/nfl/').then(r => r.text()),
-      ]);
-      const results: NewsItem[] = [];
-      if (rotoRes.status === 'fulfilled') results.push(...parseRSS(rotoRes.value, 'ROTOWIRE', palette.green));
-      if (pfrRes.status  === 'fulfilled') results.push(...parseRSS(pfrRes.value, 'PFR', palette.amber));
-      if (cbsRes.status  === 'fulfilled') results.push(...parseRSS(cbsRes.value, 'CBS SPORTS', palette.aqua));
-      const roto = results.filter(n => n.source === 'ROTOWIRE');
-      const pfr  = results.filter(n => n.source === 'PFR');
-      const cbs  = results.filter(n => n.source === 'CBS SPORTS');
-      const interleaved: NewsItem[] = [];
-      for (let i = 0; i < Math.max(roto.length, pfr.length, cbs.length); i++) {
-        if (roto[i]) interleaved.push(roto[i]);
-        if (pfr[i])  interleaved.push(pfr[i]);
-        if (cbs[i])  interleaved.push(cbs[i]);
-      }
-      if (interleaved.length > 0) setNews(interleaved);
-    } catch {}
+      const feed = await fetchNewsFeed(forceRefresh);
+      setFeed(feed);
+    } catch (e) {
+      console.log('feed load error', e);
+    }
   };
 
   const ordinal = (n: number) => { const s = ['th','st','nd','rd']; return s[(n % 100 > 3 && n % 100 < 21) ? 0 : Math.min(n % 10, 4)] || 'th'; };
@@ -393,16 +366,41 @@ export default function HomeScreen() {
         {/* ── Live Feed ── */}
         <View style={styles.sectionRow}>
           <Text style={styles.sectionLabel}>LIVE FEED</Text>
-          <Text style={styles.sectionHint}>← swipe →</Text>
+          <TouchableOpacity onPress={() => loadNewsFeed(true)}>
+            <Text style={styles.sectionHint}>↻ refresh</Text>
+          </TouchableOpacity>
         </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }} contentContainerStyle={{ gap: 6, paddingHorizontal: 2 }}>
+          {(['SLEEPER','NEWS','INJURIES','TRADES'] as NewsTab[]).map(t => {
+            const count = feed[t].length;
+            const isActive = newsTab === t;
+            const tabColor = t === 'SLEEPER' ? '#52c0e0' : t === 'INJURIES' ? '#ff4d6a' : t === 'TRADES' ? '#ffb800' : '#6eeb83';
+            return (
+              <TouchableOpacity key={t} onPress={() => setNewsTab(t)}
+                style={[styles.feedTab, isActive && { backgroundColor: tabColor + '22', borderColor: tabColor }]}>
+                <Text style={[styles.feedTabText, isActive && { color: tabColor }]}>{t}</Text>
+                {count > 0 && <Text style={[styles.feedTabCount, isActive && { color: tabColor }]}>{count}</Text>}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
-          {news.map((n, i) => (
-            <TouchableOpacity key={i} activeOpacity={0.7} onPress={() => n.url ? Linking.openURL(n.url) : undefined}
-              style={[styles.newsChip, { borderColor: n.color + '25' }]}>
+          {feed[newsTab].length === 0 ? (
+            <View style={styles.feedEmpty}>
+              <Text style={styles.feedEmptyText}>No {newsTab.toLowerCase()} to show.</Text>
+            </View>
+          ) : feed[newsTab].map((n: FeedNewsItem) => (
+            <TouchableOpacity key={n.id} activeOpacity={0.7} onPress={() => n.url ? Linking.openURL(n.url) : undefined}
+              style={[styles.newsChip, { borderColor: n.color + '35' }]}>
               <View style={[styles.newsDot, { backgroundColor: n.color }]} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.newsSource, { color: n.color }]}>{n.source}</Text>
-                <Text style={styles.newsText} numberOfLines={2}>{n.headline}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                  <Text style={[styles.newsSource, { color: n.color }]}>{n.sourceTag}</Text>
+                  <Text style={styles.newsAge}>{n.age}</Text>
+                </View>
+                <Text style={styles.newsText} numberOfLines={3}>{n.headline}</Text>
               </View>
             </TouchableOpacity>
           ))}
@@ -639,4 +637,26 @@ const styles = StyleSheet.create({
   modalInsight: { fontSize: SZ.sm, fontFamily: F.body, color: dark.textSub, lineHeight: 20, marginBottom: 20 },
   modalBtn: { backgroundColor: palette.aqua, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   modalBtnTxt: { fontFamily: F.bold, color: dark.bg, fontSize: SZ.base, letterSpacing: 1 },
+
+  feedTab: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 11, paddingVertical: 6, borderRadius: 10,
+    borderWidth: 1, borderColor: '#1a3542', backgroundColor: '#0f1c22',
+  },
+  feedTabText: {
+    fontFamily: F.mono, fontSize: 9, letterSpacing: 1.2, color: '#7a9eaa', fontWeight: '700',
+  },
+  feedTabCount: {
+    fontFamily: F.mono, fontSize: 9, color: '#7a9eaa', opacity: 0.7,
+  },
+  feedEmpty: {
+    width: 220, padding: 16, backgroundColor: '#0f1c22', borderRadius: 10,
+    borderWidth: 1, borderColor: '#1a3542', alignItems: 'center',
+  },
+  feedEmptyText: {
+    fontFamily: F.body, fontSize: 12, color: '#7a9eaa',
+  },
+  newsAge: {
+    fontFamily: F.mono, fontSize: 9, color: '#7a9eaa',
+  },
 });

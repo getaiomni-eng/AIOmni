@@ -397,7 +397,7 @@ export default function RankingsScreen() {
   };
 
   const rawData = mode === 'mine' ? myRanks : communityData;
-  const formatAdjusted = applyFormatAdjustments(rawData, format as ScoringFormat);
+  const formatAdjusted = mode === 'mine' ? rawData : applyFormatAdjustments(rawData, format as ScoringFormat);
   const filtered = formatAdjusted.filter(p =>
     (position === 'ALL' || p.position === position) &&
     (!search || p.name.toLowerCase().includes(search.toLowerCase()) || p.team.toLowerCase().includes(search.toLowerCase()))
