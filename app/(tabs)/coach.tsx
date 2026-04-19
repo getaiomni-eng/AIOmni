@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, KeyboardAvoidingView, Modal, Platform,
@@ -201,6 +201,7 @@ const renderAIText = (text: string) =>
 export default function CoachScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ q?: string }>();
 
   const [messages,       setMessages]       = useState<Message[]>([]);
   const [input,          setInput]          = useState('');
@@ -255,6 +256,16 @@ export default function CoachScreen() {
       systemPromptRef.current = buildSystemPrompt(allLeagues, selectedLeague, memoriesRef.current) + liveDataRef.current;
     }
   }, [selectedLeague, allLeagues]);
+
+  // Auto-send from URL param (when rankings/other screens route here with a question)
+  useEffect(() => {
+    if (!contextReady) return;
+    if (!params.q) return;
+    const q = String(params.q);
+    // Clear the param so it doesn't re-fire on re-render
+    router.setParams({ q: undefined });
+    setTimeout(() => { send(q); }, 400);
+  }, [contextReady, params.q]);
 
   const selectLeague = (league: LeagueContext | null) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

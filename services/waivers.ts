@@ -7,6 +7,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ESPNFreeAgent, getESPNFreeAgents, loadESPNCredentials } from './espn';
 import { getValidYahooToken, getYahooFreeAgents, YahooPlayer } from './yahoo';
+import { getActiveSleeperIds, getActiveESPNIds } from './nflPlayers';
 
 // ─── TYPES ──────────────────────────────────────────────────
 
@@ -95,14 +96,17 @@ async function fetchSleeperFreeAgents(leagueId: string): Promise<AvailablePlayer
     const added = new Set<string>();
 
     // Helper: is this player currently on an NFL roster and not retired/injured-long-term?
-    const isLive = (p: any): boolean => {
+    // Canonical active list from Supabase nfl_players — source of truth
+    const activeIds = await getActiveSleeperIds().catch(() => new Set<string>());
+    const isLive = (pid: string, p: any): boolean => {
       if (!p) return false;
-      if (p.active === false) return false;
-      if (p.status === 'Retired' || p.status === 'Inactive' || p.status === 'NFL') {
-        // Sleeper sometimes marks retirees with status='Inactive'
-        return false;
+      if (p.position === 'DEF') return true; // DEFs aren't in nflverse rosters
+      if (activeIds.size > 0) {
+        return activeIds.has(pid);
       }
-      // Must be on an NFL team (DEF is always fine)
+      // Fallback if canonical data hasn't loaded yet
+      if (p.active === false) return false;
+      if (p.search_rank && p.search_rank >= 9999999) return false;
       if (p.position !== 'DEF' && !p.team) return false;
       return true;
     };
@@ -112,7 +116,7 @@ async function fetchSleeperFreeAgents(leagueId: string): Promise<AvailablePlayer
       const p = allPlayers[t.player_id];
       if (!p || rostered.has(t.player_id) || added.has(t.player_id)) continue;
       if (!['QB','RB','WR','TE','K','DEF'].includes(p.position)) continue;
-      if (!isLive(p)) continue;
+      if (!isLive(t.player_id, p)) continue;
       results.push(normalizeSleeperPlayer(t.player_id, p, t.count));
       added.add(t.player_id);
       if (results.length >= 150) break;
@@ -125,7 +129,7 @@ async function fetchSleeperFreeAgents(leagueId: string): Promise<AvailablePlayer
           !rostered.has(pid) &&
           !added.has(pid) &&
           ['QB','RB','WR','TE','K','DEF'].includes(p.position) &&
-          isLive(p) &&
+          isLive(pid, p) &&
           p.search_rank && p.search_rank < 500
         )
         .sort(([, a]: any, [, b]: any) => (a.search_rank ?? 9999) - (b.search_rank ?? 9999))

@@ -8,6 +8,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { syncRankingsToCloud, loadRankingsFromCloud } from './userSync';
+import { getActiveSleeperIds } from './nflPlayers';
 
 // ─── TYPES ──────────────────────────────────────────────────
 
@@ -131,13 +132,21 @@ async function getSleeperPlayers(): Promise<Record<string, any>> {
 
 export async function fetchSleeperADP(): Promise<RankedPlayer[]> {
   try {
-    const players = await getSleeperPlayers();
+    const [players, activeIds] = await Promise.all([
+      getSleeperPlayers(),
+      getActiveSleeperIds().catch(() => new Set<string>()),
+    ]);
 
     const eligible = Object.entries(players)
-      .filter(([_, p]: any) =>
-        p.active && p.search_rank && p.search_rank < 500 &&
-        ['QB', 'RB', 'WR', 'TE', 'K'].includes(p.position) && p.team
-      )
+      .filter(([pid, p]: any) => {
+        if (!p.search_rank || p.search_rank >= 500) return false;
+        if (!['QB', 'RB', 'WR', 'TE', 'K'].includes(p.position)) return false;
+        if (!p.team) return false;
+        // If canonical list loaded, require player to be in it
+        if (activeIds.size > 0) return activeIds.has(pid);
+        // Fallback to Sleeper's own active flag
+        return p.active !== false;
+      })
       .map(([id, p]: any) => ({
         id, name: p.full_name || `${p.first_name} ${p.last_name}`,
         position: p.position, team: p.team, searchRank: p.search_rank,

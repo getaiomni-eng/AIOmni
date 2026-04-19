@@ -7,7 +7,9 @@ import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 're
 import { askAI } from "../../services/ai";
 import { findMyESPNTeam, formatESPNPosition, getESPNAllRosters, getESPNLeague, getESPNMatchups, getESPNStandings, getESPNTransactions, isESPNStarter, loadESPNCredentials } from '../../services/espn';
 import { Icon } from '../components/AIOmniIcons';
+import PlayerCardModal from '../components/PlayerCardModal';
 import { getMyYahooTeam, getValidYahooToken, getYahooAllRosters, getYahooMatchups, getYahooStandings, getYahooTransactions } from '../../services/yahoo';
+import { getActiveSleeperIds } from '../../services/nflPlayers';
 import { C, F, R, SZ, BEVEL, dark, palette } from '../constants/tokens';
 
 // ── Cream theme card constants ──────────────────────────────────────────────
@@ -123,6 +125,7 @@ export default function LeagueScreen() {
   const [advice,             setAdvice]             = useState('');
   const [adviceLoading,      setAdviceLoading]      = useState(false);
   const [modalVisible,       setModalVisible]       = useState(false);
+  const [cardVisible,        setCardVisible]        = useState(false);
   const [activeTab,          setActiveTab]          = useState<'roster'|'waivers'|'matchup'|'standings'|'activity'>('roster');
   const [waiverPlayers,      setWaiverPlayers]      = useState<Player[]>([]);
   const [waiverLoading,      setWaiverLoading]      = useState(false);
@@ -362,12 +365,23 @@ export default function LeagueScreen() {
     setWaiverLoading(true);
     try {
       if (platformStr === 'sleeper') {
-        const rosters = await (await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`)).json();
-        const taken   = new Set(rosters.flatMap((r: any) => r.players || []));
-        const pDb     = await getPlayersDb();
+        const [rosters, pDb, activeIds] = await Promise.all([
+          (await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`)).json(),
+          getPlayersDb(),
+          getActiveSleeperIds().catch(() => new Set<string>()),
+        ]);
+        const taken = new Set(rosters.flatMap((r: any) => r.players || []));
         setWaiverPlayers(
           Object.values(pDb)
-            .filter((p: any) => ['QB','RB','WR','TE','K'].includes(p.position) && p.team && !taken.has(p.player_id))
+            .filter((p: any) =>
+              ['QB','RB','WR','TE','K','DEF'].includes(p.position) &&
+              (p.team || p.position === 'DEF') &&
+              !taken.has(p.player_id) &&
+              p.search_rank && p.search_rank < 1000 &&
+              // Canonical active check — filters Sleeper's lingering retirees (Roethlisberger, Bell, etc.)
+              (p.position === 'DEF' || activeIds.size === 0 || activeIds.has(p.player_id))
+            )
+            .sort((a: any, b: any) => (a.search_rank ?? 9999) - (b.search_rank ?? 9999))
             .slice(0, 150)
             .map((p: any) => ({ id: p.player_id, name: `${p.first_name} ${p.last_name}`, position: p.position, team: p.team, injuryStatus: p.injury_status, isStarter: false }))
         );
@@ -420,7 +434,7 @@ export default function LeagueScreen() {
       <TouchableOpacity
         key={`${player.id}-${index}`}
         style={[styles.playerCard, !active && styles.benchCard]}
-        onPress={() => handleAdvice(player, isWaiver)}
+        onPress={() => { setSelectedPlayer(player); setCardVisible(true); }}
         activeOpacity={0.8}
       >
         {/* bevel catchlight */}
@@ -660,6 +674,20 @@ export default function LeagueScreen() {
       ) : null}
 
       {/* ── Advice Modal ── */}
+      <PlayerCardModal
+        visible={cardVisible}
+        player={selectedPlayer}
+        platform={platformStr as 'sleeper' | 'espn' | 'yahoo'}
+        onClose={() => setCardVisible(false)}
+        onAskAI={() => {
+          setCardVisible(false);
+          // Slight delay so close animation doesn't conflict with open
+          setTimeout(() => {
+            if (selectedPlayer) handleAdvice(selectedPlayer, activeTab === 'waivers');
+          }, 150);
+        }}
+      />
+
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>

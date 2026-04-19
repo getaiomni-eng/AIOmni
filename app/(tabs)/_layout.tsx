@@ -63,7 +63,6 @@ export default function TabLayout() {
         }}
       />
       {/* Hidden screens — still routable, not in tab bar */}
-      <Tabs.Screen name="waiver"   options={{ href: null }} />
       <Tabs.Screen name="league"   options={{ href: null }} />
       <Tabs.Screen name="settings" options={{ href: null }} />
     </Tabs>

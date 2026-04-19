@@ -25,6 +25,7 @@ import type { ScoringFormat } from '../../services/rankingsData';
 import { applyFormatAdjustments } from '../../services/rankingsData';
 import { getCurrentTier } from '../../services/purchases';
 import { F, SP, dark, palette } from '../constants/tokens';
+import PlayerCardModal from '../components/PlayerCardModal';
 
 type Format   = 'PPR' | 'HALF' | 'STD' | 'SF' | 'DYN';
 type Position = 'ALL' | 'QB' | 'RB' | 'WR' | 'TE' | 'K';
@@ -115,15 +116,15 @@ function PlayerPhoto({ playerId, size = 48 }: { playerId: string; size?: number 
   );
 }
 
-function PlayerCard({ player, index, onChangeRank }: {
-  player: RankedPlayer; index: number; onChangeRank?: (p: RankedPlayer) => void;
+function PlayerCard({ player, index, onChangeRank, onOpenCard }: {
+  player: RankedPlayer; index: number; onChangeRank?: (p: RankedPlayer) => void; onOpenCard?: (p: RankedPlayer) => void;
 }) {
   const posStyle = POS_COLORS[player.position] || POS_COLORS.K;
   const consensus = Math.max(50, 100 - index * 2.5);
   const isTop3 = index < 3;
 
   return (
-    <View style={s.card}>
+    <TouchableOpacity style={s.card} activeOpacity={0.7} onPress={() => onOpenCard?.(player)}>
       <Text style={[s.rank, isTop3 && { color: palette.amber }]}>{index + 1}</Text>
       <PlayerPhoto playerId={player.id} size={48} />
       <View style={s.info}>
@@ -152,7 +153,7 @@ function PlayerCard({ player, index, onChangeRank }: {
           </>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -396,7 +397,7 @@ export default function RankingsScreen() {
   };
 
   const rawData = mode === 'mine' ? myRanks : communityData;
-  const formatAdjusted = mode === 'mine' ? rawData : applyFormatAdjustments(rawData, format as ScoringFormat);
+  const formatAdjusted = applyFormatAdjustments(rawData, format as ScoringFormat);
   const filtered = formatAdjusted.filter(p =>
     (position === 'ALL' || p.position === position) &&
     (!search || p.name.toLowerCase().includes(search.toLowerCase()) || p.team.toLowerCase().includes(search.toLowerCase()))
@@ -410,6 +411,8 @@ export default function RankingsScreen() {
   });
 
   const [movePlayer, setMovePlayer] = useState<RankedPlayer | null>(null);
+  const [cardVisible, setCardVisible] = useState(false);
+  const [cardPlayer, setCardPlayer] = useState<RankedPlayer | null>(null);
   const [moveRank, setMoveRank] = useState('');
 
   const openMoveModal = (player: RankedPlayer) => {
@@ -434,7 +437,7 @@ export default function RankingsScreen() {
   };
 
   const renderRow = ({ item, index }: { item: RankedPlayer; index: number }) => (
-    <PlayerCard player={item} index={index} onChangeRank={openMoveModal} />
+    <PlayerCard player={item} index={index} onChangeRank={openMoveModal} onOpenCard={(p) => { setCardPlayer(p); setCardVisible(true); }} />
   );
 
   const baseLabel = selectedBase
@@ -564,7 +567,7 @@ export default function RankingsScreen() {
                 </View>
                 {group.players.map((p) => (
                   <View key={p.id}>
-                    <PlayerCard player={p} index={filtered.findIndex(fp => fp.id === p.id)} />
+                    <PlayerCard player={p} index={filtered.findIndex(fp => fp.id === p.id)} onOpenCard={(pl) => { setCardPlayer(pl); setCardVisible(true); }} />
                   </View>
                 ))}
               </React.Fragment>
@@ -626,6 +629,22 @@ export default function RankingsScreen() {
               );
             })
           )
+        )}
+
+        {cardPlayer && (
+          <PlayerCardModal
+            visible={cardVisible}
+            player={{ id: cardPlayer.id, name: cardPlayer.name, position: cardPlayer.position, team: cardPlayer.team }}
+            platform={'sleeper'}
+            onClose={() => setCardVisible(false)}
+            onAskAI={() => {
+              const q = `What should I know about ${cardPlayer.name} (${cardPlayer.position} - ${cardPlayer.team}) for my ${format} league? Current rank is #${cardPlayer.rank}.`;
+              setCardVisible(false);
+              setTimeout(() => {
+                router.push({ pathname: '/(tabs)/coach', params: { q } } as any);
+              }, 150);
+            }}
+          />
         )}
 
         <BaseSelectionModal
