@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator, Image, Modal, ScrollView, StyleSheet,
     Text, TextInput, TouchableOpacity, View,
@@ -11,18 +11,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
     RankedPlayer,
     RankingsSource,
-    fetchBaseRankings,
-    fetchBlendedConsensus,
-    getCustomRankings,
     getSelectedBase,
-    saveCustomRankings,
     setSelectedBase,
 } from '../../services/rankingsData';
-import { getConsensusRankings, invalidateConsensusCache } from '../../services/rankingsCache';
+import { getEngineRankings, getEngineRankingsForSource, invalidateEngineCache, assignGlobalTier, assignPositionalTier } from '../../services/rankings/aiomniEngineBridge';
+import { getOverrides, setOverride, clearOverrides, applyOverrides } from '../../services/rankings/userOverrides';
 import { fetchDedupedProspects } from '../../services/rankingsData';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { ScoringFormat } from '../../services/rankingsData';
-import { applyFormatAdjustments } from '../../services/rankingsData';
 import { getCurrentTier } from '../../services/purchases';
 import { F, SP, dark, palette } from '../constants/tokens';
 import PlayerCardModal from '../components/PlayerCardModal';
@@ -62,7 +57,6 @@ const BASE_SOURCES: { key: RankingsSource; label: string; sub: string; color: st
   { key: 'sleeper', label: 'Sleeper ADP', sub: 'Based on Sleeper draft data', color: '#00FFF9' },
   { key: 'espn', label: 'ESPN ADP', sub: 'Based on ESPN draft data', color: '#e52534' },
   { key: 'yahoo', label: 'Yahoo ADP', sub: 'Requires Yahoo connection', color: '#7c3aed' },
-  { key: 'fantasypros', label: 'FantasyPros ECR', sub: 'Expert Consensus Rankings', color: palette.amber },
   { key: 'nfl', label: 'NFL.com', sub: 'Official NFL rankings', color: palette.aqua },
 ];
 
@@ -235,7 +229,15 @@ export default function RankingsScreen() {
   const [position, setPosition] = useState<Position>('ALL');
   const [search, setSearch] = useState('');
   const [communityData, setCommunityData] = useState<RankedPlayer[]>(SEED);
-  const [myRanks, setMyRanks] = useState<RankedPlayer[]>([]);
+  // myRanksEngine = pristine engine output for this format (no user edits).
+  // overrides     = user's per-player delta map (loaded from userOverrides module).
+  // myRanks       = what the UI renders — engine + overrides, re-sorted, re-ranked.
+  const [myRanksEngine, setMyRanksEngine] = useState<RankedPlayer[]>([]);
+  const [overrides, setOverrides] = useState<Map<string, number>>(new Map());
+  const myRanks = useMemo(
+    () => applyOverrides(myRanksEngine, overrides),
+    [myRanksEngine, overrides],
+  );
   const [loading, setLoading] = useState(false);
   const [prospects, setProspects] = useState<any[]>([]);
   const [prospectsLoading, setProspectsLoading] = useState(false);
@@ -256,10 +258,10 @@ export default function RankingsScreen() {
   const loadCommunityRankings = async () => {
     setLoading(true);
     try {
-      const data = await getConsensusRankings();
+      const data = await getEngineRankings(format);
       if (data.length > 0) setCommunityData(data);
     } catch (e) {
-      console.log('getConsensusRankings error:', e);
+      console.log('getEngineRankings error:', e);
     } finally {
       setLoading(false);
     }
@@ -285,18 +287,14 @@ export default function RankingsScreen() {
   const handleLeagueChange = async (leagueId: string, leagueName: string) => {
     setSelectedLeagueId(leagueId || undefined);
     setSelectedLeagueName(leagueName);
-    const custom = await getCustomRankings(format, leagueId || undefined);
-    if (custom && custom.length > 0) {
-      setMyRanks(custom); return;
-    }
     try {
-      const live = await getConsensusRankings();
-      const seed = live.length > 0 ? live : [...SEED];
-      setMyRanks(seed);
-      await saveCustomRankings(seed, format, leagueId || undefined);
+      const live = await getEngineRankings(format);
+      const ovs = await getOverrides(leagueId || undefined);
+      setMyRanksEngine(live.length > 0 ? live : [...SEED]);
+      setOverrides(ovs);
     } catch {
-      setMyRanks([...SEED]);
-      await saveCustomRankings([...SEED], format, leagueId || undefined);
+      setMyRanksEngine([...SEED]);
+      setOverrides(new Map());
     }
   };
 
@@ -322,19 +320,14 @@ export default function RankingsScreen() {
   const loadSavedState = async () => {
     const base = await getSelectedBase();
     setSelectedBaseState(base);
-    const custom = await getCustomRankings(format, selectedLeagueId);
-    if (custom && custom.length > 0) {
-      setMyRanks(custom);
-      return;
-    }
     try {
-      const live = await getConsensusRankings();
-      const seed = live.length > 0 ? live : [...SEED];
-      setMyRanks(seed);
-      await saveCustomRankings(seed, format, selectedLeagueId);
+      const live = await getEngineRankings(format);
+      const ovs = await getOverrides(selectedLeagueId);
+      setMyRanksEngine(live.length > 0 ? live : [...SEED]);
+      setOverrides(ovs);
     } catch {
-      setMyRanks([...SEED]);
-      await saveCustomRankings([...SEED], format, selectedLeagueId);
+      setMyRanksEngine([...SEED]);
+      setOverrides(new Map());
     }
   };
 
@@ -342,7 +335,7 @@ export default function RankingsScreen() {
     setBaseModalVisible(false);
     setLoading(true);
     try {
-      const rankings = await fetchBaseRankings(source);
+      const rankings = await getEngineRankingsForSource(source, format);
       if (rankings.length > 0) {
         setMyRanks(rankings);
         await saveCustomRankings(rankings, format);
@@ -373,41 +366,62 @@ export default function RankingsScreen() {
     setBaseModalVisible(true);
   };
 
-  const saveMyRanks = (ranks: RankedPlayer[]) => {
-    setMyRanks(ranks);
-    saveCustomRankings(ranks, format, selectedLeagueId);
-  };
-
   const resetToConsensus = async () => {
     try {
-      invalidateConsensusCache();
-      // Clear both local AND cloud copy so stale Supabase data doesn't override
+      invalidateEngineCache();
+      // Clear legacy full-list storage keys (dead code paths from Hour 1)
       const localKey = selectedLeagueId ? 'my_custom_rankings_' + format + '_' + selectedLeagueId : 'my_custom_rankings_' + format;
       await AsyncStorage.removeItem(localKey);
       await AsyncStorage.removeItem('my_custom_rankings_v7');
-      const live = await getConsensusRankings(true);
-      const seed = live.length > 0 ? live : [...SEED];
-      setMyRanks(seed);
-      await saveCustomRankings(seed, format, selectedLeagueId);
+      // Clear user overrides (the new storage model)
+      await clearOverrides(selectedLeagueId);
+      setOverrides(new Map());
+      // Re-fetch engine
+      const live = await getEngineRankings(format, true);
+      setMyRanksEngine(live.length > 0 ? live : [...SEED]);
     } catch (e) {
       console.log('reset error:', e);
-      setMyRanks([...SEED]);
-      await saveCustomRankings([...SEED], format, selectedLeagueId);
+      setMyRanksEngine([...SEED]);
+      setOverrides(new Map());
     }
   };
 
   const rawData = mode === 'mine' ? myRanks : communityData;
-  const formatAdjusted = mode === 'mine' ? rawData : applyFormatAdjustments(rawData, format as ScoringFormat);
-  const filtered = formatAdjusted.filter(p =>
+  const filtered = rawData.filter(p =>
     (position === 'ALL' || p.position === position) &&
     (!search || p.name.toLowerCase().includes(search.toLowerCase()) || p.team.toLowerCase().includes(search.toLowerCase()))
   );
 
+  // Tier source depends on mode + position filter.
+  //   My Rankings: recompute tiers from user's list order. Moving a Tier 3
+  //     RB to rank 1 puts them in the user's Tier 1 — their rankings, their tiers.
+  //   Community:   use the tier from engine output (locked to algorithm).
   const grouped: { tier: number; players: RankedPlayer[] }[] = [];
   let lastTier = -1;
   filtered.forEach((p, i) => {
-    if (p.tier !== lastTier) { grouped.push({ tier: p.tier, players: [] }); lastTier = p.tier; }
-    grouped[grouped.length - 1].players.push({ ...p, rank: i + 1 });
+    const rank = i + 1;
+    let t: number;
+    if (mode === 'mine') {
+      t = position === 'ALL' ? assignGlobalTier(rank) : assignPositionalTier(rank);
+    } else {
+      t = position === 'ALL' ? p.tier : ((p as any).positionalTier ?? p.tier);
+    }
+    if (t !== lastTier) { grouped.push({ tier: t, players: [] }); lastTier = t; }
+    grouped[grouped.length - 1].players.push({ ...p, rank });
+  });
+
+  // Flatten grouped into typed items for FlatList (used in My Rankings).
+  // Each item is either a divider or a player. FlatList's virtualization
+  // handles both types transparently via the type-tagged renderRow below.
+  type MyRanksItem =
+    | { type: 'divider'; tier: number; key: string }
+    | { type: 'player'; player: RankedPlayer; displayIndex: number; key: string };
+  const flatItems: MyRanksItem[] = [];
+  grouped.forEach((group, gIdx) => {
+    flatItems.push({ type: 'divider', tier: group.tier, key: `tier-${gIdx}-${group.tier}` });
+    group.players.forEach((p) => {
+      flatItems.push({ type: 'player', player: p, displayIndex: p.rank - 1, key: p.id });
+    });
   });
 
   const [movePlayer, setMovePlayer] = useState<RankedPlayer | null>(null);
@@ -425,20 +439,43 @@ export default function RankingsScreen() {
     if (!movePlayer) return;
     const target = parseInt(moveRank, 10);
     if (isNaN(target) || target < 1) { setMovePlayer(null); return; }
-    const curIdx = myRanks.findIndex(p => p.id === movePlayer.id);
-    if (curIdx === -1) { setMovePlayer(null); return; }
-    const newIdx = Math.min(Math.max(target - 1, 0), myRanks.length - 1);
-    const next = [...myRanks];
-    const [moved] = next.splice(curIdx, 1);
-    next.splice(newIdx, 0, moved);
-    const renumbered = next.map((p, i) => ({ ...p, rank: i + 1 }));
-    saveMyRanks(renumbered);
+    // Delta is relative to the ENGINE rank (not the displayed rank), so the
+    // user's intent survives re-engine runs, format switches, and other
+    // overrides shifting the list around them.
+    const enginePlayer = myRanksEngine.find(p => p.id === movePlayer.id);
+    if (!enginePlayer) { setMovePlayer(null); return; }
+    const delta = target - enginePlayer.rank;
+    const newOverrides = new Map(overrides);
+    if (delta === 0) {
+      newOverrides.delete(movePlayer.id);
+    } else {
+      newOverrides.set(movePlayer.id, Math.max(-200, Math.min(200, delta)));
+    }
+    setOverrides(newOverrides);
+    // Persist in background — UI already reflects the change via useMemo
+    setOverride(movePlayer.id, delta, selectedLeagueId).catch(e => console.log('setOverride:', e));
     setMovePlayer(null);
   };
 
-  const renderRow = ({ item, index }: { item: RankedPlayer; index: number }) => (
-    <PlayerCard player={item} index={index} onChangeRank={openMoveModal} onOpenCard={(p) => { setCardPlayer(p); setCardVisible(true); }} />
-  );
+  const renderRow = ({ item }: { item: MyRanksItem }) => {
+    if (item.type === 'divider') {
+      return (
+        <View style={s.tierDivider}>
+          <View style={s.tierLine} />
+          <Text style={s.tierLabel}>{TIER_NAMES[item.tier]}</Text>
+          <View style={s.tierLine} />
+        </View>
+      );
+    }
+    return (
+      <PlayerCard
+        player={item.player}
+        index={item.displayIndex}
+        onChangeRank={openMoveModal}
+        onOpenCard={(p) => { setCardPlayer(p); setCardVisible(true); }}
+      />
+    );
+  };
 
   const baseLabel = selectedBase
     ? BASE_SOURCES.find(s => s.key === selectedBase)?.label ?? selectedBase
@@ -483,7 +520,7 @@ export default function RankingsScreen() {
       </ScrollView>
 
       <View style={s.hintRow}>
-        <Text style={s.hint}>CONSENSUS · SLEEPER + ESPN + YAHOO</Text>
+        <Text style={s.hint}>AIOMNI ENGINE · MULTI-SOURCE BLEND</Text>
         <Text style={s.hint}>{mode === 'mine' ? 'TAP CHANGE TO REORDER' : 'ADP'}</Text>
       </View>
 
@@ -520,8 +557,8 @@ export default function RankingsScreen() {
         {mode === 'mine' && myRanks.length > 0 ? (
           <>
           <FlatList
-            data={filtered}
-            keyExtractor={item => item.id}
+            data={flatItems}
+            keyExtractor={item => item.key}
             renderItem={renderRow}
             ListHeaderComponent={Header}
             contentContainerStyle={{ paddingHorizontal: SP[3], paddingBottom: 100 }}
@@ -558,8 +595,8 @@ export default function RankingsScreen() {
         ) : (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: SP[3], paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
             <Header />
-            {!loading && grouped.map(group => (
-              <React.Fragment key={group.tier}>
+            {!loading && grouped.map((group, gIdx) => (
+              <React.Fragment key={`tier-${gIdx}-${group.tier}`}>
                 <View style={s.tierDivider}>
                   <View style={s.tierLine} />
                   <Text style={s.tierLabel}>{TIER_NAMES[group.tier]}</Text>

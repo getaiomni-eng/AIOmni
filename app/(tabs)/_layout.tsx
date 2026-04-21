@@ -37,7 +37,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="draft"
         options={{
-          title: 'Draft',
+          title: 'The O',
           tabBarIcon: ({ focused }) => <TabIcon name="draft" focused={focused} size={26} />,
         }}
       />

@@ -1,5 +1,5 @@
 // app/(tabs)/draft.tsx
-// AIOmni Draft Copilot — V7 Dark Theme
+// AIOmni The O — Draft Intelligence (V7 Dark Theme)
 // Sleeper: auto-sync live picks | ESPN/Yahoo/Offline: companion mode
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,6 +22,8 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI } from '../../services/ai';
+import { applyEngineToDraftPool, draftSettingsToUIFormat } from '../../services/rankings/draftPool';
+import { TheOLogo, ApertureO } from '../components/TheOLogo';
 import {
     DEFAULT_PLAYER_DB,
     loadLivePlayerDB,
@@ -250,6 +252,19 @@ export default function DraftCopilotScreen() {
         : isDynasty && settings.rounds >= 15 ? 'startup'
         : 'redraft';
       let liveDB = await loadLivePlayerDB(draftMode);
+      // Overlay AIOmni engine rankings + user overrides onto the base pool.
+      // Skipped for rookie drafts (engine doesn't score 2026 prospects).
+      if (draftMode !== 'rookie') {
+        const uiFormat = draftSettingsToUIFormat({
+          scoringFormat: settings.scoringFormat,
+          rosterSlots: settings.rosterSlots,
+          isDynasty,
+        });
+        const leagueIdForOverrides = settings.leagueId && settings.leagueId !== 'offline'
+          ? settings.leagueId
+          : null;
+        liveDB = await applyEngineToDraftPool(liveDB, uiFormat, leagueIdForOverrides);
+      }
       if (settings.platform === 'sleeper' && settings.leagueId && settings.leagueId !== 'offline') {
         try {
           const rostersRes = await fetch('https://api.sleeper.app/v1/league/' + settings.leagueId + '/rosters');
@@ -373,7 +388,7 @@ function SetupWizard({
     <ScrollView style={styles.setupScroll} contentContainerStyle={styles.setupContent}>
       {/* Header */}
       <View style={styles.setupHeader}>
-        <Text style={styles.setupTitle}>DRAFT COPILOT</Text>
+        <TheOLogo fontSize={36} color="#f0f4f5" />
         <Text style={styles.setupSub}>
           {step === 'platform' && 'Choose your platform'}
           {step === 'league' && 'Select your league'}
@@ -768,7 +783,7 @@ function DraftBoard({
       {/* ── TOP BAR ── */}
       <View style={styles.draftHeader}>
         <View style={styles.draftHeaderLeft}>
-          <Text style={styles.draftHeaderTitle}>DRAFT COPILOT</Text>
+          <TheOLogo fontSize={22} color="#f0f4f5" />
           <Text style={styles.draftHeaderSub}>
             {state.settings.leagueName} · {state.settings.scoringFormat.toUpperCase()}
           </Text>
@@ -869,7 +884,10 @@ function DraftBoard({
           <Text style={styles.bottomBtnText}>MY TEAM ({state.myRoster.length})</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.bottomBtnAI} onPress={() => handleAskAI()}>
-          <Text style={styles.bottomBtnAIText}>WHO SHOULD I PICK?</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.bottomBtnAIText}>ASK THE </Text>
+                <ApertureO size={18} color="#000" pupilColor="#000" />
+              </View>
         </TouchableOpacity>
         <TouchableOpacity style={styles.bottomBtn} onPress={() => setShowPickLog(true)}>
           <Text style={styles.bottomBtnText}>LOG</Text>
@@ -920,7 +938,7 @@ function DraftBoard({
         >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>AI DRAFT ADVICE</Text>
+              <TheOLogo fontSize={22} color="#f0f4f5" />
               <TouchableOpacity onPress={() => setShowAI(false)}>
                 <Text style={styles.modalClose}>CLOSE</Text>
               </TouchableOpacity>
@@ -929,7 +947,7 @@ function DraftBoard({
               {aiLoading ? (
                 <View style={styles.aiLoadingWrap}>
                   <ActivityIndicator color={C.amber} size="large" />
-                  <Text style={styles.aiLoadingText}>Analyzing your draft...</Text>
+                  <Text style={styles.aiLoadingText}>The O is thinking...</Text>
                 </View>
               ) : (
                 <Text style={styles.aiResponseText}>{aiResponse}</Text>

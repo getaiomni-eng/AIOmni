@@ -374,14 +374,25 @@ export default function LeagueScreen() {
         setWaiverPlayers(
           Object.values(pDb)
             .filter((p: any) =>
-              ['QB','RB','WR','TE','K','DEF'].includes(p.position) &&
-              (p.team || p.position === 'DEF') &&
+              (() => {
+                const rosterPositions = (leagueSettings?.roster_positions || ['QB','RB','WR','TE','K','DEF']) as string[];
+                const activePositions = new Set(rosterPositions.flatMap((pos: string) => {
+                  if (pos === 'FLEX') return ['RB','WR','TE'];
+                  if (pos === 'SUPER_FLEX') return ['QB','RB','WR','TE'];
+                  if (pos === 'REC_FLEX') return ['WR','TE'];
+                  if (pos === 'WRRB_FLEX') return ['RB','WR'];
+                  if (['BN','IR','TAXI'].includes(pos)) return [];
+                  return [pos];
+                }));
+                return activePositions.has(p.position);
+              })() &&
+              (p.team || p.position === 'DEF' || p.search_rank == null) &&
               !taken.has(p.player_id) &&
-              p.search_rank && p.search_rank < 1000 &&
+              (p.search_rank == null || p.search_rank < 1000) &&
               // Canonical active check — filters Sleeper's lingering retirees (Roethlisberger, Bell, etc.)
               (p.position === 'DEF' || activeIds.size === 0 || activeIds.has(p.player_id))
             )
-            .sort((a: any, b: any) => (a.search_rank ?? 9999) - (b.search_rank ?? 9999))
+            .sort((a: any, b: any) => (a.search_rank ?? 100) - (b.search_rank ?? 100))
             .slice(0, 150)
             .map((p: any) => ({ id: p.player_id, name: `${p.first_name} ${p.last_name}`, position: p.position, team: p.team, injuryStatus: p.injury_status, isStarter: false }))
         );
