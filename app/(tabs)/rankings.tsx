@@ -21,6 +21,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCurrentTier } from '../../services/purchases';
 import { F, SP, dark, palette } from '../constants/tokens';
 import PlayerCardModal from '../components/PlayerCardModal';
+import { HeatIcon } from '../components/HeatIcon';
+import { computeHeatBatch } from '../../services/heat';
+import { getHeatSignalsMap } from '../../services/heatData';
+import { useHeatAccess, HeatAccess } from '../hooks/useHeatAccess';
 
 type Format   = 'PPR' | 'HALF' | 'STD' | 'SF' | 'DYN';
 type Position = 'ALL' | 'QB' | 'RB' | 'WR' | 'TE' | 'K';
@@ -110,8 +114,23 @@ function PlayerPhoto({ playerId, size = 48 }: { playerId: string; size?: number 
   );
 }
 
-function PlayerCard({ player, index, onChangeRank, onOpenCard }: {
+// ─── HEAT MERGE HELPER ─────────────────────────────────────────
+// Attach Sleeper trending velocity signals + computed Heat score
+// to each ranked player. Non-blocking: returns plain list on failure.
+async function mergeHeat<T extends { id: string }>(players: T[]): Promise<any[]> {
+  try {
+    const heatMap = await getHeatSignalsMap();
+    const withSignals = players.map(p => ({ ...p, heatSignals: heatMap.get(p.id) }));
+    return computeHeatBatch(withSignals as any);
+  } catch (e) {
+    console.log('mergeHeat error:', e);
+    return players;
+  }
+}
+
+function PlayerCard({ player, index, onChangeRank, onOpenCard, heatAccess }: {
   player: RankedPlayer; index: number; onChangeRank?: (p: RankedPlayer) => void; onOpenCard?: (p: RankedPlayer) => void;
+  heatAccess?: HeatAccess;
 }) {
   const posStyle = POS_COLORS[player.position] || POS_COLORS.K;
   const consensus = Math.max(50, 100 - index * 2.5);
@@ -145,6 +164,17 @@ function PlayerCard({ player, index, onChangeRank, onOpenCard }: {
               {player.trend === 'up' ? `▲ ${player.trendVal}` : player.trend === 'down' ? `▼ ${player.trendVal}` : '—'}
             </Text>
           </>
+        )}
+        {heatAccess && ((player as any).heatScore ?? 0) >= heatAccess.iconThreshold && heatAccess.showIcon && (
+          <View style={{ marginTop: 4 }}>
+            <HeatIcon
+              score={(player as any).heatScore ?? 0}
+              direction={(player as any).heatDirection ?? 'flat'}
+              size={26}
+              showScore={heatAccess.showScore}
+              compact
+            />
+          </View>
         )}
       </View>
     </TouchableOpacity>
@@ -234,6 +264,7 @@ export default function RankingsScreen() {
   // myRanks       = what the UI renders — engine + overrides, re-sorted, re-ranked.
   const [myRanksEngine, setMyRanksEngine] = useState<RankedPlayer[]>([]);
   const [overrides, setOverrides] = useState<Map<string, number>>(new Map());
+  const heatAccess = useHeatAccess();
   const myRanks = useMemo(
     () => applyOverrides(myRanksEngine, overrides),
     [myRanksEngine, overrides],
@@ -259,7 +290,7 @@ export default function RankingsScreen() {
     setLoading(true);
     try {
       const data = await getEngineRankings(format);
-      if (data.length > 0) setCommunityData(data);
+      if (data.length > 0) setCommunityData(await mergeHeat(data));
     } catch (e) {
       console.log('getEngineRankings error:', e);
     } finally {
@@ -290,7 +321,7 @@ export default function RankingsScreen() {
     try {
       const live = await getEngineRankings(format);
       const ovs = await getOverrides(leagueId || undefined);
-      setMyRanksEngine(live.length > 0 ? live : [...SEED]);
+      setMyRanksEngine(live.length > 0 ? await mergeHeat(live) : [...SEED]);
       setOverrides(ovs);
     } catch {
       setMyRanksEngine([...SEED]);
@@ -323,7 +354,7 @@ export default function RankingsScreen() {
     try {
       const live = await getEngineRankings(format);
       const ovs = await getOverrides(selectedLeagueId);
-      setMyRanksEngine(live.length > 0 ? live : [...SEED]);
+      setMyRanksEngine(live.length > 0 ? await mergeHeat(live) : [...SEED]);
       setOverrides(ovs);
     } catch {
       setMyRanksEngine([...SEED]);
@@ -335,21 +366,20 @@ export default function RankingsScreen() {
     setBaseModalVisible(false);
     setLoading(true);
     try {
+      // Switching base source invalidates prior deltas (they were relative
+      // to the old source's ordering). Clear the user's overrides for this
+      // league, then reload engine output for the new source. useMemo
+      // recomputes `myRanks` automatically off the new engine + empty deltas.
+      const leagueScope = selectedLeagueId || null;
+      await clearOverrides(leagueScope);
+      setOverrides(new Map());
       const rankings = await getEngineRankingsForSource(source, format);
-      if (rankings.length > 0) {
-        setMyRanks(rankings);
-        await saveCustomRankings(rankings, format);
-        await setSelectedBase(source);
-        setSelectedBaseState(source);
-      } else {
-        // Fallback to seed if API fails
-        setMyRanks([...SEED]);
-        await saveCustomRankings([...SEED], format, selectedLeagueId);
-        await setSelectedBase(source);
-        setSelectedBaseState(source);
-      }
-    } catch {
-      setMyRanks([...SEED]);
+      setMyRanksEngine(rankings.length > 0 ? await mergeHeat(rankings) : [...SEED]);
+      await setSelectedBase(source);
+      setSelectedBaseState(source);
+    } catch (e) {
+      console.log('handleSelectBase error:', e);
+      setMyRanksEngine([...SEED]);
     }
     setLoading(false);
   };
@@ -473,6 +503,7 @@ export default function RankingsScreen() {
         index={item.displayIndex}
         onChangeRank={openMoveModal}
         onOpenCard={(p) => { setCardPlayer(p); setCardVisible(true); }}
+        heatAccess={heatAccess}
       />
     );
   };
@@ -604,7 +635,7 @@ export default function RankingsScreen() {
                 </View>
                 {group.players.map((p) => (
                   <View key={p.id}>
-                    <PlayerCard player={p} index={filtered.findIndex(fp => fp.id === p.id)} onOpenCard={(pl) => { setCardPlayer(pl); setCardVisible(true); }} />
+                    <PlayerCard player={p} index={filtered.findIndex(fp => fp.id === p.id)} onOpenCard={(pl) => { setCardPlayer(pl); setCardVisible(true); }} heatAccess={heatAccess} />
                   </View>
                 ))}
               </React.Fragment>

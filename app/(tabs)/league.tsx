@@ -8,6 +8,10 @@ import { askAI } from "../../services/ai";
 import { findMyESPNTeam, formatESPNPosition, getESPNAllRosters, getESPNLeague, getESPNMatchups, getESPNStandings, getESPNTransactions, isESPNStarter, loadESPNCredentials } from '../../services/espn';
 import { Icon } from '../components/AIOmniIcons';
 import PlayerCardModal from '../components/PlayerCardModal';
+import { HeatIcon } from '../components/HeatIcon';
+import { computeHeatBatch } from '../../services/heat';
+import { getHeatSignalsMap } from '../../services/heatData';
+import { useHeatAccess } from '../hooks/useHeatAccess';
 import { getMyYahooTeam, getValidYahooToken, getYahooAllRosters, getYahooMatchups, getYahooStandings, getYahooTransactions } from '../../services/yahoo';
 import { getActiveSleeperIds } from '../../services/nflPlayers';
 import { C, F, R, SZ, BEVEL, dark, palette } from '../constants/tokens';
@@ -140,6 +144,9 @@ export default function LeagueScreen() {
   const [transactions,       setTransactions]       = useState<Transaction[]>([]);
   const [activityLoading,    setActivityLoading]    = useState(false);
   const [playersDb,          setPlayersDb]          = useState<any>({});
+  const heatAccess = useHeatAccess();
+  const [sortByHeat, setSortByHeat] = useState(false);
+  const [heatUpgradeVisible, setHeatUpgradeVisible] = useState(false);
 
   const PLATFORM_COLOR = platformStr === 'espn' ? '#e03030' : platformStr === 'yahoo' ? '#6001D2' : C.gold;
 
@@ -396,6 +403,13 @@ export default function LeagueScreen() {
             .slice(0, 150)
             .map((p: any) => ({ id: p.player_id, name: `${p.first_name} ${p.last_name}`, position: p.position, team: p.team, injuryStatus: p.injury_status, isStarter: false }))
         );
+        // Attach Sleeper trending velocity → Heat score.
+        try {
+          const heatMap = await getHeatSignalsMap();
+          setWaiverPlayers(prev => computeHeatBatch(
+            prev.map(p => ({ ...p, heatSignals: heatMap.get(p.id) })) as any
+          ) as any);
+        } catch (e) { console.log('waiver heat merge:', e); }
       } else if (platformStr === 'espn') {
         const creds = await loadESPNCredentials(); if (!creds) return;
         const data  = await getESPNLeague(parseInt(leagueId as string), creds);
@@ -434,7 +448,13 @@ export default function LeagueScreen() {
     } finally { setAdviceLoading(false); }
   };
 
-  const filteredWaivers = waiverPlayers.filter(p => selectedPosition === 'ALL' || p.position === selectedPosition);
+  const filteredWaivers = (() => {
+    const base = waiverPlayers.filter(p => selectedPosition === 'ALL' || p.position === selectedPosition);
+    if (sortByHeat && heatAccess.canSortByHeat) {
+      return [...base].sort((a, b) => (((b as any).heatScore ?? 0) - ((a as any).heatScore ?? 0)));
+    }
+    return base;
+  })();
 
   const renderPlayer = (player: Player, isWaiver = false, index = 0) => {
     const posColor  = POS_COLORS[player.position] || C.dim2;
@@ -463,6 +483,17 @@ export default function LeagueScreen() {
             <View style={[styles.progressFill, { width: `${Math.random() * 60 + 20}%`, backgroundColor: active ? posColor : DIM_BORDER }]} />
           </View>
         </View>
+        {heatAccess.showIcon && (((player as any).heatScore ?? 0) >= heatAccess.iconThreshold) && (
+          <View style={{ marginRight: 6 }}>
+            <HeatIcon
+              score={(player as any).heatScore ?? 0}
+              direction={(player as any).heatDirection ?? 'flat'}
+              size={28}
+              showScore={heatAccess.showScore}
+              compact
+            />
+          </View>
+        )}
         <View style={styles.aiTag}>
           <Text style={styles.aiTagText}>AI</Text>
         </View>
@@ -648,6 +679,17 @@ export default function LeagueScreen() {
                 <Text style={[styles.filterText, selectedPosition === pos && { color: C.blueDeep }]}>{pos}</Text>
               </TouchableOpacity>
             ))}
+            <TouchableOpacity
+              style={[styles.filterBtn, sortByHeat && heatAccess.canSortByHeat && { borderColor: '#ff5714', backgroundColor: 'rgba(255,87,20,0.12)' }]}
+              onPress={() => {
+                if (heatAccess.canSortByHeat) setSortByHeat(v => !v);
+                else setHeatUpgradeVisible(true);
+              }}
+            >
+              <Text style={[styles.filterText, sortByHeat && heatAccess.canSortByHeat && { color: '#ff5714' }]}>
+                {sortByHeat && heatAccess.canSortByHeat ? '🔥 HEAT' : 'SORT: HEAT'}
+              </Text>
+            </TouchableOpacity>
           </ScrollView>
           {waiverLoading ? (
             <View style={styles.loadingBox}><ActivityIndicator color={C.blueDeep} /><Text style={styles.loadingText}>LOADING</Text></View>
@@ -758,6 +800,25 @@ export default function LeagueScreen() {
             </ScrollView>
             <TouchableOpacity style={[styles.gotItBtn, { backgroundColor: PLATFORM_COLOR }]} onPress={() => setRosterModalVisible(false)}>
               <Text style={[styles.gotItText, { color: platformStr === 'sleeper' ? '#1a1a1a' : '#fff' }]}>CLOSE</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Heat sort upgrade modal — Pro tier only */}
+      <Modal visible={heatUpgradeVisible} transparent animationType="fade" onRequestClose={() => setHeatUpgradeVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { minHeight: 240 }]}>
+            <View style={[styles.modalTopAccent, { backgroundColor: '#ff5714' }]} />
+            <Text style={[styles.modalPlayerName, { marginBottom: 12 }]}>🔥 SORT BY HEAT</Text>
+            <Text style={styles.adviceText}>
+              Heat sort is a Pro feature. Surface the fastest-rising waiver targets across all of fantasy — before your leaguemates see them.
+            </Text>
+            <TouchableOpacity style={[styles.gotItBtn, { backgroundColor: '#ff5714', marginBottom: 8 }]} onPress={() => { setHeatUpgradeVisible(false); router.push('/paywall' as any); }}>
+              <Text style={[styles.gotItText, { color: '#fff' }]}>UPGRADE TO PRO</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.gotItBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#1a3542' }]} onPress={() => setHeatUpgradeVisible(false)}>
+              <Text style={[styles.gotItText, { color: '#7a9eaa' }]}>NOT NOW</Text>
             </TouchableOpacity>
           </View>
         </View>

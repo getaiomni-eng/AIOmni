@@ -12,6 +12,9 @@ import { useFonts } from 'expo-font';
 import * as Linking from 'expo-linking';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
+import { supabase } from '../services/supabase';
+import { syncUserBehavioralData } from '../services/behavioralSync';
 import { Alert, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getUser, getUserRow } from '../services/supabase';
@@ -29,6 +32,27 @@ Sentry.init({
 
 export default Sentry.wrap(function RootLayout() {
   const router = useRouter();
+
+  // Phase 1 behavioral data sync — Sleeper + Yahoo only.
+  // Triggers on mount and every app foreground. The service enforces a
+  // 6hr cooldown internally so this is safe to call aggressively.
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (data?.user?.id) {
+          await syncUserBehavioralData(data.user.id);
+        }
+      } catch (e) {
+        console.log('behavioralSync error:', e);
+      }
+    };
+    run();
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') run();
+    });
+    return () => sub.remove();
+  }, []);
 
   const [fontsLoaded] = useFonts({
     // ── V7 Primary fonts ─────────────────────
