@@ -1,237 +1,273 @@
 // app/components/HeatIcon.tsx
-// Animated Heat badge — flame silhouette whose color, intensity, and
-// flicker speed shift based on the 0-100 score.
-// V7 palette only: aqua / green / amber / flame / chartreuse. No gold.
+// ═══════════════════════════════════════════════════════════════════════════
+// HEAT ICON — Spectrum C Arc (v2)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The Heat indicator IS the AIOmni logo. Every time a player is hot, the
+// user sees another Spectrum C — the same mark that's in the AIOMNI
+// wordmark, the AI Coach tab, and THE O. One brand glyph, worn everywhere
+// the product signals intelligence.
+//
+// ─── VISUAL LANGUAGE ────────────────────────────────────────────────────────
+//   Arc length encodes heat intensity:
+//     FROZEN   0-20   — 15% arc, muted aqua
+//     COLD    20-40   — 25% arc, aqua
+//     COOLING 40-55   — 45% arc, green
+//     WARM    55-70   — 60% arc, amber
+//     HOT     70-85   — 75% arc, amber+flame
+//     SCORCHING 85+   — 85% arc, full spectrum (matches the actual logo)
+//
+//   Color gradient stops match intensity — cold stays in aqua/green territory,
+//   scorching hits the full logo spectrum (flame→amber→chartreuse→green→aqua).
+//
+//   Gap always faces down (at 6 o'clock) matching the AIOmniLogo component.
+//   This ensures every Heat impression visually rhymes with the brand mark.
+//
+// ─── API (unchanged from v1) ────────────────────────────────────────────────
+//   Same props interface as the flame version it replaces. All call sites
+//   in rankings.tsx and league.tsx continue to work without modification.
+//
+//   Props:
+//     score: 0-100
+//     direction?: 'up' | 'down' | 'flat' — subtle chevron next to arc
+//     size: pixels (width = height)
+//     showScore?: boolean — draws numeric score inside the ring
+//     compact?: boolean — hides pedestal if we had one; currently no-op
+// ═══════════════════════════════════════════════════════════════════════════
 
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import Svg, {
-  Path,
+  Circle,
   Defs,
   LinearGradient,
-  RadialGradient,
   Stop,
-  Circle,
+  Path,
   G,
 } from 'react-native-svg';
 
-const AnimatedG = Animated.createAnimatedComponent(G);
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export type HeatDirection = 'up' | 'down' | 'flat';
 
 interface HeatIconProps {
-  /** 0-100 Heat score */
   score: number;
-  /** Direction of momentum */
   direction?: HeatDirection;
-  /** Size in pixels (width = height) */
   size?: number;
-  /** Show the numeric score inside the icon */
   showScore?: boolean;
-  /** Compact mode — just the flame, no pedestal */
   compact?: boolean;
 }
 
-/**
- * Heat color ramp — V7 palette.
- *
- *  Tier      Range   Core       Glow       Edge         Feel
- *  ────────────────────────────────────────────────────────────────
- *  FROZEN     0-20   #7a9eaa    #1be7ff    #0f1c22      muted aqua
- *  COLD      20-40   #1be7ff    #1be7ff    #0d5a6a      pure aqua
- *  COOLING   40-55   #6eeb83    #ffb800    #3d6020      green
- *  WARM      55-70   #ffb800    #ffb800    #7a4a0a      amber
- *  HOT       70-85   #ff5714    #ffb800    #7a2a08      flame
- *  SCORCHING 85-100  #e4ff1a    #ff5714    #ff5714      chartreuse + flame
- */
-function getHeatColors(score: number): { core: string; glow: string; edge: string } {
-  if (score >= 85) return { core: '#e4ff1a', glow: '#ff5714', edge: '#ff5714' };
-  if (score >= 70) return { core: '#ff5714', glow: '#ffb800', edge: '#7a2a08' };
-  if (score >= 55) return { core: '#ffb800', glow: '#ffb800', edge: '#7a4a0a' };
-  if (score >= 40) return { core: '#6eeb83', glow: '#ffb800', edge: '#3d6020' };
-  if (score >= 20) return { core: '#1be7ff', glow: '#1be7ff', edge: '#0d5a6a' };
-  return { core: '#7a9eaa', glow: '#1be7ff', edge: '#0f1c22' };
+// ─── TIER CONFIG ────────────────────────────────────────────────────────────
+// Arc length (0–1) encodes how far around the circle the stroke travels.
+// Colors stops define the gradient — scorching matches the full logo.
+// All gaps face down (6 o'clock) using stroke-dashoffset math.
+
+interface HeatTier {
+  arcFraction: number;        // 0.15 = 15% of circumference lit
+  gradientStops: [string, string, string]; // 0%, 50%, 100%
+  glowOpacity: number;
+  pulseEnabled: boolean;
 }
+
+function getHeatTier(score: number): HeatTier {
+  if (score >= 85) return {
+    arcFraction: 0.85,  // matches the AIOmni logo exactly — scorching IS the logo
+    gradientStops: ['#ff5714', '#ffb800', '#e4ff1a'],
+    glowOpacity: 0.6,
+    pulseEnabled: true,
+  };
+  if (score >= 70) return {
+    arcFraction: 0.75,
+    gradientStops: ['#ffb800', '#e4ff1a', '#ff5714'],
+    glowOpacity: 0.45,
+    pulseEnabled: true,
+  };
+  if (score >= 55) return {
+    arcFraction: 0.60,
+    gradientStops: ['#6eeb83', '#e4ff1a', '#ffb800'],
+    glowOpacity: 0.3,
+    pulseEnabled: false,
+  };
+  if (score >= 40) return {
+    arcFraction: 0.45,
+    gradientStops: ['#1be7ff', '#6eeb83', '#e4ff1a'],
+    glowOpacity: 0.2,
+    pulseEnabled: false,
+  };
+  if (score >= 20) return {
+    arcFraction: 0.25,
+    gradientStops: ['#1be7ff', '#1be7ff', '#6eeb83'],
+    glowOpacity: 0.15,
+    pulseEnabled: false,
+  };
+  return {
+    arcFraction: 0.15,
+    gradientStops: ['#7a9eaa', '#1be7ff', '#1be7ff'],
+    glowOpacity: 0.1,
+    pulseEnabled: false,
+  };
+}
+
+// ─── COMPONENT ──────────────────────────────────────────────────────────────
 
 export function HeatIcon({
   score,
   direction = 'flat',
   size = 48,
   showScore = true,
-  compact = false,
 }: HeatIconProps) {
-  const colors = getHeatColors(score);
-  const intensity = Math.min(1, Math.max(0, score / 100));
+  const tier = getHeatTier(score);
+  const clampedScore = Math.max(0, Math.min(100, Math.round(score)));
 
-  const flicker = useRef(new Animated.Value(0)).current;
-  const pulse = useRef(new Animated.Value(1)).current;
+  // Geometry: viewbox 64 × 64 (same as AIOmniLogo for visual parity)
+  const vb = 64;
+  const cx = vb / 2;
+  const cy = vb / 2;
+  const r = vb * 0.35;                         // 22.4, matches logo
+  const strokeWidth = Math.max(3, size * 0.12);
+  const circ = 2 * Math.PI * r;
+  const arcLen = circ * tier.arcFraction;
+  const gapLen = circ - arcLen;
+
+  // Place gap at bottom (6 o'clock). SVG arcs start at 3 o'clock going
+  // clockwise — we offset by circ * 0.625 to center the gap at the bottom.
+  // Same math used in AIOmniLogo for visual consistency.
+  const dashOffset = circ * 0.625;
+
+  // Pulse animation for HOT+SCORCHING — subtle breathing glow
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Flicker speeds up as heat climbs: 900ms cold → 500ms scorching
-    const flickerSpeed = 900 - intensity * 400;
-    const flickerAnim = Animated.loop(
+    if (!tier.pulseEnabled) return;
+    // Faster pulse at scorching
+    const duration = score >= 85 ? 900 : 1400;
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(flicker, {
-          toValue: 1,
-          duration: flickerSpeed,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(flicker, {
-          toValue: 0,
-          duration: flickerSpeed,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    const pulseAnim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1.08,
-          duration: 1400,
+        Animated.timing(pulseAnim, {
+          toValue: 1.06,
+          duration,
           easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
         }),
-        Animated.timing(pulse, {
+        Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 1400,
+          duration,
           easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
         }),
       ])
     );
+    loop.start();
+    return () => loop.stop();
+  }, [tier.pulseEnabled, score]);
 
-    flickerAnim.start();
-    if (intensity > 0.4) pulseAnim.start();
+  // Unique gradient id per score prevents collisions when multiple HeatIcons
+  // render on the same screen (waiver list may have 40+ simultaneously).
+  const gradId = `heatSpec-${clampedScore}-${direction}`;
+  const glowId = `heatGlow-${clampedScore}-${direction}`;
 
-    return () => {
-      flickerAnim.stop();
-      pulseAnim.stop();
-    };
-  }, [intensity]);
+  const scoreColor = score >= 70 ? '#0a1214' : '#f0f4f5';
 
-  const translateY = flicker.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -1.5],
-  });
-
-  const scale = flicker.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.04],
-  });
-
-  const vb = 64;
-  // Score text color: dark on bright flames, light on cold ones
-  const scoreColor = score >= 55 ? '#0a1214' : '#f0f4f5';
+  // Direction chevron — tiny, tucked outside the arc at top-right
+  const renderDirection = () => {
+    if (direction === 'flat') return null;
+    const chevronColor = direction === 'up' ? tier.gradientStops[0] : '#7a9eaa';
+    if (direction === 'up') {
+      return (
+        <Path
+          d={`M ${vb * 0.74} ${vb * 0.28} L ${vb * 0.82} ${vb * 0.20} L ${vb * 0.90} ${vb * 0.28}`}
+          stroke={chevronColor}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+      );
+    }
+    return (
+      <Path
+        d={`M ${vb * 0.74} ${vb * 0.20} L ${vb * 0.82} ${vb * 0.28} L ${vb * 0.90} ${vb * 0.20}`}
+        stroke={chevronColor}
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    );
+  };
 
   return (
-    <View style={[styles.wrap, { width: size, height: size }]}>
+    <Animated.View
+      style={[
+        styles.wrap,
+        { width: size, height: size, transform: [{ scale: pulseAnim }] },
+      ]}
+    >
       <Svg width={size} height={size} viewBox={`0 0 ${vb} ${vb}`}>
         <Defs>
-          <LinearGradient id={`heatCore-${score}`} x1="0.5" y1="1" x2="0.5" y2="0">
-            <Stop offset="0" stopColor={colors.core} stopOpacity="1" />
-            <Stop offset="0.6" stopColor={colors.glow} stopOpacity="0.9" />
-            <Stop offset="1" stopColor={colors.edge} stopOpacity="0.4" />
+          {/* Main arc gradient — encodes heat intensity via color stops */}
+          <LinearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0%" stopColor={tier.gradientStops[0]} />
+            <Stop offset="50%" stopColor={tier.gradientStops[1]} />
+            <Stop offset="100%" stopColor={tier.gradientStops[2]} />
           </LinearGradient>
-
-          <RadialGradient id={`heatHalo-${score}`} cx="0.5" cy="0.65" r="0.6">
-            <Stop offset="0" stopColor={colors.glow} stopOpacity={intensity * 0.5} />
-            <Stop offset="1" stopColor={colors.glow} stopOpacity="0" />
-          </RadialGradient>
-
-          <RadialGradient id={`heatInner-${score}`} cx="0.5" cy="0.75" r="0.25">
-            <Stop offset="0" stopColor="#ffffff" stopOpacity={intensity * 0.8} />
-            <Stop offset="1" stopColor={colors.core} stopOpacity="0" />
-          </RadialGradient>
+          {/* Soft glow behind the arc */}
+          <LinearGradient id={glowId} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0%" stopColor={tier.gradientStops[0]} stopOpacity={tier.glowOpacity} />
+            <Stop offset="100%" stopColor={tier.gradientStops[2]} stopOpacity={tier.glowOpacity} />
+          </LinearGradient>
         </Defs>
 
-        {/* Halo — static background */}
-        <Circle cx={vb / 2} cy={vb * 0.6} r={vb * 0.45} fill={`url(#heatHalo-${score})`} />
+        {/* Glow aura — wider, softer stroke behind the main arc */}
+        <Circle
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke={`url(#${glowId})`}
+          strokeWidth={strokeWidth + 4}
+          strokeLinecap="round"
+          strokeDasharray={`${arcLen} ${gapLen}`}
+          strokeDashoffset={dashOffset}
+        />
 
-        {/* Animated flame group */}
-        <AnimatedG translateY={translateY} scale={scale}>
-          {/* Outer flame silhouette */}
-          <Path
-            d={`
-              M ${vb / 2} 8
-              C ${vb * 0.35} 18, ${vb * 0.22} 28, ${vb * 0.22} 40
-              C ${vb * 0.22} 52, ${vb * 0.34} 58, ${vb / 2} 58
-              C ${vb * 0.66} 58, ${vb * 0.78} 52, ${vb * 0.78} 40
-              C ${vb * 0.78} 28, ${vb * 0.65} 18, ${vb / 2} 8
-              Z
-            `}
-            fill={`url(#heatCore-${score})`}
-            stroke={colors.edge}
-            strokeWidth="1"
-            strokeOpacity="0.6"
-          />
+        {/* Main Spectrum C arc */}
+        <Circle
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke={`url(#${gradId})`}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={`${arcLen} ${gapLen}`}
+          strokeDashoffset={dashOffset}
+        />
 
-          {/* Inner flame */}
-          <Path
-            d={`
-              M ${vb / 2} 18
-              C ${vb * 0.42} 24, ${vb * 0.34} 32, ${vb * 0.34} 42
-              C ${vb * 0.34} 50, ${vb * 0.42} 54, ${vb / 2} 54
-              C ${vb * 0.58} 54, ${vb * 0.66} 50, ${vb * 0.66} 42
-              C ${vb * 0.66} 32, ${vb * 0.58} 24, ${vb / 2} 18
-              Z
-            `}
-            fill={colors.glow}
-            fillOpacity={0.5 + intensity * 0.4}
-          />
-
-          {/* Hot spot at base */}
-          <Circle cx={vb / 2} cy={vb * 0.7} r={vb * 0.12} fill={`url(#heatInner-${score})`} />
-        </AnimatedG>
-
-        {/* Pedestal line (unless compact) */}
-        {!compact && (
-          <Path
-            d={`M ${vb * 0.3} 60 L ${vb * 0.7} 60`}
-            stroke={colors.edge}
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            opacity="0.4"
-          />
-        )}
-
-        {/* Direction chevron */}
-        {direction === 'up' && (
-          <Path
-            d={`M ${vb * 0.78} 16 L ${vb * 0.86} 10 L ${vb * 0.94} 16`}
-            stroke={colors.core}
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-        )}
-        {direction === 'down' && (
-          <Path
-            d={`M ${vb * 0.78} 10 L ${vb * 0.86} 16 L ${vb * 0.94} 10`}
-            stroke="#7a9eaa"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-        )}
+        {renderDirection()}
       </Svg>
 
       {showScore && (
         <View style={styles.scoreOverlay} pointerEvents="none">
-          <Text style={[styles.scoreText, { fontSize: size * 0.28, color: scoreColor }]}>
-            {Math.round(score)}
+          <Text
+            style={[
+              styles.scoreText,
+              { fontSize: size * 0.32, color: scoreColor },
+            ]}
+          >
+            {clampedScore}
           </Text>
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
-/** Compact inline badge for list rows — flame + score pill */
+// ─── COMPACT BADGE (unchanged API) ──────────────────────────────────────────
+// Preserved for any caller using HeatBadge. Renders icon + numeric score
+// inline in a pill.
+
 export function HeatBadge({
   score,
   direction = 'flat',
@@ -241,11 +277,13 @@ export function HeatBadge({
   direction?: HeatDirection;
   size?: number;
 }) {
-  const colors = getHeatColors(score);
+  const tier = getHeatTier(score);
   return (
-    <View style={[badgeStyles.wrap, { borderColor: colors.edge }]}>
-      <HeatIcon score={score} direction={direction} size={size} showScore={false} compact />
-      <Text style={[badgeStyles.score, { color: colors.core }]}>{Math.round(score)}</Text>
+    <View style={[badgeStyles.wrap, { borderColor: tier.gradientStops[0] }]}>
+      <HeatIcon score={score} direction={direction} size={size} showScore={false} />
+      <Text style={[badgeStyles.score, { color: tier.gradientStops[1] }]}>
+        {Math.round(score)}
+      </Text>
     </View>
   );
 }
@@ -266,10 +304,10 @@ const styles = StyleSheet.create({
   },
   scoreText: {
     fontFamily: 'BebasNeue-Regular',
-    letterSpacing: 0.5,
-    textShadowColor: 'rgba(0,0,0,0.3)',
+    letterSpacing: 0.3,
+    textShadowColor: 'rgba(0,0,0,0.25)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    textShadowRadius: 1,
   },
 });
 

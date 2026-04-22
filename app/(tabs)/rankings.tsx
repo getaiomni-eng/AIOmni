@@ -25,6 +25,7 @@ import { HeatIcon } from '../components/HeatIcon';
 import { computeHeatBatch } from '../../services/heat';
 import { getHeatSignalsMap } from '../../services/heatData';
 import { useHeatAccess, HeatAccess } from '../hooks/useHeatAccess';
+import { PlatformErrorCard, classifyPlatformError } from '../components/PlatformErrorCard';
 
 type Format   = 'PPR' | 'HALF' | 'STD' | 'SF' | 'DYN';
 type Position = 'ALL' | 'QB' | 'RB' | 'WR' | 'TE' | 'K';
@@ -264,6 +265,7 @@ export default function RankingsScreen() {
   // myRanks       = what the UI renders — engine + overrides, re-sorted, re-ranked.
   const [myRanksEngine, setMyRanksEngine] = useState<RankedPlayer[]>([]);
   const [overrides, setOverrides] = useState<Map<string, number>>(new Map());
+  const [communityError, setCommunityError] = useState<any>(null);
   const heatAccess = useHeatAccess();
   const myRanks = useMemo(
     () => applyOverrides(myRanksEngine, overrides),
@@ -288,11 +290,13 @@ export default function RankingsScreen() {
 
   const loadCommunityRankings = async () => {
     setLoading(true);
+    setCommunityError(null);
     try {
       const data = await getEngineRankings(format);
       if (data.length > 0) setCommunityData(await mergeHeat(data));
     } catch (e) {
       console.log('getEngineRankings error:', e);
+      setCommunityError(e);
     } finally {
       setLoading(false);
     }
@@ -623,9 +627,19 @@ export default function RankingsScreen() {
             </TouchableOpacity>
           </Modal>
           </>
-        ) : (
+        ) : mode === 'community' ? (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: SP[3], paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
             <Header />
+            {communityError ? (() => {
+              const c = classifyPlatformError(communityError);
+              return (
+                <PlatformErrorCard
+                  kind={c.kind}
+                  message={c.message}
+                  onRetry={loadCommunityRankings}
+                />
+              );
+            })() : null}
             {!loading && grouped.map((group, gIdx) => (
               <React.Fragment key={`tier-${gIdx}-${group.tier}`}>
                 <View style={s.tierDivider}>
@@ -641,7 +655,7 @@ export default function RankingsScreen() {
               </React.Fragment>
             ))}
           </ScrollView>
-        )}
+        ) : null}
 
 
         {mode === 'prospects' && (

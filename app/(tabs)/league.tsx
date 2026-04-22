@@ -12,6 +12,7 @@ import { HeatIcon } from '../components/HeatIcon';
 import { computeHeatBatch } from '../../services/heat';
 import { getHeatSignalsMap } from '../../services/heatData';
 import { useHeatAccess } from '../hooks/useHeatAccess';
+import { PlatformErrorCard, classifyPlatformError } from '../components/PlatformErrorCard';
 import { getMyYahooTeam, getValidYahooToken, getYahooAllRosters, getYahooMatchups, getYahooStandings, getYahooTransactions } from '../../services/yahoo';
 import { getActiveSleeperIds } from '../../services/nflPlayers';
 import { C, F, R, SZ, BEVEL, dark, palette } from '../constants/tokens';
@@ -147,6 +148,8 @@ export default function LeagueScreen() {
   const heatAccess = useHeatAccess();
   const [sortByHeat, setSortByHeat] = useState(false);
   const [heatUpgradeVisible, setHeatUpgradeVisible] = useState(false);
+  const [rosterError, setRosterError] = useState<any>(null);
+  const [waiverError, setWaiverError] = useState<any>(null);
 
   const PLATFORM_COLOR = platformStr === 'espn' ? '#e03030' : platformStr === 'yahoo' ? '#6001D2' : C.gold;
 
@@ -243,10 +246,14 @@ export default function LeagueScreen() {
   const fetchRoster = async () => {
     try {
       setLoading(true);
+      setRosterError(null);
       if      (platformStr === 'espn')  await fetchESPNRoster();
       else if (platformStr === 'yahoo') await fetchYahooRoster();
       else                              await fetchSleeperRoster();
-    } catch (err) { console.error('fetchRoster:', err); }
+    } catch (err) {
+      console.error('fetchRoster:', err);
+      setRosterError(err);
+    }
     finally { setLoading(false); }
   };
 
@@ -370,6 +377,7 @@ export default function LeagueScreen() {
 
   const fetchWaivers = async () => {
     setWaiverLoading(true);
+    setWaiverError(null);
     try {
       if (platformStr === 'sleeper') {
         const [rosters, pDb, activeIds] = await Promise.all([
@@ -421,7 +429,10 @@ export default function LeagueScreen() {
         const data  = await (await fetch(`https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueId}/players;status=FA;sort=OR;count=50?format=json`, { headers: { Authorization: `Bearer ${token}` } })).json();
         setWaiverPlayers(Object.values(data?.fantasy_content?.league?.[1]?.players || {}).filter((v: any) => typeof v === 'object' && v.player).map((v: any) => { const p = v.player[0]; return { id: p.player_key, name: p.name?.full || 'Unknown', position: p.display_position || '?', team: p.editorial_team_abbr || 'FA', injuryStatus: p.status, isStarter: false }; }));
       }
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      setWaiverError(err);
+    }
     finally { setWaiverLoading(false); }
   };
 
@@ -553,6 +564,17 @@ export default function LeagueScreen() {
 
       ) : activeTab === 'roster' ? (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+          {rosterError ? (() => {
+            const c = classifyPlatformError(rosterError);
+            return (
+              <PlatformErrorCard
+                kind={c.kind}
+                platform={c.platform ?? (platformStr as any)}
+                message={c.message}
+                onRetry={fetchRoster}
+              />
+            );
+          })() : null}
           <View style={styles.sectionHeader}>
             <View style={styles.sectionAccent} />
             <Text style={styles.sectionLabel}>STARTERS</Text>
@@ -695,6 +717,17 @@ export default function LeagueScreen() {
             <View style={styles.loadingBox}><ActivityIndicator color={C.blueDeep} /><Text style={styles.loadingText}>LOADING</Text></View>
           ) : (
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+              {waiverError ? (() => {
+                const c = classifyPlatformError(waiverError);
+                return (
+                  <PlatformErrorCard
+                    kind={c.kind}
+                    platform={c.platform ?? (platformStr as any)}
+                    message={c.message}
+                    onRetry={fetchWaivers}
+                  />
+                );
+              })() : null}
               {filteredWaivers.map((p, i) => renderPlayer(p, true, i))}
               <View style={{ height: 40 }} />
             </ScrollView>
