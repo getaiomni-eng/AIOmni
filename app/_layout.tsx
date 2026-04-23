@@ -39,9 +39,11 @@ export default Sentry.wrap(function RootLayout() {
   useEffect(() => {
     const run = async () => {
       try {
-        const { data } = await supabase.auth.getUser();
-        if (data?.user?.id) {
-          await syncUserBehavioralData(data.user.id);
+        // getSession is lighter than getUser and does not throw on
+        // missing session — it simply returns {data: {session: null}}.
+        const { data } = await supabase.auth.getSession();
+        if (data?.session?.user?.id) {
+          await syncUserBehavioralData(data.session.user.id);
         }
       } catch (e) {
         console.log('behavioralSync error:', e);
@@ -98,8 +100,7 @@ export default Sentry.wrap(function RootLayout() {
         let user = null;
         try { user = await getUser(); } catch {}
         if (!user) {
-          try { await initPurchases(); } catch {}
-          router.replace('/(tabs)' as any);
+          router.replace('/auth' as any);
           return;
         }
         Sentry.setUser({ id: user.id, email: user.email });

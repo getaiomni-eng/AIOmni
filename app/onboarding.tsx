@@ -131,13 +131,6 @@ export default function OnboardingScreen() {
           >
             <Text style={styles.secondaryBtnText}>SIGN IN</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.skipBtn}
-            onPress={() => router.replace('/(tabs)')}
-          >
-            <Text style={styles.skipBtnText}>CONTINUE WITHOUT ACCOUNT</Text>
-          </TouchableOpacity>
         </Animated.View>
 
         {/* Platform strip */}
