@@ -142,8 +142,12 @@ export default Sentry.wrap(function RootLayout() {
               try {
                 const res = await updatePassword(newPw);
                 if (res.success) {
-                  Alert.alert('Password Updated', 'You can now sign in with your new password.');
-                  router.replace('/(tabs)');
+                  // Supabase's recovery flow does NOT auto-sign-in after
+                  // password update. Force a clean sign-out and route to
+                  // /auth so the user signs in with their new password.
+                  try { await supabase.auth.signOut(); } catch {}
+                  Alert.alert('Password Updated', 'Sign in with your new password.');
+                  router.replace('/auth' as any);
                 } else {
                   Alert.alert('Error', res.error ?? 'Failed to update password.');
                 }
