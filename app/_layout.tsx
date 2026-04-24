@@ -128,8 +128,20 @@ export default Sentry.wrap(function RootLayout() {
 
       // ── Password reset callback ──
       if (url.includes('auth/reset') || url.includes('type=recovery')) {
+        // Dedup: iOS caches the last-opened deep-link URL and replays it
+        // on every cold start via Linking.getInitialURL. Without this guard
+        // the recovery prompt would re-fire forever. Use the URL itself as
+        // the dedup key (each recovery link is uniquely signed by Supabase).
+        const processedKey = 'processed_reset_url';
+        try {
+          const lastProcessed = await AsyncStorage.getItem(processedKey);
+          if (lastProcessed === url) return;
+          await AsyncStorage.setItem(processedKey, url);
+        } catch {}
+
         // Supabase auto-sets the session from the recovery token in the URL
-        // Prompt user for new password
+        // (detectSessionInUrl: true in services/supabase.ts). Give it a
+        // beat to parse the token before prompting.
         setTimeout(() => {
           Alert.prompt(
             'Set New Password',
