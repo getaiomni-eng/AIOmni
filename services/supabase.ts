@@ -11,6 +11,10 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
     autoRefreshToken: true,
     persistSession:   true,
     detectSessionInUrl: true,
+    // PKCE flow: tokens arrive as ?code=xyz in query string instead of
+    // URL fragment. iOS strips fragments from custom URL schemes; query
+    // params survive. Required for password reset deep-links to work.
+    flowType: 'pkce',
   },
 });
 

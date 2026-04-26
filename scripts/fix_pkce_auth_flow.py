@@ -1,4 +1,55 @@
-import { useRouter, useLocalSearchParams } from 'expo-router';
+#!/usr/bin/env python3
+"""
+Switch to PKCE auth flow — fixes password reset on iOS deep links.
+
+Why this is needed:
+  Without flowType: 'pkce', Supabase sends recovery tokens in the URL
+  FRAGMENT (after #). iOS strips fragments from custom URL schemes
+  (aiomnifantasy://) before any app code sees them. That's why
+  Linking.getInitialURL() returned null in the debug build.
+
+  PKCE flow sends the recovery token as a QUERY PARAM (?code=...) which
+  iOS preserves. expo-router parses query params automatically and
+  passes them to screens via useLocalSearchParams().
+
+Two changes:
+  1. services/supabase.ts — add flowType: 'pkce' to auth config
+  2. app/auth/reset.tsx   — use useLocalSearchParams() instead of Linking,
+                             call exchangeCodeForSession() instead of
+                             setSession(). Also removes the debug display.
+
+Run from /Users/patrickmeyer/AIOmni:
+    python3 scripts/fix_pkce_auth_flow.py
+"""
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+SUPA = ROOT / "services" / "supabase.ts"
+RESET = ROOT / "app" / "auth" / "reset.tsx"
+
+
+# ─── Patch 1: add flowType: 'pkce' to supabase.ts ─────────────────────────
+SUPA_OLD = """  auth: {
+    storage:          AsyncStorage,
+    autoRefreshToken: true,
+    persistSession:   true,
+    detectSessionInUrl: true,"""
+
+SUPA_NEW = """  auth: {
+    storage:          AsyncStorage,
+    autoRefreshToken: true,
+    persistSession:   true,
+    detectSessionInUrl: true,
+    // PKCE flow: tokens arrive as ?code=xyz in query string instead of
+    // URL fragment. iOS strips fragments from custom URL schemes; query
+    // params survive. Required for password reset deep-links to work.
+    flowType: 'pkce',"""
+
+
+# ─── Patch 2: rewrite reset.tsx to use expo-router params + exchangeCode ──
+RESET_NEW = '''import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
@@ -201,3 +252,63 @@ const styles = StyleSheet.create({
   submitTxt: { fontFamily: F.mono, color: '#0a1214', fontSize: SZ.base, letterSpacing: 2 },
   cancelTxt: { fontFamily: F.mono, color: '#6eeb83', fontSize: SZ.sm, textAlign: 'center', paddingVertical: 4 },
 });
+'''
+
+
+def main():
+    print("=" * 60)
+    print("PKCE auth flow + reset screen rewrite")
+    print("=" * 60)
+    print()
+
+    # ── Patch supabase.ts ─────────────────────────────────────────────────
+    if not SUPA.exists():
+        print(f"ERROR: {SUPA} not found")
+        sys.exit(1)
+
+    supa_text = SUPA.read_text()
+    if "flowType: 'pkce'" in supa_text:
+        print("  [ALREADY]  services/supabase.ts has flowType: 'pkce'")
+    elif SUPA_OLD in supa_text:
+        SUPA.write_text(supa_text.replace(SUPA_OLD, SUPA_NEW))
+        print("  [APPLIED]  added flowType: 'pkce' to services/supabase.ts")
+    else:
+        print("  [MISSING]  could not locate auth config block in services/supabase.ts")
+        sys.exit(2)
+
+    # ── Rewrite reset.tsx ─────────────────────────────────────────────────
+    if not RESET.exists():
+        print(f"ERROR: {RESET} not found")
+        sys.exit(1)
+
+    reset_text = RESET.read_text()
+    if "useLocalSearchParams" in reset_text and "exchangeCodeForSession" in reset_text:
+        if "DEBUG" in reset_text or "debugUrl" in reset_text:
+            # Has the debug build mixed in — overwrite with clean version
+            RESET.write_text(RESET_NEW)
+            print("  [APPLIED]  rewrote app/auth/reset.tsx (PKCE + removed debug)")
+        else:
+            print("  [ALREADY]  app/auth/reset.tsx already on PKCE flow")
+    else:
+        # Either initial version or first-rewrite version — overwrite
+        RESET.write_text(RESET_NEW)
+        print("  [APPLIED]  rewrote app/auth/reset.tsx for PKCE flow")
+
+    print()
+    print("=" * 60)
+    print("✓ PKCE flow ready")
+    print("=" * 60)
+    print()
+    print("What changed:")
+    print("  • supabase.ts: flowType: 'pkce' (tokens via query, not fragment)")
+    print("  • reset.tsx: useLocalSearchParams + exchangeCodeForSession")
+    print("  • Debug display removed")
+    print()
+    print("Next:")
+    print("  npx tsc --noEmit")
+    print("  git add -A && git commit -m \"Switch to PKCE auth flow for password reset\"")
+    print("  git push && eas build --platform ios --profile testflight --auto-submit")
+
+
+if __name__ == "__main__":
+    main()
