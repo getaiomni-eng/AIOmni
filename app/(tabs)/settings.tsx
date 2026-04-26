@@ -40,7 +40,8 @@ export default function SettingsScreen() {
       if (cachedUser) setEmail(cachedUser);
       if (cachedSleeper) setUsername(cachedSleeper);
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) return;
 
       const { data: row } = await supabase
