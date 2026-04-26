@@ -1,4 +1,42 @@
-import { useRouter } from 'expo-router';
+#!/usr/bin/env python3
+"""
+Fix reset.tsx to manually establish recovery session from URL fragment.
+
+Why this is needed:
+  Supabase's detectSessionInUrl: true setting works in WEB environments
+  because it reads window.location.hash. In React Native there is no
+  window.location — the deep-link URL arrives via expo-linking, and we
+  have to manually parse the access_token + refresh_token out of the
+  URL fragment and call supabase.auth.setSession() ourselves.
+
+  Without this, the recovery session is never established. updateUser()
+  then throws "Auth session missing!" — exactly the error visible on
+  the new reset.tsx screen.
+
+What this patch does:
+  1. Adds expo-linking imports and useEffect on mount
+  2. On mount: gets the URL via Linking.getInitialURL() OR Linking.addEventListener
+  3. Parses #access_token=...&refresh_token=...&type=recovery from the URL
+  4. Calls supabase.auth.setSession({ access_token, refresh_token })
+  5. Stores session-ready state — only enables Update Password when ready
+  6. handleSubmit's updateUser() now runs against an established session
+
+Run from /Users/patrickmeyer/AIOmni:
+    python3 scripts/fix_reset_session_establishment.py
+"""
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+TARGET = ROOT / "app" / "auth" / "reset.tsx"
+
+
+# We rewrite the entire file because the changes touch imports, state,
+# useEffect, and the JSX in interrelated ways. Trying to do this as
+# multiple targeted patches would be more fragile than one rewrite.
+
+NEW_FILE = '''import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
@@ -256,3 +294,48 @@ const styles = StyleSheet.create({
   submitTxt: { fontFamily: F.mono, color: '#0a1214', fontSize: SZ.base, letterSpacing: 2 },
   cancelTxt: { fontFamily: F.mono, color: '#6eeb83', fontSize: SZ.sm, textAlign: 'center', paddingVertical: 4 },
 });
+'''
+
+
+def main():
+    if not TARGET.exists():
+        print(f"ERROR: {TARGET} not found")
+        sys.exit(1)
+
+    current = TARGET.read_text()
+
+    # Check if already patched (look for a distinctive symbol from the new version)
+    if "parseRecoveryTokens" in current and "supabase.auth.setSession" in current:
+        print("  [ALREADY]  reset.tsx already has session-establishment logic")
+        return
+
+    # Sanity check: make sure we're patching the right file
+    if "ResetPasswordScreen" not in current:
+        print(f"  [MISSING]  {TARGET.name} doesn't look like the reset screen")
+        sys.exit(2)
+
+    TARGET.write_text(NEW_FILE)
+    print(f"  [APPLIED]  rewrote {TARGET.name} with session establishment")
+    print()
+    print(f"  ✓ {TARGET.name}")
+    print()
+    print("Changes:")
+    print("  • Imports expo-linking")
+    print("  • Adds useEffect on mount to grab deep-link URL")
+    print("  • Parses access_token + refresh_token from URL fragment")
+    print("  • Calls supabase.auth.setSession() to establish recovery session")
+    print("  • Disables Update Password until session is ready")
+    print("  • Shows clear error if URL is missing/malformed/wrong type")
+
+
+if __name__ == "__main__":
+    print("=" * 60)
+    print("Fix reset.tsx — manual session establishment")
+    print("=" * 60)
+    print()
+    main()
+    print()
+    print("Next:")
+    print("  npx tsc --noEmit")
+    print("  git add -A && git commit -m \"Reset: manual setSession from URL fragment\"")
+    print("  git push && eas build --platform ios --profile testflight --auto-submit")
