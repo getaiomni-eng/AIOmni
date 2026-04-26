@@ -49,6 +49,9 @@ export default function ResetPasswordScreen() {
   // have a valid recovery session attached to the Supabase client.
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState('');
+  // DEBUG — remove once auth flow works
+  const [debugUrl, setDebugUrl] = useState<string>('(no URL captured yet)');
+  const [debugParsed, setDebugParsed] = useState<string>('(not parsed yet)');
 
   // ─── On mount: grab the deep-link URL and establish the recovery session ──
   useEffect(() => {
@@ -56,12 +59,20 @@ export default function ResetPasswordScreen() {
 
     async function establishSession(url: string | null) {
       if (cancelled) return;
+      // DEBUG — store raw URL for visibility
+      setDebugUrl(url ?? '(null)');
       if (!url) {
         setSessionError('No reset link detected. Open this screen from your password reset email.');
         return;
       }
 
       const { accessToken, refreshToken, type } = parseRecoveryTokens(url);
+      // DEBUG — store parsed values
+      setDebugParsed(
+        `type=${type ?? '(missing)'}\n` +
+        `access_token=${accessToken ? accessToken.substring(0, 20) + '...' : '(missing)'}\n` +
+        `refresh_token=${refreshToken ? refreshToken.substring(0, 20) + '...' : '(missing)'}`
+      );
 
       if (type !== 'recovery') {
         setSessionError('This link is not a password recovery link. Try requesting a new reset email.');
@@ -199,6 +210,14 @@ export default function ResetPasswordScreen() {
             <TouchableOpacity onPress={() => router.replace('/auth' as any)}>
               <Text style={styles.cancelTxt}>← Back to sign in</Text>
             </TouchableOpacity>
+          </View>
+
+          {/* DEBUG — remove once auth flow works */}
+          <View style={{ marginTop: 24, padding: 12, backgroundColor: '#0f1c22', borderRadius: 8, borderWidth: 1, borderColor: '#1a3542' }}>
+            <Text style={{ color: '#6eeb83', fontFamily: F.mono, fontSize: 9, letterSpacing: 1, marginBottom: 4 }}>DEBUG · URL</Text>
+            <Text selectable style={{ color: '#f0f4f5', fontFamily: F.mono, fontSize: 9, marginBottom: 8 }}>{debugUrl}</Text>
+            <Text style={{ color: '#6eeb83', fontFamily: F.mono, fontSize: 9, letterSpacing: 1, marginBottom: 4 }}>DEBUG · PARSED</Text>
+            <Text selectable style={{ color: '#f0f4f5', fontFamily: F.mono, fontSize: 9 }}>{debugParsed}</Text>
           </View>
 
         </View>
