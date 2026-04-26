@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../services/supabase';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
@@ -23,14 +24,49 @@ export default function SettingsScreen() {
   }, []);
 
   const loadSettings = async () => {
-    const u = await AsyncStorage.getItem('sleeper_username');
-    if (u) setUsername(u);
-    const e = await AsyncStorage.getItem('user_email');
-    if (e) setEmail(e);
+    // ESPN/Yahoo connection state lives in AsyncStorage (it's the auth
+    // token cache). Fetch those first — they don't depend on the network.
     const espn = await AsyncStorage.getItem('espn_s2');
     setEspnLinked(!!espn);
     const yahoo = await AsyncStorage.getItem('yahoo_tokens');
     setYahooLinked(!!yahoo);
+
+    // Email + Sleeper username come from public.users (source of truth).
+    // AsyncStorage is the offline fallback — we read it first as a fast
+    // local hint, then overwrite with the canonical DB values.
+    try {
+      const cachedUser = await AsyncStorage.getItem('user_email');
+      const cachedSleeper = await AsyncStorage.getItem('sleeper_username');
+      if (cachedUser) setEmail(cachedUser);
+      if (cachedSleeper) setUsername(cachedSleeper);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: row } = await supabase
+        .from('users')
+        .select('email, sleeper_username')
+        .eq('auth_id', user.id)
+        .maybeSingle();
+
+      if (row?.email) {
+        setEmail(row.email);
+        // Refresh AsyncStorage cache for next cold start
+        await AsyncStorage.setItem('user_email', row.email);
+      } else if (user.email) {
+        // Fallback to auth user email if public.users.email is somehow null
+        setEmail(user.email);
+        await AsyncStorage.setItem('user_email', user.email);
+      }
+
+      if (row?.sleeper_username) {
+        setUsername(row.sleeper_username);
+        await AsyncStorage.setItem('sleeper_username', row.sleeper_username);
+      }
+    } catch (e) {
+      // Network failure or DB error — AsyncStorage values already shown above
+      console.warn('loadSettings: falling back to cached values', e);
+    }
   };
 
   const handleSignOut = async () => {
