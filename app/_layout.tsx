@@ -126,52 +126,11 @@ export default Sentry.wrap(function RootLayout() {
     const handleDeepLink = async (event: { url: string }) => {
       const url = event.url;
 
-      // ── Password reset callback ──
-      if (url.includes('auth/reset') || url.includes('type=recovery')) {
-        // Dedup: iOS caches the last-opened deep-link URL and replays it
-        // on every cold start via Linking.getInitialURL. Without this guard
-        // the recovery prompt would re-fire forever. Use the URL itself as
-        // the dedup key (each recovery link is uniquely signed by Supabase).
-        const processedKey = 'processed_reset_url';
-        try {
-          const lastProcessed = await AsyncStorage.getItem(processedKey);
-          if (lastProcessed === url) return;
-          await AsyncStorage.setItem(processedKey, url);
-        } catch {}
-
-        // Supabase auto-sets the session from the recovery token in the URL
-        // (detectSessionInUrl: true in services/supabase.ts). Give it a
-        // beat to parse the token before prompting.
-        setTimeout(() => {
-          Alert.prompt(
-            'Set New Password',
-            'Enter your new password:',
-            async (newPw) => {
-              if (!newPw || newPw.length < 6) {
-                Alert.alert('Error', 'Password must be at least 6 characters.');
-                return;
-              }
-              try {
-                const res = await updatePassword(newPw);
-                if (res.success) {
-                  // Supabase's recovery flow does NOT auto-sign-in after
-                  // password update. Force a clean sign-out and route to
-                  // /auth so the user signs in with their new password.
-                  try { await supabase.auth.signOut(); } catch {}
-                  Alert.alert('Password Updated', 'Sign in with your new password.');
-                  router.replace('/auth' as any);
-                } else {
-                  Alert.alert('Error', res.error ?? 'Failed to update password.');
-                }
-              } catch (e: any) {
-                Alert.alert('Error', e.message ?? 'Something went wrong.');
-              }
-            },
-            'secure-text'
-          );
-        }, 500);
-        return;
-      }
+      // Password reset is handled by app/auth/reset.tsx via expo-router
+      // auto-resolution. Supabase parses the recovery token from the URL
+      // fragment via detectSessionInUrl: true in services/supabase.ts,
+      // so by the time reset.tsx mounts the user has a valid recovery
+      // session and can call supabase.auth.updateUser({password}) directly.
 
       // ── Yahoo OAuth callback ──
       if (!url.includes('oauth/yahoo')) return;

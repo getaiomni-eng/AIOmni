@@ -1,10 +1,10 @@
-import { AIOmniLogo } from './components/AIOmniLogo';
+import { AIOmniLogo } from '../components/AIOmniLogo';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState } from 'react';
-import { signInWithEmail, signUpWithEmail, resetPassword } from '../services/auth';
+import { signInWithEmail, signUpWithEmail, resetPassword } from '../../services/auth';
 
-import { C, F, SZ, R, SP } from './constants/tokens';
+import { C, F, SZ, R, SP } from '../constants/tokens';
 import { KeyboardAvoidingView, Platform, View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 
 const SURFACE  = '#12252e';
