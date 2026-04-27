@@ -70,13 +70,50 @@ export async function restorePurchases(): Promise<{ success: boolean; tier?: str
 }
 
 // ── Current Tier ──────────────────────────────────────────────────────────────
+// Reads tier from public.users first (DB is source of truth); falls back
+// to RevenueCat if DB lookup fails or returns 'free'. Whichever returns
+// the higher tier wins — this lets manual DB grants (founders, comps,
+// beta testers) work alongside RevenueCat purchases without conflict.
+
+const TIER_RANK: Record<string, number> = {
+  free: 0,
+  rankings: 1,
+  pro: 2,
+  dynasty_elite: 3,
+};
+
+function higherTier(a: string, b: string): string {
+  return (TIER_RANK[a] ?? 0) >= (TIER_RANK[b] ?? 0) ? a : b;
+}
+
 export async function getCurrentTier(): Promise<string> {
+  let dbTier: string = 'free';
+  let rcTier: string = 'free';
+
+  // ── DB path ──
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: row } = await supabase
+        .from('users')
+        .select('tier')
+        .eq('auth_id', user.id)
+        .maybeSingle();
+      if (row?.tier && typeof row.tier === 'string') dbTier = row.tier;
+    }
+  } catch {
+    // DB error — fall through to RC only
+  }
+
+  // ── RevenueCat path ──
   try {
     const customerInfo = await Purchases.getCustomerInfo();
-    return getTierFromEntitlements(customerInfo.entitlements.active) ?? 'free';
+    rcTier = getTierFromEntitlements(customerInfo.entitlements.active) ?? 'free';
   } catch {
-    return 'free';
+    // RC error — DB result will be returned
   }
+
+  return higherTier(dbTier, rcTier);
 }
 
 function getTierFromEntitlements(active: Record<string, any>): string | null {

@@ -330,7 +330,7 @@ export default function HomeScreen() {
                 <Text style={styles.handleTxt}>@{username}</Text>
               </View>
             ) : null}
-            <TouchableOpacity onPress={() => router.push('/settings-page' as any)} style={styles.gearBtn}>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/settings' as any)} style={styles.gearBtn}>
               <Ionicons name="settings-sharp" size={20} color={dark.textMuted} />
             </TouchableOpacity>
           </View>
@@ -463,7 +463,7 @@ export default function HomeScreen() {
           <FlatCard style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No leagues found</Text>
             <Text style={styles.emptyTxt}>Connect Sleeper, ESPN, or Yahoo in Settings.</Text>
-            <TouchableOpacity onPress={() => router.push('/settings-page' as any)} style={styles.emptyBtn}>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/settings' as any)} style={styles.emptyBtn}>
               <Text style={styles.emptyBtnTxt}>GO TO SETTINGS</Text>
             </TouchableOpacity>
           </FlatCard>

@@ -369,7 +369,7 @@ export default function CoachScreen() {
                 <View style={[styles.livePulse, !contextReady && { backgroundColor: C.gold }]} />
                 <Text style={[styles.liveTxt, !contextReady && { color: C.gold }]}>{contextReady ? 'LIVE' : 'SYNC'}</Text>
               </View>
-              <TouchableOpacity onPress={() => router.push('/settings')} style={styles.gearBtn}>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/settings' as any)} style={styles.gearBtn}>
                 <Ionicons name="settings-sharp" size={20} color={C.dim2} />
               </TouchableOpacity>
             </View>
