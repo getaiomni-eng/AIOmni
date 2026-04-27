@@ -390,7 +390,13 @@ function SetupWizard({
       <View style={styles.setupHeader}>
         <TheOLogo fontSize={36} color="#f0f4f5" />
         <Text style={styles.setupSub}>
-          {step === 'platform' && 'Choose your platform'}
+          {step === 'platform' && (
+            <>
+              {'Runs alongside your real draft'}
+              {'\n'}
+              <Text style={{ color: '#7a9eaa' }}>{'Choose where your draft is happening'}</Text>
+            </>
+          )}
           {step === 'league' && 'Select your league'}
           {step === 'position' && 'Draft settings'}
           {step === 'confirm' && 'Ready to draft'}
@@ -412,8 +418,8 @@ function SetupWizard({
         <View style={styles.setupSection}>
           {([
             { key: 'sleeper', label: 'SLEEPER', desc: 'Live auto-sync — picks update automatically', color: '#00FFF9', live: true },
-            { key: 'espn', label: 'ESPN', desc: 'Companion mode — mark picks as they happen', color: '#e52534', live: false },
-            { key: 'yahoo', label: 'YAHOO', desc: 'Companion mode — mark picks as they happen', color: '#7c3aed', live: false },
+            { key: 'espn', label: 'ESPN', desc: 'Open ESPN to draft — tap picks here as they happen', color: '#e52534', live: false },
+            { key: 'yahoo', label: 'YAHOO', desc: 'Open Yahoo to draft — tap picks here as they happen', color: '#7c3aed', live: false },
             { key: 'offline', label: 'OFFLINE / LIVE', desc: 'In-person draft — track picks on your phone', color: C.amber, live: false },
           ] as const).map(p => (
             <TouchableOpacity

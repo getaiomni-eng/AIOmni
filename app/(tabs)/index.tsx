@@ -22,7 +22,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W    = SCREEN_W - SP[3] * 2;
 const INSIGHT_W = CARD_W - 28;
 
-type Platform = 'sleeper' | 'espn' | 'yahoo';
+type Platform = 'sleeper' | 'espn' | 'yahoo' | 'mfl' | 'fleaflicker';
 type League = {
   id: string; name: string; platform: Platform;
   format?: string; rec?: string; rank?: string;
@@ -67,7 +67,7 @@ export default function HomeScreen() {
   const [scoreIdx,       setScoreIdx]       = useState(0);
   const [feed, setFeed] = useState<FeedByTab>({ SLEEPER: [], NEWS: [], INJURIES: [], TRADES: [], all: [] });
   const [newsTab, setNewsTab] = useState<NewsTab>('NEWS');
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['sleeper', 'espn', 'yahoo']);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['sleeper', 'espn', 'yahoo', 'mfl', 'fleaflicker']);
   const [selectedSeason,    setSelectedSeason]    = useState(String(new Date().getFullYear()));
   const [aiCoachActive,     setAiCoachActive]     = useState(false);
   const [selectedLeague,    setSelectedLeague]    = useState<League | null>(null);

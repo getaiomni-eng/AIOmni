@@ -546,6 +546,22 @@ export default function RankingsScreen() {
         ))}
       </ScrollView>
 
+      {/* ─── REDRAFT / DYNASTY toggle ─── */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.formatScroll}>
+        {(['redraft', 'dynasty'] as const).map(lt => (
+          <TouchableOpacity
+            key={lt}
+            onPress={() => setLeagueType(lt)}
+            style={[s.formatPill, leagueType === lt && s.formatPillOn]}
+          >
+            <Text style={[s.formatText, leagueType === lt && s.formatTextOn]}>
+              {lt.toUpperCase()}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* ─── Scoring format pills ─── */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.formatScroll}>
         {FORMATS.map(fmt => (
           <TouchableOpacity key={fmt.key} onPress={() => setFormat(fmt.key)} style={[s.formatPill, format === fmt.key && s.formatPillOn]}>

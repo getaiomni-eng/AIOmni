@@ -1,5 +1,5 @@
 // services/draft.ts
-// AIOmni Draft Copilot — Unified Draft Service
+// The O — AIOmni's AI Draft Co-Pilot — Unified Draft Service
 // Sleeper: live polling via public API
 // ESPN / Yahoo / Offline: companion mode (manual pick tracking)
 
@@ -362,7 +362,7 @@ export function buildDraftPrompt(state: DraftState, question?: string): string {
   );
   const remaining = myPicks.filter(p => p >= currentPick);
 
-  return `You are AIOmni Draft Copilot. You are advising a fantasy football manager during a live ${settings.draftType} draft.
+  return `You are The O, AIOmni's AI draft co-pilot. You are advising a fantasy football manager during a live ${settings.draftType} draft.
 
 LEAGUE SETTINGS:
 - Platform: ${settings.platform.toUpperCase()}

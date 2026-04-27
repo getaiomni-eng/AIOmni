@@ -177,7 +177,7 @@ export const TIER_INFO: Record<string, {
     yearlyPrice: '$89.99/yr',
     color: '#ffb800',
     features: [
-      'Draft Copilot',
+      'The O — AI draft co-pilot',
       'Trade Analyzer',
       'Season-long AI memory',
       '40 AI prompts/week',
