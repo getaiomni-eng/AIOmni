@@ -79,6 +79,36 @@ export default function HomeScreen() {
   useEffect(() => { loadLeagues(); loadNewsFeed(); }, [selectedSeason]);
 
   // ── All data loading functions identical to v6 ──
+  // ─── MFL leagues (stub — wire to real fetch in Piece 2A) ────
+  const loadMflLeagues = async (_year: string = String(new Date().getFullYear())): Promise<League[]> => {
+    try {
+      const leagueId = await AsyncStorage.getItem('mfl_league_id');
+      if (!leagueId) return [];
+      return [{
+        id: String(leagueId),
+        name: 'MFL League',
+        platform: 'mfl' as any,
+        format: 'PPR',
+        rec: '0-0', rank: '-', pts: 0, opp: 0, week: 1,
+      }];
+    } catch { return []; }
+  };
+
+  // ─── Fleaflicker leagues (stub — wire to real fetch in Piece 2A) ────
+  const loadFleaflickerLeagues = async (_year: string = String(new Date().getFullYear())): Promise<League[]> => {
+    try {
+      const leagueId = await AsyncStorage.getItem('fleaflicker_league_id');
+      if (!leagueId) return [];
+      return [{
+        id: String(leagueId),
+        name: 'Fleaflicker League',
+        platform: 'fleaflicker' as any,
+        format: 'PPR',
+        rec: '0-0', rank: '-', pts: 0, opp: 0, week: 1,
+      }];
+    } catch { return []; }
+  };
+
   const loadSleeperLeagues = async (year: string = String(new Date().getFullYear())): Promise<League[]> => {
     try {
       const u = await AsyncStorage.getItem('sleeper_username');
@@ -252,6 +282,8 @@ export default function HomeScreen() {
         loadSleeperLeagues(selectedSeason),
         loadESPNLeagues(selectedSeason),
         loadYahooLeagues(selectedSeason),
+        loadMflLeagues(selectedSeason),
+        loadFleaflickerLeagues(selectedSeason),
       ]);
       const allLeagues: League[] = [];
       if (sleeper.status === 'fulfilled') allLeagues.push(...sleeper.value);
@@ -462,7 +494,7 @@ export default function HomeScreen() {
         ) : (
           <FlatCard style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No leagues found</Text>
-            <Text style={styles.emptyTxt}>Connect Sleeper, ESPN, or Yahoo in Settings.</Text>
+            <Text style={styles.emptyTxt}>Connect Sleeper, ESPN, Yahoo, MFL, or Fleaflicker in Settings.</Text>
             <TouchableOpacity onPress={() => router.push('/(tabs)/settings' as any)} style={styles.emptyBtn}>
               <Text style={styles.emptyBtnTxt}>GO TO SETTINGS</Text>
             </TouchableOpacity>

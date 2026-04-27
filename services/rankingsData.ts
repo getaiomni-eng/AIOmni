@@ -119,12 +119,34 @@ const SLEEPER_CACHE_KEY = 'sleeper_players_cache';
 const SLEEPER_CACHE_TS  = 'sleeper_players_cache_ts';
 const CACHE_TTL         = 24 * 60 * 60 * 1000; // 24 hours
 
-const TIER_BREAKS = [4, 10, 18, 25];
-function assignTier(rank: number): number {
-  if (rank <= TIER_BREAKS[0]) return 1;
-  if (rank <= TIER_BREAKS[1]) return 2;
-  if (rank <= TIER_BREAKS[2]) return 3;
-  if (rank <= TIER_BREAKS[3]) return 4;
+// ─── Tier breaks (format-aware) ───────────────────────────────
+// Tier 1 ends at idx 0, Tier 2 at idx 1, etc. Anything past idx 3
+// becomes Tier 5 (deep depth / dart throws).
+//
+// Calibration rationale:
+//   - Standard redraft cliff is RB-driven; top 4 form an RB1/elite tier
+//   - Superflex tightens because elite QBs clump
+//   - Dynasty extends because young assets have multi-year relevance
+//     (a Tier 3 dynasty player is still a long-term piece)
+const TIER_BREAKS_DEFAULT  = [4, 10, 18, 25];
+const TIER_BREAKS_SUPERFLEX = [3, 8, 16, 24];
+const TIER_BREAKS_DYNASTY  = [5, 14, 26, 40];
+
+function getTierBreaks(format?: string): number[] {
+  if (format === 'SF' || format === 'superflex') return TIER_BREAKS_SUPERFLEX;
+  if (format === 'DYN' || format === 'dynasty')  return TIER_BREAKS_DYNASTY;
+  return TIER_BREAKS_DEFAULT;
+}
+
+// Backwards-compatible alias for any existing callers
+const TIER_BREAKS = TIER_BREAKS_DEFAULT;
+
+function assignTier(rank: number, format?: string): number {
+  const breaks = getTierBreaks(format);
+  if (rank <= breaks[0]) return 1;
+  if (rank <= breaks[1]) return 2;
+  if (rank <= breaks[2]) return 3;
+  if (rank <= breaks[3]) return 4;
   return 5;
 }
 

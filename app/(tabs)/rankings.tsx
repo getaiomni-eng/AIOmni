@@ -27,7 +27,7 @@ import { getHeatSignalsMap } from '../../services/heatData';
 import { useHeatAccess, HeatAccess } from '../hooks/useHeatAccess';
 import { PlatformErrorCard, classifyPlatformError } from '../components/PlatformErrorCard';
 
-type Format   = 'PPR' | 'HALF' | 'STD' | 'SF' | 'DYN';
+type Format   = 'PPR' | 'HALF' | 'STD' | 'SF';
 type Position = 'ALL' | 'QB' | 'RB' | 'WR' | 'TE' | 'K';
 type Mode     = 'community' | 'mine' | 'prospects';
 
@@ -52,7 +52,6 @@ const FORMATS: { key: Format; label: string }[] = [
   { key: 'HALF', label: 'HALF PPR' },
   { key: 'STD', label: 'STANDARD' },
   { key: 'SF', label: 'SUPERFLEX' },
-  { key: 'DYN', label: 'DYNASTY' },
 ];
 
 const POSITIONS: Position[] = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K'];
