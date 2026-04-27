@@ -12,7 +12,7 @@ import { getActiveSleeperIds } from './nflPlayers';
 
 // ─── TYPES ──────────────────────────────────────────────────
 
-export type RankingsSource = 'sleeper' | 'espn' | 'yahoo' | 'fantasypros' | 'nfl' | 'aiomni';
+export type RankingsSource = 'sleeper' | 'espn' | 'yahoo' | 'mfl' | 'fleaflicker' | 'fantasypros' | 'nfl' | 'aiomni';
 
 export interface RankedPlayer {
   id: string;
@@ -39,6 +39,66 @@ export interface RankedPlayer {
 }
 
 export type ScoringFormat = 'PPR' | 'HALF' | 'STD' | 'SF' | 'DYN';
+
+// ─── FORMAT-AWARE BLEND TYPES (Piece 1) ─────────────────────────────────
+// LeagueType + ScoringRules supersede ScoringFormat for the SOURCE BLEND
+// step (deciding how much each platform's ADP contributes). The legacy
+// ScoringFormat enum stays for the post-blend position-boost step in
+// applyFormatAdjustments() — that's orthogonal and works on tiers, not
+// source aggregation. New callers should pass these two params; old
+// callers that pass nothing get redraft/PPR defaults.
+
+export type LeagueType = 'redraft' | 'dynasty';
+export type ScoringRules = 'ppr' | 'half' | 'std' | 'superflex';
+
+// Per-format source weights. These determine how much each platform's
+// rank contributes to the blended consensus rank.
+//   - Redraft: ESPN/Sleeper/Yahoo are crowd-sourced ADP gold standards.
+//     NFL.com is editorial (one analyst), weighted lower. MFL/Fleaflicker
+//     are smaller user bases for redraft.
+//   - Dynasty: MFL/Fleaflicker are the gold standard (smartest dynasty
+//     demographics). Sleeper has decent dynasty signal. ESPN/Yahoo
+//     dynasty data is weak. NFL.com doesn't publish dynasty rankings.
+//
+// Weights sum to 100 within each format.
+export const SOURCE_WEIGHTS: Record<LeagueType, Record<RankingsSource, number>> = {
+  redraft: {
+    sleeper: 24,
+    espn: 24,
+    yahoo: 24,
+    nfl: 12,
+    mfl: 8,
+    fleaflicker: 8,
+    fantasypros: 0,    // not implemented; reserved
+    aiomni: 0,         // synthesized output, not a source input
+  },
+  dynasty: {
+    sleeper: 20,
+    espn: 12.5,
+    yahoo: 12.5,
+    nfl: 0,            // NFL.com doesn't publish dynasty rankings
+    mfl: 30,
+    fleaflicker: 25,
+    fantasypros: 0,
+    aiomni: 0,
+  },
+};
+
+// Map legacy ScoringFormat -> (LeagueType, ScoringRules) so old callers
+// continue to work. Used as fallback when callers pass only ScoringFormat.
+export function legacyFormatToBlendParams(
+  format: ScoringFormat
+): { leagueType: LeagueType; scoringRules: ScoringRules } {
+  switch (format) {
+    case 'DYN':  return { leagueType: 'dynasty', scoringRules: 'ppr' };
+    case 'SF':   return { leagueType: 'redraft', scoringRules: 'superflex' };
+    case 'HALF': return { leagueType: 'redraft', scoringRules: 'half' };
+    case 'STD':  return { leagueType: 'redraft', scoringRules: 'std' };
+    case 'PPR':
+    default:     return { leagueType: 'redraft', scoringRules: 'ppr' };
+  }
+}
+
 
 export interface CollegeProspect {
   id: string;
@@ -285,6 +345,42 @@ export async function fetchYahooADP(): Promise<RankedPlayer[]> {
   } catch (e) { console.log('fetchYahooADP error:', e); return []; }
 }
 
+// ─── MFL ADP (stub for Piece 1; real fetcher lands in Piece 2) ──────────
+// MFL exposes ADP via api.myfantasyleague.com/{year}/export?TYPE=adp
+// with IS_PPR / IS_KEEPER params controlling format. Implementing
+// the actual fetch + parsing is deferred to Piece 2 to keep this
+// patch focused on architecture.
+
+export async function fetchMFLADP(
+  _leagueType: LeagueType = 'redraft',
+  _scoringRules: ScoringRules = 'ppr'
+): Promise<RankedPlayer[]> {
+  // Piece 2 will implement: hit MFL ADP endpoint, parse XML/JSON,
+  // map to RankedPlayer[]. For now returns empty so the weighted
+  // blender knows MFL data is missing and skips it gracefully.
+  return [];
+}
+
+// ─── Fleaflicker rankings (stub for Piece 1) ────────────────────────────
+// Fleaflicker has player rankings at /api/Players. Piece 2 implements.
+
+export async function fetchFleaflickerADP(
+  _leagueType: LeagueType = 'redraft',
+  _scoringRules: ScoringRules = 'ppr'
+): Promise<RankedPlayer[]> {
+  return [];
+}
+
+// ─── NFL.com rankings (stub for Piece 1; scraper lands in Piece 3) ──────
+// NFL.com has no public API. Piece 3 implements via Supabase edge
+// function that scrapes fantasy.nfl.com/research/rankings and caches.
+
+export async function fetchNFLDotComRankings(
+  _scoringRules: ScoringRules = 'ppr'
+): Promise<RankedPlayer[]> {
+  return [];
+}
+
 // ─── NFL INJURIES ───────────────────────────────────────────
 
 interface InjuryInfo { name: string; status: string; detail: string; }
@@ -528,16 +624,23 @@ async function fetchRotoNews(): Promise<NewsItem[]> {
 
 // ─── BLENDED CONSENSUS (the main engine) ────────────────────
 
-export async function fetchBlendedConsensus(): Promise<RankedPlayer[]> {
+export async function fetchBlendedConsensus(
+  leagueType: LeagueType = 'redraft',
+  scoringRules: ScoringRules = 'ppr'
+): Promise<RankedPlayer[]> {
   // Pull ALL data sources in parallel
   const [
     sleeperResult, espnResult, yahooResult,
+    mflResult, fleaflickerResult, nflcomResult,
     trendingResult, leadersResult,
     injuriesResult, vegasResult, snapsResult, newsResult,
   ] = await Promise.allSettled([
     fetchSleeperADP(),
     fetchESPNADP(),
     fetchYahooADP(),
+    fetchMFLADP(leagueType, scoringRules),
+    fetchFleaflickerADP(leagueType, scoringRules),
+    fetchNFLDotComRankings(scoringRules),
     fetchSleeperTrending(),
     fetchESPNLeaders(),
     fetchNFLInjuries(),
@@ -547,9 +650,12 @@ export async function fetchBlendedConsensus(): Promise<RankedPlayer[]> {
   ]);
 
   // Unpack results safely
-  const sleeperData = sleeperResult.status === 'fulfilled' ? sleeperResult.value : [];
-  const espnData    = espnResult.status === 'fulfilled' ? espnResult.value : [];
-  const yahooData   = yahooResult.status === 'fulfilled' ? yahooResult.value : [];
+  const sleeperData     = sleeperResult.status === 'fulfilled' ? sleeperResult.value : [];
+  const espnData        = espnResult.status === 'fulfilled' ? espnResult.value : [];
+  const yahooData       = yahooResult.status === 'fulfilled' ? yahooResult.value : [];
+  const mflData         = mflResult.status === 'fulfilled' ? mflResult.value : [];
+  const fleaflickerData = fleaflickerResult.status === 'fulfilled' ? fleaflickerResult.value : [];
+  const nflcomData      = nflcomResult.status === 'fulfilled' ? nflcomResult.value : [];
   const trending    = trendingResult.status === 'fulfilled' ? trendingResult.value : { adds: [], drops: [] };
   const leaders     = leadersResult.status === 'fulfilled' ? leadersResult.value : [];
   const injuries    = injuriesResult.status === 'fulfilled' ? injuriesResult.value : [];
@@ -574,11 +680,18 @@ export async function fetchBlendedConsensus(): Promise<RankedPlayer[]> {
     if (n.player) newsMap.set(n.player.toLowerCase(), n.title);
   }
 
-  // ── Step 1: Multi-source ADP blend ──
-  const sources: { name: string; data: RankedPlayer[] }[] = [];
-  if (sleeperData.length > 0) sources.push({ name: 'Sleeper', data: sleeperData });
-  if (espnData.length > 0)    sources.push({ name: 'ESPN', data: espnData });
-  if (yahooData.length > 0)   sources.push({ name: 'Yahoo', data: yahooData });
+  // ── Step 1: Multi-source ADP blend (format-aware weighting) ──
+  // Each platform contributes its rank weighted by SOURCE_WEIGHTS[leagueType].
+  // Sources with weight 0 OR empty data are skipped. Median fallback is used
+  // when only one platform contributed (common for niche dynasty data).
+  const sources: { name: RankingsSource; data: RankedPlayer[]; weight: number }[] = [];
+  const weights = SOURCE_WEIGHTS[leagueType];
+  if (sleeperData.length > 0     && weights.sleeper > 0)     sources.push({ name: 'sleeper',     data: sleeperData,     weight: weights.sleeper });
+  if (espnData.length > 0        && weights.espn > 0)        sources.push({ name: 'espn',        data: espnData,        weight: weights.espn });
+  if (yahooData.length > 0       && weights.yahoo > 0)       sources.push({ name: 'yahoo',       data: yahooData,       weight: weights.yahoo });
+  if (mflData.length > 0         && weights.mfl > 0)         sources.push({ name: 'mfl',         data: mflData,         weight: weights.mfl });
+  if (fleaflickerData.length > 0 && weights.fleaflicker > 0) sources.push({ name: 'fleaflicker', data: fleaflickerData, weight: weights.fleaflicker });
+  if (nflcomData.length > 0      && weights.nfl > 0)         sources.push({ name: 'nfl',         data: nflcomData,      weight: weights.nfl });
 
   if (sources.length === 0) return fetchSleeperADP(); // absolute fallback
 
@@ -586,7 +699,7 @@ export async function fetchBlendedConsensus(): Promise<RankedPlayer[]> {
 
   const playerMap = new Map<string, {
     name: string; position: string; team: string; id: string;
-    ranks: number[]; sourceCount: number;
+    weightedSum: number; totalWeight: number; sourceCount: number;
   }>();
 
   for (const source of sources) {
@@ -594,12 +707,15 @@ export async function fetchBlendedConsensus(): Promise<RankedPlayer[]> {
       const key = normalize(p.name);
       if (playerMap.has(key)) {
         const existing = playerMap.get(key)!;
-        existing.ranks.push(p.rank);
+        existing.weightedSum += p.rank * source.weight;
+        existing.totalWeight += source.weight;
         existing.sourceCount++;
       } else {
         playerMap.set(key, {
           name: p.name, position: p.position, team: p.team, id: p.id,
-          ranks: [p.rank], sourceCount: 1,
+          weightedSum: p.rank * source.weight,
+          totalWeight: source.weight,
+          sourceCount: 1,
         });
       }
     }
@@ -609,14 +725,12 @@ export async function fetchBlendedConsensus(): Promise<RankedPlayer[]> {
   const scored: (RankedPlayer & { score: number })[] = [];
 
   for (const [key, p] of playerMap) {
-    // Median ADP across sources
-    const sorted = [...p.ranks].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+    // Weighted average rank across sources (was median; now respects SOURCE_WEIGHTS)
+    const blendedRank = p.weightedSum / p.totalWeight;
 
     // Base score: ADP dominates. Lower ADP = much higher score.
     // Using log-scaled inversion so #1 vs #10 gap is much larger than #100 vs #110.
-    let score = 1000 - (Math.log(Math.max(median, 1)) * 80);
+    let score = 1000 - (Math.log(Math.max(blendedRank, 1)) * 80);
 
     // Confidence bonus: more sources = slight edge (tiebreaker only)
     score += (p.sourceCount - 1) * 2;
@@ -650,7 +764,10 @@ export async function fetchBlendedConsensus(): Promise<RankedPlayer[]> {
     if (teamImplied && teamImplied > 24) score += (teamImplied - 24) * 2;
 
     // Trend direction
-    const spread = sorted.length > 1 ? sorted[sorted.length - 1] - sorted[0] : 0;
+    // We no longer track per-source ranks individually after the weighted
+    // blend, so spread defaults to 0 (will be replaced with a proper
+    // disagreement metric when Piece 2 ships per-source rank tracking).
+    const spread = 0;
     const trend: 'up' | 'down' | 'flat' =
       adds > drops * 2 ? 'up' :
       drops > adds * 2 ? 'down' :
@@ -669,7 +786,7 @@ export async function fetchBlendedConsensus(): Promise<RankedPlayer[]> {
 
     scored.push({
       id: p.id, name: p.name, position: p.position, team: p.team,
-      rank: 0, adp: median.toFixed(1), trend, trendVal: p.sourceCount, tier: 0,
+      rank: 0, adp: blendedRank.toFixed(1), trend, trendVal: p.sourceCount, tier: 0,
       posRank: 0, injuryStatus: inj?.status ?? null, injuryDetail: inj?.detail ?? null,
       trendingAdds: adds, trendingDrops: drops, snapPct: snap ?? null,
       newsHeadline: headline, newsAge: null,

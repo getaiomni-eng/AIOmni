@@ -257,6 +257,7 @@ export default function RankingsScreen() {
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<Mode>('community');
   const [format, setFormat] = useState<Format>('PPR');
+  const [leagueType, setLeagueType] = useState<'redraft' | 'dynasty'>('redraft');
   const [position, setPosition] = useState<Position>('ALL');
   const [search, setSearch] = useState('');
   const [communityData, setCommunityData] = useState<RankedPlayer[]>(SEED);
