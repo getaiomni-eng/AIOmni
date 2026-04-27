@@ -16,6 +16,8 @@ export default function SettingsScreen() {
   const [email, setEmail] = useState('');
   const [espnLinked, setEspnLinked] = useState(false);
   const [yahooLinked, setYahooLinked] = useState(false);
+  const [mflLinked, setMflLinked] = useState(false);
+  const [fleaflickerLinked, setFleaflickerLinked] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
   const [notifications, setNotifications] = useState(true);
 
@@ -30,6 +32,10 @@ export default function SettingsScreen() {
     setEspnLinked(!!espn);
     const yahoo = await AsyncStorage.getItem('yahoo_tokens');
     setYahooLinked(!!yahoo);
+    const mfl = await AsyncStorage.getItem('mfl_league_id');
+    setMflLinked(!!mfl);
+    const ff = await AsyncStorage.getItem('fleaflicker_league_id');
+    setFleaflickerLinked(!!ff);
 
     // Email + Sleeper username come from public.users (source of truth).
     // AsyncStorage is the offline fallback — we read it first as a fast
@@ -156,7 +162,7 @@ export default function SettingsScreen() {
             <Text style={s.rowLabel}>ESPN</Text>
             <Text style={[s.rowValue, { color: espnLinked ? palette.green : palette.amber }]}>{espnLinked ? 'Connected' : 'Connect →'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[s.row, { borderBottomWidth: 0 }]} onPress={yahooLinked ? handleDisconnectYahoo : async () => {
+          <TouchableOpacity style={s.row} onPress={yahooLinked ? handleDisconnectYahoo : async () => {
               try {
                 const { getYahooAuthURL, exchangeYahooCode, getValidYahooToken } = require('../../services/yahoo');
                 const WebBrowser = require('expo-web-browser');
@@ -176,6 +182,34 @@ export default function SettingsScreen() {
             <View style={[s.dot, { backgroundColor: '#7c3aed' }]} />
             <Text style={s.rowLabel}>Yahoo</Text>
             <Text style={[s.rowValue, { color: yahooLinked ? palette.green : palette.amber }]}>{yahooLinked ? 'Connected' : 'Connect →'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.row} onPress={mflLinked
+            ? () => Alert.alert('MFL', 'Disconnect MFL?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Disconnect', style: 'destructive', onPress: async () => {
+                  const { clearMflCredentials } = require('../../services/platform/mfl');
+                  await clearMflCredentials();
+                  setMflLinked(false);
+                }},
+              ])
+            : () => router.push('/mfl-login' as any)}>
+            <View style={[s.dot, { backgroundColor: '#e4ff1a' }]} />
+            <Text style={s.rowLabel}>MFL</Text>
+            <Text style={[s.rowValue, { color: mflLinked ? palette.green : palette.amber }]}>{mflLinked ? 'Connected' : 'Connect →'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.row, { borderBottomWidth: 0 }]} onPress={fleaflickerLinked
+            ? () => Alert.alert('Fleaflicker', 'Disconnect Fleaflicker?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Disconnect', style: 'destructive', onPress: async () => {
+                  const { clearFleaflickerCredentials } = require('../../services/platform/fleaflicker');
+                  await clearFleaflickerCredentials();
+                  setFleaflickerLinked(false);
+                }},
+              ])
+            : () => router.push('/fleaflicker-login' as any)}>
+            <View style={[s.dot, { backgroundColor: '#1be7ff' }]} />
+            <Text style={s.rowLabel}>Fleaflicker</Text>
+            <Text style={[s.rowValue, { color: fleaflickerLinked ? palette.green : palette.amber }]}>{fleaflickerLinked ? 'Connected' : 'Connect →'}</Text>
           </TouchableOpacity>
         </View>
 

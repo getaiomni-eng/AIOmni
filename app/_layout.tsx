@@ -161,6 +161,8 @@ export default Sentry.wrap(function RootLayout() {
         <Stack.Screen name="paywall"    options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="settings"   options={{ headerShown: false }} />
         <Stack.Screen name="espn-login" options={{ headerShown: false }} />
+        <Stack.Screen name="mfl-login" options={{ headerShown: false }} />
+        <Stack.Screen name="fleaflicker-login" options={{ headerShown: false }} />
         <Stack.Screen name="settings-page" options={{ headerShown: false }} />
         <Stack.Screen name="draft" options={{ headerShown: false }} />
         <Stack.Screen name="league" options={{ headerShown: false }} />

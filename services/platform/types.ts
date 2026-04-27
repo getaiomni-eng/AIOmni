@@ -5,7 +5,7 @@
 
 // ─── ENUMS ──────────────────────────────────────────────────
 
-export type PlatformId = 'sleeper' | 'espn' | 'yahoo';
+export type PlatformId = 'sleeper' | 'espn' | 'yahoo' | 'mfl' | 'fleaflicker';
 
 export type ScoringFormat = 'ppr' | 'half' | 'standard';
 
@@ -80,6 +80,14 @@ export interface RosterSlot {
   isStarter: boolean;
   points?: number;
   projected?: number;
+  /** Dynasty/keeper leagues: salary in dollars (MFL/Fleaflicker) */
+  salary?: number;
+  /** Dynasty/keeper leagues: contract years remaining (MFL) */
+  contractYear?: number;
+  /** Dynasty/keeper leagues: contract details/notes (MFL) */
+  contractInfo?: string;
+  /** Dynasty/keeper leagues: marked as a keeper for next season (Fleaflicker/MFL) */
+  isKeeper?: boolean;
 }
 
 /** League summary */
@@ -103,6 +111,14 @@ export interface LeagueDetail extends League {
   faabRemaining?: number;
   scoringSettings?: Record<string, number>;
   isDynasty: boolean;
+  /** Starting roster includes a SuperFlex slot (QB/RB/WR/TE) */
+  isSuperFlex?: boolean;
+  /** League uses player salaries (cap leagues, dynasty) */
+  hasSalaries?: boolean;
+  /** League uses multi-year contracts */
+  hasContracts?: boolean;
+  /** League has a separate taxi/practice squad */
+  hasTaxiSquad?: boolean;
 }
 
 /** One user's roster in a league */

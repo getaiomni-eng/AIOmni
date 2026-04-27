@@ -8,6 +8,8 @@ import { FantasyPlatform, PlatformId } from './types';
 import { sleeperPlatform } from './sleeper';
 import { espnPlatform } from './espn';
 import { yahooPlatform } from './yahoo';
+import { mflPlatform } from './mfl';
+import { fleaflickerPlatform } from './fleaflicker';
 
 export * from './types';
 
@@ -21,16 +23,18 @@ export * from './types';
  */
 export function getPlatform(id: PlatformId): FantasyPlatform {
   switch (id) {
-    case 'sleeper': return sleeperPlatform;
-    case 'espn':    return espnPlatform;
-    case 'yahoo':   return yahooPlatform;
+    case 'sleeper':     return sleeperPlatform;
+    case 'espn':        return espnPlatform;
+    case 'yahoo':       return yahooPlatform;
+    case 'mfl':         return mflPlatform;
+    case 'fleaflicker': return fleaflickerPlatform;
     default:
       throw new Error(`Unknown platform: ${id}`);
   }
 }
 
 /** All platform IDs in a stable order — useful for iterating in UI. */
-export const ALL_PLATFORMS: PlatformId[] = ['sleeper', 'espn', 'yahoo'];
+export const ALL_PLATFORMS: PlatformId[] = ['sleeper', 'espn', 'yahoo', 'mfl', 'fleaflicker'];
 
 /**
  * Get all platforms the user is currently connected to.
@@ -62,4 +66,4 @@ export async function getAllLeagues(season?: string) {
 }
 
 /** Re-export individual platforms for advanced use (tests, debugging). */
-export { sleeperPlatform, espnPlatform, yahooPlatform };
+export { sleeperPlatform, espnPlatform, yahooPlatform, mflPlatform, fleaflickerPlatform };
