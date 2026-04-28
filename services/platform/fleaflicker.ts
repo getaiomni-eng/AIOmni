@@ -42,13 +42,34 @@ function hotSet(k: string, d: any, ttl = TTL) {
 }
 
 // ─── HTTP ──────────────────────────────────────────────────────────────────
+// Sentinel error class — UI catches this specifically to show a clean
+// "private league not yet supported" message instead of a generic crash.
+export class FleaflickerPrivateLeagueError extends Error {
+  constructor(public readonly leagueId?: string) {
+    super(
+      leagueId
+        ? `Fleaflicker league ${leagueId} appears to be private. Private-league support is coming in a future release.`
+        : 'This Fleaflicker league appears to be private. Private-league support is coming in a future release.'
+    );
+    this.name = 'FleaflickerPrivateLeagueError';
+  }
+}
+
 async function ff<T>(endpoint: string, params: Record<string, string | number> = {}): Promise<T> {
   const qs = new URLSearchParams({ sport: 'NFL', ...Object.fromEntries(
     Object.entries(params).map(([k, v]) => [k, String(v)])
   )}).toString();
   const url = `${BASE}/${endpoint}?${qs}`;
   const res = await fetch(url);
-  if (!res.ok) throw new PlatformError(`Fleaflicker ${endpoint} failed: ${res.status}`, 'fleaflicker');
+  if (!res.ok) {
+    // 404 from FetchLeague* endpoints almost always means private league
+    // (or genuinely deleted league). Either way, no public API path exists.
+    if (res.status === 404 && endpoint.startsWith('FetchLeague')) {
+      const leagueId = params.league_id ? String(params.league_id) : undefined;
+      throw new FleaflickerPrivateLeagueError(leagueId);
+    }
+    throw new PlatformError(`Fleaflicker ${endpoint} failed: ${res.status}`, 'fleaflicker');
+  }
   return res.json() as Promise<T>;
 }
 

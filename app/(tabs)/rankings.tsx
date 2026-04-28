@@ -1,31 +1,32 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator, Image, Modal, ScrollView, StyleSheet,
-    Text, TextInput, TouchableOpacity, View,
+  ActivityIndicator,
   FlatList,
+  Image, Modal, ScrollView, StyleSheet,
+  Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-    RankedPlayer,
-    RankingsSource,
-    getSelectedBase,
-    setSelectedBase,
-} from '../../services/rankingsData';
-import { getEngineRankings, getEngineRankingsForSource, invalidateEngineCache, assignGlobalTier, assignPositionalTier } from '../../services/rankings/aiomniEngineBridge';
-import { getOverrides, setOverride, clearOverrides, applyOverrides } from '../../services/rankings/userOverrides';
-import { fetchDedupedProspects } from '../../services/rankingsData';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getCurrentTier } from '../../services/purchases';
-import { F, SP, dark, palette } from '../constants/tokens';
-import PlayerCardModal from '../components/PlayerCardModal';
-import { HeatIcon } from '../components/HeatIcon';
+import { useRouter } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { computeHeatBatch } from '../../services/heat';
 import { getHeatSignalsMap } from '../../services/heatData';
-import { useHeatAccess, HeatAccess } from '../hooks/useHeatAccess';
+import { getCurrentTier } from '../../services/purchases';
+import { assignGlobalTier, assignPositionalTier, getEngineRankings, getEngineRankingsForSource, invalidateEngineCache } from '../../services/rankings/aiomniEngineBridge';
+import { applyOverrides, clearOverrides, getOverrides, setOverride } from '../../services/rankings/userOverrides';
+import {
+  RankedPlayer,
+  RankingsSource,
+  fetchDedupedProspects,
+  getSelectedBase,
+  setSelectedBase,
+} from '../../services/rankingsData';
+import { HeatIcon } from '../components/HeatIcon';
 import { PlatformErrorCard, classifyPlatformError } from '../components/PlatformErrorCard';
+import PlayerCardModal from '../components/PlayerCardModal';
+import { F, SP, dark, palette } from '../constants/tokens';
+import { HeatAccess, useHeatAccess } from '../hooks/useHeatAccess';
 
 type Format   = 'PPR' | 'HALF' | 'STD' | 'SF';
 type Position = 'ALL' | 'QB' | 'RB' | 'WR' | 'TE' | 'K';
@@ -275,6 +276,7 @@ export default function RankingsScreen() {
   const [prospects, setProspects] = useState<any[]>([]);
   const [prospectsLoading, setProspectsLoading] = useState(false);
   const [prospectsGated, setProspectsGated] = useState(false);
+  const [prospectsError, setProspectsError] = useState<string | null>(null);
   const [leagues, setLeagues] = useState<{id: string; name: string}[]>([]);
   const [selectedLeagueId, setSelectedLeagueId] = useState<string | undefined>(undefined);
   const [selectedLeagueName, setSelectedLeagueName] = useState<string>('All Leagues');
@@ -344,11 +346,30 @@ export default function RankingsScreen() {
     setMode('prospects');
     if (prospects.length === 0) {
       setProspectsLoading(true);
+      setProspectsError(null);
       try {
-        const data = await fetchDedupedProspects(2026);
-        if (data.length > 0) setProspects(data);
-      } catch {}
-      setProspectsLoading(false);
+        // 15-second timeout — depends on Sleeper player sync which can hang
+        // post-NFL-Draft when player IDs change. Without timeout, UI freezes.
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Prospects fetch timed out after 15 seconds')), 15000)
+        );
+        const data = await Promise.race([fetchDedupedProspects(2026), timeout]);
+        if (data.length > 0) {
+          setProspects(data);
+        } else {
+          setProspectsError('No prospects available right now. Check back closer to the NFL Draft.');
+        }
+      } catch (err: any) {
+        console.error('[Prospects] fetch failed:', err);
+        const isTimeout = err?.message?.includes('timed out');
+        setProspectsError(
+          isTimeout
+            ? 'Prospects took too long to load. Pull to refresh or try again later.'
+            : "Couldn't load prospects. Pull to refresh or try again later."
+        );
+      } finally {
+        setProspectsLoading(false);
+      }
     }
   };
 
@@ -686,6 +707,17 @@ export default function RankingsScreen() {
                 onPress={() => router.push('/paywall' as any)}
               >
                 <Text style={{ fontFamily: F.bold, fontSize: 14, color: dark.bg, letterSpacing: 2 }}>UPGRADE TO RANKINGS</Text>
+              </TouchableOpacity>
+            </View>
+          ) : prospectsError ? (
+            <View style={{ alignItems: 'center', paddingTop: 60, paddingHorizontal: 20 }}>
+              <Text style={{ color: palette.flame, fontFamily: F.bold, fontSize: 14, letterSpacing: 1, marginBottom: 12 }}>COULDN'T LOAD PROSPECTS</Text>
+              <Text style={{ color: dark.textMuted, fontFamily: F.body, fontSize: 13, lineHeight: 20, textAlign: 'center', marginBottom: 24 }}>{prospectsError}</Text>
+              <TouchableOpacity 
+                style={{ backgroundColor: palette.flame, borderRadius: 12, paddingHorizontal: 28, paddingVertical: 14 }}
+                onPress={() => { setProspectsError(null); setProspects([]); handleProspectsTab(); }}
+              >
+                <Text style={{ fontFamily: F.bold, fontSize: 13, color: dark.bg, letterSpacing: 1.5 }}>TRY AGAIN</Text>
               </TouchableOpacity>
             </View>
           ) : prospectsLoading ? (

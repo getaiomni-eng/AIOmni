@@ -79,7 +79,10 @@ function velocityScore(s: HeatSignals): number | null {
   if (s.addsLast48h === undefined && s.dropsLast48h === undefined) return null;
 
   const net = (s.addsLast48h ?? 0) - (s.dropsLast48h ?? 0);
-  if (net === 0) return 50;
+  // Non-trending players (zero net activity) are COOL, not WARM.
+  // 25 sits in the middle of COOL (1-25), so the heat icon hides for
+  // these players unless other signals (ownership, ranking) pull them up.
+  if (net === 0) return 25;
 
   const sign = net > 0 ? 1 : -1;
   const magnitude = Math.log10(Math.abs(net) + 1);

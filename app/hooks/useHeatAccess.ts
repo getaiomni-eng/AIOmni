@@ -69,7 +69,9 @@ export function useHeatAccess(): HeatAccess {
     tier,
     showIcon: true,                       // always show something; threshold filters
     showScore: isPaid,                    // numeric score only for paid
-    iconThreshold: isPaid ? 40 : 70,      // free = HOT+SCORCHING only; paid = WARM+
+    // Free: HOT+SCORCHING only (score >= 50 catches HOT 51+ but excludes WARM)
+    // Paid: WARM+ (score >= 25 catches mild trending and up — premium reveal)
+    iconThreshold: isPaid ? 25 : 50,
     canSortByHeat: isPro,                 // Pro-only waiver sort
   };
 }
