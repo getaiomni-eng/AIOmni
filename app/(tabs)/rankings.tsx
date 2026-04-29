@@ -288,13 +288,13 @@ export default function RankingsScreen() {
     loadSavedState();
     loadCommunityRankings();
     loadLeagues();
-  }, [format]);
+  }, [format, leagueType]);
 
   const loadCommunityRankings = async () => {
     setLoading(true);
     setCommunityError(null);
     try {
-      const data = await getEngineRankings(format);
+      const data = await getEngineRankings(format, leagueType);
       if (data.length > 0) setCommunityData(await mergeHeat(data));
     } catch (e) {
       console.log('getEngineRankings error:', e);
@@ -325,7 +325,7 @@ export default function RankingsScreen() {
     setSelectedLeagueId(leagueId || undefined);
     setSelectedLeagueName(leagueName);
     try {
-      const live = await getEngineRankings(format);
+      const live = await getEngineRankings(format, leagueType);
       const ovs = await getOverrides(leagueId || undefined);
       setMyRanksEngine(live.length > 0 ? await mergeHeat(live) : [...SEED]);
       setOverrides(ovs);
@@ -354,11 +354,10 @@ export default function RankingsScreen() {
           setTimeout(() => reject(new Error('Prospects fetch timed out after 15 seconds')), 15000)
         );
         const data = await Promise.race([fetchDedupedProspects(2026), timeout]);
-        if (data.length > 0) {
-          setProspects(data);
-        } else {
-          setProspectsError('No prospects available right now. Check back closer to the NFL Draft.');
-        }
+        // Empty data is the offseason state, not a fetch failure. Real
+        // errors (timeout, network) throw and hit the catch block where
+        // "TRY AGAIN" makes sense. Empty just renders the offseason state.
+        setProspects(data);
       } catch (err: any) {
         console.error('[Prospects] fetch failed:', err);
         const isTimeout = err?.message?.includes('timed out');
@@ -377,7 +376,7 @@ export default function RankingsScreen() {
     const base = await getSelectedBase();
     setSelectedBaseState(base);
     try {
-      const live = await getEngineRankings(format);
+      const live = await getEngineRankings(format, leagueType);
       const ovs = await getOverrides(selectedLeagueId);
       setMyRanksEngine(live.length > 0 ? await mergeHeat(live) : [...SEED]);
       setOverrides(ovs);
@@ -398,7 +397,7 @@ export default function RankingsScreen() {
       const leagueScope = selectedLeagueId || null;
       await clearOverrides(leagueScope);
       setOverrides(new Map());
-      const rankings = await getEngineRankingsForSource(source, format);
+      const rankings = await getEngineRankingsForSource(source, format, leagueType);
       setMyRanksEngine(rankings.length > 0 ? await mergeHeat(rankings) : [...SEED]);
       await setSelectedBase(source);
       setSelectedBaseState(source);
@@ -432,7 +431,7 @@ export default function RankingsScreen() {
       await clearOverrides(selectedLeagueId);
       setOverrides(new Map());
       // Re-fetch engine
-      const live = await getEngineRankings(format, true);
+      const live = await getEngineRankings(format, leagueType, true);
       setMyRanksEngine(live.length > 0 ? live : [...SEED]);
     } catch (e) {
       console.log('reset error:', e);
@@ -696,7 +695,9 @@ export default function RankingsScreen() {
 
 
         {mode === 'prospects' && (
-          prospectsGated ? (
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: SP[3], paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+            <Header />
+            {prospectsGated ? (
             <View style={{ alignItems: 'center', paddingTop: 60, paddingHorizontal: 20 }}>
               <Text style={{ fontFamily: F.bold, fontSize: 22, color: dark.text, textAlign: 'center', letterSpacing: 1, marginBottom: 12 }}>PROSPECT RANKINGS</Text>
               <Text style={{ fontFamily: F.body, fontSize: 14, color: dark.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
@@ -724,6 +725,13 @@ export default function RankingsScreen() {
             <View style={{ alignItems: 'center', paddingTop: 60 }}>
               <ActivityIndicator color={palette.flame} size="large" />
               <Text style={{ color: dark.textMuted, fontFamily: F.body, marginTop: 12 }}>Loading prospects...</Text>
+            </View>
+          ) : prospects.length === 0 ? (
+            <View style={{ alignItems: 'center', paddingTop: 60, paddingHorizontal: 20 }}>
+              <Text style={{ fontFamily: F.bold, fontSize: 14, color: dark.textMuted, letterSpacing: 2, marginBottom: 12 }}>OFFSEASON</Text>
+              <Text style={{ color: dark.textMuted, fontFamily: F.body, fontSize: 13, lineHeight: 20, textAlign: 'center' }}>
+                2026 NFL Draft complete — those rookies now appear in your regular rankings. The 2027 prospect class will be ranked closer to the season.
+              </Text>
             </View>
           ) : (
             prospects.filter(p =>
@@ -758,7 +766,8 @@ export default function RankingsScreen() {
                 </View>
               );
             })
-          )
+          )}
+          </ScrollView>
         )}
 
         {cardPlayer && (

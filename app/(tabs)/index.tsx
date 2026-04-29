@@ -301,7 +301,7 @@ export default function HomeScreen() {
     setInsightLoading(true);
     try {
       const prompt = `You are AIOmni, an elite fantasy football analyst. For this ${league.platform.toUpperCase()} league (${league.format}), provide 3 concise, actionable insights for Week ${league.week}. Focus on starting/sitting decisions, waiver wire adds, and matchup analysis. Format as JSON array with objects having: emoji, title, body, tag, color. Keep each insight under 120 characters.`;
-      const response = await askAI(prompt, 400);
+      const response = await askAI(prompt, { tier: 'fast', maxTokens: 400 });
       const insights = JSON.parse(response?.replace(/```json|```/g, '').trim() || '[]');
       if (Array.isArray(insights) && insights.length > 0) setAiInsights(insights);
     } catch (e) { console.error('AI insights error:', e); }
@@ -326,7 +326,7 @@ export default function HomeScreen() {
     try {
       await incrementPrompt();
       const prompt = `You are AIOmni AI Coach. Analyze this matchup and give 1 actionable insight in 2 sentences max:\n\nLeague: ${league.name} (${league.platform}, ${league.format})\nWeek: ${league.week}\nYour Score: ${league.pts}\nOpponent Score: ${league.opp}\n\nWhat should I focus on this week?`;
-      const insight = await askAI(prompt, 150);
+      const insight = await askAI(prompt, { tier: 'fast', maxTokens: 150 });
       setAiCoachInsight(insight);
     } catch (e) {
       setAiCoachInsight('Could not generate insight at this time.');

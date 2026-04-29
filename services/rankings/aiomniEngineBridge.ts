@@ -52,6 +52,8 @@ import {
   RankedPlayer as UIRankedPlayer,
   RankingsSource,
   ScoringFormat as UIFormat,
+  LeagueType,
+  ScoringRules,
 } from '../rankingsData';
 
 // ─── ENGINE POSITION VALIDATION ─────────────────────────────────────────────
@@ -64,7 +66,16 @@ function isEnginePosition(pos: string): pos is EnginePosition {
 
 // ─── UI FORMAT → LEAGUE CONFIG MAPPING ──────────────────────────────────────
 
-export function uiFormatToConfig(format: UIFormat): LeagueConfig {
+export function uiFormatToConfig(
+  format: UIFormat,
+  leagueType: LeagueType = 'redraft',
+): LeagueConfig {
+  // Dynasty leagueType always routes through DYNASTY_PPR for now.
+  // TODO: add DYNASTY_HALF / DYNASTY_STD / DYNASTY_SUPERFLEX presets to
+  // aiomniEngine and select among them based on `format`.
+  if (leagueType === 'dynasty') {
+    return { ...LEAGUE_PRESETS.DYNASTY_PPR };
+  }
   switch (format) {
     case 'PPR':  return { ...LEAGUE_PRESETS.STANDARD_REDRAFT_PPR };
     case 'HALF': return { ...LEAGUE_PRESETS.STANDARD_REDRAFT_HALF };
@@ -72,6 +83,20 @@ export function uiFormatToConfig(format: UIFormat): LeagueConfig {
     case 'SF':   return { ...LEAGUE_PRESETS.SUPERFLEX_PPR };
     case 'DYN':  return { ...LEAGUE_PRESETS.DYNASTY_PPR };
     default:     return { ...LEAGUE_PRESETS.STANDARD_REDRAFT_PPR };
+  }
+}
+
+// Map UI ScoringFormat -> rankingsData ScoringRules. (Two parallel type
+// systems; this bridges them.) Legacy 'DYN' falls into 'ppr' because in
+// the new model dynasty IS the leagueType, not the scoring rules.
+function uiFormatToScoringRules(format: UIFormat): ScoringRules {
+  switch (format) {
+    case 'HALF': return 'half';
+    case 'STD':  return 'std';
+    case 'SF':   return 'superflex';
+    case 'PPR':
+    case 'DYN':
+    default:     return 'ppr';
   }
 }
 
@@ -169,8 +194,9 @@ function toUIPlayer(
 export function applyEngineToRankings(
   source: UIRankedPlayer[],
   format: UIFormat,
+  leagueType: LeagueType = 'redraft',
 ): UIRankedPlayer[] {
-  const config = uiFormatToConfig(format);
+  const config = uiFormatToConfig(format, leagueType);
   const inputs: InputPlayer[] = [];
   const originalMap = new Map<string, UIRankedPlayer>();
 
@@ -192,6 +218,7 @@ export function applyEngineToRankings(
 
 interface CacheEntry {
   format: UIFormat;
+  leagueType: LeagueType;
   data: UIRankedPlayer[];
   ts: number;
 }
@@ -207,35 +234,42 @@ export function invalidateEngineCache(): void {
 
 export async function getEngineRankings(
   format: UIFormat,
+  leagueType: LeagueType = 'redraft',
   force = false,
 ): Promise<UIRankedPlayer[]> {
   if (
     !force &&
     engineCache &&
     engineCache.format === format &&
+    engineCache.leagueType === leagueType &&
     Date.now() - engineCache.ts < CACHE_TTL_MS
   ) {
     return engineCache.data;
   }
 
   try {
-    const blended = await fetchBlendedConsensus();
-    const data = applyEngineToRankings(blended, format);
-    engineCache = { format, data, ts: Date.now() };
+    const scoringRules = uiFormatToScoringRules(format);
+    const blended = await fetchBlendedConsensus(leagueType, scoringRules);
+    const data = applyEngineToRankings(blended, format, leagueType);
+    engineCache = { format, leagueType, data, ts: Date.now() };
     return data;
   } catch (e) {
     console.log('getEngineRankings error:', e);
-    return engineCache?.format === format ? engineCache.data : [];
+    return engineCache?.format === format && engineCache?.leagueType === leagueType
+      ? engineCache.data
+      : [];
   }
 }
 
 export async function getEngineRankingsForSource(
   source: RankingsSource,
   format: UIFormat,
+  leagueType: LeagueType = 'redraft',
 ): Promise<UIRankedPlayer[]> {
   try {
-    const raw = await fetchBaseRankings(source);
-    return applyEngineToRankings(raw, format);
+    const scoringRules = uiFormatToScoringRules(format);
+    const raw = await fetchBaseRankings(source, leagueType, scoringRules);
+    return applyEngineToRankings(raw, format, leagueType);
   } catch (e) {
     console.log('getEngineRankingsForSource error:', e);
     return [];

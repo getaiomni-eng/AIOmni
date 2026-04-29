@@ -8,7 +8,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { syncRankingsToCloud, loadRankingsFromCloud } from './userSync';
-import { getActiveSleeperIds } from './nflPlayers';
+import { getActiveSleeperIds, getCurrentStatsSeason } from './nflPlayers';
 
 // ─── TYPES ──────────────────────────────────────────────────
 
@@ -168,6 +168,27 @@ async function cfbdProxy(endpoint: string, params?: Record<string, string>): Pro
 
 // CFBD API key moved to Supabase Edge Function — never stored client-side
 
+// ─── DYNAMIC SEASON HELPERS ─────────────────────────────────
+
+// Returns the NFL season identifier ESPN/Sleeper/Yahoo expect for
+// "current ADP". Rule: March-Dec returns current calendar year (upcoming
+// or in-progress season). Jan-Feb returns previous calendar year (Super
+// Bowl is in February of year N for season N).
+function getCurrentDraftSeason(): number {
+  const now = new Date();
+  return now.getMonth() >= 2 ? now.getFullYear() : now.getFullYear() - 1;
+}
+
+// ─── PHASE 2 PROXY URLS ─────────────────────────────────────
+// MFL + Fleaflicker fetchers go through Supabase edge functions
+// to keep XML parsing + scrape regexes off-device and cacheable.
+// If a proxy is undeployed or fails, the fetcher returns [] and
+// the blender skips that source gracefully (no regression).
+
+const MFL_PROXY_URL = 'https://khoruzvsprxyocisuhet.supabase.co/functions/v1/mfl-adp-proxy';
+const FF_PROXY_URL  = 'https://khoruzvsprxyocisuhet.supabase.co/functions/v1/fleaflicker-rankings-proxy';
+const PHASE2_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtob3J1enZzcHJ4eW9jaXN1aGV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDc5MTEsImV4cCI6MjA5MDU4MzkxMX0.YUIDZOJJhUc0ubkQxB_pSyXeE_xjcrqY7jGmbttlfRw';
+
 // ─── SLEEPER ────────────────────────────────────────────────
 
 interface SleeperPlayerRaw {
@@ -278,7 +299,7 @@ function getESPNTeamAbbr(id: number): string {
 export async function fetchESPNADP(): Promise<RankedPlayer[]> {
   try {
     const res = await fetch(
-      'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2026/segments/0/leagues/0?view=kona_player_info',
+      `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${getCurrentDraftSeason()}/segments/0/leagues/0?view=kona_player_info`,
       { headers: { 'x-fantasy-filter': JSON.stringify({ players: { limit: 200, sortDraftRanks: { sortPriority: 1, sortAsc: true, value: "STANDARD" } } }) } }
     );
     if (!res.ok) return [];
@@ -367,30 +388,76 @@ export async function fetchYahooADP(): Promise<RankedPlayer[]> {
   } catch (e) { console.log('fetchYahooADP error:', e); return []; }
 }
 
-// ─── MFL ADP (stub for Piece 1; real fetcher lands in Piece 2) ──────────
-// MFL exposes ADP via api.myfantasyleague.com/{year}/export?TYPE=adp
-// with IS_PPR / IS_KEEPER params controlling format. Implementing
-// the actual fetch + parsing is deferred to Piece 2 to keep this
-// patch focused on architecture.
+// ─── MFL ADP (Phase 2 real fetcher) ─────────────────────────────────────
+// Goes through supabase/functions/mfl-adp-proxy/index.ts which handles
+// XML parsing + name resolution server-side. If the edge function is
+// undeployed or returns an error, we return [] and the blender skips
+// MFL gracefully (no regression vs Phase 1 stub).
 
 export async function fetchMFLADP(
-  _leagueType: LeagueType = 'redraft',
-  _scoringRules: ScoringRules = 'ppr'
+  leagueType: LeagueType = 'redraft',
+  scoringRules: ScoringRules = 'ppr'
 ): Promise<RankedPlayer[]> {
-  // Piece 2 will implement: hit MFL ADP endpoint, parse XML/JSON,
-  // map to RankedPlayer[]. For now returns empty so the weighted
-  // blender knows MFL data is missing and skips it gracefully.
-  return [];
+  try {
+    const url = `${MFL_PROXY_URL}?leagueType=${leagueType}&scoringRules=${scoringRules}`;
+    const res = await fetch(url, {
+      headers: {
+        'apikey': PHASE2_ANON,
+        'Authorization': `Bearer ${PHASE2_ANON}`,
+      },
+    });
+    if (!res.ok) {
+      console.log('fetchMFLADP HTTP', res.status);
+      return [];
+    }
+    const data = await res.json();
+    if (!data?.ok || !Array.isArray(data.players)) return [];
+    // Reassign tiers using the local helper so they match the rest of
+    // the blend's tier schema before the engine bridge runs.
+    return data.players.map((p: any, i: number) => ({
+      ...p,
+      rank: i + 1,
+      tier: assignTier(i + 1),
+    }));
+  } catch (e) {
+    console.log('fetchMFLADP error:', e);
+    return [];
+  }
 }
 
-// ─── Fleaflicker rankings (stub for Piece 1) ────────────────────────────
-// Fleaflicker has player rankings at /api/Players. Piece 2 implements.
+// ─── Fleaflicker rankings (Phase 2 real fetcher) ────────────────────────
+// Goes through supabase/functions/fleaflicker-rankings-proxy which scrapes
+// Fleaflicker's public player rankings page. Layout-fragile by nature
+// (scraping); fails open to [] on any error so dynasty rankings still work
+// off MFL + Sleeper alone.
 
 export async function fetchFleaflickerADP(
-  _leagueType: LeagueType = 'redraft',
-  _scoringRules: ScoringRules = 'ppr'
+  leagueType: LeagueType = 'redraft',
+  scoringRules: ScoringRules = 'ppr'
 ): Promise<RankedPlayer[]> {
-  return [];
+  try {
+    const url = `${FF_PROXY_URL}?leagueType=${leagueType}&scoringRules=${scoringRules}`;
+    const res = await fetch(url, {
+      headers: {
+        'apikey': PHASE2_ANON,
+        'Authorization': `Bearer ${PHASE2_ANON}`,
+      },
+    });
+    if (!res.ok) {
+      console.log('fetchFleaflickerADP HTTP', res.status);
+      return [];
+    }
+    const data = await res.json();
+    if (!data?.ok || !Array.isArray(data.players)) return [];
+    return data.players.map((p: any, i: number) => ({
+      ...p,
+      rank: i + 1,
+      tier: assignTier(i + 1),
+    }));
+  } catch (e) {
+    console.log('fetchFleaflickerADP error:', e);
+    return [];
+  }
 }
 
 // ─── NFL.com rankings (stub for Piece 1; scraper lands in Piece 3) ──────
@@ -457,9 +524,10 @@ async function fetchVegasLines(): Promise<Map<string, number>> {
 
 // ─── SNAP COUNTS (nflverse) ─────────────────────────────────
 
-async function fetchSnapCounts(season = 2024): Promise<Map<string, number>> {
+async function fetchSnapCounts(seasonOverride?: number): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   try {
+    const season = seasonOverride ?? await getCurrentStatsSeason();
     const url = `https://github.com/nflverse/nflverse-data/releases/download/snap_counts/snap_counts_${season}.csv`;
     const res = await fetch(url);
     if (!res.ok) return map;
@@ -538,48 +606,12 @@ export async function fetchNCAAStandings(conference = 'all-conf'): Promise<any> 
 
 // ─── 2026 PROSPECT SEED (fallback when CFBD is down) ────────
 
-const PROSPECT_SEED_2026: CollegeProspect[] = [
-  // ─── QB (2026 class) ───
-  { id: 'p01', name: 'Fernando Mendoza', school: 'Indiana', position: 'QB', year: '2026', height: '6-5', weight: 236, grade: 98 },
-  { id: 'p02', name: 'Ty Simpson', school: 'Alabama', position: 'QB', year: '2026', height: '6-1', weight: 211, grade: 88 },
-  { id: 'p03', name: 'Carson Beck', school: 'Georgia', position: 'QB', year: '2026', height: '6-4', weight: 220, grade: 85 },
-  { id: 'p04', name: 'Garrett Nussmeier', school: 'LSU', position: 'QB', year: '2026', height: '6-2', weight: 210, grade: 83 },
-  // ─── RB (2026 class) ───
-  { id: 'p05', name: 'Jeremiyah Love', school: 'Notre Dame', position: 'RB', year: '2026', height: '5-10', weight: 202, grade: 97 },
-  { id: 'p06', name: 'Jadarian Price', school: 'Notre Dame', position: 'RB', year: '2026', height: '5-10', weight: 195, grade: 88 },
-  { id: 'p07', name: 'Emmett Johnson', school: 'Nebraska', position: 'RB', year: '2026', height: '5-11', weight: 210, grade: 86 },
-  { id: 'p08', name: 'Jonah Coleman', school: 'Washington', position: 'RB', year: '2026', height: '5-8', weight: 220, grade: 84 },
-  { id: 'p09', name: 'Mike Washington Jr.', school: 'Arkansas', position: 'RB', year: '2026', height: '6-1', weight: 215, grade: 82 },
-  // ─── WR (2026 class) ───
-  { id: 'p10', name: 'Makai Lemon', school: 'USC', position: 'WR', year: '2026', height: '5-10', weight: 177, grade: 93 },
-  { id: 'p11', name: 'Carnell Tate', school: 'Ohio State', position: 'WR', year: '2026', height: '6-2', weight: 190, grade: 92 },
-  { id: 'p12', name: 'Jalen Bernard', school: 'Alabama', position: 'WR', year: '2026', height: '6-1', weight: 206, grade: 90 },
-  { id: 'p13', name: 'Jaylen Tyson', school: 'Stanford', position: 'WR', year: '2026', height: '6-2', weight: 205, grade: 89 },
-  { id: 'p14', name: 'Elijah Cooper', school: 'Indiana', position: 'WR', year: '2026', height: '6-1', weight: 195, grade: 88 },
-  { id: 'p15', name: 'Matthew Brazzell', school: 'Florida', position: 'WR', year: '2026', height: '6-0', weight: 185, grade: 86 },
-  { id: 'p16', name: 'Evan Fields', school: 'Virginia', position: 'WR', year: '2026', height: '6-4', weight: 218, grade: 84 },
-  // ─── TE (2026 class) ───
-  { id: 'p17', name: 'Kenyon Sadiq', school: 'Oregon', position: 'TE', year: '2026', height: '6-5', weight: 245, grade: 94 },
-  { id: 'p18', name: 'Eli Stowers', school: 'Texas A&M', position: 'TE', year: '2026', height: '6-4', weight: 239, grade: 88 },
-  { id: 'p19', name: 'Eli Raridon', school: 'Notre Dame', position: 'TE', year: '2026', height: '6-6', weight: 250, grade: 85 },
-  { id: 'p20', name: 'Michael Trigg', school: 'Tennessee', position: 'TE', year: '2026', height: '6-4', weight: 245, grade: 83 },
-  { id: 'p21', name: 'Justin Joly', school: 'Oregon State', position: 'TE', year: '2026', height: '6-5', weight: 248, grade: 80 },
-  // ─── IDP / Dynasty-relevant ───
-  { id: 'p22', name: 'Caleb Downs', school: 'Ohio State', position: 'S', year: '2026', height: '6-0', weight: 200, grade: 96 },
-  { id: 'p23', name: 'Arvell Reese', school: 'Ohio State', position: 'LB', year: '2026', height: '6-4', weight: 240, grade: 95 },
-  { id: 'p24', name: 'Sonny Styles', school: 'Ohio State', position: 'LB', year: '2026', height: '6-4', weight: 235, grade: 94 },
-  { id: 'p25', name: 'Rueben Bain Jr.', school: 'Miami', position: 'EDGE', year: '2026', height: '6-2', weight: 265, grade: 93 },
-  { id: 'p26', name: 'Dillon Thieneman', school: 'Oregon', position: 'S', year: '2026', height: '6-1', weight: 205, grade: 91 },
-  { id: 'p27', name: 'Anthony Hill Jr.', school: 'Texas', position: 'LB', year: '2026', height: '6-2', weight: 235, grade: 90 },
-  { id: 'p28', name: 'Jacob Rodriguez', school: 'Texas Tech', position: 'LB', year: '2026', height: '6-1', weight: 225, grade: 89 },
-  { id: 'p29', name: 'Jermod McCoy', school: 'Tennessee', position: 'CB', year: '2026', height: '6-0', weight: 190, grade: 92 },
-  { id: 'p30', name: 'Mansoor Delane', school: 'LSU', position: 'CB', year: '2026', height: '6-2', weight: 195, grade: 91 },
-  { id: 'p31', name: 'CJ Allen', school: 'Georgia', position: 'LB', year: '2026', height: '6-1', weight: 230, grade: 88 },
-  // ─── OL (dynasty/IDP leagues) ───
-  { id: 'p32', name: 'Josh Proctor', school: 'Penn State', position: 'OT', year: '2026', height: '6-7', weight: 352, grade: 87 },
-  { id: 'p33', name: 'Spencer Fano', school: 'Utah', position: 'OT', year: '2026', height: '6-5', weight: 305, grade: 86 },
-  { id: 'p34', name: 'Iapani Ioane', school: 'Oregon', position: 'OG', year: '2026', height: '6-4', weight: 326, grade: 85 },
-];
+// 2026 NFL Draft completed April 23-25, 2026. Every previously-listed
+// 2026 college prospect is now an NFL player (rookie). Until a 2027
+// prospect dataset is curated, this seed is empty -- fetchDedupedProspects
+// returns [] and the UI shows "No prospects available right now."
+// TODO: source 2027 NFL Draft prospects (current college juniors/seniors)
+const PROSPECT_SEED_2026: CollegeProspect[] = [];
 
 
 // ─── 2026 PROSPECT SEED (fallback when CFBD is down) ────────
@@ -785,15 +817,13 @@ export async function fetchBlendedConsensus(
     const teamImplied = vegasMap.get(p.team?.toUpperCase());
     if (teamImplied && teamImplied > 24) score += (teamImplied - 24) * 2;
 
-    // Trend direction
-    // We no longer track per-source ranks individually after the weighted
-    // blend, so spread defaults to 0 (will be replaced with a proper
-    // disagreement metric when Piece 2 ships per-source rank tracking).
-    const spread = 0;
+    // Trend direction -- based purely on Sleeper add/drop velocity.
+    // (Was using a hardcoded spread=0 placeholder which made the
+    // fallback always 'up'. Per-source rank dispersion lands later.)
     const trend: 'up' | 'down' | 'flat' =
       adds > drops * 2 ? 'up' :
       drops > adds * 2 ? 'down' :
-      spread <= 5 ? 'up' : spread <= 15 ? 'flat' : 'down';
+      'flat';
 
     // Build stat line
     let statLine = '';
@@ -834,14 +864,18 @@ export async function fetchBlendedConsensus(
 
 // ─── SOURCE DISPATCHER ──────────────────────────────────────
 
-export async function fetchBaseRankings(source: RankingsSource): Promise<RankedPlayer[]> {
+export async function fetchBaseRankings(
+  source: RankingsSource,
+  leagueType: LeagueType = 'redraft',
+  scoringRules: ScoringRules = 'ppr',
+): Promise<RankedPlayer[]> {
   switch (source) {
     case 'sleeper':     return fetchSleeperADP();
     case 'espn':        return fetchESPNADP();
     case 'yahoo':       return fetchYahooADP();
-    case 'fantasypros': return fetchBlendedConsensus();
-    case 'nfl':         return fetchBlendedConsensus();
-    case 'aiomni':      return fetchBlendedConsensus();
+    case 'fantasypros': return fetchBlendedConsensus(leagueType, scoringRules);
+    case 'nfl':         return fetchBlendedConsensus(leagueType, scoringRules);
+    case 'aiomni':      return fetchBlendedConsensus(leagueType, scoringRules);
     default:            return fetchSleeperADP();
   }
 }
