@@ -186,7 +186,7 @@ function getCurrentDraftSeason(): number {
 // the blender skips that source gracefully (no regression).
 
 const MFL_PROXY_URL = 'https://khoruzvsprxyocisuhet.supabase.co/functions/v1/mfl-adp-proxy';
-const FF_PROXY_URL  = 'https://khoruzvsprxyocisuhet.supabase.co/functions/v1/fleaflicker-rankings-proxy';
+const YH_PROXY_URL  = 'https://khoruzvsprxyocisuhet.supabase.co/functions/v1/yahoo-rankings-proxy';
 const PHASE2_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtob3J1enZzcHJ4eW9jaXN1aGV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDc5MTEsImV4cCI6MjA5MDU4MzkxMX0.YUIDZOJJhUc0ubkQxB_pSyXeE_xjcrqY7jGmbttlfRw';
 
 // ─── SLEEPER ────────────────────────────────────────────────
@@ -357,6 +357,29 @@ export async function fetchESPNLeaders(): Promise<{ name: string; stats: string[
 // ─── YAHOO ──────────────────────────────────────────────────
 
 export async function fetchYahooADP(): Promise<RankedPlayer[]> {
+  // 1) Try the server-side service-account proxy first.
+  //    Always available, no per-user auth required.
+  try {
+    const proxyUrl = YH_PROXY_URL;
+    const res = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {
+        'apikey': PHASE2_ANON,
+        'Authorization': `Bearer ${PHASE2_ANON}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.ok && Array.isArray(data.players)) {
+        return data.players as RankedPlayer[];
+      }
+    }
+  } catch (e) {
+    console.log('fetchYahooADP proxy error, falling back to per-user token:', e);
+  }
+
+  // 2) Fallback: per-user Yahoo token (works only when user is signed in).
   try {
     const { getValidYahooToken } = require('./yahoo');
     const token = await getValidYahooToken();
@@ -432,32 +455,11 @@ export async function fetchMFLADP(
 // off MFL + Sleeper alone.
 
 export async function fetchFleaflickerADP(
-  leagueType: LeagueType = 'redraft',
-  scoringRules: ScoringRules = 'ppr'
+  _leagueType: LeagueType = 'redraft',
+  _scoringRules: ScoringRules = 'ppr'
 ): Promise<RankedPlayer[]> {
-  try {
-    const url = `${FF_PROXY_URL}?leagueType=${leagueType}&scoringRules=${scoringRules}`;
-    const res = await fetch(url, {
-      headers: {
-        'apikey': PHASE2_ANON,
-        'Authorization': `Bearer ${PHASE2_ANON}`,
-      },
-    });
-    if (!res.ok) {
-      console.log('fetchFleaflickerADP HTTP', res.status);
-      return [];
-    }
-    const data = await res.json();
-    if (!data?.ok || !Array.isArray(data.players)) return [];
-    return data.players.map((p: any, i: number) => ({
-      ...p,
-      rank: i + 1,
-      tier: assignTier(i + 1),
-    }));
-  } catch (e) {
-    console.log('fetchFleaflickerADP error:', e);
-    return [];
-  }
+  // KeepTradeCut source removed (scraping concerns). Stub returns [].
+  return [];
 }
 
 // ─── NFL.com rankings (stub for Piece 1; scraper lands in Piece 3) ──────
@@ -873,6 +875,8 @@ export async function fetchBaseRankings(
     case 'sleeper':     return fetchSleeperADP();
     case 'espn':        return fetchESPNADP();
     case 'yahoo':       return fetchYahooADP();
+    case 'mfl':         return fetchMFLADP(leagueType, scoringRules);
+    // KeepTradeCut source removed -- using Yahoo + Sleeper + MFL instead
     case 'fantasypros': return fetchBlendedConsensus(leagueType, scoringRules);
     case 'nfl':         return fetchBlendedConsensus(leagueType, scoringRules);
     case 'aiomni':      return fetchBlendedConsensus(leagueType, scoringRules);

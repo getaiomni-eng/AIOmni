@@ -62,6 +62,7 @@ const BASE_SOURCES: { key: RankingsSource; label: string; sub: string; color: st
   { key: 'sleeper', label: 'Sleeper ADP', sub: 'Based on Sleeper draft data', color: '#00FFF9' },
   { key: 'espn', label: 'ESPN ADP', sub: 'Based on ESPN draft data', color: '#e52534' },
   { key: 'yahoo', label: 'Yahoo ADP', sub: 'Requires Yahoo connection', color: '#7c3aed' },
+  { key: 'mfl', label: 'MFL ADP', sub: 'MyFantasyLeague consensus', color: '#f59e0b' },
   { key: 'nfl', label: 'NFL.com', sub: 'Official NFL rankings', color: palette.aqua },
 ];
 
