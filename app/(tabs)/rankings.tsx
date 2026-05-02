@@ -58,10 +58,11 @@ const FORMATS: { key: Format; label: string }[] = [
 const POSITIONS: Position[] = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K'];
 
 const BASE_SOURCES: { key: RankingsSource; label: string; sub: string; color: string }[] = [
-  { key: 'aiomni', label: 'AIOmni AI Rankings', sub: 'AI-synthesized from all sources', color: '#6eeb83' },
+  { key: 'aiomni_formula', label: 'AIOmni Formula', sub: 'Proprietary algorithmic engine', color: '#D4FF00' },
+  { key: 'aiomni', label: 'AIOmni Pulse', sub: 'AI-blended community sources', color: '#6eeb83' },
   { key: 'sleeper', label: 'Sleeper ADP', sub: 'Based on Sleeper draft data', color: '#00FFF9' },
   { key: 'espn', label: 'ESPN ADP', sub: 'Based on ESPN draft data', color: '#e52534' },
-  { key: 'yahoo', label: 'Yahoo ADP', sub: 'Requires Yahoo connection', color: '#7c3aed' },
+  { key: 'yahoo', label: 'Yahoo ADP', sub: 'Yahoo official rankings', color: '#7c3aed' },
   { key: 'mfl', label: 'MFL ADP', sub: 'MyFantasyLeague consensus', color: '#f59e0b' },
   { key: 'nfl', label: 'NFL.com', sub: 'Official NFL rankings', color: palette.aqua },
 ];

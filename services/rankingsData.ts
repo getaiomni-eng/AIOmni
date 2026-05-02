@@ -12,7 +12,7 @@ import { getActiveSleeperIds, getCurrentStatsSeason } from './nflPlayers';
 
 // ─── TYPES ──────────────────────────────────────────────────
 
-export type RankingsSource = 'sleeper' | 'espn' | 'yahoo' | 'mfl' | 'fleaflicker' | 'fantasypros' | 'nfl' | 'aiomni';
+export type RankingsSource = 'sleeper' | 'espn' | 'yahoo' | 'mfl' | 'fleaflicker' | 'fantasypros' | 'nfl' | 'aiomni' | 'aiomni_formula';
 
 export interface RankedPlayer {
   id: string;
@@ -70,7 +70,8 @@ export const SOURCE_WEIGHTS: Record<LeagueType, Record<RankingsSource, number>> 
     mfl: 8,
     fleaflicker: 8,
     fantasypros: 0,    // not implemented; reserved
-    aiomni: 0,         // synthesized output, not a source input
+    aiomni: 0,         // Pulse blend output, not a source input
+    aiomni_formula: 0, // proprietary algorithmic engine, never blended
   },
   dynasty: {
     sleeper: 20,
@@ -81,6 +82,7 @@ export const SOURCE_WEIGHTS: Record<LeagueType, Record<RankingsSource, number>> 
     fleaflicker: 25,
     fantasypros: 0,
     aiomni: 0,
+    aiomni_formula: 0,
   },
 };
 
@@ -864,6 +866,49 @@ export async function fetchBlendedConsensus(
   });
 }
 
+// ─── AIOmni Formula (proprietary algorithmic engine) ─────────
+// Reads from nfl_proprietary_rankings table, populated by the
+// supabase/functions/aiomni-rankings-engine edge function (v2.5.2+).
+// This is the pure stats-based projection -- separate from Pulse.
+
+const PROPRIETARY_RANKINGS_URL =
+  'https://khoruzvsprxyocisuhet.supabase.co/rest/v1/nfl_proprietary_rankings';
+
+export async function fetchAIOmniFormula(
+  format: ScoringFormat = 'PPR',
+): Promise<RankedPlayer[]> {
+  try {
+    const url = `${PROPRIETARY_RANKINGS_URL}?format=eq.${format}&select=rank,gsis_id,name,position,team,score,tier,pos_rank,method&order=rank`;
+    const res = await fetch(url, {
+      headers: {
+        'apikey': PHASE2_ANON,
+        'Authorization': `Bearer ${PHASE2_ANON}`,
+      },
+    });
+    if (!res.ok) {
+      console.log('fetchAIOmniFormula HTTP', res.status);
+      return [];
+    }
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    return data.map((r: any, i: number): RankedPlayer => ({
+      id: r.gsis_id ?? String(i),
+      name: r.name ?? 'Unknown',
+      position: r.position ?? 'FLEX',
+      team: r.team ?? '—',
+      rank: r.rank ?? (i + 1),
+      adp: String(r.rank ?? (i + 1)),
+      trend: 'flat' as const,
+      trendVal: 0,
+      tier: r.tier ?? assignTier(r.rank ?? (i + 1)),
+      method: r.method ?? null,
+    }) as any);
+  } catch (e) {
+    console.log('fetchAIOmniFormula error:', e);
+    return [];
+  }
+}
+
 // ─── SOURCE DISPATCHER ──────────────────────────────────────
 
 export async function fetchBaseRankings(
@@ -872,15 +917,16 @@ export async function fetchBaseRankings(
   scoringRules: ScoringRules = 'ppr',
 ): Promise<RankedPlayer[]> {
   switch (source) {
-    case 'sleeper':     return fetchSleeperADP();
-    case 'espn':        return fetchESPNADP();
-    case 'yahoo':       return fetchYahooADP();
-    case 'mfl':         return fetchMFLADP(leagueType, scoringRules);
+    case 'sleeper':         return fetchSleeperADP();
+    case 'espn':            return fetchESPNADP();
+    case 'yahoo':           return fetchYahooADP();
+    case 'mfl':             return fetchMFLADP(leagueType, scoringRules);
     // KeepTradeCut source removed -- using Yahoo + Sleeper + MFL instead
-    case 'fantasypros': return fetchBlendedConsensus(leagueType, scoringRules);
-    case 'nfl':         return fetchBlendedConsensus(leagueType, scoringRules);
-    case 'aiomni':      return fetchBlendedConsensus(leagueType, scoringRules);
-    default:            return fetchSleeperADP();
+    case 'fantasypros':     return fetchBlendedConsensus(leagueType, scoringRules);
+    case 'nfl':             return fetchBlendedConsensus(leagueType, scoringRules);
+    case 'aiomni':          return fetchBlendedConsensus(leagueType, scoringRules);
+    case 'aiomni_formula':  return fetchAIOmniFormula();
+    default:                return fetchSleeperADP();
   }
 }
 

@@ -276,4 +276,30 @@ export async function getEngineRankingsForSource(
   }
 }
 
+
+
+// ─── AIOmni Formula (proprietary algorithmic engine) ────────────────────────
+// Reads directly from nfl_proprietary_rankings table. Bypasses the consensus
+// blend AND the rankAIOmni() in-process engine. Pure v2.5.2+ algorithmic.
+
+export async function getFormulaRankings(
+  format: UIFormat,
+  leagueType: LeagueType = 'redraft',
+): Promise<UIRankedPlayer[]> {
+  try {
+    const { fetchAIOmniFormula } = await import('../rankingsData');
+    const raw = await fetchAIOmniFormula(format);
+    return raw.map((p, i) => ({
+      ...p,
+      rank: p.rank ?? (i + 1),
+      tier: p.tier ?? assignGlobalTier(p.rank ?? (i + 1)),
+      positionalTier: assignPositionalTier(p.rank ?? (i + 1)),
+      algorithmicTier: p.tier,
+    } as any));
+  } catch (e) {
+    console.log('getFormulaRankings error:', e);
+    return [];
+  }
+}
+
 export { AIOMNI_ALGORITHM_VERSION };
