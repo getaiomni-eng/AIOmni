@@ -117,7 +117,9 @@ function rookieBaselineByPos(position: string, draftRound: number | null): numbe
     return 2.5;
   }
   if (position === 'QB') {
-    if (draftRound === 1) return 14.0;
+    // v2.5.3: lowered from 14.0 to 11.0. Year-1 QB rookies historically
+    // average 12-15 PPG; 14.0 was midpoint of established mid-tier vets.
+    if (draftRound === 1) return 11.0;
     return 0;
   }
   return 0;
@@ -520,10 +522,19 @@ async function buildFormat(format: Format, supabase: any): Promise<RankedRow[]> 
     const injInfo = injuryMap.get(injuryNameKey);
     let injuryMult = 1.0;
     let injuryNote = '';
+    // v2.5.3: only apply injury penalty for severe statuses.
+    // Skip "Unspecified", "Questionable", "Probable" -- those are noise.
     if (injInfo && injInfo.multiplier < 1.0) {
-      injuryMult = injInfo.multiplier;
-      baseline = baseline * injuryMult;
-      injuryNote = `INJURY: ${injInfo.injury} (${injuryMult.toFixed(2)}x)`;
+      const severity = (injInfo.severity ?? injInfo.status ?? '').toLowerCase();
+      const isSerious = severity.includes('out') ||
+                        severity.includes('ir') ||
+                        severity.includes('pup') ||
+                        severity.includes('doubtful');
+      if (isSerious) {
+        injuryMult = injInfo.multiplier;
+        baseline = baseline * injuryMult;
+        injuryNote = `INJURY: ${injInfo.injury} (${injuryMult.toFixed(2)}x)`;
+      }
     }
 
     const ageMult = ageCurve(p.position, age);
@@ -546,12 +557,18 @@ async function buildFormat(format: Format, supabase: any): Promise<RankedRow[]> 
     if (isRookie) {
       const pick = p.draft_pick;
       const round = p.draft_round;
-      if (typeof pick === 'number' && pick <= 10) {
+      // v2.5.3: QB rookies capped at 0.10 max regardless of capital.
+      // R1 QBs need a season of NFL data before getting top-10 QB
+      // valuation -- Mendoza at QB8 was unrealistic for a Year-1.
+      if (p.position === 'QB') {
+        if (round === 1) rookieBoost = 0.10;
+        else rookieBoost = 0;
+      } else if (typeof pick === 'number' && pick <= 10) {
         rookieBoost = (p.position === 'RB' || p.position === 'WR') ? 0.35 : 0.30;
       } else if (round === 1) rookieBoost = 0.20;
       else if (round === 2) rookieBoost = 0.10;
       else if (round === 3) rookieBoost = 0.05;
-      else rookieBoost = 0; // R4+ or unknown
+      else rookieBoost = 0;
     }
     const oppAdj = a25 ? opportunityAdj(a25.weeks) : 0;
     const formatAdj = formatPositionAdj(format, p.position, age);
@@ -601,8 +618,13 @@ async function buildFormat(format: Format, supabase: any): Promise<RankedRow[]> 
   // value is points-above-streamer, not raw points. Skipped for SF (QB
   // scarcity already handled) and DYN (long-term value matters more).
   if (format === 'PPR' || format === 'HALF' || format === 'STD') {
+    // v2.5.3: QB removed from VBD. Single-QB league QB pool depth
+    // is too compressed for VBD math to work -- top 14 QBs all score
+    // 16-22 PPG, so subtracting QB14's score crushes the spread to
+    // 3-5 points while RB/WR spreads stay 12-15. Result: elite QBs
+    // ended up ranked behind QB backups. Skip QB entirely; rely on
+    // raw multiplied score for QB ordering within position.
     const REPLACEMENT_RANK: Record<string, number> = {
-      QB: 14,
       RB: 30,
       WR: 36,
       TE: 14,
