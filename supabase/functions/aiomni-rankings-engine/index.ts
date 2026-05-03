@@ -233,14 +233,27 @@ function aggregateSeason(rows: any[], ptsCol: string): Map<string, SeasonAgg> {
     //   wks 10-13: 2x  (late-season ramp)
     //   wks 14-17: 4x  (FANTASY PLAYOFFS)
     //   wk 18:     1x  (starters rested)
+    // v2.5.4: Recency weighting with threshold dampener.
+    // Count games in each amplified window first.
+    let midWindowGames = 0;   // weeks 10-13
+    let playoffGames = 0;     // weeks 14-17
+    for (const wk of agg.weeks) {
+      if (wk.week >= 10 && wk.week <= 13) midWindowGames++;
+      else if (wk.week >= 14 && wk.week <= 17) playoffGames++;
+    }
+    // v2.5.4: full bonus only if player has 2+ games in window;
+    // otherwise reduced 1.5x (some amplification, less outlier risk).
+    // Playoff window also lowered from 4x to 3x base bonus.
+    const midWeight = midWindowGames >= 2 ? 2 : 1.5;
+    const playoffWeight = playoffGames >= 2 ? 3 : 1.5;
     let weightedSum = 0;
     let totalWeight = 0;
-    for (const g of agg.weeks) {
-      let w = 1;
-      if (g.week >= 14 && g.week <= 17) w = 4;
-      else if (g.week >= 10 && g.week <= 13) w = 2;
-      else if (g.week === 18) w = 1;
-      weightedSum += g.pts * w;
+    for (const wk of agg.weeks) {
+      let w: number;
+      if (wk.week >= 14 && wk.week <= 17) w = playoffWeight;
+      else if (wk.week >= 10 && wk.week <= 13) w = midWeight;
+      else w = 1;
+      weightedSum += wk.pts * w;
       totalWeight += w;
     }
     agg.recencyPpg = totalWeight > 0 ? weightedSum / totalWeight : agg.ppg;
