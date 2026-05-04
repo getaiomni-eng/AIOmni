@@ -16,6 +16,7 @@ export type RankingsSource = 'sleeper' | 'espn' | 'yahoo' | 'mfl' | 'fleaflicker
 
 export interface RankedPlayer {
   id: string;
+  sleeperId?: string;
   name: string;
   position: string;
   team: string;
@@ -878,6 +879,7 @@ export async function fetchAIOmniFormula(
   format: ScoringFormat = 'PPR',
 ): Promise<RankedPlayer[]> {
   try {
+    // Step 1: Pull rankings from nfl_proprietary_rankings
     const url = `${PROPRIETARY_RANKINGS_URL}?format=eq.${format}&select=rank,gsis_id,name,position,team,score,tier,pos_rank,method&order=rank`;
     const res = await fetch(url, {
       headers: {
@@ -891,8 +893,40 @@ export async function fetchAIOmniFormula(
     }
     const data = await res.json();
     if (!Array.isArray(data)) return [];
+    
+    // Step 2: Pull sleeper_id mapping from nfl_players for these gsis_ids
+    // (Avoids embedding by FK; clean two-query approach.)
+    const gsisIds = data.map((r: any) => r.gsis_id).filter(Boolean);
+    const sleeperIdMap = new Map<string, string>();
+    if (gsisIds.length > 0) {
+      try {
+        const idsCsv = gsisIds.map(id => `"${id}"`).join(',');
+        const playersUrl = `https://khoruzvsprxyocisuhet.supabase.co/rest/v1/nfl_players?gsis_id=in.(${idsCsv})&select=gsis_id,sleeper_id`;
+        const playersRes = await fetch(playersUrl, {
+          headers: {
+            'apikey': PHASE2_ANON,
+            'Authorization': `Bearer ${PHASE2_ANON}`,
+          },
+        });
+        if (playersRes.ok) {
+          const players = await playersRes.json();
+          if (Array.isArray(players)) {
+            for (const p of players) {
+              if (p.gsis_id && p.sleeper_id) {
+                sleeperIdMap.set(p.gsis_id, p.sleeper_id);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.log('fetchAIOmniFormula sleeper_id lookup error:', e);
+        // Non-fatal: ranking still returns, just without headshots
+      }
+    }
+    
     return data.map((r: any, i: number): RankedPlayer => ({
       id: r.gsis_id ?? String(i),
+      sleeperId: sleeperIdMap.get(r.gsis_id),
       name: r.name ?? 'Unknown',
       position: r.position ?? 'FLEX',
       team: r.team ?? '—',

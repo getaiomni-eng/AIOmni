@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { computeHeatBatch } from '../../services/heat';
 import { getHeatSignalsMap } from '../../services/heatData';
 import { getCurrentTier } from '../../services/purchases';
-import { assignGlobalTier, assignPositionalTier, getEngineRankings, getEngineRankingsForSource, invalidateEngineCache } from '../../services/rankings/aiomniEngineBridge';
+import { assignGlobalTier, assignPositionalTier, getEngineRankings, getEngineRankingsForSource, invalidateEngineCache, getFormulaRankings} from '../../services/rankings/aiomniEngineBridge';
 import { applyOverrides, clearOverrides, getOverrides, setOverride } from '../../services/rankings/userOverrides';
 import {
   RankedPlayer,
@@ -101,11 +101,16 @@ const SEED: RankedPlayer[] = [
   { id:'6819',  name:'Michael Pittman Jr.',  position:'WR', team:'IND', rank:30, adp:'29.0',trend:'up',   trendVal:1, tier:5 },
 ];
 
-function PlayerPhoto({ playerId, size = 48 }: { playerId: string; size?: number }) {
+function PlayerPhoto({ playerId, sleeperId, size = 48 }: { playerId: string; sleeperId?: string; size?: number }) {
   const [err, setErr] = useState(false);
-  if (!err && playerId) return (
+  // Prefer sleeperId (always works with Sleeper CDN). Fall back to playerId
+  // only if it does NOT look like a gsis_id (e.g. "00-0034796"); raw gsis_ids
+  // 404 on Sleeper CDN, so just show the placeholder rather than fail.
+  const looksLikeGsisId = playerId?.startsWith('00-');
+  const effectiveId = sleeperId || (looksLikeGsisId ? null : playerId);
+  if (!err && effectiveId) return (
     <Image
-      source={{ uri: `https://sleepercdn.com/content/nfl/players/thumb/${playerId}.jpg` }}
+      source={{ uri: `https://sleepercdn.com/content/nfl/players/thumb/${effectiveId}.jpg` }}
       style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: dark.surface, borderWidth: 2, borderColor: dark.border }}
       onError={() => setErr(true)}
     />
@@ -142,7 +147,7 @@ function PlayerCard({ player, index, onChangeRank, onOpenCard, heatAccess }: {
   return (
     <TouchableOpacity style={s.card} activeOpacity={0.7} onPress={() => onOpenCard?.(player)}>
       <Text style={[s.rank, isTop3 && { color: palette.amber }]}>{index + 1}</Text>
-      <PlayerPhoto playerId={player.id} size={48} />
+      <PlayerPhoto playerId={player.id} sleeperId={(player as any).sleeperId} size={48} />
       <View style={s.info}>
         <Text style={s.name}>{player.name.toUpperCase()}</Text>
         <View style={s.metaRow}>
@@ -399,7 +404,12 @@ export default function RankingsScreen() {
       const leagueScope = selectedLeagueId || null;
       await clearOverrides(leagueScope);
       setOverrides(new Map());
-      const rankings = await getEngineRankingsForSource(source, format, leagueType);
+      // Route AIOmni Formula through its clean bypass (reads nfl_proprietary_rankings
+      // directly, skips rankAIOmni() in-process consensus engine). All other sources
+      // continue to flow through getEngineRankingsForSource for consensus blending.
+      const rankings = source === 'aiomni_formula'
+        ? await getFormulaRankings(format, leagueType)
+        : await getEngineRankingsForSource(source, format, leagueType);
       setMyRanksEngine(rankings.length > 0 ? await mergeHeat(rankings) : [...SEED]);
       await setSelectedBase(source);
       setSelectedBaseState(source);
@@ -545,13 +555,13 @@ export default function RankingsScreen() {
 
       <View style={s.toggle}>
         <TouchableOpacity onPress={() => setMode('community')} style={[s.toggleBtn, mode === 'community' && s.toggleBtnOn]}>
-          <Text style={[s.toggleText, mode === 'community' && s.toggleTextOn]}>COMMUNITY</Text>
+          <Text style={[s.toggleText, mode === 'community' && s.toggleTextOn]} numberOfLines={1} adjustsFontSizeToFit>COMMUNITY</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={handleMyRankingsTab} style={[s.toggleBtn, mode === 'mine' && s.toggleBtnOn]}>
-          <Text style={[s.toggleText, mode === 'mine' && s.toggleTextOn]}>MY RANKINGS</Text>
+          <Text style={[s.toggleText, mode === 'mine' && s.toggleTextOn]} numberOfLines={1} adjustsFontSizeToFit>MY RANKINGS</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={handleProspectsTab} style={[s.toggleBtn, mode === 'prospects' && { backgroundColor: palette.flame }]}>
-          <Text style={[s.toggleText, mode === 'prospects' && s.toggleTextOn]}>PROSPECTS</Text>
+          <Text style={[s.toggleText, mode === 'prospects' && s.toggleTextOn]} numberOfLines={1} adjustsFontSizeToFit>PROSPECTS</Text>
         </TouchableOpacity>
       </View>
 
@@ -807,9 +817,9 @@ const s = StyleSheet.create({
   eyebrow:    { fontFamily: F.body, fontSize: 10, letterSpacing: 3, color: dark.textMuted, marginBottom: 2 },
   title:      { fontFamily: F.bold, fontSize: 42, color: dark.text, letterSpacing: 2, marginBottom: 14 },
   toggle:     { flexDirection: 'row', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: dark.border, backgroundColor: dark.card, marginBottom: 14 },
-  toggleBtn:  { flex: 1, paddingVertical: 11, alignItems: 'center' },
+  toggleBtn:  { flex: 1, paddingVertical: 11, paddingHorizontal: 4, alignItems: 'center' },
   toggleBtnOn:{ backgroundColor: palette.green },
-  toggleText: { fontFamily: F.bold, fontSize: 15, letterSpacing: 2, color: dark.textSub },
+  toggleText: { fontFamily: F.bold, fontSize: 13, letterSpacing: 1, color: dark.textSub, textAlign: 'center' },
   toggleTextOn:{ color: dark.bg },
   searchWrap: { backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, borderColor: dark.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, marginBottom: 12 },
   searchIcon: { fontSize: 18, color: palette.green, marginRight: 10 },
