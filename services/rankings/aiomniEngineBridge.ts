@@ -211,7 +211,15 @@ export function applyEngineToRankings(
   if (inputs.length === 0) return [];
 
   const ranked = rankAIOmni(inputs, config);
-  return ranked.map(p => toUIPlayer(p, originalMap));
+  // rankAIOmni keeps an internal player universe (e.g. for cross-source
+  // augmentation) and may emit ids that were never in the input source.
+  // Those ids fall through toUIPlayer's fallback path and produce ghost
+  // rows with name-format mismatches (e.g. "James Cook" vs "James Cook III"),
+  // which surfaces in Pulse as duplicate players. Filter to the source's
+  // id space so output is always a subset of the input.
+  return ranked
+    .filter(p => originalMap.has(p.id))
+    .map(p => toUIPlayer(p, originalMap));
 }
 
 // ─── IN-MEMORY CACHE ────────────────────────────────────────────────────────
