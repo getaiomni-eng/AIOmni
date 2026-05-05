@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Image, Modal, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
@@ -291,18 +292,61 @@ export default function RankingsScreen() {
   const [baseModalVisible, setBaseModalVisible] = useState(false);
   const [changeModalVisible, setChangeModalVisible] = useState(false);
 
+  // ─── Pulse tab indicator (event-driven, native-driver only) ─────────
+  // Animates a small dot once when fresh community rankings arrive.
+  // Suppresses the first load (no pulse on app open). If user is on a
+  // different tab when data lands, defers the pulse until they switch back.
+  const pulseScale       = useRef(new Animated.Value(1)).current;
+  const pulseOpacity     = useRef(new Animated.Value(1)).current;
+  const hasLoadedOnceRef = useRef(false);
+  const pendingPulseRef  = useRef(false);
+  const isPulsingRef     = useRef(false);
+
+  const triggerPulse = () => {
+    if (isPulsingRef.current) return;
+    isPulsingRef.current = true;
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(pulseScale,   { toValue: 1.4, duration: 300, useNativeDriver: true }),
+        Animated.timing(pulseScale,   { toValue: 1.0, duration: 300, useNativeDriver: true }),
+      ]),
+      Animated.sequence([
+        Animated.timing(pulseOpacity, { toValue: 0.4, duration: 300, useNativeDriver: true }),
+        Animated.timing(pulseOpacity, { toValue: 1.0, duration: 300, useNativeDriver: true }),
+      ]),
+    ]).start(() => { isPulsingRef.current = false; });
+  };
+
   useEffect(() => {
     loadSavedState();
     loadCommunityRankings();
     loadLeagues();
   }, [format, leagueType]);
 
+  // Fire deferred pulse when user switches back to the Pulse tab.
+  useEffect(() => {
+    if (mode === 'community' && pendingPulseRef.current) {
+      pendingPulseRef.current = false;
+      triggerPulse();
+    }
+  }, [mode]);
+
   const loadCommunityRankings = async () => {
     setLoading(true);
     setCommunityError(null);
     try {
       const data = await getEngineRankings(format, leagueType);
-      if (data.length > 0) setCommunityData(await mergeHeat(data));
+      if (data.length > 0) {
+        setCommunityData(await mergeHeat(data));
+        // Pulse the tab indicator on fresh data — but only after the first
+        // load (so app-open doesn't pulse), and defer if user isn't viewing.
+        if (hasLoadedOnceRef.current) {
+          if (mode === 'community') triggerPulse();
+          else pendingPulseRef.current = true;
+        } else {
+          hasLoadedOnceRef.current = true;
+        }
+      }
     } catch (e) {
       console.log('getEngineRankings error:', e);
       setCommunityError(e);
@@ -461,7 +505,7 @@ export default function RankingsScreen() {
   // Tier source depends on mode + position filter.
   //   My Rankings: recompute tiers from user's list order. Moving a Tier 3
   //     RB to rank 1 puts them in the user's Tier 1 — their rankings, their tiers.
-  //   Community:   use the tier from engine output (locked to algorithm).
+  //   Pulse:       use the tier from engine output (locked to algorithm).
   const grouped: { tier: number; players: RankedPlayer[] }[] = [];
   let lastTier = -1;
   filtered.forEach((p, i) => {
@@ -555,7 +599,15 @@ export default function RankingsScreen() {
 
       <View style={s.toggle}>
         <TouchableOpacity onPress={() => setMode('community')} style={[s.toggleBtn, mode === 'community' && s.toggleBtnOn]}>
-          <Text style={[s.toggleText, mode === 'community' && s.toggleTextOn]} numberOfLines={1} adjustsFontSizeToFit>COMMUNITY</Text>
+          <View style={s.pulseTabInner}>
+            <Text style={[s.toggleText, mode === 'community' && s.toggleTextOn]} numberOfLines={1} adjustsFontSizeToFit>PULSE</Text>
+            <Animated.View
+              style={[
+                s.pulseDot,
+                { transform: [{ scale: pulseScale }], opacity: pulseOpacity },
+              ]}
+            />
+          </View>
         </TouchableOpacity>
         <TouchableOpacity onPress={handleMyRankingsTab} style={[s.toggleBtn, mode === 'mine' && s.toggleBtnOn]}>
           <Text style={[s.toggleText, mode === 'mine' && s.toggleTextOn]} numberOfLines={1} adjustsFontSizeToFit>MY RANKINGS</Text>
@@ -821,6 +873,8 @@ const s = StyleSheet.create({
   toggleBtnOn:{ backgroundColor: palette.green },
   toggleText: { fontFamily: F.bold, fontSize: 13, letterSpacing: 1, color: dark.textSub, textAlign: 'center' },
   toggleTextOn:{ color: dark.bg },
+  pulseTabInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  pulseDot:   { width: 8, height: 8, borderRadius: 4, backgroundColor: palette.aqua, marginLeft: 6 },
   searchWrap: { backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, borderColor: dark.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, marginBottom: 12 },
   searchIcon: { fontSize: 18, color: palette.green, marginRight: 10 },
   searchInput:{ flex: 1, fontFamily: F.body, fontSize: 11, letterSpacing: 1.5, color: dark.text, paddingVertical: 12 },
