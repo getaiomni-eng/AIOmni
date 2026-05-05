@@ -81,35 +81,48 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
     const accessToken = await getValidAccessToken(supabase);
 
-    const url = 'https://fantasysports.yahooapis.com/fantasy/v2/game/nfl/players;sort=OR;count=200?format=json';
-    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Yahoo API HTTP ${res.status}: ${text.slice(0, 300)}`);
-    }
-    const data = await res.json();
-
-    const yahooPlayers = data?.fantasy_content?.game?.[1]?.players;
-    if (!yahooPlayers) throw new Error('no players in response');
+    // Yahoo's API caps single-request responses at 25 players regardless of
+    // the count param. Paginate via ;start=N. 10 parallel pages = 250 players.
+    const PAGE_SIZE = 25;
+    const PAGES = 8; // 8 × 25 = 200 cap
+    const pageResponses = await Promise.all(
+      Array.from({ length: PAGES }, async (_, i) => {
+        const url = `https://fantasysports.yahooapis.com/fantasy/v2/game/nfl/players;sort=OR;start=${i * PAGE_SIZE};count=${PAGE_SIZE}?format=json`;
+        const r = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+        if (!r.ok) {
+          const text = await r.text();
+          console.error(`Yahoo page ${i} HTTP ${r.status}: ${text.slice(0, 200)}`);
+          return null;
+        }
+        return r.json();
+      }).map(p => p.catch(() => null))
+    );
 
     const result: RankedPlayer[] = [];
-    const count = yahooPlayers.count ?? 0;
-    for (let i = 0; i < count; i++) {
-      const p = yahooPlayers[i]?.player?.[0];
-      if (!p) continue;
-      const findField = (key: string) => p.find((x: any) => x[key])?.[key];
-      result.push({
-        id: findField('player_key') ?? String(i),
-        name: p.find((x: any) => x.name)?.name?.full ?? 'Unknown',
-        position: findField('display_position') ?? 'FLEX',
-        team: findField('editorial_team_abbr') ?? '-',
-        rank: i + 1,
-        adp: (i + 1).toFixed(1),
-        trend: 'flat',
-        trendVal: 0,
-        tier: assignTier(i + 1),
-      });
+    let rank = 0;
+    for (const data of pageResponses) {
+      const yahooPlayers = data?.fantasy_content?.game?.[1]?.players;
+      if (!yahooPlayers) continue;
+      const count = yahooPlayers.count ?? 0;
+      for (let i = 0; i < count; i++) {
+        const p = yahooPlayers[i]?.player?.[0];
+        if (!p) continue;
+        rank++;
+        const findField = (key: string) => p.find((x: any) => x[key])?.[key];
+        result.push({
+          id: findField('player_key') ?? String(rank),
+          name: p.find((x: any) => x.name)?.name?.full ?? 'Unknown',
+          position: findField('display_position') ?? 'FLEX',
+          team: findField('editorial_team_abbr') ?? '-',
+          rank,
+          adp: rank.toFixed(1),
+          trend: 'flat',
+          trendVal: 0,
+          tier: assignTier(rank),
+        });
+      }
     }
+    if (result.length === 0) throw new Error('no players in response');
 
     return new Response(JSON.stringify({ ok: true, count: result.length, players: result }), {
       headers: { ...CORS, 'Content-Type': 'application/json' },

@@ -300,10 +300,25 @@ function getESPNTeamAbbr(id: number): string {
 }
 
 export async function fetchESPNADP(): Promise<RankedPlayer[]> {
+  // The original leagues/0 path returns only a ~30-player default subset
+  // because league 0 has no draft pool registered. Switching to
+  // leaguedefaults/3 (PPR default-league context) gives global ADP: the
+  // limit filter is respected and ownership.averageDraftPosition is
+  // populated for all 200 players. Format IDs: 1=Standard, 3=PPR, 5=Half.
   try {
     const res = await fetch(
-      `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${getCurrentDraftSeason()}/segments/0/leagues/0?view=kona_player_info`,
-      { headers: { 'x-fantasy-filter': JSON.stringify({ players: { limit: 200, sortDraftRanks: { sortPriority: 1, sortAsc: true, value: "STANDARD" } } }) } }
+      `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${getCurrentDraftSeason()}/segments/0/leaguedefaults/3?view=kona_player_info`,
+      {
+        headers: {
+          'x-fantasy-filter': JSON.stringify({
+            players: {
+              filterSlotIds: { value: [0, 2, 4, 6, 16, 17] }, // QB/RB/WR/TE/DST/K eligibility
+              limit: 250,
+              sortDraftRanks: { sortPriority: 1, sortAsc: true, value: 'PPR' },
+            },
+          }),
+        },
+      }
     );
     if (!res.ok) return [];
     const data = await res.json();
@@ -313,11 +328,15 @@ export async function fetchESPNADP(): Promise<RankedPlayer[]> {
       .filter((p: any) => posMap[p.player?.defaultPositionId])
       .slice(0, 200)
       .map((p: any, i: number) => ({
-        id: String(p.id), name: p.player?.fullName ?? 'Unknown',
+        id: String(p.id),
+        name: p.player?.fullName ?? 'Unknown',
         position: posMap[p.player?.defaultPositionId] ?? 'FLEX',
         team: p.player?.proTeamId ? getESPNTeamAbbr(p.player.proTeamId) : '—',
-        rank: i + 1, adp: (p.player?.ownership?.averageDraftPosition ?? i + 1).toFixed(1),
-        trend: 'flat' as const, trendVal: 0, tier: assignTier(i + 1),
+        rank: i + 1,
+        adp: (p.player?.ownership?.averageDraftPosition ?? i + 1).toFixed(1),
+        trend: 'flat' as const,
+        trendVal: 0,
+        tier: assignTier(i + 1),
       }));
   } catch (e) { console.log('fetchESPNADP error:', e); return []; }
 }
@@ -383,32 +402,46 @@ export async function fetchYahooADP(): Promise<RankedPlayer[]> {
   }
 
   // 2) Fallback: per-user Yahoo token (works only when user is signed in).
+  // Yahoo's API caps single-request responses at 25 players regardless of the
+  // count param, so we paginate via ;start=N. 10 parallel pages = 250 players.
   try {
     const { getValidYahooToken } = require('./yahoo');
     const token = await getValidYahooToken();
     if (!token) return [];
 
-    const res = await fetch(
-      'https://fantasysports.yahooapis.com/fantasy/v2/game/nfl/players;sort=OR;count=200?format=json',
-      { headers: { Authorization: `Bearer ${token}` } }
+    const PAGE_SIZE = 25;
+    const PAGES = 8; // 8 × 25 = 200 cap
+    const responses = await Promise.all(
+      Array.from({ length: PAGES }, (_, i) =>
+        fetch(
+          `https://fantasysports.yahooapis.com/fantasy/v2/game/nfl/players;sort=OR;start=${i * PAGE_SIZE};count=${PAGE_SIZE}?format=json`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ).then(r => (r.ok ? r.json() : null)).catch(() => null)
+      )
     );
-    if (!res.ok) return [];
-    const data = await res.json();
-    const yahooPlayers = data?.fantasy_content?.game?.[1]?.players;
-    if (!yahooPlayers) return [];
 
     const result: RankedPlayer[] = [];
-    const count = yahooPlayers.count ?? 0;
-    for (let i = 0; i < count; i++) {
-      const p = yahooPlayers[i]?.player?.[0];
-      if (!p) continue;
-      result.push({
-        id: p.find((x: any) => x.player_key)?.player_key ?? String(i),
-        name: p.find((x: any) => x.name)?.name?.full ?? 'Unknown',
-        position: p.find((x: any) => x.display_position)?.display_position ?? 'FLEX',
-        team: p.find((x: any) => x.editorial_team_abbr)?.editorial_team_abbr ?? '—',
-        rank: i + 1, adp: (i + 1).toFixed(1), trend: 'flat' as const, trendVal: 0, tier: assignTier(i + 1),
-      });
+    let rank = 0;
+    for (const data of responses) {
+      const yahooPlayers = data?.fantasy_content?.game?.[1]?.players;
+      if (!yahooPlayers) continue;
+      const count = yahooPlayers.count ?? 0;
+      for (let i = 0; i < count; i++) {
+        const p = yahooPlayers[i]?.player?.[0];
+        if (!p) continue;
+        rank++;
+        result.push({
+          id: p.find((x: any) => x.player_key)?.player_key ?? String(rank),
+          name: p.find((x: any) => x.name)?.name?.full ?? 'Unknown',
+          position: p.find((x: any) => x.display_position)?.display_position ?? 'FLEX',
+          team: p.find((x: any) => x.editorial_team_abbr)?.editorial_team_abbr ?? '—',
+          rank,
+          adp: rank.toFixed(1),
+          trend: 'flat' as const,
+          trendVal: 0,
+          tier: assignTier(rank),
+        });
+      }
     }
     return result;
   } catch (e) { console.log('fetchYahooADP error:', e); return []; }
