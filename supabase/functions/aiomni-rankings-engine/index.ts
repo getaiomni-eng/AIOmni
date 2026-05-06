@@ -152,15 +152,46 @@ function pointsCol(format: Format): 'fantasy_pts_ppr' | 'fantasy_pts_half' | 'fa
 }
 
 function formatPositionAdj(format: Format, position: string, age: number): number {
+  // Superflex QB premium — preserved from existing logic
   if (format === 'SF') {
     if (position === 'QB') return 1.40;
     return 1.0;
   }
+
+  // Dynasty: position-specific career curves (locked v2026-05).
+  // Replaces the prior naive age <=24/>=30 buckets which produced
+  // CMC at RB6 (29 yo, no discount) and MHJ at WR34 (23 yo, only +10%).
+  // These curves give RB cliff at 31+, WR ascending boost <24, etc.
   if (format === 'DYN') {
-    if (age <= 24) return 1.10;
-    if (age >= 30) return 0.85;
-    return 1.0;
+    switch (position) {
+      case 'RB':
+        if (age < 25) return 1.15;   // ascending
+        if (age < 27) return 1.05;   // peak entering
+        if (age < 29) return 0.95;   // peak exiting
+        if (age < 31) return 0.80;   // decline phase
+        return 0.65;                  // cliff
+      case 'WR':
+        if (age < 24) return 1.20;   // high ascending
+        if (age < 27) return 1.10;   // peak entering
+        if (age < 30) return 1.00;   // peak
+        if (age < 33) return 0.85;   // decline phase
+        return 0.65;                  // cliff
+      case 'QB':
+        if (age < 26) return 1.10;   // ascending
+        if (age < 33) return 1.00;   // peak
+        if (age < 38) return 0.95;   // graceful decline
+        return 0.80;                  // winding down
+      case 'TE':
+        if (age < 25) return 1.15;   // ascending
+        if (age < 30) return 1.05;   // peak
+        if (age < 33) return 0.95;   // decline phase
+        return 0.80;                  // cliff
+      default:
+        return 1.0;
+    }
   }
+
+  // PPR / HALF / STD: no age adjustment
   return 1.0;
 }
 
