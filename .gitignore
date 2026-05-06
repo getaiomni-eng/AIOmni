@@ -60,3 +60,9 @@ scripts/patches/
 
 # Supabase CLI working directory — version stamps + ephemeral state
 supabase/.temp/
+
+# Obsidian vault scaffold — Obsidian regenerates this when it sniffs
+# ~/AIOmni as a candidate vault. Never belongs in the app repo.
+AIOmni/
+.obsidian/
+.smart-env/
