@@ -13,7 +13,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { computeHeatBatch } from '../../services/heat';
 import { getHeatSignalsMap } from '../../services/heatData';
-import { getCurrentTier } from '../../services/purchases';
+import { getCachedTier, getCurrentTier, refreshTier, type Tier } from '../../services/purchases';
 import { loadQuizResult } from '../../services/quiz/engine';
 import type { QuizResult } from '../../services/quiz/types';
 import { assignGlobalTier, assignPositionalTier, getEngineRankings, getEngineRankingsForSource, invalidateEngineCache, getFormulaRankings} from '../../services/rankings/aiomniEngineBridge';
@@ -294,6 +294,15 @@ export default function RankingsScreen() {
   const [baseModalVisible, setBaseModalVisible] = useState(false);
   const [changeModalVisible, setChangeModalVisible] = useState(false);
   const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
+  const [tier, setTier] = useState<Tier>(getCachedTier());
+
+  // Refresh tier on mount + whenever rankings tab gains focus. The cache
+  // updates asynchronously via the customer-info listener, so re-reading
+  // here picks up changes from a paywall that was just opened in flight.
+  useEffect(() => {
+    setTier(getCachedTier());
+    refreshTier().then(setTier).catch(() => {});
+  }, []);
 
   // ─── Pulse tab indicator (event-driven, native-driver only) ─────────
   // Animates a small dot once when fresh community rankings arrive.
@@ -475,6 +484,10 @@ export default function RankingsScreen() {
   };
 
   const handleMyRankingsTab = () => {
+    if (tier === 'free') {
+      router.push('/paywall?context=rankings_lock' as any);
+      return;
+    }
     setMode('mine');
     if (!selectedBase && myRanks.length === 0) {
       setBaseModalVisible(true);
@@ -620,10 +633,14 @@ export default function RankingsScreen() {
           </View>
         </TouchableOpacity>
         <TouchableOpacity onPress={handleMyRankingsTab} style={[s.toggleBtn, mode === 'mine' && s.toggleBtnOn]}>
-          <Text style={[s.toggleText, mode === 'mine' && s.toggleTextOn]} numberOfLines={1} adjustsFontSizeToFit>MY RANKINGS</Text>
+          <Text style={[s.toggleText, mode === 'mine' && s.toggleTextOn]} numberOfLines={1} adjustsFontSizeToFit>
+            MY RANKINGS{tier === 'free' ? ' \u{1F512}' : ''}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={handleProspectsTab} style={[s.toggleBtn, mode === 'prospects' && { backgroundColor: palette.flame }]}>
-          <Text style={[s.toggleText, mode === 'prospects' && s.toggleTextOn]} numberOfLines={1} adjustsFontSizeToFit>PROSPECTS</Text>
+          <Text style={[s.toggleText, mode === 'prospects' && s.toggleTextOn]} numberOfLines={1} adjustsFontSizeToFit>
+            PROSPECTS{tier === 'free' ? ' \u{1F512}' : ''}
+          </Text>
         </TouchableOpacity>
       </View>
 

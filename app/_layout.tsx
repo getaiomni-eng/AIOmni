@@ -20,7 +20,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getUser, getUserRow } from '../services/supabase';
 import { exchangeYahooCode } from '../services/yahoo';
 import { updatePassword } from '../services/auth';
-import { initPurchases } from '../services/purchases';
+import { attachCustomerInfoListener, initPurchases, refreshTier } from '../services/purchases';
 import { pullCloudDataOnLogin } from '../services/userSync';
 import { dark } from './constants/tokens';
 
@@ -105,6 +105,12 @@ export default Sentry.wrap(function RootLayout() {
         }
         Sentry.setUser({ id: user.id, email: user.email });
         await initPurchases(user.id);
+        // Populate the cached tier and listen for entitlement changes so
+        // tier-gated UI (lock icons, paywall triggers) sees updates from
+        // restored purchases / cancellations / cross-device upgrades
+        // without requiring an app restart.
+        await refreshTier();
+        attachCustomerInfoListener();
         try { await pullCloudDataOnLogin(); } catch (e) { console.log('Cloud sync skipped:', e); }
 
         const row = await getUserRow();

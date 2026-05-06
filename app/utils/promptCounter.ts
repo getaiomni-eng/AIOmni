@@ -1,21 +1,21 @@
 // app/utils/promptCounter.ts
-// Tier-aware prompt system:
-//   Free:     10 prompts LIFETIME (non-renewing)
-//   Rankings: 20 prompts/week (resets Sunday noon)
-//   Pro:      40 prompts/week (resets Sunday noon)
+// Tier-aware prompt system (Option D, locked 2026-05-04):
+//   Free:     10 prompts LIFETIME (non-renewing) — conversion forcing function
+//   Rankings: 25 prompts/week (resets Sunday noon)
+//   Pro:      50 prompts/week (resets Sunday noon)
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getCurrentTier } from '../../services/purchases';
+import { getCachedTier, getCurrentTier, type Tier } from '../../services/purchases';
 import { syncPromptUsageToCloud } from '../../services/userSync';
 
 const PROMPT_COUNT_KEY = 'prompt_count';
 const PROMPT_RESET_KEY = 'prompt_reset_time';
 const FREE_LIFETIME_KEY = 'free_lifetime_used';
 
-const LIMITS: Record<string, number> = {
-  free: 10,       // lifetime, never resets
-  rankings: 20,   // per week
-  pro: 40,        // per week
+const LIMITS: Record<Tier, number> = {
+  free: 10,
+  rankings: 25,
+  pro: 50,
 };
 
 function getNextSundayNoon(): number {
@@ -48,7 +48,7 @@ async function maybeResetWeekly(): Promise<void> {
 
 export async function getRemainingPrompts(): Promise<number> {
   const tier = await getCurrentTier();
-  const limit = LIMITS[tier] ?? LIMITS.free;
+  const limit = LIMITS[tier];
 
   if (tier === 'free') {
     // Lifetime — read from separate key, never resets
@@ -66,7 +66,68 @@ export async function getRemainingPrompts(): Promise<number> {
 
 export async function getPromptLimit(): Promise<number> {
   const tier = await getCurrentTier();
-  return LIMITS[tier] ?? LIMITS.free;
+  return LIMITS[tier];
+}
+
+// ── consumePrompt: atomic check-and-increment ──────────────────────
+// Returns false if the user is over their cap (caller routes to paywall).
+// Returns true after incrementing the appropriate counter.
+//
+// Replaces the older canSendPrompt() + incrementPrompt() pair which had
+// a TOCTOU window — two rapid sends could both pass the check, then both
+// increment, allowing one extra prompt past the cap. Existing call sites
+// that use the older pair still work; new sites should prefer this.
+export async function consumePrompt(): Promise<boolean> {
+  const tier = await getCurrentTier();
+  if (tier === 'free') {
+    const usedStr = await AsyncStorage.getItem(FREE_LIFETIME_KEY);
+    const used = parseInt(usedStr || '0', 10);
+    if (used >= LIMITS.free) return false;
+    const next = used + 1;
+    await AsyncStorage.setItem(FREE_LIFETIME_KEY, String(next));
+    syncPromptUsageToCloud(next); // fire-and-forget
+    return true;
+  }
+  await maybeResetWeekly();
+  const countStr = await AsyncStorage.getItem(PROMPT_COUNT_KEY);
+  const used = parseInt(countStr || '0', 10);
+  if (used >= LIMITS[tier]) return false;
+  await AsyncStorage.setItem(PROMPT_COUNT_KEY, String(used + 1));
+  return true;
+}
+
+// ── getPromptStatus: structured read for UI display ─────────────────
+// Sync-cache-tier variant for places that render the counter and need a
+// snapshot. Uses getCachedTier so it can run during render without await.
+export interface PromptStatus {
+  used: number;
+  cap: number;
+  resetType: 'lifetime' | 'weekly';
+  nextResetDate?: Date;
+  remaining: number;
+}
+
+export async function getPromptStatus(): Promise<PromptStatus> {
+  const tier = getCachedTier();
+  if (tier === 'free') {
+    const used = parseInt((await AsyncStorage.getItem(FREE_LIFETIME_KEY)) || '0', 10);
+    return {
+      used,
+      cap: LIMITS.free,
+      resetType: 'lifetime',
+      remaining: Math.max(0, LIMITS.free - used),
+    };
+  }
+  await maybeResetWeekly();
+  const used = parseInt((await AsyncStorage.getItem(PROMPT_COUNT_KEY)) || '0', 10);
+  const cap = LIMITS[tier];
+  return {
+    used,
+    cap,
+    resetType: 'weekly',
+    nextResetDate: new Date(getNextSundayNoon()),
+    remaining: Math.max(0, cap - used),
+  };
 }
 
 export async function canSendPrompt(): Promise<boolean> {
@@ -111,7 +172,7 @@ export async function getPromptDisplayInfo(): Promise<{
 }> {
   const tier = await getCurrentTier();
   const remaining = await getRemainingPrompts();
-  const limit = LIMITS[tier] ?? LIMITS.free;
+  const limit = LIMITS[tier];
   const isLifetime = tier === 'free';
 
   let resetLabel = '';

@@ -1,8 +1,18 @@
 // services/purchases.ts
-// RevenueCat subscription management — 2 tiers: Rankings ($2.99) + Pro ($9.99)
+// RevenueCat subscription management — Option D tier structure (locked
+// 2026-05-04 in decisions.md):
+//   Free       — Pulse only, 10 lifetime AI prompts
+//   Rankings   — $4.99/mo or $39.99/yr, Formula + Quiz + 25 weekly prompts
+//   Pro        — $12.99/mo or $99.99/yr, AI Coach + Draft Copilot + 50/wk
+//
+// Tier resolution is DB-first / RevenueCat-fallback (whichever returns
+// the higher tier). DB-first lets manual grants for founders / comps /
+// beta testers work alongside RC purchases.
 
 import Purchases, { LOG_LEVEL, PurchasesPackage } from 'react-native-purchases';
 import { supabase } from './supabase';
+
+export type Tier = 'free' | 'rankings' | 'pro';
 
 const REVENUECAT_APPLE_KEY = 'appl_rfnwmgVZgjZWBrbGjYehDCMmJvG';
 
@@ -42,12 +52,15 @@ export async function getPackages(): Promise<PurchasesPackage[]> {
 // ── Purchase ──────────────────────────────────────────────────────────────────
 export async function purchasePackage(pkg: PurchasesPackage): Promise<{
   success: boolean;
-  tier?: string;
+  tier?: Tier;
 }> {
   try {
     const { customerInfo } = await Purchases.purchasePackage(pkg);
     const tier = getTierFromEntitlements(customerInfo.entitlements.active);
-    if (tier) await syncTierToSupabase(tier);
+    if (tier) {
+      await syncTierToSupabase(tier);
+      cachedTier = tier;
+    }
     return { success: true, tier: tier ?? undefined };
   } catch (e: any) {
     if (e.userCancelled) return { success: false };
@@ -57,11 +70,17 @@ export async function purchasePackage(pkg: PurchasesPackage): Promise<{
 }
 
 // ── Restore ───────────────────────────────────────────────────────────────────
-export async function restorePurchases(): Promise<{ success: boolean; tier?: string }> {
+export async function restorePurchases(): Promise<{ success: boolean; tier?: Tier }> {
   try {
     const customerInfo = await Purchases.restorePurchases();
     const tier = getTierFromEntitlements(customerInfo.entitlements.active);
-    if (tier) await syncTierToSupabase(tier);
+    if (tier) {
+      await syncTierToSupabase(tier);
+      cachedTier = tier;
+    } else {
+      // No active entitlements — make sure the cache reflects that too
+      cachedTier = 'free';
+    }
     return { success: true, tier: tier ?? undefined };
   } catch (e) {
     console.log('restorePurchases error:', e);
@@ -75,20 +94,28 @@ export async function restorePurchases(): Promise<{ success: boolean; tier?: str
 // the higher tier wins — this lets manual DB grants (founders, comps,
 // beta testers) work alongside RevenueCat purchases without conflict.
 
-const TIER_RANK: Record<string, number> = {
+const TIER_RANK: Record<Tier, number> = {
   free: 0,
   rankings: 1,
   pro: 2,
-  dynasty_elite: 3,
 };
 
-function higherTier(a: string, b: string): string {
-  return (TIER_RANK[a] ?? 0) >= (TIER_RANK[b] ?? 0) ? a : b;
+function higherTier(a: Tier, b: Tier): Tier {
+  return TIER_RANK[a] >= TIER_RANK[b] ? a : b;
 }
 
-export async function getCurrentTier(): Promise<string> {
-  let dbTier: string = 'free';
-  let rcTier: string = 'free';
+function normalizeTier(raw: string | null | undefined): Tier {
+  if (raw === 'pro') return 'pro';
+  if (raw === 'rankings') return 'rankings';
+  // Anything else (including legacy 'premium' / 'dynasty_elite' from
+  // pre-Option-D rows in public.users) collapses to free. Manual grants
+  // post-Option-D should write 'rankings' or 'pro' only.
+  return 'free';
+}
+
+export async function getCurrentTier(): Promise<Tier> {
+  let dbTier: Tier = 'free';
+  let rcTier: Tier = 'free';
 
   // ── DB path ──
   try {
@@ -99,7 +126,7 @@ export async function getCurrentTier(): Promise<string> {
         .select('tier')
         .eq('auth_id', user.id)
         .maybeSingle();
-      if (row?.tier && typeof row.tier === 'string') dbTier = row.tier;
+      dbTier = normalizeTier(row?.tier as string | null | undefined);
     }
   } catch {
     // DB error — fall through to RC only
@@ -116,14 +143,45 @@ export async function getCurrentTier(): Promise<string> {
   return higherTier(dbTier, rcTier);
 }
 
-function getTierFromEntitlements(active: Record<string, any>): string | null {
-  // Check highest tier first
+function getTierFromEntitlements(active: Record<string, any>): Tier | null {
+  // Pro entitlement is a superset of Rankings (Pro users have both).
+  // Check highest first so the resolved tier is the highest active.
   if (active[ENTITLEMENTS.pro]?.isActive) return 'pro';
   if (active[ENTITLEMENTS.rankings]?.isActive) return 'rankings';
   return null;
 }
 
-async function syncTierToSupabase(tier: string): Promise<void> {
+// ── Cached tier (for sync read sites) ──────────────────────────────
+// Sites that render synchronously (lock-icon visibility, prompt-counter
+// display) can't await getCurrentTier on every render. They read this
+// cache; refreshTier() repopulates it after init, after purchases, and
+// on customer-info change events.
+
+let cachedTier: Tier = 'free';
+
+export function getCachedTier(): Tier {
+  return cachedTier;
+}
+
+export async function refreshTier(): Promise<Tier> {
+  const tier = await getCurrentTier();
+  cachedTier = tier;
+  return tier;
+}
+
+// Wires a RevenueCat customer-info listener so server-side entitlement
+// changes (e.g. cancellations, billing failures, tier upgrades from
+// another device) repopulate the cache without an app restart.
+let listenerAttached = false;
+export function attachCustomerInfoListener(): void {
+  if (listenerAttached) return;
+  Purchases.addCustomerInfoUpdateListener(() => {
+    void refreshTier();
+  });
+  listenerAttached = true;
+}
+
+async function syncTierToSupabase(tier: Tier): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -137,7 +195,8 @@ async function syncTierToSupabase(tier: string): Promise<void> {
 }
 
 // ── Tier display info ─────────────────────────────────────────────────────────
-export const TIER_INFO: Record<string, {
+// Prices + prompt allocations locked 2026-05-04 (decisions.md item 1).
+export const TIER_INFO: Record<Tier, {
   label: string;
   price: string;
   yearlyPrice: string;
@@ -151,39 +210,39 @@ export const TIER_INFO: Record<string, {
     yearlyPrice: '$0',
     color: '#7a9eaa',
     features: [
-      'Community rankings',
+      'Pulse — multi-source consensus rankings',
       'Roster & matchup view',
-      '10 AI prompts to try',
+      '10 AI prompts to try (lifetime)',
     ],
     promptLabel: '10 lifetime',
   },
   rankings: {
     label: 'Rankings',
-    price: '$2.99/mo',
-    yearlyPrice: '$24.99/yr',
+    price: '$4.99/mo',
+    yearlyPrice: '$39.99/yr',
     color: '#1be7ff',
     features: [
-      'Custom rankings per league',
-      'Prospect rankings',
-      'Format filters (PPR/SF/TEP)',
-      '20 AI prompts/week',
+      'AIOmni Formula (proprietary engine)',
+      'My Rankings + Custom Rankings Quiz',
+      'Format filters (PPR/Half/Std/SF, Redraft/Dynasty)',
+      '25 AI prompts/week',
       'Everything in Free',
     ],
-    promptLabel: '20/week',
+    promptLabel: '25/week',
   },
   pro: {
     label: 'Pro',
-    price: '$9.99/mo',
-    yearlyPrice: '$89.99/yr',
+    price: '$12.99/mo',
+    yearlyPrice: '$99.99/yr',
     color: '#ffb800',
     features: [
-      'The O — AI draft co-pilot',
-      'Trade Analyzer',
-      'Season-long AI memory',
-      '40 AI prompts/week',
+      'AI Coach — season memory + roster context',
+      'Draft Copilot (live draft assistance)',
+      'Trade Analyzer (A-F grades, league-aware)',
+      '50 AI prompts/week',
       'Everything in Rankings',
     ],
-    promptLabel: '40/week',
+    promptLabel: '50/week',
   },
 };
 

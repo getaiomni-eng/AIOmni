@@ -18,7 +18,7 @@ import { getPlayerContext } from '../../services/playerIntelligence';
 import { PositionPill } from '../components/Atoms';
 import { AIOmniLogo } from '../components/AIOmniLogo';
 import { C, F, R, SP, SZ } from '../constants/tokens';
-import { getRemainingPrompts, getResetTime, incrementPrompt } from '../utils/promptCounter';
+import { getPromptLimit, getRemainingPrompts, getResetTime, incrementPrompt } from '../utils/promptCounter';
 import { getNFLSeason } from '../../services/season';
 
 // Prompt limits are tier-aware — see getPromptDisplayInfo()
@@ -242,10 +242,16 @@ export default function CoachScreen() {
       setAllLeagues(all);
       setContextReady(true);
 
-      const limitNum = currentTier === 'dynasty_elite' ? Infinity : currentTier === 'premium' ? 125 : currentTier === 'pro' ? 75 : 25;
-      const limit = limitNum;
+      // Tier-aware limit comes from the centralized LIMITS map in
+      // promptCounter (10 free / 25 rankings / 50 pro under Option D).
+      // Older inline ternaries referenced retired tiers (premium /
+      // dynasty_elite) — replaced with a single source of truth.
+      const limitNum = await getPromptLimit();
+      const promptLabel = currentTier === 'free'
+        ? `${rem} of ${limitNum} free prompts remaining`
+        : `${rem} of ${limitNum} prompts remaining this week`;
       const greeting = all.length > 0
-        ? `Hey — ${all.length} league${all.length > 1 ? 's' : ''} loaded. ${limitNum === Infinity ? '∞' : rem + ' of ' + limitNum} prompts remaining this week. What do you need?`
+        ? `Hey — ${all.length} league${all.length > 1 ? 's' : ''} loaded. ${promptLabel}. What do you need?`
         : `Hey — connect your Sleeper username or ESPN account in Settings to get started.`;
       setMessages([{ role: 'ai', text: greeting }]);
     })();
@@ -280,12 +286,21 @@ export default function CoachScreen() {
     if (!text.trim() || loading) return;
     const rem = await getRemainingPrompts();
     if (rem <= 0) {
-      const resetTime = await getResetTime();
-      const resetStr  = resetTime
-        ? resetTime.toLocaleString('en-US', { weekday:'short', hour:'numeric', minute:'2-digit' })
-        : 'Sunday noon';
-      setMessages(prev => [...prev, { role:'ai', text: getPaywallMessage(resetStr) }]);
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+      const currentTier = await getCurrentTier();
+      // Pro users at weekly cap get a friendly inline message — no upsell
+      // since they're already on the top tier. Free + Rankings users
+      // route to the paywall with a context-specific headline.
+      if (currentTier === 'pro') {
+        const resetTime = await getResetTime();
+        const resetStr = resetTime
+          ? resetTime.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+          : 'Sunday noon';
+        setMessages(prev => [...prev, { role: 'ai', text: `You've hit this week's 50-prompt cap. Resets ${resetStr}.` }]);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+        return;
+      }
+      const ctx = currentTier === 'free' ? 'free_prompts_exhausted' : 'weekly_prompts_exhausted';
+      router.push(`/paywall?context=${ctx}` as any);
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

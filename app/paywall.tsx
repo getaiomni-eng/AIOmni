@@ -1,7 +1,15 @@
 // app/paywall.tsx
-// AIOmni Paywall — Free / Rankings ($2.99) / Pro ($9.99)
+// AIOmni Paywall — Option D tier structure (locked 2026-05-04 in decisions.md):
+//   Free       — $0
+//   Rankings   — $4.99/mo, $39.99/yr
+//   Pro        — $12.99/mo, $99.99/yr
+//
+// Context-aware headline: ?context=rankings_lock | pro_lock |
+//                                  free_prompts_exhausted | weekly_prompts_exhausted
+// Uses TIER_INFO from services/purchases.ts as the single source of truth
+// for prices + features (so future price changes only land there).
 
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,6 +26,7 @@ import {
   getCurrentTier,
   getPackages,
   purchasePackage,
+  refreshTier,
   restorePurchases,
   TIER_INFO,
 } from '../services/purchases';
@@ -32,13 +41,24 @@ const SUB = '#7a9eaa';
 const AMBER = '#ffb800';
 const AQUA = '#1be7ff';
 
+type PaywallContext = 'rankings_lock' | 'pro_lock' | 'free_prompts_exhausted' | 'weekly_prompts_exhausted';
+
+const CONTEXT_HEADLINES: Record<PaywallContext, { title: string; sub?: string }> = {
+  rankings_lock:            { title: 'Unlock the Full AIOmni Engine', sub: 'Formula rankings, custom quiz, format filters.' },
+  pro_lock:                 { title: 'Get the AI Coach',              sub: 'Season memory, roster context, draft copilot.' },
+  free_prompts_exhausted:   { title: "You've used your 10 free questions", sub: 'Upgrade to keep asking — 25/week on Rankings, 50/week on Pro.' },
+  weekly_prompts_exhausted: { title: "You've hit this week's prompt limit", sub: 'Upgrade to Pro for 50 prompts/week + AI Coach.' },
+};
+
 export default function PaywallScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ context?: string }>();
+  const context = (params.context as PaywallContext) ?? null;
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
-  const [currentTier, setCurrentTier] = useState('free');
+  const [currentTier, setCurrentTier] = useState<string>('free');
   const [billing, setBilling] = useState<BillingCycle>('monthly');
 
   useEffect(() => {
@@ -57,8 +77,8 @@ export default function PaywallScreen() {
     });
   };
 
-  const handlePurchase = async (tier: string) => {
-    const pkg = findPackage(tier === 'rankings' ? 'rankings' : 'pro', billing);
+  const handlePurchase = async (tier: 'rankings' | 'pro') => {
+    const pkg = findPackage(tier, billing);
     if (!pkg) {
       Alert.alert('Not Available', 'This subscription is not available right now. Please try again later.');
       return;
@@ -67,8 +87,13 @@ export default function PaywallScreen() {
     const result = await purchasePackage(pkg);
     setPurchasing(false);
     if (result.success) {
-      setCurrentTier(result.tier ?? tier);
-      Alert.alert('Welcome!', `You're now on the ${TIER_INFO[tier]?.label ?? tier} plan.`, [
+      // Force a fresh tier read from RC + DB. purchasePackage already
+      // updates the cache, but refreshTier ensures the higherTier blend
+      // (DB grants vs RC entitlements) is applied — important when a
+      // beta-tester comp is in the DB row alongside a paid sub.
+      const refreshed = await refreshTier();
+      setCurrentTier(refreshed);
+      Alert.alert('Welcome!', `You're now on the ${TIER_INFO[refreshed]?.label ?? refreshed} plan.`, [
         { text: 'OK', onPress: () => router.back() },
       ]);
     }
@@ -95,9 +120,15 @@ export default function PaywallScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Text style={styles.closeBtn}>✕</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Choose Your Plan</Text>
+        <Text style={styles.title}>
+          {context && CONTEXT_HEADLINES[context]?.title ? CONTEXT_HEADLINES[context].title : 'Choose Your Plan'}
+        </Text>
         <View style={{ width: 28 }} />
       </View>
+
+      {context && CONTEXT_HEADLINES[context]?.sub && (
+        <Text style={styles.contextSub}>{CONTEXT_HEADLINES[context].sub}</Text>
+      )}
 
       {/* Billing Toggle */}
       <View style={styles.toggleRow}>
@@ -243,6 +274,18 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: TEXT,
     letterSpacing: 1,
+    flex: 1,
+    textAlign: 'center',
+  },
+  contextSub: {
+    fontFamily: 'SpaceGrotesk_400Regular',
+    fontSize: 12,
+    color: SUB,
+    paddingHorizontal: 24,
+    marginTop: -4,
+    marginBottom: 12,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 
   // Toggle
