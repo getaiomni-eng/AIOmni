@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { computeHeatBatch } from '../../services/heat';
 import { getHeatSignalsMap } from '../../services/heatData';
 import { getCurrentTier } from '../../services/purchases';
+import { loadQuizResult } from '../../services/quiz/engine';
+import type { QuizResult } from '../../services/quiz/types';
 import { assignGlobalTier, assignPositionalTier, getEngineRankings, getEngineRankingsForSource, invalidateEngineCache, getFormulaRankings} from '../../services/rankings/aiomniEngineBridge';
 import { applyOverrides, clearOverrides, getOverrides, setOverride } from '../../services/rankings/userOverrides';
 import {
@@ -291,6 +293,7 @@ export default function RankingsScreen() {
   const [selectedBase, setSelectedBaseState] = useState<RankingsSource | null>(null);
   const [baseModalVisible, setBaseModalVisible] = useState(false);
   const [changeModalVisible, setChangeModalVisible] = useState(false);
+  const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
 
   // ─── Pulse tab indicator (event-driven, native-driver only) ─────────
   // Animates a small dot once when fresh community rankings arrive.
@@ -427,7 +430,14 @@ export default function RankingsScreen() {
     const base = await getSelectedBase();
     setSelectedBaseState(base);
     try {
-      const live = await getEngineRankings(format, leagueType);
+      // Quiz result, if present and no manual base picked, becomes the My
+      // Rankings starting point — replacing the format/source engine output.
+      const quiz = await loadQuizResult();
+      setQuizResult(quiz);
+      const useQuiz = quiz?.generatedRankings && quiz.generatedRankings.length > 0 && !base;
+      const live = useQuiz
+        ? quiz!.generatedRankings
+        : await getEngineRankings(format, leagueType);
       const ovs = await getOverrides(selectedLeagueId);
       setMyRanksEngine(live.length > 0 ? await mergeHeat(live) : [...SEED]);
       setOverrides(ovs);
@@ -659,6 +669,16 @@ export default function RankingsScreen() {
         <Text style={s.hint}>{mode === 'mine' ? 'TAP CHANGE TO REORDER' : 'ADP'}</Text>
       </View>
 
+      {mode === 'mine' && !quizResult && !selectedBase && (
+        <TouchableOpacity onPress={() => router.push('/quiz' as any)} style={s.quizBanner} activeOpacity={0.8}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.quizBannerTitle}>BUILD YOUR CUSTOM RANKINGS</Text>
+            <Text style={s.quizBannerSub}>Take the 2-minute quiz</Text>
+          </View>
+          <Text style={s.quizBannerArrow}>→</Text>
+        </TouchableOpacity>
+      )}
+
       {mode === 'mine' && (
         <View style={s.editBar}>
           {selectedBase ? (
@@ -875,6 +895,16 @@ const s = StyleSheet.create({
   toggleTextOn:{ color: dark.bg },
   pulseTabInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   pulseDot:   { width: 8, height: 8, borderRadius: 4, backgroundColor: palette.aqua, marginLeft: 6 },
+  quizBanner: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: palette.aqua + '15',
+    borderRadius: 12, borderWidth: 1, borderColor: palette.aqua + '40',
+    paddingVertical: 12, paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  quizBannerTitle: { fontFamily: F.bold, fontSize: 12, color: palette.aqua, letterSpacing: 1.5 },
+  quizBannerSub:   { fontFamily: F.body, fontSize: 11, color: dark.textSub, marginTop: 2 },
+  quizBannerArrow: { fontFamily: F.bold, fontSize: 18, color: palette.aqua, marginLeft: 8 },
   searchWrap: { backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, borderColor: dark.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, marginBottom: 12 },
   searchIcon: { fontSize: 18, color: palette.green, marginRight: 10 },
   searchInput:{ flex: 1, fontFamily: F.body, fontSize: 11, letterSpacing: 1.5, color: dark.text, paddingVertical: 12 },

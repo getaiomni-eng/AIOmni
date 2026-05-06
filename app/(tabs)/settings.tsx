@@ -7,6 +7,7 @@ import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity,
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signOut } from '../../services/auth';
 import { clearESPNCredentials } from '../../services/espn';
+import { clearQuizResult } from '../../services/quiz/engine';
 import { dark, F, palette, SP } from '../constants/tokens';
 
 export default function SettingsScreen() {
@@ -87,6 +88,24 @@ export default function SettingsScreen() {
         }
       },
     ]);
+  };
+
+  const handleRetakeQuiz = () => {
+    Alert.alert(
+      'Retake Custom Rankings Quiz?',
+      'Your current personalized rankings will be cleared. You can take the quiz again to rebuild them.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Retake',
+          style: 'destructive',
+          onPress: async () => {
+            await clearQuizResult();
+            router.push('/quiz' as any);
+          },
+        },
+      ],
+    );
   };
 
   const handleDisconnectESPN = () => {
@@ -244,6 +263,16 @@ export default function SettingsScreen() {
         </View>
 
         {/* App */}
+        {/* Rankings */}
+        <Text style={s.sectionTitle}>RANKINGS</Text>
+        <View style={s.card}>
+          <TouchableOpacity style={[s.row, { borderBottomWidth: 0 }]} onPress={handleRetakeQuiz}>
+            <Ionicons name="refresh-outline" size={20} color={palette.aqua} />
+            <Text style={s.rowLabel}>Retake Custom Rankings Quiz</Text>
+            <Ionicons name="chevron-forward" size={16} color={dark.textMuted} />
+          </TouchableOpacity>
+        </View>
+
         <Text style={s.sectionTitle}>APP</Text>
         <View style={s.card}>
           <TouchableOpacity style={s.row} onPress={() => router.push('/paywall' as any)}>
