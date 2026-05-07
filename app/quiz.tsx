@@ -31,7 +31,9 @@ import PlayerPicker from './components/PlayerPicker';
 import QuizSlot from './components/QuizSlot';
 import { dark, F, palette } from './constants/tokens';
 
-const POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE', 'K'];
+// Kickers excluded from quiz Phase 2 — engine doesn't rank K (decision
+// 2026-05-06). User ranks the four scoring positions only.
+const POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE'];
 const TOTAL_PHASE1 = QUESTIONS.length; // 8
 const TOTAL_STEPS = TOTAL_PHASE1 + POSITIONS.length; // 13
 

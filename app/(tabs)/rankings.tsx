@@ -58,7 +58,10 @@ const FORMATS: { key: Format; label: string }[] = [
   { key: 'SF', label: 'SUPERFLEX' },
 ];
 
-const POSITIONS: Position[] = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K'];
+// Kickers excluded by product decision (2026-05-06) — engine doesn't
+// produce K rankings (filter at supabase/functions/aiomni-rankings-engine/
+// index.ts:444), and external ADP feeds are stripped at display time below.
+const POSITIONS: Position[] = ['ALL', 'QB', 'RB', 'WR', 'TE'];
 
 const BASE_SOURCES: { key: RankingsSource; label: string; sub: string; color: string }[] = [
   { key: 'aiomni_formula', label: 'AIOmni Formula', sub: 'Proprietary algorithmic engine', color: '#D4FF00' },
@@ -519,7 +522,9 @@ export default function RankingsScreen() {
     }
   };
 
-  const rawData = mode === 'mine' ? myRanks : communityData;
+  // Pulse blends external ADP feeds that include kickers. Strip them
+  // here so rankings UI never shows K, even if a source returns one.
+  const rawData = (mode === 'mine' ? myRanks : communityData).filter(p => p.position !== 'K');
   const filtered = rawData.filter(p =>
     (position === 'ALL' || p.position === position) &&
     (!search || p.name.toLowerCase().includes(search.toLowerCase()) || p.team.toLowerCase().includes(search.toLowerCase()))
