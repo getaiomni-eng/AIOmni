@@ -30,7 +30,12 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-type Format = 'PPR' | 'HALF' | 'STD' | 'SF' | 'DYN';
+// Format keys (locked 2026-05-07):
+//   Redraft: PPR, HALF, STD, SF
+//   Dynasty: DYN (PPR-scored, kept for backward compat with client),
+//            DYN_HALF, DYN_STD, DYN_SF (added 2026-05-07 — same dynasty
+//            age curves, different scoring + optional SF QB premium).
+type Format = 'PPR' | 'HALF' | 'STD' | 'SF' | 'DYN' | 'DYN_HALF' | 'DYN_STD' | 'DYN_SF';
 
 // ─── AGE CURVES (v2: steeper late-career declines) ────────────────────
 function ageCurve(position: string, age: number | null): number {
@@ -146,53 +151,94 @@ function opportunityAdj(
 }
 
 function pointsCol(format: Format): 'fantasy_pts_ppr' | 'fantasy_pts_half' | 'fantasy_pts_std' {
-  if (format === 'PPR' || format === 'DYN' || format === 'SF') return 'fantasy_pts_ppr';
-  if (format === 'HALF') return 'fantasy_pts_half';
-  return 'fantasy_pts_std';
+  if (format === 'HALF' || format === 'DYN_HALF') return 'fantasy_pts_half';
+  if (format === 'STD'  || format === 'DYN_STD')  return 'fantasy_pts_std';
+  // PPR / DYN / SF / DYN_SF all use full-PPR scoring (SF doesn't change
+  // scoring math; it composes a QB multiplier in formatPositionAdj).
+  return 'fantasy_pts_ppr';
+}
+
+// ─── POSITION SCARCITY (v2026-05-07) ────────────────────────────────
+// Elite players at scarce positions get a multiplier on top of VOR.
+// Calibration: RB has the steepest curve (true workhorse RB1-5 are
+// rare). TE has the steepest top-3 (elite difference-maker TEs are
+// even scarcer). QB-SF only kicks in when superflex roster
+// construction makes top QBs structurally scarce.
+// Tiers must be sorted ascending by rank.
+const POSITION_SCARCITY: Record<string, Array<{ rank: number; mult: number }>> = {
+  RB: [{ rank: 5, mult: 1.15 }, { rank: 10, mult: 1.10 }, { rank: 15, mult: 1.05 }],
+  WR: [{ rank: 5, mult: 1.08 }, { rank: 10, mult: 1.05 }, { rank: 15, mult: 1.02 }],
+  TE: [{ rank: 3, mult: 1.20 }, { rank: 5,  mult: 1.10 }, { rank: 10, mult: 1.05 }],
+};
+const QB_SF_SCARCITY: Array<{ rank: number; mult: number }> = [
+  { rank: 5, mult: 1.15 },
+  { rank: 10, mult: 1.10 },
+];
+function scarcityMult(position: string, posRank: number, isSuperflex: boolean): number {
+  if (position === 'QB') {
+    if (!isSuperflex) return 1.0;
+    for (const t of QB_SF_SCARCITY) if (posRank <= t.rank) return t.mult;
+    return 1.0;
+  }
+  const tiers = POSITION_SCARCITY[position];
+  if (!tiers) return 1.0;
+  for (const t of tiers) if (posRank <= t.rank) return t.mult;
+  return 1.0;
 }
 
 function formatPositionAdj(format: Format, position: string, age: number): number {
-  // Superflex QB premium — preserved from existing logic
-  if (format === 'SF') {
-    if (position === 'QB') return 1.40;
-    return 1.0;
+  // Multiplier composition: SF and Dynasty are orthogonal — SF affects
+  // QB scarcity, Dynasty applies position-specific age curves to lifetime
+  // value. DYN_SF stacks both. Each adjustment is a multiplier; we
+  // compose by multiplying.
+
+  const isDynasty   = format === 'DYN' || format === 'DYN_HALF' || format === 'DYN_STD' || format === 'DYN_SF';
+  const isSuperflex = format === 'SF'  || format === 'DYN_SF';
+
+  let mult = 1.0;
+
+  // SF QB premium — applies to any SF variant (redraft or dynasty).
+  if (isSuperflex && position === 'QB') {
+    mult *= 1.40;
   }
 
-  // Dynasty: position-specific career curves (locked v2026-05).
-  // Replaces the prior naive age <=24/>=30 buckets which produced
-  // CMC at RB6 (29 yo, no discount) and MHJ at WR34 (23 yo, only +10%).
-  // These curves give RB cliff at 31+, WR ascending boost <24, etc.
-  if (format === 'DYN') {
+  // Dynasty age curves (locked v2026-05). Same curves regardless of which
+  // dynasty scoring variant is active — age depreciation is independent
+  // of how receptions are scored.
+  if (isDynasty) {
+    let ageCurve = 1.0;
     switch (position) {
       case 'RB':
-        if (age < 25) return 1.15;   // ascending
-        if (age < 27) return 1.05;   // peak entering
-        if (age < 29) return 0.95;   // peak exiting
-        if (age < 31) return 0.80;   // decline phase
-        return 0.65;                  // cliff
+        if      (age < 25) ageCurve = 1.15;   // ascending
+        else if (age < 27) ageCurve = 1.05;   // peak entering
+        else if (age < 29) ageCurve = 0.95;   // peak exiting
+        else if (age < 31) ageCurve = 0.80;   // decline phase
+        else                ageCurve = 0.65;  // cliff
+        break;
       case 'WR':
-        if (age < 24) return 1.20;   // high ascending
-        if (age < 27) return 1.10;   // peak entering
-        if (age < 30) return 1.00;   // peak
-        if (age < 33) return 0.85;   // decline phase
-        return 0.65;                  // cliff
+        if      (age < 24) ageCurve = 1.20;   // high ascending
+        else if (age < 27) ageCurve = 1.10;   // peak entering
+        else if (age < 30) ageCurve = 1.00;   // peak
+        else if (age < 33) ageCurve = 0.85;   // decline phase
+        else                ageCurve = 0.65;  // cliff
+        break;
       case 'QB':
-        if (age < 26) return 1.10;   // ascending
-        if (age < 33) return 1.00;   // peak
-        if (age < 38) return 0.95;   // graceful decline
-        return 0.80;                  // winding down
+        if      (age < 26) ageCurve = 1.10;   // ascending
+        else if (age < 33) ageCurve = 1.00;   // peak
+        else if (age < 38) ageCurve = 0.95;   // graceful decline
+        else                ageCurve = 0.80;  // winding down
+        break;
       case 'TE':
-        if (age < 25) return 1.15;   // ascending
-        if (age < 30) return 1.05;   // peak
-        if (age < 33) return 0.95;   // decline phase
-        return 0.80;                  // cliff
-      default:
-        return 1.0;
+        if      (age < 25) ageCurve = 1.15;   // ascending
+        else if (age < 30) ageCurve = 1.05;   // peak
+        else if (age < 33) ageCurve = 0.95;   // decline phase
+        else                ageCurve = 0.80;  // cliff
+        break;
     }
+    mult *= ageCurve;
   }
 
-  // PPR / HALF / STD: no age adjustment
-  return 1.0;
+  return mult;
 }
 
 // ─── PAGINATED WEEKLY FETCH ───────────────────────────────────────────
@@ -471,6 +517,52 @@ async function buildFormat(format: Format, supabase: any): Promise<RankedRow[]> 
     byPos[pos].forEach((row, i) => finishedRanks.set(row.gsis_id, i + 1));
   }
 
+  // ─── SYSTEM CONTEXT (target concentration / personal usage share) ───
+  // v2026-05-07. Builds team-level aggregates from 2025 weekly stats so we
+  // can score "is this offense system-dependent" (QB) and "is this player
+  // a workhorse / alpha" (RB/WR/TE). Tier-1 system-context proxy from the
+  // 2026-05-07 design discussion. ±3% multiplier on forwardLayer.
+  //   QB:        team's top-3 receiver target share. >65% = -3% (concentrated,
+  //              boom-bust risk). <50% = +3% (broad cast).
+  //   WR/TE:     personal target share of team. >25% = +3% (alpha read).
+  //              <10% = -3% (complementary).
+  //   RB:        personal carry share of team. >60% = +3% (workhorse).
+  //              <30% = -3% (RBBC).
+  const positionByGsis: Record<string, string> = {};
+  for (const pl of players) positionByGsis[pl.gsis_id] = pl.position;
+
+  type TeamAggMap = Record<string, Record<string, number>>;
+  const teamReceiverTargets: TeamAggMap = {};   // team -> gsis_id -> targets
+  const teamRusherCarries:   TeamAggMap = {};
+  const teamTotalReceiverTargets: Record<string, number> = {};
+  const teamTotalRBCarries:       Record<string, number> = {};
+
+  for (const w of w2025) {
+    const team = w.team;
+    if (!team) continue;
+    const tgts = Number(w.targets ?? 0);
+    const car  = Number(w.carries ?? 0);
+    const pos  = positionByGsis[w.gsis_id];
+    if (pos === 'WR' || pos === 'TE' || pos === 'RB') {
+      (teamReceiverTargets[team] = teamReceiverTargets[team] ?? {});
+      teamReceiverTargets[team][w.gsis_id] = (teamReceiverTargets[team][w.gsis_id] ?? 0) + tgts;
+      teamTotalReceiverTargets[team] = (teamTotalReceiverTargets[team] ?? 0) + tgts;
+    }
+    if (pos === 'RB') {
+      (teamRusherCarries[team] = teamRusherCarries[team] ?? {});
+      teamRusherCarries[team][w.gsis_id] = (teamRusherCarries[team][w.gsis_id] ?? 0) + car;
+      teamTotalRBCarries[team] = (teamTotalRBCarries[team] ?? 0) + car;
+    }
+  }
+
+  const teamTop3Concentration: Record<string, number> = {};
+  for (const team of Object.keys(teamReceiverTargets)) {
+    const sortedTgts = Object.values(teamReceiverTargets[team]).sort((a, b) => b - a);
+    const top3 = sortedTgts.slice(0, 3).reduce((s, t) => s + t, 0);
+    const total = teamTotalReceiverTargets[team] ?? 0;
+    teamTop3Concentration[team] = total > 0 ? top3 / total : 0.55; // neutral default
+  }
+
   // Score each player
   const scored: RankedRow[] = [];
   const computedAt = new Date().toISOString();
@@ -512,22 +604,54 @@ async function buildFormat(format: Format, supabase: any): Promise<RankedRow[]> 
       recentPpg < 12 &&
       injuryMap.has(injuryNameKey)
     );
+    // Sample-size confidence weight (v2026-05-07): each year's contribution
+    // to the multi-year blend is scaled by gameCountWeight so a 9-game spike
+    // doesn't carry the same authority as a 16-game full season. Linear
+    // interpolation: 16+ games = 1.0×, 8 games = 0.7×, in between = linear.
+    // Closes the Purdy-overrate-from-9-game-sample gap surfaced 2026-05-07.
+    const gameCountWeight = (games: number): number => {
+      if (games >= 16) return 1.0;
+      if (games <= 8)  return 0.7;
+      return 0.7 + (games - 8) * (0.3 / 8);
+    };
+    // Weighted-blend helper: weights are baseW * gameCountWeight, normalized.
+    const blend = (parts: Array<{ baseW: number; ppg: number; games: number }>): number => {
+      const totalW = parts.reduce((s, c) => s + c.baseW * gameCountWeight(c.games), 0);
+      if (totalW <= 0) return 0;
+      return parts.reduce((s, c) => s + c.baseW * gameCountWeight(c.games) * c.ppg, 0) / totalW;
+    };
+
     if (injuryRebound) {
-      baseline = 0.6 * priorAvg + 0.4 * recentPpg;
+      // Rebound case: prior years anchor, recent year is partial signal.
+      // Sample-size weighting applied to both sides for consistency.
+      const priorParts: Array<{ baseW: number; ppg: number; games: number }> = [];
+      if (has24) priorParts.push({ baseW: 0.5, ppg: a24!.recencyPpg, games: a24!.games });
+      if (has23) priorParts.push({ baseW: 0.5, ppg: a23!.recencyPpg, games: a23!.games });
+      const priorWeighted = blend(priorParts);
+      baseline = 0.6 * priorWeighted + 0.4 * recentPpg;
       baselineSource = 'rebound';
     } else if (useMultiYear && has25 && has24 && has23) {
-      baseline = 0.6 * a25!.recencyPpg + 0.3 * a24!.recencyPpg + 0.1 * a23!.recencyPpg;
-      baselineSource = `3yr blend`;
+      baseline = blend([
+        { baseW: 0.6, ppg: a25!.recencyPpg, games: a25!.games },
+        { baseW: 0.3, ppg: a24!.recencyPpg, games: a24!.games },
+        { baseW: 0.1, ppg: a23!.recencyPpg, games: a23!.games },
+      ]);
+      baselineSource = `3yr blend (sample-weighted)`;
     } else if (useMultiYear && has25 && has24) {
-      baseline = 0.7 * a25!.recencyPpg + 0.3 * a24!.recencyPpg;
-      baselineSource = `2yr blend`;
+      baseline = blend([
+        { baseW: 0.7, ppg: a25!.recencyPpg, games: a25!.games },
+        { baseW: 0.3, ppg: a24!.recencyPpg, games: a24!.games },
+      ]);
+      baselineSource = `2yr blend (sample-weighted)`;
     } else if (has25) {
-      baseline = a25!.recencyPpg;
-      baselineSource = `2025 recency`;
+      // Single-year case: still apply sample-size discount for partial seasons.
+      baseline = a25!.recencyPpg * gameCountWeight(a25!.games);
+      baselineSource = `2025 recency (${a25!.games}g, ${gameCountWeight(a25!.games).toFixed(2)}x sample)`;
     } else if (has24) {
-      // injured 2025? use 2024 with discount
-      baseline = a24!.recencyPpg * 0.85;
-      baselineSource = `2024 (no 2025)`;
+      // Injured 2025? Use 2024 with the existing 0.85 absence-discount,
+      // then sample-size on top.
+      baseline = a24!.recencyPpg * 0.85 * gameCountWeight(a24!.games);
+      baselineSource = `2024 (no 2025, sample-weighted)`;
     } else if (isRookie) {
       baseline = rookieBaselineByPos(p.position, p.draft_round);
       baselineSource = `rookie R${p.draft_round ?? '?'}`;
@@ -617,7 +741,38 @@ async function buildFormat(format: Format, supabase: any): Promise<RankedRow[]> 
     const oppAdj = a25 ? opportunityAdj(a25.weeks) : 0;
     const formatAdj = formatPositionAdj(format, p.position, age);
 
-    const forwardLayer = baseline * ageMult * teamMult * (1 + rookieBoost) * (1 + oppAdj) * formatAdj;
+    // ── System context multiplier (Tier 1, v2026-05-07) ──
+    // Captures team-level dependency / usage concentration, orthogonal to
+    // opportunityAdj (which is within-season trend). Applied as a final
+    // forwardLayer factor, ±3% range.
+    let sysCtxMult = 1.0;
+    let sysCtxNote = '';
+    const playerTeam = p.team ?? '';
+    if (p.position === 'QB') {
+      const conc = teamTop3Concentration[playerTeam];
+      if (conc !== undefined) {
+        if (conc > 0.65)      { sysCtxMult = 0.97; sysCtxNote = `concentrated offense -3% (top3 ${(conc*100).toFixed(0)}%)`; }
+        else if (conc < 0.50) { sysCtxMult = 1.03; sysCtxNote = `broad cast +3% (top3 ${(conc*100).toFixed(0)}%)`; }
+      }
+    } else if (p.position === 'WR' || p.position === 'TE') {
+      const myT = teamReceiverTargets[playerTeam]?.[p.gsis_id] ?? 0;
+      const totT = teamTotalReceiverTargets[playerTeam] ?? 0;
+      const share = totT > 0 ? myT / totT : 0;
+      if (myT > 0) {
+        if (share > 0.25)      { sysCtxMult = 1.03; sysCtxNote = `alpha read +3% (${(share*100).toFixed(0)}% team tgts)`; }
+        else if (share < 0.10) { sysCtxMult = 0.97; sysCtxNote = `complementary -3% (${(share*100).toFixed(0)}% team tgts)`; }
+      }
+    } else if (p.position === 'RB') {
+      const myC = teamRusherCarries[playerTeam]?.[p.gsis_id] ?? 0;
+      const totC = teamTotalRBCarries[playerTeam] ?? 0;
+      const share = totC > 0 ? myC / totC : 0;
+      if (myC > 0) {
+        if (share > 0.60)      { sysCtxMult = 1.03; sysCtxNote = `workhorse +3% (${(share*100).toFixed(0)}% team carries)`; }
+        else if (share < 0.30) { sysCtxMult = 0.97; sysCtxNote = `RBBC -3% (${(share*100).toFixed(0)}% team carries)`; }
+      }
+    }
+
+    const forwardLayer = baseline * ageMult * teamMult * (1 + rookieBoost) * (1 + oppAdj) * formatAdj * sysCtxMult;
     const score = baseline * 0.25 + forwardLayer * 0.75;
 
     // Build readable method
@@ -635,6 +790,7 @@ async function buildFormat(format: Format, supabase: any): Promise<RankedRow[]> 
     if (weakTeamPenalty) parts.push(`${p.team} weak offense (0.95x)`);
     if (injuryNote) parts.push(injuryNote);
     if (rookieBoost > 0) parts.push(`rookie boost +${(rookieBoost*100).toFixed(0)}%`);
+    if (sysCtxNote) parts.push(sysCtxNote);
 
     scored.push({
       format,
@@ -690,6 +846,27 @@ async function buildFormat(format: Format, supabase: any): Promise<RankedRow[]> 
   }
 
   scored.sort((a, b) => b.score - a.score);
+
+  // ─── Position scarcity pass (v2026-05-07) ──────────────────────────
+  // Compute initial pos_rank by score, then multiply each player's score
+  // by the scarcity tier for their position-rank. Re-sort after.
+  // Elite RB/TE/WR/SF-QB get a tier-reinforcer boost; everyone outside
+  // the scarcity tiers is unaffected (multiplier = 1.0).
+  {
+    const isSuperflex = format === 'SF' || format === 'DYN_SF';
+    const posCount: Record<string, number> = {};
+    for (const r of scored) {
+      posCount[r.position] = (posCount[r.position] ?? 0) + 1;
+      const initialPosRank = posCount[r.position];
+      const sm = scarcityMult(r.position, initialPosRank, isSuperflex);
+      if (sm !== 1.0) {
+        r.score *= sm;
+        r.method += ` · scarcity ${sm.toFixed(2)}x (${r.position}${initialPosRank})`;
+      }
+    }
+    // Re-sort for floor-protection + final ranking to see scarcity-adjusted order
+    scored.sort((a, b) => b.score - a.score);
+  }
 
   // ─── Floor protection (skipped for players age >= 30) ──────────────
   const violators: { gsis_id: string; targetIdx: number; }[] = [];
@@ -752,7 +929,7 @@ serve(async (req) => {
   try {
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
     const startedAt = Date.now();
-    const formats: Format[] = ['PPR', 'HALF', 'STD', 'SF', 'DYN'];
+    const formats: Format[] = ['PPR', 'HALF', 'STD', 'SF', 'DYN', 'DYN_HALF', 'DYN_STD', 'DYN_SF'];
     const stats: any = { formats: {}, errors: [] };
 
     for (const fmt of formats) {
