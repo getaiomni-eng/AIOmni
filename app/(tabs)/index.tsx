@@ -33,8 +33,37 @@ type NewsItem = {
   source: string; headline: string; color: string; url?: string;
 };
 
-const PLAT_COLOR  = (p: Platform) => p === 'espn' ? palette.flame : p === 'yahoo' ? '#a855f2' : palette.aqua;
-const PLAT_LABEL  = (p: Platform) => p === 'espn' ? 'ESPN' : p === 'yahoo' ? 'YAHOO' : 'SLEEPER';
+// Colors. Sleeper + ESPN + Yahoo + MFL mirror their settings.tsx swatches.
+// Fleaflicker uses palette.flame (orange) instead of its settings cyan to
+// stay distinguishable from Sleeper's aqua in the home pill row, since the
+// two platforms otherwise read as the same hue at small pill sizes.
+const PLAT_COLOR  = (p: Platform): string => {
+  switch (p) {
+    case 'sleeper':     return palette.aqua;
+    case 'espn':        return '#e52534';
+    case 'yahoo':       return '#7c3aed';
+    case 'mfl':         return '#e4ff1a';
+    case 'fleaflicker': return palette.flame;
+    default:            return palette.aqua;
+  }
+};
+// Map platform-abstraction's ScoringFormat / LeagueType to the home tab's
+// short display string ("PPR", "0.5 PPR", "STD", "PPR · DYN", etc).
+const formatLabel = (scoring: string | undefined, leagueType: string | undefined): string => {
+  const base = scoring === 'ppr' ? 'PPR' : scoring === 'half' ? '0.5 PPR' : 'STD';
+  return leagueType === 'dynasty' ? `${base} · DYN` : base;
+};
+
+const PLAT_LABEL  = (p: Platform): string => {
+  switch (p) {
+    case 'sleeper':     return 'SLEEPER';
+    case 'espn':        return 'ESPN';
+    case 'yahoo':       return 'YAHOO';
+    case 'mfl':         return 'MFL';
+    case 'fleaflicker': return 'FF';
+    default:            return String(p).toUpperCase();
+  }
+};
 
 const FALLBACK_NEWS: NewsItem[] = [
   { source: 'ROTOWIRE', headline: 'Jaxon Smith-Njigba: 5th-year option picked up by SEA', color: palette.green, url: 'https://www.rotowire.com/football/player/jaxon-smith-njigba-15164' },
@@ -79,34 +108,77 @@ export default function HomeScreen() {
   useEffect(() => { loadLeagues(); loadNewsFeed(); }, [selectedSeason]);
 
   // ── All data loading functions identical to v6 ──
-  // ─── MFL leagues (stub — wire to real fetch in Piece 2A) ────
-  const loadMflLeagues = async (_year: string = String(new Date().getFullYear())): Promise<League[]> => {
+  // ─── MFL + Fleaflicker leagues ────────────────────────────────────
+  // Wired through the FantasyPlatform abstraction in services/platform.
+  // Fetches league info via getLeagues(year) and parallels into
+  // getStandings + getMatchups to populate rec / rank / pts / opp at
+  // parity with ESPN + Yahoo. The platform classes already mark the
+  // user's rows via `isMe`, so no franchise/team lookup is needed here.
+
+  const buildPlatformLeague = async (
+    plat: any,
+    l: any,
+    platformId: 'mfl' | 'fleaflicker',
+  ): Promise<League> => {
+    const week = l.currentWeek ?? 1;
+    let rec: string | undefined;
+    let rankStr: string | undefined;
+    let pts = 0;
+    let opp = 0;
     try {
-      const leagueId = await AsyncStorage.getItem('mfl_league_id');
-      if (!leagueId) return [];
-      return [{
-        id: String(leagueId),
-        name: 'MFL League',
-        platform: 'mfl' as any,
-        format: 'PPR',
-        rec: '0-0', rank: '-', pts: 0, opp: 0, week: 1,
-      }];
-    } catch { return []; }
+      const [standings, matchups] = await Promise.all([
+        plat.getStandings(l.id).catch(() => [] as any[]),
+        plat.getMatchups(l.id, week).catch(() => [] as any[]),
+      ]);
+      const me = (standings as any[]).find(s => s.isMe);
+      if (me) {
+        rec = `${me.record.wins}–${me.record.losses}`;
+        if (me.rank > 0) rankStr = `${me.rank}${ordinal(me.rank)} of ${standings.length}`;
+      }
+      for (const m of (matchups as any[])) {
+        if (m.home?.isMe) { pts = m.home.points ?? 0; opp = m.away?.points ?? 0; break; }
+        if (m.away?.isMe) { pts = m.away.points ?? 0; opp = m.home?.points ?? 0; break; }
+      }
+    } catch (e) {
+      console.log(`${platformId} standings/matchups error:`, e);
+    }
+    return {
+      id: String(l.id),
+      name: l.name,
+      platform: platformId as any,
+      format: formatLabel(l.scoringFormat, l.leagueType),
+      rec: rec ?? '0-0',
+      rank: rankStr,
+      pts,
+      opp,
+      week,
+    };
   };
 
-  // ─── Fleaflicker leagues (stub — wire to real fetch in Piece 2A) ────
-  const loadFleaflickerLeagues = async (_year: string = String(new Date().getFullYear())): Promise<League[]> => {
+  const loadMflLeagues = async (year: string = String(new Date().getFullYear())): Promise<League[]> => {
     try {
-      const leagueId = await AsyncStorage.getItem('fleaflicker_league_id');
-      if (!leagueId) return [];
-      return [{
-        id: String(leagueId),
-        name: 'Fleaflicker League',
-        platform: 'fleaflicker' as any,
-        format: 'PPR',
-        rec: '0-0', rank: '-', pts: 0, opp: 0, week: 1,
-      }];
-    } catch { return []; }
+      const { getPlatform } = require('../../services/platform');
+      const plat = getPlatform('mfl');
+      const platLeagues = await plat.getLeagues(year);
+      if (!platLeagues?.length) return [];
+      return Promise.all(platLeagues.map((l: any) => buildPlatformLeague(plat, l, 'mfl')));
+    } catch (e) {
+      console.log('loadMflLeagues error:', e);
+      return [];
+    }
+  };
+
+  const loadFleaflickerLeagues = async (year: string = String(new Date().getFullYear())): Promise<League[]> => {
+    try {
+      const { getPlatform } = require('../../services/platform');
+      const plat = getPlatform('fleaflicker');
+      const platLeagues = await plat.getLeagues(year);
+      if (!platLeagues?.length) return [];
+      return Promise.all(platLeagues.map((l: any) => buildPlatformLeague(plat, l, 'fleaflicker')));
+    } catch (e) {
+      console.log('loadFleaflickerLeagues error:', e);
+      return [];
+    }
   };
 
   const loadSleeperLeagues = async (year: string = String(new Date().getFullYear())): Promise<League[]> => {
@@ -370,8 +442,14 @@ export default function HomeScreen() {
 
         {/* ── Platform pills + season ── */}
         <View style={styles.platformRow}>
-          <View style={styles.platformToggles}>
-            {(['sleeper', 'espn', 'yahoo'] as Platform[]).map(platform => {
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ flex: 1, marginRight: 8 }}
+            contentContainerStyle={styles.platformToggles}
+            keyboardShouldPersistTaps="handled"
+          >
+            {(['sleeper', 'espn', 'yahoo', 'mfl', 'fleaflicker'] as Platform[]).map(platform => {
               const isSelected = selectedPlatforms.includes(platform);
               const color = PLAT_COLOR(platform);
               return (
@@ -386,7 +464,7 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </ScrollView>
           <TouchableOpacity
             onPress={() => { const seasons = getAvailableSeasons(); Alert.alert('Select Season', '', seasons.map(y => ({ text: y, onPress: () => setSelectedSeason(y) })), { cancelable: true }); }}
             style={styles.seasonPill}
@@ -593,9 +671,9 @@ const styles = StyleSheet.create({
 
   // Platform pills
   platformRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  platformToggles: { flexDirection: 'row', gap: 6 },
-  platformToggle: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: dark.border, backgroundColor: dark.card },
-  platformToggleText: { fontSize: 10, fontFamily: F.bold, color: dark.textSub, letterSpacing: 0.5 },
+  platformToggles: { flexDirection: 'row', gap: 4 },
+  platformToggle: { paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7, borderWidth: 1, borderColor: dark.border, backgroundColor: dark.card },
+  platformToggleText: { fontSize: 9, fontFamily: F.bold, color: dark.textSub, letterSpacing: 0.2 },
   seasonPill: { backgroundColor: dark.card, borderRadius: 8, borderWidth: 1, borderColor: dark.border, paddingHorizontal: 12, paddingVertical: 6 },
   seasonPillText: { fontSize: 10, fontFamily: F.mono, color: dark.textSub },
 
