@@ -102,7 +102,18 @@ async function fetchSleeperFreeAgents(leagueId: string): Promise<AvailablePlayer
       if (!p) return false;
       if (p.position === 'DEF') return true; // DEFs aren't in nflverse rosters
       if (activeIds.size > 0) {
-        return activeIds.has(pid);
+        if (activeIds.has(pid)) return true;
+        // Post-draft rookie escape clause. The nflverse → nfl_players
+        // sync populates gsis_id but leaves sleeper_id null until the
+        // cross-platform-id backfill catches up, which can take days
+        // after the NFL Draft. Without this clause, every Y0 rookie
+        // (Jeremiyah Love, Carnell Tate, Mendoza, etc.) gets stripped
+        // from waivers because their pid isn't in activeIds. Allow
+        // active Y0 players on a real team aged ≤ 24 through.
+        const isRookie = (p.years_exp === 0 || p.years_exp === undefined || p.years_exp === null)
+                      && (p.age === undefined || p.age === null || p.age <= 24);
+        if (isRookie && p.active !== false && p.team) return true;
+        return false;
       }
       // Fallback if canonical data hasn't loaded yet
       if (p.active === false) return false;

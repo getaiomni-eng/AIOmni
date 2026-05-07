@@ -508,7 +508,21 @@ class SleeperPlatform implements FantasyPlatform {
         return true;
       }
 
-      if (activeIds.size > 0) return activeIds.has(pid);
+      // Redraft eligibility. Default: must be in the canonical NFL active
+      // list (cross-checked against nfl_players.sleeper_id). Exception:
+      // post-draft rookies. The nflverse → nfl_players sync populates
+      // gsis_id but leaves sleeper_id null until the cross-platform-id
+      // backfill runs. Without an escape clause, every 2026 rookie gets
+      // dropped from waivers in redraft leagues until that backfill ships.
+      // Mirror the dynasty rookie clause: Y0 + age <= 24 + active + on a
+      // team. Tightens to active+team to keep practice-squad ghosts out.
+      if (activeIds.size > 0) {
+        if (activeIds.has(pid)) return true;
+        const isRookie = (p.years_exp === 0 || p.years_exp === undefined || p.years_exp === null)
+                      && (p.age === undefined || p.age === null || p.age <= 24);
+        if (isRookie && p.active !== false && p.team) return true;
+        return false;
+      }
       if (p.active === false) return false;
       if (!p.team) return false;
       return true;

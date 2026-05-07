@@ -405,7 +405,21 @@ export default function LeagueScreen() {
               !taken.has(p.player_id) &&
               (p.search_rank == null || p.search_rank < 1000) &&
               // Canonical active check — filters Sleeper's lingering retirees (Roethlisberger, Bell, etc.)
-              (p.position === 'DEF' || activeIds.size === 0 || activeIds.has(p.player_id))
+              // Rookie escape: 2026 rookies in nfl_players have null sleeper_id
+              // until the cross-platform-id backfill runs, so they fail the
+              // activeIds check above. Allow Y0 + age ≤ 24 + active + on team
+              // through so post-draft rookies (Jeremiyah Love, Carnell Tate,
+              // Mendoza, etc.) appear in waivers immediately, not days later.
+              (p.position === 'DEF'
+                || activeIds.size === 0
+                || activeIds.has(p.player_id)
+                || (
+                  (p.years_exp === 0 || p.years_exp == null)
+                  && (p.age == null || p.age <= 24)
+                  && p.active !== false
+                  && p.team
+                )
+              )
             )
             .sort((a: any, b: any) => (a.search_rank ?? 100) - (b.search_rank ?? 100))
             .slice(0, 150)
