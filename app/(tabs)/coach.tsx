@@ -12,6 +12,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI } from '../../services/ai';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../services/espn';
 import { fetchAllLiveData, formatLiveDataForPrompt } from '../../services/liveData';
+import { getSeasonContext2026 } from '../../services/seasonContext2026';
+import { FANTASY_FOOTBALL_KNOWLEDGE } from '../../services/fantasyKnowledge';
 import { getCurrentTier } from '../../services/purchases';
 import { getMemories, saveMemory } from '../../services/supabase';
 import { getPlayerContext } from '../../services/playerIntelligence';
@@ -139,7 +141,15 @@ Roster: ${l.roster.length > 0 ? l.roster.join(', ') : 'Not loaded'}
 `).join('\n---\n');
   const focusNote  = selectedLeague ? `\n\nThe user has focused on ONE league: ${selectedLeague.name}. All advice should be specific to this league's scoring format and roster.` : '';
   const memoryBlock = memories ? `\n\nPAST DECISIONS (use for context, don't repeat):\n${memories}` : '';
-  return `${BASE_SYSTEM}\n\nYou have loaded ${targets.length} league${targets.length > 1 ? 's' : ''}:\n${leagueBlocks}\n${FF_KNOWLEDGE}${focusNote}${memoryBlock}`;
+  // v2026-05-12k: inject coaching changes, player moves, injury notes, and
+  // personnel tendencies. Mirrors what the rankings engine factors in so
+  // the Coach's advice stays consistent with the ranked output.
+  // v2026-05-12l: expanded FF knowledge base — terminology, league formats,
+  // scoring deep-dive, draft strategy, in-season management, trades,
+  // playoffs, metrics, answering-principles. Pulled from FantasyPros,
+  // FantasySixPack, PitcherList, etc. Replaces the old shallow FF_KNOWLEDGE.
+  const seasonContext = getSeasonContext2026();
+  return `${BASE_SYSTEM}\n\nYou have loaded ${targets.length} league${targets.length > 1 ? 's' : ''}:\n${leagueBlocks}\n${FANTASY_FOOTBALL_KNOWLEDGE}${focusNote}${memoryBlock}\n\n${seasonContext}`;
 }
 
 // ── Verdict card (blue) ─────────────────────────────────────
