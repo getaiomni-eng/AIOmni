@@ -55,6 +55,12 @@ Never compare players across different leagues — each league is scored indepen
 type LeagueContext = {
   name: string; platform: string; format: string;
   record: string; rank: string; roster: string[]; week: number; season: number;
+  // v2026-05-14: enriched context for dynasty/keeper/best-ball awareness
+  leagueType?: 'redraft' | 'keeper' | 'dynasty' | 'bestball';
+  rosterSize?: number;
+  taxiSlots?: number;
+  ownedPicks?: string;  // formatted: "2026: R1, R2, R3 / 2027: R1 (×2, BUF), R3"
+  bestBall?: boolean;
 };
 
 function getPaywallMessage(resetStr: string): string {
@@ -87,20 +93,76 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
       const isPPR = l.scoring_settings?.rec > 0;
       const isSF  = (l.roster_positions || []).includes('SUPER_FLEX');
       const fmt   = `${isPPR ? (l.scoring_settings.rec >= 1 ? 'PPR' : '0.5 PPR') : 'STD'}${isSF ? ' · SuperFlex' : ''}`;
+
+      // v2026-05-14: dynasty/keeper detection from Sleeper settings.type
+      // 0 = redraft, 1 = keeper, 2 = dynasty. best_ball is its own flag.
+      let leagueType: LeagueContext['leagueType'] = 'redraft';
+      if (l.settings?.best_ball === 1) leagueType = 'bestball';
+      else if (l.settings?.type === 2) leagueType = 'dynasty';
+      else if (l.settings?.type === 1) leagueType = 'keeper';
+      const taxiSlots = l.settings?.taxi_slots || 0;
+      const rosterSize = (l.roster_positions || []).length;
+      const bestBall = l.settings?.best_ball === 1;
+
       try {
-        const rosters = await fetch(`https://api.sleeper.app/v1/league/${l.league_id}/rosters`).then(r => r.json());
+        const [rosters, tradedPicks] = await Promise.all([
+          fetch(`https://api.sleeper.app/v1/league/${l.league_id}/rosters`).then(r => r.json()),
+          // Only fetch pick inventory for dynasty/keeper leagues
+          (leagueType === 'dynasty' || leagueType === 'keeper')
+            ? fetch(`https://api.sleeper.app/v1/league/${l.league_id}/traded_picks`).then(r => r.json()).catch(() => [])
+            : Promise.resolve([]),
+        ]);
         const myRoster    = Array.isArray(rosters) ? rosters.find((r: any) => r.owner_id === user.user_id) : null;
         const wins        = myRoster?.settings?.wins   ?? 0;
         const losses      = myRoster?.settings?.losses ?? 0;
         const sorted      = Array.isArray(rosters) ? [...rosters].sort((a: any, b: any) => (b.settings?.wins ?? 0) - (a.settings?.wins ?? 0)) : [];
         const rankIdx     = sorted.findIndex((r: any) => r.roster_id === myRoster?.roster_id);
-        const rosterNames = (myRoster?.players ?? []).slice(0, 15).map((id: string) => {
+        const rosterNames = (myRoster?.players ?? []).slice(0, 30).map((id: string) => {
           const p = playerMap[id];
           return p ? `${p.first_name} ${p.last_name} (${p.position})` : id;
         });
-        return { name: l.name, platform: 'Sleeper', format: fmt, record: `${wins}–${losses}`, rank: rankIdx >= 0 ? `${rankIdx + 1} of ${rosters.length}` : 'unknown', roster: rosterNames, week, season: parseInt(l.season) || 2025 };
+
+        // Compute owned picks for dynasty/keeper.
+        // Default: each team owns picks in all rounds × upcoming 2 seasons.
+        // Subtract picks they traded away. Add picks traded in.
+        let ownedPicks: string | undefined;
+        if ((leagueType === 'dynasty' || leagueType === 'keeper') && myRoster) {
+          const rosterId = myRoster.roster_id;
+          const totalTeams = rosters.length || 12;
+          const rounds = l.settings?.draft_rounds || 5;
+          const seasons = [String(parseInt(l.season) + 1), String(parseInt(l.season) + 2)];
+          const picksBySeason: Record<string, string[]> = { [seasons[0]]: [], [seasons[1]]: [] };
+          for (const season of seasons) {
+            for (let round = 1; round <= rounds; round++) {
+              // Find if there's a traded_pick entry for this slot
+              const tradedAway = tradedPicks.find((tp: any) =>
+                tp.season === season && tp.round === round &&
+                tp.previous_owner_id === rosterId && tp.owner_id !== rosterId
+              );
+              if (!tradedAway) picksBySeason[season].push(`R${round}`);
+            }
+            // Add picks traded IN
+            const incoming = tradedPicks.filter((tp: any) =>
+              tp.season === season && tp.owner_id === rosterId && tp.previous_owner_id !== rosterId
+            );
+            for (const tp of incoming) {
+              const fromRoster = rosters.find((r: any) => r.roster_id === tp.roster_id);
+              const fromLabel = fromRoster ? ` (via ${rosters.indexOf(fromRoster) + 1})` : '';
+              picksBySeason[season].push(`R${tp.round}${fromLabel}`);
+            }
+          }
+          ownedPicks = seasons.map(s => `${s}: ${picksBySeason[s].sort().join(', ') || 'none'}`).join(' / ');
+        }
+
+        return {
+          name: l.name, platform: 'Sleeper', format: fmt,
+          record: `${wins}–${losses}`,
+          rank: rankIdx >= 0 ? `${rankIdx + 1} of ${rosters.length}` : 'unknown',
+          roster: rosterNames, week, season: parseInt(l.season) || 2025,
+          leagueType, rosterSize, taxiSlots, bestBall, ownedPicks,
+        };
       } catch {
-        return { name: l.name, platform: 'Sleeper', format: fmt, record: '?', rank: '?', roster: [], week, season: parseInt(l.season) || 2025 };
+        return { name: l.name, platform: 'Sleeper', format: fmt, record: '?', rank: '?', roster: [], week, season: parseInt(l.season) || 2025, leagueType, rosterSize, taxiSlots, bestBall };
       }
     }));
   } catch { return []; }
@@ -134,11 +196,21 @@ async function loadESPNContext(): Promise<LeagueContext[]> {
 function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueContext | null, memories: string): string {
   const targets = selectedLeague ? [selectedLeague] : leagues;
   if (targets.length === 0) return `${BASE_SYSTEM}\n\nNo leagues loaded yet.`;
-  const leagueBlocks = targets.map(l => `
-League: ${l.name} (${l.platform} · ${l.format})
-Record: ${l.record} · Rank: ${l.rank} · Season: ${l.season} · Week: ${l.week}
-Roster: ${l.roster.length > 0 ? l.roster.join(', ') : 'Not loaded'}
-`).join('\n---\n');
+  // v2026-05-14: emit league type, taxi slots, owned picks (dynasty/keeper) so
+  // the Coach answers "how many draft picks do I have" correctly.
+  const leagueBlocks = targets.map(l => {
+    const typeLabel = l.leagueType ? `[${l.leagueType.toUpperCase()}]` : '';
+    const rosterStr = l.roster.length > 0 ? l.roster.join(', ') : 'Not loaded';
+    const rosterMeta = l.rosterSize ? ` (${l.rosterSize}-slot)` : '';
+    const taxi = l.taxiSlots ? ` · Taxi slots: ${l.taxiSlots}` : '';
+    const picks = l.ownedPicks ? `\nDraft picks owned — ${l.ownedPicks}` : '';
+    const bestBall = l.bestBall ? ' [BEST BALL]' : '';
+    return `
+League: ${l.name} (${l.platform} · ${l.format}) ${typeLabel}${bestBall}
+Record: ${l.record} · Rank: ${l.rank} · Season: ${l.season} · Week: ${l.week}${taxi}
+Roster${rosterMeta}: ${rosterStr}${picks}
+`;
+  }).join('\n---\n');
   const focusNote  = selectedLeague ? `\n\nThe user has focused on ONE league: ${selectedLeague.name}. All advice should be specific to this league's scoring format and roster.` : '';
   const memoryBlock = memories ? `\n\nPAST DECISIONS (use for context, don't repeat):\n${memories}` : '';
   // v2026-05-12k: inject coaching changes, player moves, injury notes, and

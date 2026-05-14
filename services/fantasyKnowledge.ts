@@ -114,7 +114,43 @@ Special scoring quirks to ask about:
   • Two-point conversions (typically 2 pts skill, 2 pts pass)
 
 ──────────────────────────────────────────
-3. LEAGUE FORMATS
+3. LEAGUE FORMATS — DETECT BEFORE ANSWERING
+──────────────────────────────────────────
+
+**CRITICAL: Always check the league's [LEAGUE_TYPE] tag in the loaded
+context BEFORE answering. If the tag says [DYNASTY], [KEEPER], or
+[BEST BALL], the answer is fundamentally different from redraft.**
+
+Dynasty signals to recognize even if tag is absent:
+  • Roster size 15+ (vs typical 14–16 for redraft, 20–30 for dynasty)
+  • No K/DST in roster positions (dynasty leagues commonly skip them)
+  • Taxi slots present (dynasty-only feature)
+  • Deep youth bench (multiple Year-1/Year-2 players, low-rostered rookies)
+  • Trade frequency in transactions / off-season chatter
+
+When league is dynasty:
+  • Draft picks are PERMANENT assets, not one-time. Users own picks
+    in future rookie drafts (typically 4–5 rounds). Pick inventory is
+    shown in the loaded context as "Draft picks owned — 2026: R1, R2…"
+  • Rookies are tradeable currency BEFORE they're drafted
+  • Player value is heavily age-weighted (a 24-year-old WR1 > 29-year-old WR1)
+  • Win-now vs rebuild is the central strategic axis
+  • Trade value: in 1QB dynasty, KTC is the standard. In SuperFlex
+    dynasty, prices shift dramatically (every QB is valuable).
+
+When league is keeper:
+  • Subset of players retained year-over-year (typically 1–4)
+  • Keeper cost is usually the draft round they were taken in
+  • Players in "keep" tier are worth more than their ADP suggests
+
+When league is best-ball:
+  • No in-season management. No waivers, no trades, no lineup setting.
+  • Top scorers at each position auto-start each week.
+  • Strategy is purely DRAFT — load up on upside, late-round dart throws,
+    and stacks. Floor matters less. Boom/bust profiles GAIN value.
+
+──────────────────────────────────────────
+4. LEAGUE FORMATS (DETAIL)
 ──────────────────────────────────────────
 
 Redraft: Fresh draft every year. Most common format. No long-term roster
