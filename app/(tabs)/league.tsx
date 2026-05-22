@@ -243,13 +243,41 @@ export default function LeagueScreen() {
     setBench   (result.roster.bench.map   ((p: any) => toPlayer(p, false)));
   };
 
+  // Fleaflicker + MFL both implement the FantasyPlatform abstraction, so
+  // one helper handles both. The Sleeper/ESPN/Yahoo branches use inline
+  // platform-specific code for historical reasons; routing them through
+  // the abstraction is a future cleanup. Without this helper the league
+  // screen falls into fetchSleeperRoster for any non-{espn,yahoo} platform
+  // and crashes with "Cannot read property 'find' of null" because the
+  // Sleeper API returns 404 for a Fleaflicker league_id.
+  const fetchAbstractRoster = async (platformId: 'fleaflicker' | 'mfl') => {
+    const { getPlatform } = require('../../services/platform');
+    const plat = getPlatform(platformId);
+    const roster = await plat.getMyRoster(leagueId as string);
+    if (!roster) return;
+    setLeagueSettings({ name: leagueId, team: roster.teamName });
+    const toPlayer = (s: any, isStarter: boolean): Player => ({
+      id:           String(s.player?.id ?? ''),
+      name:         s.player?.name || 'Unknown',
+      position:     s.player?.position || '?',
+      team:         s.player?.team || 'FA',
+      injuryStatus: s.player?.injuryStatus ?? undefined,
+      isStarter,
+      slotLabel:    s.slot || (isStarter ? '' : 'BN'),
+    });
+    setStarters((roster.starters || []).map((s: any) => toPlayer(s, true)));
+    setBench((roster.bench || []).map((s: any) => toPlayer(s, false)));
+  };
+
   const fetchRoster = async () => {
     try {
       setLoading(true);
       setRosterError(null);
-      if      (platformStr === 'espn')  await fetchESPNRoster();
-      else if (platformStr === 'yahoo') await fetchYahooRoster();
-      else                              await fetchSleeperRoster();
+      if      (platformStr === 'espn')        await fetchESPNRoster();
+      else if (platformStr === 'yahoo')       await fetchYahooRoster();
+      else if (platformStr === 'fleaflicker') await fetchAbstractRoster('fleaflicker');
+      else if (platformStr === 'mfl')         await fetchAbstractRoster('mfl');
+      else                                    await fetchSleeperRoster();
     } catch (err) {
       console.error('fetchRoster:', err);
       setRosterError(err);
@@ -268,6 +296,35 @@ export default function LeagueScreen() {
         const token = await getValidYahooToken(); if (!token) return;
         setStandings((await getYahooStandings(leagueId as string, token)).map((t: any) => ({ rosterId: t.teamKey, username: t.name, wins: t.wins, losses: t.losses, ties: t.ties, pointsFor: t.pointsFor, pointsAgainst: t.pointsAgainst, streak: t.streak || '' })));
         setOtherRosters(await getYahooAllRosters(leagueId as string, token));
+      } else if (platformStr === 'fleaflicker' || platformStr === 'mfl') {
+        const { getPlatform } = require('../../services/platform');
+        const plat = getPlatform(platformStr);
+        const [stds, allRosters] = await Promise.all([
+          plat.getStandings(leagueId as string).catch(() => []),
+          plat.getAllRosters(leagueId as string).catch(() => []),
+        ]);
+        setStandings(stds.map((s: any) => ({
+          rosterId:      s.rosterId,
+          username:      s.teamName,
+          wins:          s.record?.wins   ?? 0,
+          losses:        s.record?.losses ?? 0,
+          ties:          s.record?.ties   ?? 0,
+          pointsFor:     s.pointsFor      ?? 0,
+          pointsAgainst: s.pointsAgainst  ?? 0,
+          streak:        s.streak         ?? '',
+        })));
+        setOtherRosters(allRosters.filter((r: any) => !r.isMe).map((r: any) => ({
+          rosterId: r.rosterId,
+          username: r.teamName,
+          players: [...(r.starters || []), ...(r.bench || [])].map((s: any) => ({
+            id:           String(s.player?.id ?? ''),
+            name:         s.player?.name || 'Unknown',
+            position:     s.player?.position || '?',
+            team:         s.player?.team || 'FA',
+            injuryStatus: s.player?.injuryStatus ?? undefined,
+            isStarter:    !!s.isStarter,
+          })),
+        })));
       } else {
         const [rostersRes, usersRes] = await Promise.all([
           fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`),
@@ -301,6 +358,38 @@ export default function LeagueScreen() {
       } else if (platformStr === 'yahoo') {
         const token = await getValidYahooToken(); if (!token) return;
         setMatchup(await getYahooMatchups(leagueId as string, token));
+      } else if (platformStr === 'fleaflicker' || platformStr === 'mfl') {
+        const { getPlatform } = require('../../services/platform');
+        const plat = getPlatform(platformStr);
+        const leaguesArr = await plat.getLeagues().catch(() => []);
+        const week = leaguesArr?.[0]?.currentWeek ?? 1;
+        const matchups = await plat.getMatchups(leagueId as string, week).catch(() => []);
+        const mine = (matchups as any[]).find(m => m.home?.isMe || m.away?.isMe);
+        const myIsHome = !!mine?.home?.isMe;
+        const me   = mine ? (myIsHome ? mine.home : mine.away) : null;
+        const opp  = mine ? (myIsHome ? mine.away : mine.home) : null;
+        setMatchup({
+          myTeam:           me?.teamName  ?? 'You',
+          myPoints:         me?.points    ?? 0,
+          myStarters:       [],
+          myStarterPoints:  [],
+          opponentTeam:     opp?.teamName ?? 'TBD',
+          opponentPoints:   opp?.points   ?? 0,
+          oppStarters:      [],
+          oppStarterPoints: [],
+          week,
+          allMatchups: (matchups as any[]).map(m => ({
+            team1:              m.home?.teamName ?? '',
+            team1Points:        m.home?.points   ?? 0,
+            team1Starters:      [],
+            team1StarterPoints: [],
+            team2:              m.away?.teamName ?? '',
+            team2Points:        m.away?.points   ?? 0,
+            team2Starters:      [],
+            team2StarterPoints: [],
+            isMyMatchup:        !!(m.home?.isMe || m.away?.isMe),
+          })),
+        });
       } else {
         const username = await AsyncStorage.getItem('sleeper_username'); if (!username) return;
         const user  = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
@@ -352,6 +441,17 @@ export default function LeagueScreen() {
       } else if (platformStr === 'yahoo') {
         const token = await getValidYahooToken(); if (!token) return;
         setTransactions(await getYahooTransactions(leagueId as string, token));
+      } else if (platformStr === 'fleaflicker' || platformStr === 'mfl') {
+        const { getPlatform } = require('../../services/platform');
+        const plat = getPlatform(platformStr);
+        const txs = await plat.getTransactions(leagueId as string, 50).catch(() => []);
+        setTransactions((txs as any[]).map(t => ({
+          type:   t.type,
+          adds:   (t.adds  || []).map((a: any) => a.player?.name).filter(Boolean),
+          drops: (t.drops || []).map((d: any) => d.player?.name).filter(Boolean),
+          trader: '',
+          time:   t.timestamp,
+        })));
       } else {
         const pDb   = await getPlayersDb();
         const users = await (await fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`)).json();
