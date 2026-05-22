@@ -133,18 +133,26 @@ function mapPlayer(proPlayer: any, positionEligibility?: string[]): Player {
   };
 }
 
-function mapRosterSlot(playerEntry: any): RosterSlot {
-  const pp = playerEntry?.proPlayer ?? playerEntry?.player?.proPlayer ?? {};
-  const slot = playerEntry?.position?.label ?? playerEntry?.position?.start?.label ?? 'BN';
-  const isStarter = !!(playerEntry?.position?.start);
+// Maps either a FetchRoster slot (entry has .position + .leaguePlayer
+// wrappers) or a FetchLeagueRosters player (entry has .proPlayer at the
+// top level, no position info). Empirically both shapes flow through here.
+function mapRosterSlot(entry: any): RosterSlot {
+  const pp = entry?.leaguePlayer?.proPlayer ?? entry?.proPlayer ?? entry?.player?.proPlayer ?? {};
+  const pos = entry?.position ?? {};
+  const slot = pos?.label ?? 'BN';
+  // Fleaflicker marks a starter slot with `position.start` set to the count
+  // of starters needed at that position (e.g. 1 for QB, 2 for RB). Bench
+  // slots either omit the field or set it to 0/null.
+  const isStarter = !!pos?.start && pos.start > 0;
+  const stats = entry?.leaguePlayer ?? entry;
   return {
-    player: mapPlayer(pp, playerEntry?.position?.eligibility),
+    player: mapPlayer(pp, pos?.eligibility),
     slot:   String(slot).toUpperCase(),
     isStarter,
-    points: playerEntry?.viewingActualPoints?.value ? parseFloat(playerEntry.viewingActualPoints.formatted) : undefined,
-    projected: playerEntry?.viewingProjectedPoints?.value ? parseFloat(playerEntry.viewingProjectedPoints.formatted) : undefined,
-    salary: playerEntry?.salary?.value ? parseFloat(playerEntry.salary.value) : undefined,
-    isKeeper: !!playerEntry?.isKeeper,
+    points:    stats?.viewingActualPoints?.value    ? parseFloat(stats.viewingActualPoints.formatted)    : undefined,
+    projected: stats?.viewingProjectedPoints?.value ? parseFloat(stats.viewingProjectedPoints.formatted) : undefined,
+    salary:    stats?.salary?.value                 ? parseFloat(stats.salary.value)                     : undefined,
+    isKeeper: !!stats?.isKeeper,
   };
 }
 
@@ -155,9 +163,11 @@ async function fetchRoster(leagueId: string, teamId: string): Promise<Roster | n
   if (cached) return cached;
 
   const data = await ff<any>('FetchRoster', { league_id: leagueId, team_id: teamId });
-  const team = data?.team;
+  // FetchRoster doesn't return a `team` block — just the lineup groups.
+  // Team metadata (name/record/points) is filled in by getStandings; here
+  // we just need the players. (Previously we bailed if !team, leaving the
+  // user's roster perpetually empty.)
   const groups = data?.groups ?? [];
-  if (!team) return null;
 
   const starters: RosterSlot[] = [];
   const bench: RosterSlot[] = [];
@@ -165,14 +175,16 @@ async function fetchRoster(leagueId: string, teamId: string): Promise<Roster | n
   const taxi: RosterSlot[] = [];
 
   for (const group of groups) {
+    const groupLabel = String(group?.group ?? '').toUpperCase();
     for (const entry of (group?.slots ?? [])) {
       if (!entry?.leaguePlayer?.proPlayer && !entry?.proPlayer) continue;
-      const lp = entry.leaguePlayer ?? entry;
-      const slot = mapRosterSlot(lp);
-      const groupLabel = String(group?.group ?? '').toUpperCase();
-      if (groupLabel.includes('IR')) ir.push(slot);
-      else if (groupLabel.includes('TAXI')) taxi.push(slot);
-      else if (slot.isStarter) starters.push(slot);
+      const slot = mapRosterSlot(entry);
+      // Group labels observed in the wild: START, INJURED, TAXI, plus an
+      // unlabeled group used as the bench. Match each explicitly so we
+      // don't accidentally classify a bench player as IR.
+      if (groupLabel === 'INJURED' || groupLabel === 'IR') ir.push(slot);
+      else if (groupLabel === 'TAXI') taxi.push(slot);
+      else if (groupLabel === 'START' && slot.isStarter) starters.push(slot);
       else bench.push(slot);
     }
   }
@@ -181,16 +193,12 @@ async function fetchRoster(leagueId: string, teamId: string): Promise<Roster | n
   const isMe = creds?.teamId === String(teamId);
 
   const roster: Roster = {
-    userId:      String(team.owners?.[0]?.id ?? team.id),
-    rosterId:    String(team.id),
-    teamName:    team.name ?? 'Unnamed',
-    record: {
-      wins:   team.recordOverall?.wins ?? 0,
-      losses: team.recordOverall?.losses ?? 0,
-      ties:   team.recordOverall?.ties ?? 0,
-    },
-    pointsFor:     parseFloat(team.pointsFor?.formatted ?? '0'),
-    pointsAgainst: parseFloat(team.pointsAgainst?.formatted ?? '0'),
+    userId:      String(teamId),
+    rosterId:    String(teamId),
+    teamName:    '',
+    record:      { wins: 0, losses: 0, ties: 0 },
+    pointsFor:     0,
+    pointsAgainst: 0,
     starters,
     bench,
     ir,
