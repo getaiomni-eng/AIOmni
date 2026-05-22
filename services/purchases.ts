@@ -39,10 +39,34 @@ export async function initPurchases(userId?: string): Promise<void> {
 }
 
 // ── Packages ──────────────────────────────────────────────────────────────────
+// Returns packages from EVERY offering (current + all named offerings),
+// de-duped by product identifier. Many RC dashboards split tiers into
+// separate offerings (e.g. a "rankings" offering and a "pro" offering);
+// returning only `offerings.current.availablePackages` silently misses
+// the other tier's packages and makes findPackage() fail.
 export async function getPackages(): Promise<PurchasesPackage[]> {
   try {
     const offerings = await Purchases.getOfferings();
-    return offerings.current?.availablePackages ?? [];
+    const seen = new Set<string>();
+    const out: PurchasesPackage[] = [];
+    const push = (pkgs?: PurchasesPackage[]) => {
+      for (const p of pkgs ?? []) {
+        const k = p.product.identifier;
+        if (k && !seen.has(k)) { seen.add(k); out.push(p); }
+      }
+    };
+    push(offerings.current?.availablePackages);
+    for (const id of Object.keys(offerings.all ?? {})) {
+      push(offerings.all[id]?.availablePackages);
+    }
+    if (__DEV__) {
+      console.log('[RC] getPackages →', out.map(p => ({
+        offering: p.offeringIdentifier,
+        type: p.packageType,
+        productId: p.product.identifier,
+      })));
+    }
+    return out;
   } catch (e) {
     console.log('getPackages error:', e);
     return [];

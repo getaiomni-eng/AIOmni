@@ -350,7 +350,7 @@ export default function HomeScreen() {
   const loadLeagues = useCallback(async () => {
     setLoading(true);
     try {
-      const [sleeper, espn, yahoo] = await Promise.allSettled([
+      const [sleeper, espn, yahoo, mfl, fleaflicker] = await Promise.allSettled([
         loadSleeperLeagues(selectedSeason),
         loadESPNLeagues(selectedSeason),
         loadYahooLeagues(selectedSeason),
@@ -358,9 +358,11 @@ export default function HomeScreen() {
         loadFleaflickerLeagues(selectedSeason),
       ]);
       const allLeagues: League[] = [];
-      if (sleeper.status === 'fulfilled') allLeagues.push(...sleeper.value);
-      if (espn.status    === 'fulfilled') allLeagues.push(...espn.value);
-      if (yahoo.status   === 'fulfilled') allLeagues.push(...yahoo.value);
+      if (sleeper.status     === 'fulfilled') allLeagues.push(...sleeper.value);
+      if (espn.status        === 'fulfilled') allLeagues.push(...espn.value);
+      if (yahoo.status       === 'fulfilled') allLeagues.push(...yahoo.value);
+      if (mfl.status         === 'fulfilled') allLeagues.push(...mfl.value);
+      if (fleaflicker.status === 'fulfilled') allLeagues.push(...fleaflicker.value);
       setLeagues(allLeagues);
       const u = await AsyncStorage.getItem('sleeper_username');
       setUsername(u || '');

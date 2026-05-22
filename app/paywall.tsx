@@ -20,7 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { PurchasesPackage } from 'react-native-purchases';
+import { PACKAGE_TYPE, PurchasesPackage } from 'react-native-purchases';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   getCurrentTier,
@@ -70,10 +70,23 @@ export default function PaywallScreen() {
     })();
   }, []);
 
+  // Two-step matcher:
+  //   1) Prefer RC-native fields — packageType (MONTHLY/ANNUAL) + offering
+  //      identifier (when the dashboard splits tiers into named offerings
+  //      like "rankings"/"pro").
+  //   2) Fall back to product.identifier substring for single-offering
+  //      setups where everything lives under offerings.current.
   const findPackage = (keyword: string, cycle: BillingCycle): PurchasesPackage | undefined => {
-    return packages.find((p) => {
+    const wantType = cycle === 'yearly' ? PACKAGE_TYPE.ANNUAL : PACKAGE_TYPE.MONTHLY;
+    const k = keyword.toLowerCase();
+    const byNative = packages.find(p =>
+      p.packageType === wantType &&
+      (p.offeringIdentifier ?? '').toLowerCase().includes(k)
+    );
+    if (byNative) return byNative;
+    return packages.find(p => {
       const id = p.product.identifier.toLowerCase();
-      return id.includes(keyword) && id.includes(cycle === 'yearly' ? 'yearly' : 'monthly');
+      return id.includes(k) && id.includes(cycle === 'yearly' ? 'yearly' : 'monthly');
     });
   };
 
@@ -213,25 +226,43 @@ export default function PaywallScreen() {
                   ))}
                 </View>
 
-                {isCurrent ? (
-                  <View style={[styles.actionBtn, { backgroundColor: '#1a3542' }]}>
-                    <Text style={[styles.actionText, { color: SUB }]}>Current Plan</Text>
-                  </View>
-                ) : tierKey === 'free' ? null : isUpgrade ? (
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: accentColor }]}
-                    onPress={() => handlePurchase(tierKey)}
-                    disabled={purchasing}
-                  >
-                    {purchasing ? (
-                      <ActivityIndicator color="#0a1214" size="small" />
-                    ) : (
-                      <Text style={[styles.actionText, { color: '#0a1214' }]}>
-                        Upgrade to {info.label}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                ) : null}
+                {(() => {
+                  if (isCurrent) {
+                    return (
+                      <View style={[styles.actionBtn, { backgroundColor: '#1a3542' }]}>
+                        <Text style={[styles.actionText, { color: SUB }]}>Current Plan</Text>
+                      </View>
+                    );
+                  }
+                  if (tierKey === 'free' || !isUpgrade) return null;
+                  // No package found for this tier+cycle (RC offering missing,
+                  // products not yet propagated to sandbox, etc.). Render as
+                  // disabled instead of letting the tap surface an unhelpful
+                  // "Not Available" alert.
+                  const pkg = findPackage(tierKey, billing);
+                  if (!pkg) {
+                    return (
+                      <View style={[styles.actionBtn, { backgroundColor: '#1a3542' }]}>
+                        <Text style={[styles.actionText, { color: SUB }]}>Unavailable</Text>
+                      </View>
+                    );
+                  }
+                  return (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { backgroundColor: accentColor }]}
+                      onPress={() => handlePurchase(tierKey)}
+                      disabled={purchasing}
+                    >
+                      {purchasing ? (
+                        <ActivityIndicator color="#0a1214" size="small" />
+                      ) : (
+                        <Text style={[styles.actionText, { color: '#0a1214' }]}>
+                          Upgrade to {info.label}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })()}
               </View>
             );
           })}
