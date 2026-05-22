@@ -42,16 +42,16 @@ function hotSet(k: string, d: any, ttl = TTL) {
 }
 
 // ─── HTTP ──────────────────────────────────────────────────────────────────
-// Sentinel error class — UI catches this specifically to show a clean
-// "private league not yet supported" message instead of a generic crash.
-export class FleaflickerPrivateLeagueError extends Error {
-  constructor(public readonly leagueId?: string) {
-    super(
-      leagueId
-        ? `Fleaflicker league ${leagueId} appears to be private. Private-league support is coming in a future release.`
-        : 'This Fleaflicker league appears to be private. Private-league support is coming in a future release.'
-    );
-    this.name = 'FleaflickerPrivateLeagueError';
+// Sentinel raised on any 404, so callers can implement endpoint-specific
+// fallbacks. We do NOT auto-classify 404s as "private league" — empirically
+// the Fleaflicker public API is inconsistent: some leagues 404 on FetchLeague
+// but happily serve FetchLeagueStandings / FetchLeagueScoreboard for the
+// same league_id. Callers with a fallback (see getLeagues) catch this;
+// callers without one can let it propagate.
+export class FleaflickerNotFoundError extends Error {
+  constructor(public readonly endpoint: string, public readonly leagueId?: string) {
+    super(`Fleaflicker ${endpoint} returned 404${leagueId ? ` for league ${leagueId}` : ''}`);
+    this.name = 'FleaflickerNotFoundError';
   }
 }
 
@@ -62,11 +62,8 @@ async function ff<T>(endpoint: string, params: Record<string, string | number> =
   const url = `${BASE}/${endpoint}?${qs}`;
   const res = await fetch(url);
   if (!res.ok) {
-    // 404 from FetchLeague* endpoints almost always means private league
-    // (or genuinely deleted league). Either way, no public API path exists.
-    if (res.status === 404 && endpoint.startsWith('FetchLeague')) {
-      const leagueId = params.league_id ? String(params.league_id) : undefined;
-      throw new FleaflickerPrivateLeagueError(leagueId);
+    if (res.status === 404) {
+      throw new FleaflickerNotFoundError(endpoint, params.league_id ? String(params.league_id) : undefined);
     }
     throw new PlatformError(`Fleaflicker ${endpoint} failed: ${res.status}`, 'fleaflicker');
   }
@@ -112,8 +109,12 @@ function mapScoring(scoringPeriod: any): ScoringFormat {
 }
 
 function isDynastyLeague(settings: any): boolean {
-  // Fleaflicker dynasty leagues typically have keeper rules + multi-year contracts.
-  return !!(settings?.keeperCount && settings.keeperCount > 0)
+  // Fleaflicker dynasty leagues typically have keeper rules + multi-year
+  // contracts. Different endpoints surface the keeper count under different
+  // field names (`keeperCount` on FetchLeague, `maxKeepers` on FetchLeague-
+  // Standings) — check both. Treat ≥10 keepers as dynasty (5–9 is keeper).
+  const kc = settings?.keeperCount ?? settings?.maxKeepers ?? 0;
+  return (kc >= 10)
       || !!(settings?.salaryCapDollars)
       || !!(settings?.contractsEnabled);
 }
@@ -224,8 +225,26 @@ export const fleaflickerPlatform: FantasyPlatform = {
     const cached = hotGet<League[]>('leagues');
     if (cached) return cached;
 
-    const data = await ff<any>('FetchLeague', { league_id: creds.leagueId });
-    const league = data?.league;
+    // Primary: FetchLeague returns the richest payload (scoring rules,
+    // currentWeek, etc.). But Fleaflicker's public API inconsistently
+    // 404s this endpoint for some leagues that are otherwise fully
+    // readable via FetchLeagueStandings — so fall back to that on 404,
+    // synthesizing the same League shape with sensible defaults.
+    let league: any = null;
+    try {
+      const data = await ff<any>('FetchLeague', { league_id: creds.leagueId });
+      league = data?.league;
+    } catch (e) {
+      if (!(e instanceof FleaflickerNotFoundError)) throw e;
+      try {
+        const fallback = await ff<any>('FetchLeagueStandings', { league_id: creds.leagueId });
+        league = fallback?.league
+          ? { ...fallback.league, season: fallback.season ?? new Date().getFullYear() }
+          : null;
+      } catch {
+        return [];
+      }
+    }
     if (!league) return [];
 
     const result: League[] = [{
