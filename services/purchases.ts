@@ -45,6 +45,21 @@ export async function initPurchases(userId?: string): Promise<void> {
 // returning only `offerings.current.availablePackages` silently misses
 // the other tier's packages and makes findPackage() fail.
 export async function getPackages(): Promise<PurchasesPackage[]> {
+  const { packages } = await getPackagesWithDiagnostic();
+  return packages;
+}
+
+export type PackagesDiagnostic = {
+  packages: PurchasesPackage[];
+  currentOfferingId: string | null;
+  allOfferingIds: string[];
+  error: string | null;
+};
+
+// Returns packages alongside diagnostic info — used by the paywall to
+// render an on-device debug panel when nothing matches, so we can see
+// what RC actually returned without a Mac/Xcode console.
+export async function getPackagesWithDiagnostic(): Promise<PackagesDiagnostic> {
   try {
     const offerings = await Purchases.getOfferings();
     const seen = new Set<string>();
@@ -66,10 +81,20 @@ export async function getPackages(): Promise<PurchasesPackage[]> {
         productId: p.product.identifier,
       })));
     }
-    return out;
-  } catch (e) {
+    return {
+      packages: out,
+      currentOfferingId: offerings.current?.identifier ?? null,
+      allOfferingIds: Object.keys(offerings.all ?? {}),
+      error: null,
+    };
+  } catch (e: any) {
     console.log('getPackages error:', e);
-    return [];
+    return {
+      packages: [],
+      currentOfferingId: null,
+      allOfferingIds: [],
+      error: e?.message ?? String(e),
+    };
   }
 }
 

@@ -24,7 +24,8 @@ import { PACKAGE_TYPE, PurchasesPackage } from 'react-native-purchases';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   getCurrentTier,
-  getPackages,
+  getPackagesWithDiagnostic,
+  PackagesDiagnostic,
   purchasePackage,
   refreshTier,
   restorePurchases,
@@ -56,6 +57,8 @@ export default function PaywallScreen() {
   const params = useLocalSearchParams<{ context?: string }>();
   const context = (params.context as PaywallContext) ?? null;
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
+  const [diag, setDiag] = useState<PackagesDiagnostic | null>(null);
+  const [showDiag, setShowDiag] = useState(false);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
   const [currentTier, setCurrentTier] = useState<string>('free');
@@ -63,8 +66,9 @@ export default function PaywallScreen() {
 
   useEffect(() => {
     (async () => {
-      const [pkgs, tier] = await Promise.all([getPackages(), getCurrentTier()]);
-      setPackages(pkgs);
+      const [d, tier] = await Promise.all([getPackagesWithDiagnostic(), getCurrentTier()]);
+      setPackages(d.packages);
+      setDiag(d);
       setCurrentTier(tier);
       setLoading(false);
     })();
@@ -272,6 +276,47 @@ export default function PaywallScreen() {
             <Text style={styles.restoreText}>Restore Purchases</Text>
           </TouchableOpacity>
 
+          {/* Diagnostic panel — visible when any tier is missing its package,
+              so a tester without Mac/Xcode access can see what RC returned. */}
+          {(() => {
+            const anyMissing = (['rankings', 'pro'] as const).some(
+              t => !findPackage(t, billing) && currentTier !== t
+            );
+            if (!anyMissing && !showDiag) return null;
+            return (
+              <View style={styles.diagBox}>
+                <TouchableOpacity onPress={() => setShowDiag(s => !s)}>
+                  <Text style={styles.diagToggle}>
+                    {showDiag ? '▼' : '▶'} Subscription diagnostics
+                  </Text>
+                </TouchableOpacity>
+                {showDiag && diag && (
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={styles.diagLine}>
+                      Current offering: {diag.currentOfferingId ?? '(none)'}
+                    </Text>
+                    <Text style={styles.diagLine}>
+                      All offerings: {diag.allOfferingIds.length === 0 ? '(none)' : diag.allOfferingIds.join(', ')}
+                    </Text>
+                    <Text style={styles.diagLine}>
+                      Packages returned: {diag.packages.length}
+                    </Text>
+                    {diag.packages.map((p, i) => (
+                      <Text key={i} style={styles.diagLineSmall}>
+                        · [{p.offeringIdentifier}] {p.packageType} → {p.product.identifier}
+                      </Text>
+                    ))}
+                    {diag.error && (
+                      <Text style={[styles.diagLine, { color: '#ff6b8a' }]}>
+                        Error: {diag.error}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
+            );
+          })()}
+
           <Text style={styles.legal}>
             Payment is charged to your Apple ID account. Subscriptions automatically renew unless
             cancelled at least 24 hours before the end of the current period. Manage subscriptions
@@ -478,6 +523,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: AQUA,
     textDecorationLine: 'underline',
+  },
+  diagBox: {
+    backgroundColor: 'rgba(255,184,0,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,184,0,0.25)',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 12,
+    marginHorizontal: 4,
+  },
+  diagToggle: {
+    fontFamily: 'SpaceMono',
+    fontSize: 11,
+    color: AMBER,
+    letterSpacing: 0.3,
+  },
+  diagLine: {
+    fontFamily: 'SpaceMono',
+    fontSize: 10,
+    color: TEXT,
+    marginTop: 4,
+    lineHeight: 14,
+  },
+  diagLineSmall: {
+    fontFamily: 'SpaceMono',
+    fontSize: 9,
+    color: SUB,
+    marginTop: 2,
+    lineHeight: 13,
   },
   legal: {
     fontFamily: 'Barlow',
