@@ -10,7 +10,7 @@ const SLEEPER_BASE = 'https://api.sleeper.app/v1';
 
 // ─── TYPES ──────────────────────────────────────────────────
 
-export type Platform = 'sleeper' | 'espn' | 'yahoo' | 'fleaflicker' | 'offline';
+export type Platform = 'sleeper' | 'espn' | 'yahoo' | 'fleaflicker' | 'mfl' | 'offline';
 export type DraftType = 'snake' | 'linear' | 'auction';
 export type DraftStatus = 'pre_draft' | 'drafting' | 'complete';
 
