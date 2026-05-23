@@ -1,7 +1,7 @@
 // services/draft.ts
 // The O — AIOmni's AI Draft Co-Pilot — Unified Draft Service
 // Sleeper: live polling via public API
-// ESPN / Yahoo / Offline: companion mode (manual pick tracking)
+// ESPN / Yahoo / Fleaflicker / Offline: companion mode (manual pick tracking)
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchBlendedConsensus, fetchSleeperADP } from './rankingsData';
@@ -10,7 +10,7 @@ const SLEEPER_BASE = 'https://api.sleeper.app/v1';
 
 // ─── TYPES ──────────────────────────────────────────────────
 
-export type Platform = 'sleeper' | 'espn' | 'yahoo' | 'offline';
+export type Platform = 'sleeper' | 'espn' | 'yahoo' | 'fleaflicker' | 'offline';
 export type DraftType = 'snake' | 'linear' | 'auction';
 export type DraftStatus = 'pre_draft' | 'drafting' | 'complete';
 

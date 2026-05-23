@@ -361,29 +361,38 @@ export const fleaflickerPlatform: FantasyPlatform = {
     const cached = hotGet<AvailablePlayer[]>(cacheKey);
     if (cached) return cached;
 
-    const data = await ff<any>('FetchPlayerListing', {
-      league_id: leagueId,
-      filter: 'AVAILABLE',
-      result_offset: 0,
-      sort: 'SORT_RANK',
-    });
+    // FF's FetchPlayerListing has no server-side "free agents only" filter —
+    // every attempt at `filter=AVAILABLE` / `sort=SORT_RANK` / nested
+    // filter objects returns 400. The endpoint returns owned + free agents
+    // mixed together, sorted by season-total points. Rostered players
+    // dominate the first ~300 entries (12 teams × 25-ish roster slots);
+    // free agents take over after that.
+    //
+    // Strategy: fan out N parallel pages starting at the FA threshold and
+    // filter to entries with no `owner`. 12 pages × 30 per page = 360
+    // candidates, more than enough to fill the default limit of 50.
+    const PAGE = 30;
+    const offsets = Array.from({ length: 12 }, (_, i) => 300 + i * PAGE);
+    const pages = await Promise.all(
+      offsets.map(off =>
+        ff<any>('FetchPlayerListing', { league_id: leagueId, result_offset: off })
+          .catch(() => null)
+      )
+    );
 
-    const players: AvailablePlayer[] = (data?.players ?? []).slice(0, limit).map((p: any) => {
-      const pp = p.proPlayer ?? {};
-      const base = mapPlayer(pp);
-      return {
-        ...base,
-        percentOwned:  p.rosterStats?.totalRosteredPercent?.value ?? undefined,
-        percentStarted: p.rosterStats?.totalStartedPercent?.value ?? undefined,
-        heatSignals: {
-          percentOwned:    p.rosterStats?.totalRosteredPercent?.value ?? undefined,
-          percentStarted:  p.rosterStats?.totalStartedPercent?.value ?? undefined,
-        },
-      } as AvailablePlayer;
-    });
+    const out: AvailablePlayer[] = [];
+    for (const data of pages) {
+      for (const p of (data?.players ?? [])) {
+        if (p.owner) continue;
+        const pp = p.proPlayer ?? {};
+        out.push({ ...mapPlayer(pp), heatSignals: {} } as AvailablePlayer);
+        if (out.length >= limit) break;
+      }
+      if (out.length >= limit) break;
+    }
 
-    hotSet(cacheKey, players);
-    return players;
+    hotSet(cacheKey, out);
+    return out;
   },
 
   async getHeatSignals(_leagueId: string, _playerId: string): Promise<HeatSignals> {

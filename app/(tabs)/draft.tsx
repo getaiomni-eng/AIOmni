@@ -119,6 +119,7 @@ export default function DraftCopilotScreen() {
   const [sleeperPicks, setSleeperPicks] = useState<string[] | null>(null);
   const [espnLeagues, setEspnLeagues] = useState<any[]>([]);
   const [yahooLeagues, setYahooLeagues] = useState<any[]>([]);
+  const [fleaflickerLeagues, setFleaflickerLeagues] = useState<any[]>([]);
 
   // Check for saved draft state on mount
   useEffect(() => {
@@ -154,6 +155,17 @@ export default function DraftCopilotScreen() {
           console.error('Failed to load Sleeper leagues:', e);
         }
         setSleeperPicks(null);
+      })();
+    } else if (setupData.platform === 'fleaflicker') {
+      (async () => {
+        try {
+          const { getPlatform } = require('../../services/platform');
+          const plat = getPlatform('fleaflicker');
+          const leagues = await plat.getLeagues();
+          setFleaflickerLeagues(leagues || []);
+        } catch (e) {
+          console.error('Failed to load Fleaflicker leagues:', e);
+        }
       })();
     }
   }, [setupData.platform]);
@@ -319,6 +331,7 @@ export default function DraftCopilotScreen() {
           data={setupData}
           sleeperLeagues={sleeperLeagues}
           sleeperPicks={sleeperPicks}
+          fleaflickerLeagues={fleaflickerLeagues}
           onFetchPicks={(lid: string) => {
             (async () => {
               const username = await AsyncStorage.getItem('sleeper_username');
@@ -372,12 +385,13 @@ export default function DraftCopilotScreen() {
 // ═══════════════════════════════════════════════════════════
 
 function SetupWizard({
-  step, data, sleeperLeagues, sleeperPicks, onFetchPicks, onUpdate, onNext, onBack, onStart,
+  step, data, sleeperLeagues, sleeperPicks, fleaflickerLeagues, onFetchPicks, onUpdate, onNext, onBack, onStart,
 }: {
   step: SetupStep;
   data: Partial<SetupData>;
   sleeperLeagues: any[];
   sleeperPicks: string[] | null;
+  fleaflickerLeagues: any[];
   onFetchPicks: (leagueId: string) => void;
   onUpdate: (u: Partial<SetupData>) => void;
   onNext: () => void;
@@ -420,6 +434,7 @@ function SetupWizard({
             { key: 'sleeper', label: 'SLEEPER', desc: 'Live auto-sync — picks update automatically', color: '#00FFF9', live: true },
             { key: 'espn', label: 'ESPN', desc: 'Open ESPN to draft — tap picks here as they happen', color: '#e52534', live: false },
             { key: 'yahoo', label: 'YAHOO', desc: 'Open Yahoo to draft — tap picks here as they happen', color: '#7c3aed', live: false },
+            { key: 'fleaflicker', label: 'FLEAFLICKER', desc: 'Open Fleaflicker to draft — tap picks here as they happen', color: '#ff7a00', live: false },
             { key: 'offline', label: 'OFFLINE / LIVE', desc: 'In-person draft — track picks on your phone', color: C.amber, live: false },
           ] as const).map(p => (
             <TouchableOpacity
@@ -499,6 +514,31 @@ function SetupWizard({
           ) : data.platform === 'sleeper' ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>No Sleeper leagues found. Make sure your Sleeper username is set in Settings.</Text>
+            </View>
+          ) : data.platform === 'fleaflicker' && fleaflickerLeagues.length > 0 ? (
+            <>
+              {fleaflickerLeagues.map((lg: any) => (
+                <TouchableOpacity
+                  key={lg.id}
+                  style={[styles.leagueCard, data.leagueId === lg.id && { borderColor: C.aqua }]}
+                  onPress={() => onUpdate({
+                    leagueId:      lg.id,
+                    leagueName:    lg.name,
+                    teamCount:     lg.teamCount || 12,
+                    scoringFormat: (lg.scoringFormat === 'ppr' ? 'ppr' : lg.scoringFormat === 'half' ? 'half' : 'standard'),
+                    isDynasty:     lg.leagueType === 'dynasty',
+                  } as any)}
+                >
+                  <Text style={styles.leagueName}>{lg.name}</Text>
+                  <Text style={styles.leagueMeta}>
+                    {lg.teamCount} teams · {lg.season} · {lg.scoringFormat === 'ppr' ? 'PPR' : lg.scoringFormat === 'half' ? 'Half PPR' : 'Standard'}{lg.leagueType === 'dynasty' ? ' · Dynasty' : ''}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </>
+          ) : data.platform === 'fleaflicker' ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No Fleaflicker leagues found. Connect Fleaflicker in Settings first.</Text>
             </View>
           ) : (
             <View style={styles.manualLeague}>
