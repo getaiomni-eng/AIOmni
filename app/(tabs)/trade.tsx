@@ -1,9 +1,12 @@
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 
 import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI } from '../../services/ai';
+import { getCurrentTier } from '../../services/purchases';
+import { consumePrompt } from '../utils/promptCounter';
 import { C, F, R, SP, SZ } from '../constants/tokens';
 import { Icon } from '../components/AIOmniIcons';
 
@@ -42,6 +45,7 @@ const EXAMPLES = [
 
 export default function TradesScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [format, setFormat] = useState<Format>('redraft');
   const [giving, setGiving] = useState('');
   const [getting, setGetting] = useState('');
@@ -52,6 +56,14 @@ export default function TradesScreen() {
   const [analysis, setAnalysis] = useState('');
 
   const analyzeTrade = async () => {
+    // Charge a prompt up front; if over cap, route to paywall and bail.
+    const ok = await consumePrompt();
+    if (!ok) {
+      const tier = await getCurrentTier();
+      const ctx = tier === 'free' ? 'free_prompts_exhausted' : 'weekly_prompts_exhausted';
+      router.push(`/paywall?context=${ctx}` as any);
+      return;
+    }
     try {
       const prompt = `You are AIOmni, expert fantasy football trade analyst.
 Format: ${format.toUpperCase()}

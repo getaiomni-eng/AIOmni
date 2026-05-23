@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { askAI } from "../../services/ai";
+import { getCurrentTier } from '../../services/purchases';
+import { consumePrompt } from '../utils/promptCounter';
 import { findMyESPNTeam, formatESPNPosition, getESPNAllRosters, getESPNLeague, getESPNMatchups, getESPNStandings, getESPNTransactions, isESPNStarter, loadESPNCredentials } from '../../services/espn';
 import { Icon } from '../components/AIOmniIcons';
 import PlayerCardModal from '../components/PlayerCardModal';
@@ -570,6 +572,18 @@ export default function LeagueScreen() {
     setAdvice('');
     setModalVisible(true);
     setAdviceLoading(true);
+    // Atomic check-and-charge — if over cap, route to paywall instead of
+    // calling Claude. consumePrompt() avoids the TOCTOU window the older
+    // canSend+increment pair had.
+    const ok = await consumePrompt();
+    if (!ok) {
+      const tier = await getCurrentTier();
+      const ctx = tier === 'free' ? 'free_prompts_exhausted' : 'weekly_prompts_exhausted';
+      setModalVisible(false);
+      setAdviceLoading(false);
+      router.push(`/paywall?context=${ctx}` as any);
+      return;
+    }
     const controller = new AbortController();
     const timeout    = setTimeout(() => controller.abort(), 15000);
     try {

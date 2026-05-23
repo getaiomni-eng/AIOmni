@@ -22,6 +22,9 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI } from '../../services/ai';
+import { getCurrentTier } from '../../services/purchases';
+import { consumePrompt } from '../utils/promptCounter';
+import { useRouter } from 'expo-router';
 import { applyEngineToDraftPool, draftSettingsToUIFormat } from '../../services/rankings/draftPool';
 import { TheOLogo, ApertureO } from '../components/TheOLogo';
 import {
@@ -808,6 +811,7 @@ function DraftBoard({
   onStateChange: (s: DraftState) => void;
   onReset: () => void;
 }) {
+  const router = useRouter();
   const [posFilter, setPosFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [showRoster, setShowRoster] = useState(false);
@@ -905,6 +909,17 @@ function DraftBoard({
     setShowAI(true);
     setAiLoading(true);
     setAiResponse('');
+    // Atomic charge — if over cap, close the AI sheet and send the user
+    // to the paywall instead of silently hitting Claude.
+    const ok = await consumePrompt();
+    if (!ok) {
+      const tier = await getCurrentTier();
+      const ctx = tier === 'free' ? 'free_prompts_exhausted' : 'weekly_prompts_exhausted';
+      setShowAI(false);
+      setAiLoading(false);
+      router.push(`/paywall?context=${ctx}` as any);
+      return;
+    }
     try {
       const prompt = buildDraftPrompt(state, q || undefined);
       const res = await askAI(prompt);
@@ -914,7 +929,7 @@ function DraftBoard({
     } finally {
       setAiLoading(false);
     }
-  }, [state]);
+  }, [state, router]);
 
   const isSleeperLive = state.settings.platform === 'sleeper' && !!state.settings.draftId;
 
