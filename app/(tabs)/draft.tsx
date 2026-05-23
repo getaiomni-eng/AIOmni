@@ -307,6 +307,37 @@ export default function DraftCopilotScreen() {
             }
           }
         } catch (e) { console.log('roster filter error:', e); }
+      } else if ((settings.platform === 'fleaflicker' || settings.platform === 'mfl')
+                 && settings.leagueId && settings.leagueId !== 'offline') {
+        // FF/MFL don't share Sleeper's player IDs, so we filter the draft
+        // pool by normalized name instead. Without this, a rookie-mode
+        // dynasty draft on FF shows the entire top-200 NFL ADP rather
+        // than just incoming rookies + actual league free agents.
+        const normalize = (n: string) =>
+          (n ?? '').toLowerCase()
+            .replace(/[.'’]/g, '')
+            .replace(/\s+(jr|sr|ii|iii|iv|v)\.?$/, '')
+            .trim();
+        try {
+          const { getPlatform } = require('../../services/platform');
+          const plat = getPlatform(settings.platform);
+          const rosters = await plat.getAllRosters(settings.leagueId);
+          const rosteredNames = new Set<string>();
+          for (const r of rosters || []) {
+            const slots = [...(r.starters || []), ...(r.bench || []), ...(r.ir || [])];
+            for (const s of slots) {
+              const nm = s?.player?.name;
+              if (nm) rosteredNames.add(normalize(nm));
+            }
+          }
+          if (rosteredNames.size > 0) {
+            if (draftMode === 'rookie' || draftMode === 'startup') {
+              liveDB = liveDB.filter(p => !rosteredNames.has(normalize(p.name)));
+            } else {
+              liveDB = liveDB.map(p => rosteredNames.has(normalize(p.name)) ? { ...p, isDrafted: true } : p);
+            }
+          }
+        } catch (e) { console.log('FF/MFL roster filter error:', e); }
       }
       const state = createInitialDraftState(settings, liveDB);
     state.status = 'drafting';
