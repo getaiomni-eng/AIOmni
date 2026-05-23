@@ -193,6 +193,53 @@ async function loadESPNContext(): Promise<LeagueContext[]> {
   } catch { return []; }
 }
 
+// Shared loader for any platform exposing the FantasyPlatform abstraction
+// (currently Fleaflicker + MFL). Pulls the league list, then for each one
+// fans out standings + roster in parallel and assembles a LeagueContext.
+async function loadAbstractContext(
+  platformId: 'fleaflicker' | 'mfl',
+  platformLabel: 'Fleaflicker' | 'MFL',
+): Promise<LeagueContext[]> {
+  try {
+    const { getPlatform } = require('../../services/platform');
+    const plat = getPlatform(platformId);
+    const leagues = await plat.getLeagues().catch(() => []);
+    if (!leagues?.length) return [];
+    return Promise.all(leagues.slice(0, 6).map(async (l: any): Promise<LeagueContext> => {
+      const fmt = `${l.scoringFormat === 'ppr' ? 'PPR' : l.scoringFormat === 'half' ? '0.5 PPR' : 'STD'}`;
+      const week = l.currentWeek ?? 1;
+      try {
+        const [standings, roster] = await Promise.all([
+          plat.getStandings(l.id).catch(() => []),
+          plat.getMyRoster(l.id).catch(() => null),
+        ]);
+        const me = (standings as any[]).find(s => s.isMe);
+        const record = me ? `${me.record.wins}–${me.record.losses}` : '?';
+        const rank = me?.rank > 0 ? `${me.rank} of ${standings.length}` : 'unknown';
+        const slots = [...((roster as any)?.starters ?? []), ...((roster as any)?.bench ?? [])];
+        const rosterNames = slots.slice(0, 20).map((s: any) =>
+          `${s.player?.name ?? 'Unknown'} (${s.player?.position ?? 'FLEX'})`
+        );
+        const lt: LeagueContext['leagueType'] = l.leagueType === 'dynasty' ? 'dynasty'
+                                              : l.leagueType === 'keeper'  ? 'keeper'
+                                              :                              'redraft';
+        return {
+          name: l.name, platform: platformLabel, format: fmt,
+          record, rank, roster: rosterNames, week,
+          season: parseInt(l.season) || new Date().getFullYear(),
+          leagueType: lt,
+        };
+      } catch {
+        return {
+          name: l.name, platform: platformLabel, format: fmt,
+          record: '?', rank: '?', roster: [], week,
+          season: parseInt(l.season) || new Date().getFullYear(),
+        };
+      }
+    }));
+  } catch { return []; }
+}
+
 function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueContext | null, memories: string): string {
   const targets = selectedLeague ? [selectedLeague] : leagues;
   if (targets.length === 0) return `${BASE_SYSTEM}\n\nNo leagues loaded yet.`;
@@ -258,7 +305,7 @@ const AddCard: React.FC<{ pos: string; name: string; team: string; detail: strin
 );
 
 const PLATFORM_COLOR: Record<string, string> = {
-  Sleeper: C.gold, ESPN: '#e03030', Yahoo: '#6001D2',
+  Sleeper: C.gold, ESPN: '#e03030', Yahoo: '#6001D2', Fleaflicker: '#ff7a00', MFL: '#e4ff1a',
 };
 
 type Message = { role: 'ai' | 'user'; text: string; isLoading?: boolean };
@@ -306,10 +353,14 @@ export default function CoachScreen() {
       setTier(currentTier);
       setRemaining(rem);
 
-      const [sleeperLeagues, espnLeagues, liveData] = await Promise.all([
-        loadSleeperContext(), loadESPNContext(), fetchAllLiveData(),
+      const [sleeperLeagues, espnLeagues, ffLeagues, mflLeagues, liveData] = await Promise.all([
+        loadSleeperContext(),
+        loadESPNContext(),
+        loadAbstractContext('fleaflicker', 'Fleaflicker'),
+        loadAbstractContext('mfl', 'MFL'),
+        fetchAllLiveData(),
       ]);
-      const all = [...sleeperLeagues, ...espnLeagues];
+      const all = [...sleeperLeagues, ...espnLeagues, ...ffLeagues, ...mflLeagues];
 
       try {
         const leagueId = all[0]?.name ?? 'general';

@@ -446,11 +446,14 @@ export default function LeagueScreen() {
         const plat = getPlatform(platformStr);
         const txs = await plat.getTransactions(leagueId as string, 50).catch(() => []);
         setTransactions((txs as any[]).map(t => ({
-          type:   t.type,
+          // UI's Transaction.type uses Sleeper's vocabulary (free_agent /
+          // waiver / trade) for the badge labels; remap our cleaner
+          // abstraction values to match.
+          type:   t.type === 'add' ? 'free_agent' : t.type,
           adds:   (t.adds  || []).map((a: any) => a.player?.name).filter(Boolean),
-          drops: (t.drops || []).map((d: any) => d.player?.name).filter(Boolean),
+          drops:  (t.drops || []).map((d: any) => d.player?.name).filter(Boolean),
           trader: '',
-          time:   t.timestamp,
+          time:   t.timestamp, // already in ms from the abstraction
         })));
       } else {
         const pDb   = await getPlayersDb();
@@ -542,6 +545,18 @@ export default function LeagueScreen() {
         const token = await getValidYahooToken(); if (!token) return;
         const data  = await (await fetch(`https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueId}/players;status=FA;sort=OR;count=50?format=json`, { headers: { Authorization: `Bearer ${token}` } })).json();
         setWaiverPlayers(Object.values(data?.fantasy_content?.league?.[1]?.players || {}).filter((v: any) => typeof v === 'object' && v.player).map((v: any) => { const p = v.player[0]; return { id: p.player_key, name: p.name?.full || 'Unknown', position: p.display_position || '?', team: p.editorial_team_abbr || 'FA', injuryStatus: p.status, isStarter: false }; }));
+      } else if (platformStr === 'fleaflicker' || platformStr === 'mfl') {
+        const { getPlatform } = require('../../services/platform');
+        const plat = getPlatform(platformStr);
+        const players = await plat.getAvailablePlayers(leagueId as string, { limit: 100 }).catch(() => []);
+        setWaiverPlayers((players as any[]).map(p => ({
+          id:           String(p.id ?? ''),
+          name:         p.name || 'Unknown',
+          position:     p.position || '?',
+          team:         p.team || 'FA',
+          injuryStatus: p.injuryStatus ?? undefined,
+          isStarter:    false,
+        })));
       }
     } catch (err) {
       console.error(err);

@@ -471,19 +471,31 @@ export const fleaflickerPlatform: FantasyPlatform = {
   async getTransactions(leagueId: string, limit = 30): Promise<Transaction[]> {
     const data = await ff<any>('FetchLeagueTransactions', { league_id: leagueId, result_offset: 0 });
     const out: Transaction[] = [];
+    // Real FF shape (verified against league 324106): each item is
+    // { timeEpochMilli, transaction: { type?, player, team, ... } }
+    // where `type` is one of TRANSACTION_DROP / TRANSACTION_CLAIM /
+    // TRANSACTION_TRADE, or absent (= free-agent add). Single player
+    // per transaction — there are NO `additions`/`releases` arrays
+    // (which the previous implementation looked for, yielding empty
+    // adds/drops for every row).
     for (const t of (data?.items ?? []).slice(0, limit)) {
-      const ts = t?.timeEpochMilli ? Math.floor(t.timeEpochMilli / 1000) : Date.now() / 1000;
-      const adds = (t?.transaction?.additions ?? []).map((a: any) => ({
-        player: mapPlayer(a?.proPlayer ?? {}),
-        toRosterId: String(a?.team?.id ?? ''),
-      }));
-      const drops = (t?.transaction?.releases ?? []).map((d: any) => ({
-        player: mapPlayer(d?.proPlayer ?? {}),
-        fromRosterId: String(d?.team?.id ?? ''),
-      }));
+      const ts = t?.timeEpochMilli ? Number(t.timeEpochMilli) : Date.now();
+      const tx = t?.transaction ?? {};
+      const player = tx.player?.proPlayer ? mapPlayer(tx.player.proPlayer) : null;
+      const rosterId = String(tx.team?.id ?? '');
+      const rawType = String(tx.type ?? '').toUpperCase();
+      const isDrop = rawType === 'TRANSACTION_DROP';
+      const isTrade = rawType === 'TRANSACTION_TRADE';
+      const isClaim = rawType === 'TRANSACTION_CLAIM';
+      const type: Transaction['type'] = isDrop ? 'drop'
+                                      : isTrade ? 'trade'
+                                      : isClaim ? 'waiver'
+                                      :           'add';
+      const adds: Transaction['adds'] = (!isDrop && player) ? [{ player, toRosterId: rosterId }] : [];
+      const drops: Transaction['drops'] = (isDrop && player) ? [{ player, fromRosterId: rosterId }] : [];
       out.push({
-        id:        String(t?.id ?? ts),
-        type:      (t?.transaction?.type?.toLowerCase() ?? 'add') as any,
+        id:        String(t?.id ?? `${ts}-${player?.id ?? 'x'}`),
+        type,
         timestamp: ts,
         adds, drops,
         status:    'complete',
