@@ -468,13 +468,101 @@ export const fleaflickerPlatform: FantasyPlatform = {
     return out;
   },
 
-  async getDraft(_leagueId: string): Promise<DraftInfo | null> {
-    // Fleaflicker draft API exists but is league-format-dependent. Defer.
-    return null;
+  async getDraft(leagueId: string): Promise<DraftInfo | null> {
+    // FetchLeagueDraftBoard returns the full pick grid for the league's
+    // current/upcoming draft. Shape (verified against league 324106):
+    //   { draftOrder: [team, …], rows: [{ round, cells: [{ team, slot }] }] }
+    // Snake vs linear is implicit — compare row 2 col 1 against row 1
+    // col 1 (linear) vs row 1 last col (snake).
+    let data: any = null;
+    try {
+      data = await ff<any>('FetchLeagueDraftBoard', { league_id: leagueId });
+    } catch { return null; }
+
+    const rows: any[] = data?.rows ?? [];
+    if (rows.length === 0) return null;
+
+    const draftOrder: any[] = data?.draftOrder ?? [];
+    const teamCount = draftOrder.length || rows[0]?.cells?.length || 12;
+
+    const r1FirstTeam = rows[0]?.cells?.[0]?.team?.id;
+    const r2FirstTeam = rows[1]?.cells?.[0]?.team?.id;
+    const r1LastTeam  = rows[0]?.cells?.[teamCount - 1]?.team?.id;
+    const type: DraftType =
+      rows.length > 1 && r2FirstTeam === r1LastTeam ? 'snake'
+        : 'linear';
+
+    const creds = await getCreds();
+    const myTeamId = creds?.teamId ? String(creds.teamId) : null;
+
+    // Slot 1 = round 1 column 1 for THIS user. Find the earliest cell that
+    // belongs to them — handles startup drafts where the user is mid-round,
+    // and rookie/keeper drafts where traded picks may shift their slot
+    // (we only need the "first pick I own" for the setup-step display).
+    let myDraftSlot: number | undefined;
+    if (myTeamId) {
+      outer: for (const row of rows) {
+        for (const cell of (row?.cells ?? [])) {
+          if (String(cell?.team?.id ?? '') === myTeamId) {
+            myDraftSlot = cell?.slot?.slot ?? undefined;
+            break outer;
+          }
+        }
+      }
+    }
+
+    const slotToRosterId: Record<number, string> = {};
+    for (const cell of (rows[0]?.cells ?? [])) {
+      const s = cell?.slot?.slot;
+      if (s) slotToRosterId[s] = String(cell?.team?.id ?? '');
+    }
+
+    return {
+      id:         String(data?.id ?? leagueId),
+      platformId: 'fleaflicker',
+      leagueId:   String(leagueId),
+      type,
+      status:     'pre_draft',
+      rounds:     rows.length,
+      teamCount,
+      myDraftSlot,
+      slotToRosterId,
+    };
   },
 
-  async getDraftPicks(_draftId: string): Promise<DraftPick[]> {
-    return [];
+  async getDraftPicks(leagueId: string): Promise<DraftPick[]> {
+    // The same FetchLeagueDraftBoard payload carries each cell's overall
+    // pick number + team — for pre-draft this is the schedule, for in-draft
+    // it includes `pick.proPlayer` once a player has been selected.
+    let data: any = null;
+    try {
+      data = await ff<any>('FetchLeagueDraftBoard', { league_id: leagueId });
+    } catch { return []; }
+
+    const creds = await getCreds();
+    const myId = creds?.teamId ? String(creds.teamId) : null;
+    const out: DraftPick[] = [];
+    for (const row of (data?.rows ?? [])) {
+      for (const cell of (row?.cells ?? [])) {
+        const pick = cell?.pick ?? cell;
+        const pp = pick?.proPlayer ?? null;
+        if (!pp) continue;
+        const teamId = String(cell?.team?.id ?? '');
+        const mapped = mapPlayer(pp);
+        out.push({
+          pickNo:     cell?.slot?.overall ?? 0,
+          round:      cell?.slot?.round   ?? row?.round ?? 0,
+          slot:       cell?.slot?.slot    ?? 0,
+          rosterId:   teamId,
+          playerId:   mapped.id,
+          playerName: mapped.name,
+          position:   mapped.position,
+          team:       mapped.team,
+          isMyPick:   !!myId && teamId === myId,
+        });
+      }
+    }
+    return out;
   },
 
   async getTransactions(leagueId: string, limit = 30): Promise<Transaction[]> {

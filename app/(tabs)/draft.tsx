@@ -572,13 +572,31 @@ function SetupWizard({
                 <TouchableOpacity
                   key={lg.id}
                   style={[styles.leagueCard, data.leagueId === lg.id && { borderColor: C.aqua }]}
-                  onPress={() => onUpdate({
-                    leagueId:      lg.id,
-                    leagueName:    lg.name,
-                    teamCount:     lg.teamCount || 12,
-                    scoringFormat: (lg.scoringFormat === 'ppr' ? 'ppr' : lg.scoringFormat === 'half' ? 'half' : 'standard'),
-                    isDynasty:     lg.leagueType === 'dynasty',
-                  } as any)}
+                  onPress={async () => {
+                    onUpdate({
+                      leagueId:      lg.id,
+                      leagueName:    lg.name,
+                      teamCount:     lg.teamCount || 12,
+                      scoringFormat: (lg.scoringFormat === 'ppr' ? 'ppr' : lg.scoringFormat === 'half' ? 'half' : 'standard'),
+                      isDynasty:     lg.leagueType === 'dynasty',
+                    } as any);
+                    // Pull the actual draft schedule from Fleaflicker so the
+                    // Ready-to-draft screen shows real rounds/type/slot
+                    // instead of the hardcoded 15-round snake defaults.
+                    try {
+                      const { getPlatform } = require('../../services/platform');
+                      const plat = getPlatform('fleaflicker');
+                      const draft = await plat.getDraft(lg.id);
+                      if (draft) {
+                        onUpdate({
+                          draftType:   draft.type,
+                          rounds:      draft.rounds,
+                          teamCount:   draft.teamCount,
+                          myDraftSlot: draft.myDraftSlot ?? 1,
+                        } as any);
+                      }
+                    } catch (e) { console.log('FF getDraft error:', e); }
+                  }}
                 >
                   <Text style={styles.leagueName}>{lg.name}</Text>
                   <Text style={styles.leagueMeta}>
