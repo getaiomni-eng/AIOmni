@@ -312,10 +312,18 @@ export default function DraftCopilotScreen() {
         } catch (e) { console.log('roster filter error:', e); }
       } else if ((settings.platform === 'fleaflicker' || settings.platform === 'mfl')
                  && settings.leagueId && settings.leagueId !== 'offline') {
-        // FF/MFL don't share Sleeper's player IDs, so we filter the draft
-        // pool by normalized name instead. Without this, a rookie-mode
-        // dynasty draft on FF shows the entire top-200 NFL ADP rather
-        // than just incoming rookies + actual league free agents.
+        // FF/MFL don't share Sleeper's player IDs, so name-matching is the
+        // only reliable join key. Two branches:
+        //
+        //   rookie/startup  → replace the top-200 NFL pool with the league's
+        //     ACTUAL free-agent list from the platform abstraction (deeper
+        //     bench guys never appear in a top-200 ADP but are real FAs in
+        //     a 25-keeper dynasty). Merge those FAs after the prospect block
+        //     so incoming rookies still lead. Then strip any leftover NFL
+        //     entries from loadLivePlayerDB that happen to be rostered.
+        //
+        //   redraft       → just mark rostered players isDrafted=true so
+        //     they show greyed out, same as the Sleeper branch.
         const normalize = (n: string) =>
           (n ?? '').toLowerCase()
             .replace(/[.'’]/g, '')
@@ -324,23 +332,55 @@ export default function DraftCopilotScreen() {
         try {
           const { getPlatform } = require('../../services/platform');
           const plat = getPlatform(settings.platform);
-          const rosters = await plat.getAllRosters(settings.leagueId);
-          const rosteredNames = new Set<string>();
-          for (const r of rosters || []) {
-            const slots = [...(r.starters || []), ...(r.bench || []), ...(r.ir || [])];
-            for (const s of slots) {
-              const nm = s?.player?.name;
-              if (nm) rosteredNames.add(normalize(nm));
+
+          if (draftMode === 'rookie' || draftMode === 'startup') {
+            // Pull the real league FAs (paginates through FF's player
+            // listing under the hood; default request now returns ~300).
+            const fas: any[] = await plat.getAvailablePlayers(settings.leagueId, { limit: 300 }).catch(() => []);
+            const existingKeys = new Set(liveDB.map(p => normalize(p.name)));
+            const faPlayerInfos: PlayerInfo[] = fas
+              .filter(p => p?.name && !existingKeys.has(normalize(p.name)))
+              .map((p, i) => ({
+                id:       String(p.id ?? `ff_fa_${i}`),
+                name:     p.name,
+                position: p.position || '?',
+                team:     p.team || 'FA',
+                adp:      liveDB.length + i + 1, // sort after prospects
+                byeWeek:  0,
+                tier:     undefined,
+                rank:     liveDB.length + i + 1,
+                isDrafted: false,
+              }));
+            liveDB = [...liveDB, ...faPlayerInfos];
+
+            // Still need to strip the top-200 NFL entries that are rostered,
+            // since those were merged in by loadLivePlayerDB.
+            const rosters = await plat.getAllRosters(settings.leagueId).catch(() => []);
+            const rosteredNames = new Set<string>();
+            for (const r of rosters || []) {
+              const slots = [...(r.starters || []), ...(r.bench || []), ...(r.ir || [])];
+              for (const s of slots) {
+                const nm = s?.player?.name;
+                if (nm) rosteredNames.add(normalize(nm));
+              }
             }
-          }
-          if (rosteredNames.size > 0) {
-            if (draftMode === 'rookie' || draftMode === 'startup') {
+            if (rosteredNames.size > 0) {
               liveDB = liveDB.filter(p => !rosteredNames.has(normalize(p.name)));
-            } else {
-              liveDB = liveDB.map(p => rosteredNames.has(normalize(p.name)) ? { ...p, isDrafted: true } : p);
             }
+          } else {
+            // Redraft: just mark rostered players as drafted.
+            const rosters = await plat.getAllRosters(settings.leagueId).catch(() => []);
+            const rosteredNames = new Set<string>();
+            for (const r of rosters || []) {
+              const slots = [...(r.starters || []), ...(r.bench || []), ...(r.ir || [])];
+              for (const s of slots) {
+                const nm = s?.player?.name;
+                if (nm) rosteredNames.add(normalize(nm));
+              }
+            }
+            liveDB = liveDB.map(p => rosteredNames.has(normalize(p.name)) ? { ...p, isDrafted: true } : p);
           }
-        } catch (e) { console.log('FF/MFL roster filter error:', e); }
+        } catch (e) { console.log('FF/MFL pool build error:', e); }
       }
       const state = createInitialDraftState(settings, liveDB);
     state.status = 'drafting';

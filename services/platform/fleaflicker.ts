@@ -368,11 +368,15 @@ export const fleaflickerPlatform: FantasyPlatform = {
     // dominate the first ~300 entries (12 teams × 25-ish roster slots);
     // free agents take over after that.
     //
-    // Strategy: fan out N parallel pages starting at the FA threshold and
-    // filter to entries with no `owner`. 12 pages × 30 per page = 360
-    // candidates, more than enough to fill the default limit of 50.
+    // Strategy: fan out parallel pages and filter to entries with no
+    // `owner`. Scale offset + page count with the requested limit — for
+    // small limits (~50) we sweep across the boundary at offset 300; for
+    // large limits (~300, used by the dynasty draft pool) we start past
+    // the rostered cliff at offset 600 where ~all entries are FAs.
     const PAGE = 30;
-    const offsets = Array.from({ length: 12 }, (_, i) => 300 + i * PAGE);
+    const startOffset = limit > 100 ? 600 : 300;
+    const pagesNeeded = Math.max(6, Math.ceil(limit / PAGE) + 4);
+    const offsets = Array.from({ length: pagesNeeded }, (_, i) => startOffset + i * PAGE);
     const pages = await Promise.all(
       offsets.map(off =>
         ff<any>('FetchPlayerListing', { league_id: leagueId, result_offset: off })
