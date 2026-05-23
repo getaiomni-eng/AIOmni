@@ -386,10 +386,14 @@ export default function DraftCopilotScreen() {
             })();
           }}
           onUpdate={(updates) => setSetupData(prev => ({ ...prev, ...updates }))}
-          onNext={() => {
+          onNext={(platformOverride?: Platform) => {
             const steps: SetupStep[] = ['platform', 'league', 'position', 'confirm'];
             const idx = steps.indexOf(setupStep);
-            if (setupData.platform === 'offline' && setupStep === 'platform') {
+            // platformOverride lets the platform-step tiles auto-advance
+            // without waiting for the setSetupData batch to flush; without
+            // it, reading setupData.platform here would see the stale value.
+            const effectivePlatform = platformOverride ?? setupData.platform;
+            if (effectivePlatform === 'offline' && setupStep === 'platform') {
               setSetupData(prev => ({ ...prev, leagueName: 'Offline Draft' }));
               setSetupStep('position');
             } else if (idx < steps.length - 1) {
@@ -439,7 +443,7 @@ function SetupWizard({
   mflLeagues: any[];
   onFetchPicks: (leagueId: string) => void;
   onUpdate: (u: Partial<SetupData>) => void;
-  onNext: () => void;
+  onNext: (platformOverride?: Platform) => void;
   onBack: () => void;
   onStart: () => void;
 }) {
@@ -486,7 +490,15 @@ function SetupWizard({
             <TouchableOpacity
               key={p.key}
               style={[styles.platformCard, data.platform === p.key && { borderColor: p.color }]}
-              onPress={() => onUpdate({ platform: p.key as Platform })}
+              onPress={() => {
+                // Auto-advance: with 6 platform tiles the CONTINUE button gets
+                // pushed below the fold on a 6.1" screen. One-tap-to-advance is
+                // also the more intuitive UX. Pass the chosen platform directly
+                // to onNext so the handler doesn't have to wait for state to
+                // batch-flush before reading it.
+                onUpdate({ platform: p.key as Platform });
+                onNext(p.key as Platform);
+              }}
             >
               <View style={styles.platformRow}>
                 <View style={[styles.platformDot, { backgroundColor: p.color }]} />
@@ -496,13 +508,6 @@ function SetupWizard({
               <Text style={styles.platformDesc}>{p.desc}</Text>
             </TouchableOpacity>
           ))}
-          <TouchableOpacity
-            style={[styles.nextBtn, !data.platform && styles.nextBtnDisabled]}
-            onPress={onNext}
-            disabled={!data.platform}
-          >
-            <Text style={styles.nextBtnText}>CONTINUE</Text>
-          </TouchableOpacity>
         </View>
       )}
 
