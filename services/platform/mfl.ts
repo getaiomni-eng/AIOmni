@@ -141,6 +141,41 @@ async function getPlayers(): Promise<Record<string, any>> {
   return map;
 }
 
+// Top-up the in-memory + persisted players map with specific IDs that the
+// snapshot is missing. MFL adds new player IDs (2026 rookies, late signings)
+// after our 24h cached snapshot was taken, so any roster/FA list that
+// references them resolves to "Player {id}" with no name. Call this with
+// the IDs you're about to render so they get filled in just-in-time.
+async function ensurePlayersResolved(
+  ids: string[],
+  players: Record<string, any>,
+): Promise<Record<string, any>> {
+  const missing = Array.from(new Set(ids.filter(id => id && !players[id])));
+  if (missing.length === 0) return players;
+
+  // MFL accepts a comma-separated PLAYERS list; chunk to be safe.
+  const CHUNK = 80;
+  for (let i = 0; i < missing.length; i += CHUNK) {
+    const csv = missing.slice(i, i + CHUNK).join(',');
+    try {
+      const data = await mflFetch<any>('players', { PLAYERS: csv, DETAILS: '1' });
+      const raw = data?.players?.player ?? [];
+      const list = Array.isArray(raw) ? raw : [raw];
+      for (const p of list) {
+        if (p?.id) players[p.id] = p;
+      }
+    } catch (e) {
+      console.log('MFL ensurePlayersResolved chunk failed:', e);
+    }
+  }
+
+  playersMem = players;
+  try {
+    await AsyncStorage.setItem(PLAYERS_CACHE_KEY, JSON.stringify(players));
+  } catch {}
+  return players;
+}
+
 // ─── mapping helpers ──────────────────────────────────────────────────────
 function mapMflPlayer(playerId: string, players: Record<string, any>): Player {
   const raw = players[playerId];
@@ -283,12 +318,25 @@ export const mflPlatform: FantasyPlatform = {
     const cached = hotGet<Roster[]>(cacheKey);
     if (cached) return cached;
 
-    const [rostersData, leagueData, players, standingsData] = await Promise.all([
+    const [rostersData, leagueData, playersBase, standingsData] = await Promise.all([
       mflFetch<any>('rosters', { L: leagueId }),
       mflFetch<any>('league',  { L: leagueId }),
       getPlayers(),
       mflFetch<any>('leagueStandings', { L: leagueId }).catch(() => null),
     ]);
+
+    // Collect every player ID across every roster so we can top-up the
+    // players cache once (rather than letting each missing ID fall back
+    // to "Player {id}").
+    const allRosterPlayerIds: string[] = [];
+    const fRostersForIds: any[] = Array.isArray(rostersData?.rosters?.franchise)
+      ? rostersData.rosters.franchise
+      : [rostersData?.rosters?.franchise].filter(Boolean);
+    for (const fr of fRostersForIds) {
+      const pList: any[] = Array.isArray(fr?.player) ? fr.player : [fr?.player].filter(Boolean);
+      for (const p of pList) if (p?.id) allRosterPlayerIds.push(String(p.id));
+    }
+    const players = await ensurePlayersResolved(allRosterPlayerIds, playersBase);
 
     const franchiseList: any[] = leagueData?.league?.franchises?.franchise ?? [];
     const franchiseById = Object.fromEntries(franchiseList.map((f: any) => [f.id, f]));
@@ -335,10 +383,14 @@ export const mflPlatform: FantasyPlatform = {
         else bench.push(slot);
       }
 
+      const teamName =
+        (meta.name && String(meta.name).trim()) ||
+        (meta.owner_name && String(meta.owner_name).trim()) ||
+        `Team ${fid}`;
       rosters.push({
         userId:   String(fid),
         rosterId: String(fid),
-        teamName: meta.name ?? `Franchise ${fid}`,
+        teamName,
         record: {
           wins:   parseInt(standing.h2hw ?? '0', 10),
           losses: parseInt(standing.h2hl ?? '0', 10),
@@ -361,13 +413,15 @@ export const mflPlatform: FantasyPlatform = {
     const cached = hotGet<AvailablePlayer[]>(cacheKey);
     if (cached) return cached;
 
-    const [data, players] = await Promise.all([
+    const [data, playersBase] = await Promise.all([
       mflFetch<any>('freeAgents', { L: leagueId }),
       getPlayers(),
     ]);
 
     const list: any[] = data?.freeAgents?.leagueUnit?.player ?? [];
-    const out: AvailablePlayer[] = list.slice(0, limit).map((p: any) => {
+    const slice = list.slice(0, limit);
+    const players = await ensurePlayersResolved(slice.map((p: any) => p?.id), playersBase);
+    const out: AvailablePlayer[] = slice.map((p: any) => {
       const base = mapMflPlayer(p.id, players);
       return {
         ...base,
@@ -400,15 +454,34 @@ export const mflPlatform: FantasyPlatform = {
   },
 
   async getStandings(leagueId: string): Promise<Standing[]> {
-    const data = await mflFetch<any>('leagueStandings', { L: leagueId });
+    // Pull league metadata alongside standings so we can fall back to
+    // owner_name when the franchise name is empty/missing (common in
+    // freshly-created MFL leagues — e.g. "AIOmni Launch" had every team
+    // showing as the literal "Franchise 0001").
+    const [data, leagueData] = await Promise.all([
+      mflFetch<any>('leagueStandings', { L: leagueId }),
+      mflFetch<any>('league',          { L: leagueId }).catch(() => null),
+    ]);
     const rows = data?.leagueStandings?.franchise ?? [];
     const list = Array.isArray(rows) ? rows : [rows];
     const creds = await getCreds();
 
+    const franchiseMeta: Record<string, any> = {};
+    const fList: any[] = leagueData?.league?.franchises?.franchise ?? [];
+    for (const f of (Array.isArray(fList) ? fList : [fList])) {
+      if (f?.id) franchiseMeta[f.id] = f;
+    }
+
     return list
-      .map((r: any, idx: number) => ({
+      .map((r: any, idx: number) => {
+        const meta = franchiseMeta[r.id] ?? {};
+        const name = (r.name && String(r.name).trim()) ||
+                     (meta.name && String(meta.name).trim()) ||
+                     (meta.owner_name && String(meta.owner_name).trim()) ||
+                     `Team ${r.id}`;
+        return {
         rosterId:  String(r.id),
-        teamName:  r.name ?? `Franchise ${r.id}`,
+        teamName:  name,
         rank:      idx + 1,
         record: {
           wins:   parseInt(r.h2hw ?? '0', 10),
@@ -418,7 +491,8 @@ export const mflPlatform: FantasyPlatform = {
         pointsFor:     parseFloat(r.pf ?? '0'),
         pointsAgainst: parseFloat(r.pa ?? '0'),
         isMe:          creds?.franchiseId === String(r.id),
-      }))
+        };
+      })
       .sort((a, b) => b.pointsFor - a.pointsFor)
       .map((s, i) => ({ ...s, rank: i + 1 }));
   },

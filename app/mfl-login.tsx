@@ -234,10 +234,10 @@ export default function MflLoginScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <View style={[styles.statusBar, connected && { backgroundColor: 'rgba(30,140,66,0.08)' }]}>
-        {connecting && !connected && <ActivityIndicator color={C.blueDeep} size="small" style={{ marginRight: 8 }} />}
-        {connected && <Text style={{ marginRight: 8 }}>✓</Text>}
-        <Text style={[styles.statusText, connected && { color: C.mint }]}>{status}</Text>
+      <View style={[styles.statusBar, connected && { backgroundColor: 'rgba(30,140,66,0.18)' }]}>
+        {connecting && !connected && <ActivityIndicator color="#1be7ff" size="small" style={{ marginRight: 8 }} />}
+        {connected && <Text style={{ marginRight: 8, color: '#1e8c42', fontSize: 18 }}>✓</Text>}
+        <Text style={[styles.statusText, connected && { color: '#1e8c42' }]}>{status}</Text>
       </View>
 
       {leagueOptions && (
@@ -318,54 +318,68 @@ export default function MflLoginScreen() {
   );
 }
 
+// Dark theme matches the rest of the app so the login flow doesn't
+// jarringly switch palettes. Bumped text sizes on league name + meta and
+// the success status so they're readable at a glance.
+const BG       = '#0a1214';
+const CARD     = '#12252e';
+const BORDER   = '#1a3542';
+const TEXT     = '#f0f4f5';
+const SUB      = '#7a9eaa';
+const AQUA     = '#1be7ff';
+const MINT     = '#1e8c42';
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: BG },
   header: {
-    paddingHorizontal: SP[3], paddingVertical: 12,
+    paddingHorizontal: SP[3], paddingVertical: 14,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderBottomWidth: 1.5, borderBottomColor: 'rgba(88,131,191,0.18)',
-    backgroundColor: 'rgba(255,255,237,0.95)',
+    borderBottomWidth: 1, borderBottomColor: BORDER,
+    backgroundColor: BG,
   },
   backBtn: {},
-  backText: { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.base },
-  title: { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg },
+  backText: { fontFamily: F.mono, color: AQUA, fontSize: SZ.base, letterSpacing: 0.3 },
+  title: { fontFamily: F.bold, color: TEXT, fontSize: SZ.lg, letterSpacing: 0.5 },
   statusBar: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SP[3], paddingVertical: 10,
-    backgroundColor: 'rgba(88,131,191,0.06)',
-    borderBottomWidth: 1, borderBottomColor: 'rgba(88,131,191,0.14)',
+    paddingHorizontal: SP[3], paddingVertical: 12,
+    backgroundColor: CARD,
+    borderBottomWidth: 1, borderBottomColor: BORDER,
   },
-  statusText: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm, flex: 1 },
-  webview: { flex: 1 },
+  statusText: { fontFamily: F.mono, color: TEXT, fontSize: SZ.base - 1, flex: 1, lineHeight: 18 },
+  webview: { flex: 1, backgroundColor: '#ffffff' }, // WebView itself stays light (it's MFL's own login page)
 
-  leagueList: { flex: 1, backgroundColor: '#ffffff' },
+  leagueList: { flex: 1, backgroundColor: BG },
   leagueRow: {
-    paddingHorizontal: SP[3], paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(88,131,191,0.14)',
+    paddingHorizontal: SP[3], paddingVertical: 18,
+    borderBottomWidth: 1, borderBottomColor: BORDER,
+    backgroundColor: CARD,
+    marginHorizontal: SP[2], marginTop: 10,
+    borderRadius: 12,
   },
-  leagueName: { fontFamily: F.bold, fontSize: SZ.base, color: C.ink },
-  leagueId:   { fontFamily: F.mono, fontSize: SZ.xs, color: C.dim2, marginTop: 2 },
+  leagueName: { fontFamily: F.bold, fontSize: SZ.lg, color: TEXT, letterSpacing: 0.3 },
+  leagueId:   { fontFamily: F.mono, fontSize: SZ.sm, color: SUB, marginTop: 6 },
 
   fallbackBox: {
-    padding: SP[3], gap: 10, backgroundColor: 'rgba(88,131,191,0.04)',
-    borderTopWidth: 1, borderTopColor: 'rgba(88,131,191,0.14)',
+    padding: SP[3], gap: 12, backgroundColor: CARD,
+    borderTopWidth: 1, borderTopColor: BORDER,
   },
-  fallbackLabel: { fontFamily: F.mono, fontSize: SZ.sm, color: C.dim2 },
+  fallbackLabel: { fontFamily: F.mono, fontSize: SZ.sm, color: SUB, letterSpacing: 0.5 },
   fallbackInput: {
-    fontFamily: F.mono, fontSize: SZ.sm, color: C.ink,
-    borderWidth: 1, borderColor: 'rgba(88,131,191,0.3)',
-    borderRadius: 8, padding: 12, backgroundColor: '#ffffff',
+    fontFamily: F.mono, fontSize: SZ.base, color: TEXT,
+    borderWidth: 1, borderColor: BORDER,
+    borderRadius: 10, padding: 14, backgroundColor: BG,
   },
   fallbackBtn: {
-    backgroundColor: C.blueDeep, padding: 14, borderRadius: 8, alignItems: 'center',
+    backgroundColor: AQUA, padding: 16, borderRadius: 10, alignItems: 'center',
   },
-  fallbackBtnText: { fontFamily: F.bold, color: '#ffffff', fontSize: SZ.base },
+  fallbackBtnText: { fontFamily: F.bold, color: BG, fontSize: SZ.base, letterSpacing: 1 },
 
   diagBox: {
-    maxHeight: 120, backgroundColor: 'rgba(0,0,0,0.04)',
-    borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.08)',
+    maxHeight: 220, backgroundColor: 'rgba(255,184,0,0.06)',
+    borderTopWidth: 1, borderTopColor: BORDER,
   },
-  diagTitle: { fontFamily: F.mono, fontSize: SZ.xs, color: C.dim2, marginBottom: 4 },
-  diagLine:  { fontFamily: F.mono, fontSize: 10, color: C.dim2, marginBottom: 2 },
-  diagLink:  { fontFamily: F.mono, fontSize: SZ.xs, color: C.blueDeep, textDecorationLine: 'underline' },
+  diagTitle: { fontFamily: F.mono, fontSize: SZ.sm, color: '#ffb800', marginBottom: 4, letterSpacing: 0.5 },
+  diagLine:  { fontFamily: F.mono, fontSize: 11, color: TEXT, marginBottom: 2, lineHeight: 15 },
+  diagLink:  { fontFamily: F.mono, fontSize: SZ.sm, color: AQUA, textDecorationLine: 'underline', marginTop: 8 },
 });
