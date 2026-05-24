@@ -6,6 +6,7 @@ import { ActivityIndicator, Animated, Image, Modal, ScrollView, StyleSheet, Text
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { askAI } from "../../services/ai";
 import { getCurrentTier } from '../../services/purchases';
+import { syncRosteredPlayers, type RosteredPlayer } from '../../services/rosterSync';
 import { consumePrompt } from '../utils/promptCounter';
 import { findMyESPNTeam, formatESPNPosition, getESPNAllRosters, getESPNLeague, getESPNMatchups, getESPNStandings, getESPNTransactions, isESPNStarter, loadESPNCredentials } from '../../services/espn';
 import { Icon } from '../components/AIOmniIcons';
@@ -162,6 +163,27 @@ export default function LeagueScreen() {
       fetchRoster();
     }
   }, [leagueId]);
+
+  // Whenever starters/bench finish loading, push the rostered names up to
+  // public.user_rostered_players so server-side notification jobs can match
+  // news against this user's rosters without holding platform creds. The
+  // sync helper coalesces (1h cooldown per user) so this is safe to fire
+  // every time a roster loads.
+  useEffect(() => {
+    if (starters.length === 0 && bench.length === 0) return;
+    const toRP = (p: Player, isStarter: boolean): RosteredPlayer => ({
+      name:      p.name,
+      position:  p.position,
+      team:      p.team,
+      leagueId:  String(leagueId ?? ''),
+      platform:  platformStr,
+      isStarter,
+    });
+    syncRosteredPlayers([
+      ...starters.map(p => toRP(p, true)),
+      ...bench.map(p   => toRP(p, false)),
+    ]).catch(e => console.log('roster sync skipped:', e?.message));
+  }, [starters, bench, leagueId, platformStr]);
 
   useEffect(() => {
     if (activeTab === 'waivers'   && waiverPlayers.length === 0) fetchWaivers();
