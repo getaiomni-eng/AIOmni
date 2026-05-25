@@ -90,7 +90,12 @@ export async function syncPromptUsageToCloud(lifetimeUsed: number): Promise<void
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    await supabase
+    // Surface errors explicitly — previous code relied on .catch which
+    // misses error objects returned in the response (vs. thrown exceptions),
+    // so failed writes were silent and prompt usage wasn't surviving
+    // reinstall. Logging now so we can see what RLS/missing-column/etc.
+    // problem is killing the write.
+    const { error } = await supabase
       .from('prompt_usage')
       .upsert(
         {
@@ -100,8 +105,11 @@ export async function syncPromptUsageToCloud(lifetimeUsed: number): Promise<void
         },
         { onConflict: 'user_id' }
       );
-  } catch (e) {
-    console.log('syncPromptUsageToCloud error:', e);
+    if (error) {
+      console.log('[prompt-sync] upsert error:', error.message, error.code);
+    }
+  } catch (e: any) {
+    console.log('[prompt-sync] threw:', e?.message);
   }
 }
 
@@ -110,24 +118,39 @@ export async function loadPromptUsageFromCloud(): Promise<number | null> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
+    // .maybeSingle (not .single) so a first-time user with no row returns
+    // null instead of throwing PGRST116. Previously the throw aborted the
+    // load and AsyncStorage stayed at 0, masking any cloud data and
+    // letting reinstalls reset the counter even when the row existed.
     const { data, error } = await supabase
       .from('prompt_usage')
       .select('free_lifetime_used')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
-    if (error || !data) return null;
+    if (error) {
+      console.log('[prompt-sync] load error:', error.message, error.code);
+      return null;
+    }
+    if (!data) {
+      // No row yet — first time this user has been recorded. Initialize
+      // from local (if any) so subsequent syncs upsert correctly.
+      const localStr = await AsyncStorage.getItem(FREE_LIFETIME_KEY);
+      const localUsed = parseInt(localStr || '0', 10);
+      return localUsed;
+    }
 
-    const cloudUsed = data.free_lifetime_used;
+    const cloudUsed = Number(data.free_lifetime_used) || 0;
     const localStr = await AsyncStorage.getItem(FREE_LIFETIME_KEY);
     const localUsed = parseInt(localStr || '0', 10);
 
-    // Take the higher value — prevent gaming by reinstalling
+    // Take the higher value — prevents gaming by reinstalling AND
+    // restores after a legitimate reinstall.
     const actual = Math.max(cloudUsed, localUsed);
     await AsyncStorage.setItem(FREE_LIFETIME_KEY, actual.toString());
     return actual;
-  } catch (e) {
-    console.log('loadPromptUsageFromCloud error:', e);
+  } catch (e: any) {
+    console.log('[prompt-sync] load threw:', e?.message);
     return null;
   }
 }

@@ -425,8 +425,15 @@ export const mflPlatform: FantasyPlatform = {
   },
 
   async getAvailablePlayers(leagueId: string, opts: { limit?: number } = {}): Promise<AvailablePlayer[]> {
-    const limit = opts.limit ?? 50;
-    const cacheKey = `available:${leagueId}:${limit}`;
+    // MFL's /freeAgents returns the league's full FA pool in one call —
+    // 500–2000 entries depending on roster size. We used to slice to
+    // limit=100 here, which silently capped the UI's per-position filter
+    // to "first 100 entries alphabetically" (waivers only showed A's
+    // through B's because the slice ran out before reaching C). The UI
+    // does its own position + sort filter, so just return the full pool
+    // and let it pick. Cap at 800 as a safety ceiling.
+    const ceiling = Math.max(opts.limit ?? 800, 800);
+    const cacheKey = `available:${leagueId}:full`;
     const cached = hotGet<AvailablePlayer[]>(cacheKey);
     if (cached) return cached;
 
@@ -436,7 +443,7 @@ export const mflPlatform: FantasyPlatform = {
     ]);
 
     const list: any[] = data?.freeAgents?.leagueUnit?.player ?? [];
-    const slice = list.slice(0, limit);
+    const slice = list.slice(0, ceiling);
     const players = await ensurePlayersResolved(slice.map((p: any) => p?.id), playersBase);
     const out: AvailablePlayer[] = slice.map((p: any) => {
       const base = mapMflPlayer(p.id, players);
