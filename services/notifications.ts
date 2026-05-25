@@ -1,28 +1,21 @@
 // services/notifications.ts
-// Expo push notifications setup. One-call entry point from _layout.tsx
-// after auth: registerPushNotifications(userId) — asks permission, gets
-// the Expo push token, persists it to public.users.push_token.
+// Expo push notifications setup. Defensive lazy-load design:
 //
-// Server side: edge functions in supabase/functions/notification-*
-// read push_token from users joined with notification_prefs to decide
-// whether to fire, and POST to https://exp.host/--/api/v2/push/send.
+//   - expo-notifications is NEVER imported at module level. If anything
+//     goes wrong with its native init (missing entitlement, broken pod
+//     link, version mismatch), top-level import would crash the app at
+//     launch — instead we `require()` inside the function, wrapped in
+//     try/catch so a broken native module fails gracefully (returns
+//     null, app keeps running).
+//
+//   - setNotificationHandler runs ONCE inside register, not at module
+//     load. Previously the top-level handler call appeared to crash on
+//     the first install when native wasn't ready yet.
+//
+//   - Every native call is wrapped in try/catch; this function CAN NOT
+//     throw. Callers fire-and-forget without an error handler.
 
-import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
 import { supabase } from './supabase';
-
-// Foreground behavior: show the alert + sound + badge even when the app
-// is open. Without this an incoming push silently lands in the tray.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList:   true,
-  }),
-});
 
 export type NotificationPrefs = {
   player_news:    boolean;
@@ -36,17 +29,51 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   pulse_alerts:   true,
 };
 
+// Module-local "did we already wire the foreground handler" flag — set
+// after the first successful register so we don't reinstall on every call.
+let handlerWired = false;
+
 /**
- * Request permission, fetch the Expo push token, and persist it to
- * public.users.push_token. Safe to call on every app launch — it short-
- * circuits if the token hasn't changed.
- *
- * Returns the token if successful, null if the user denied permission
- * or we couldn't get one (simulator, etc.).
+ * Request permission, fetch the Expo push token, persist to
+ * public.users.push_token. Returns the token on success or null on
+ * ANY failure (no permission, no token, broken native module, etc.).
+ * Never throws.
  */
 export async function registerPushNotifications(authUserId: string): Promise<string | null> {
+  // Lazy require — if expo-notifications native isn't initialized
+  // correctly, this throws here and we catch + return null instead of
+  // crashing the app at module-load time the way a top-level import did.
+  let Notifications: any;
+  let Constants: any;
+  let Platform: any;
   try {
-    // iOS: must request explicit permission.
+    Notifications = require('expo-notifications');
+    Constants     = require('expo-constants').default;
+    Platform      = require('react-native').Platform;
+  } catch (e) {
+    console.log('[push] native modules unavailable:', (e as any)?.message);
+    return null;
+  }
+
+  try {
+    // Foreground display behavior — install once.
+    if (!handlerWired) {
+      try {
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert:  true,
+            shouldPlaySound:  true,
+            shouldSetBadge:   true,
+            shouldShowBanner: true,
+            shouldShowList:   true,
+          }),
+        });
+        handlerWired = true;
+      } catch (e) {
+        console.log('[push] setNotificationHandler failed:', (e as any)?.message);
+      }
+    }
+
     const existing = await Notifications.getPermissionsAsync();
     let status = existing.status;
     if (status !== 'granted') {
@@ -55,8 +82,6 @@ export async function registerPushNotifications(authUserId: string): Promise<str
     }
     if (status !== 'granted') return null;
 
-    // EAS projectId is required for getExpoPushTokenAsync to work in
-    // standalone builds. expo-constants exposes it from app.json.
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ??
       (Constants as any).easConfig?.projectId;
@@ -68,16 +93,16 @@ export async function registerPushNotifications(authUserId: string): Promise<str
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     if (!token) return null;
 
-    // Android needs a notification channel created before any push fires.
     if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'Default',
-        importance: Notifications.AndroidImportance.HIGH,
-      });
+      try {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Default',
+          importance: Notifications.AndroidImportance.HIGH,
+        });
+      } catch {}
     }
 
-    // Persist — but skip the round-trip if it already matches what we
-    // had stored. Token rarely changes within an install lifecycle.
+    // Persist — skip the round-trip if token hasn't changed.
     const { data: row } = await supabase
       .from('users')
       .select('push_token')
@@ -92,7 +117,7 @@ export async function registerPushNotifications(authUserId: string): Promise<str
 
     return token;
   } catch (e) {
-    console.log('[push] register error:', e);
+    console.log('[push] register error:', (e as any)?.message);
     return null;
   }
 }
@@ -124,7 +149,7 @@ export async function setNotificationPrefs(
       .update({ notification_prefs: merged, updated_at: new Date().toISOString() })
       .eq('auth_id', authUserId);
   } catch (e) {
-    console.log('[push] setPrefs error:', e);
+    console.log('[push] setPrefs error:', (e as any)?.message);
   }
 }
 
