@@ -120,7 +120,7 @@ Respond with ONLY a valid JSON object, no markdown, no code fences. Use this exa
   return (
     <View style={{ flex: 1, backgroundColor: '#0a1214' }}>
       <ScrollView
-        contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: SP[3], paddingBottom: 80 }}
+        contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: SP[3], paddingBottom: insets.bottom + 16 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -226,46 +226,31 @@ Respond with ONLY a valid JSON object, no markdown, no code fences. Use this exa
               </View>
             </View>
             <Text style={styles.analysis}>{analysis}</Text>
-            {/* Drive verdict color + button(s) from the verdict's first word
-                (the AI is prompted to start with accept/decline/consider).
-                Falls back to grade-derived buttons if the verdict text is
-                empty or unrecognized. */}
-            {(() => {
-              const firstWord = (verdict.match(/^\s*(\w+)/)?.[1] ?? '').toLowerCase();
-              const action: 'accept' | 'decline' | 'consider' | 'unknown' =
-                firstWord === 'accept'   ? 'accept'
-                : firstWord === 'decline' ? 'decline'
-                : firstWord === 'consider'? 'consider'
-                :                            'unknown';
-              const verdictColor =
-                action === 'accept'   ? '#1e8c42'
-                : action === 'decline' ? '#a83040'
-                : action === 'consider'? '#ffb800'
-                :                        '#7a9eaa';
-              const showAccept  = action === 'accept'   || action === 'consider';
-              const showDecline = action === 'decline'  || action === 'consider';
-              return (
+            <Text style={styles.verdict}>{verdict}</Text>
+            <View style={styles.ctaRow}>
+              {(['A', 'B'].includes(youReceiveGrade[0]) || ['A', 'B'].includes(youGiveGrade[0])) && (
+                <TouchableOpacity style={[styles.ctaBtn, styles.acceptBtn]}>
+                  <Text style={styles.ctaTxt}>ACCEPT</Text>
+                </TouchableOpacity>
+              )}
+              {(['D', 'F'].includes(youReceiveGrade[0]) || ['D', 'F'].includes(youGiveGrade[0])) && (
+                <TouchableOpacity style={[styles.ctaBtn, styles.declineBtn]}>
+                  <Text style={styles.ctaTxt}>DECLINE</Text>
+                </TouchableOpacity>
+              )}
+              {(['C'].includes(youReceiveGrade[0]) || ['C'].includes(youGiveGrade[0])) && (
                 <>
-                  <Text style={[styles.verdict, { borderLeftColor: verdictColor }]}>{verdict}</Text>
-                  <View style={styles.ctaRow}>
-                    {showAccept && (
-                      <TouchableOpacity style={[styles.ctaBtn, styles.acceptBtn]}>
-                        <Text style={styles.ctaTxt}>ACCEPT</Text>
-                      </TouchableOpacity>
-                    )}
-                    {showDecline && (
-                      <TouchableOpacity style={[styles.ctaBtn, styles.declineBtn]}>
-                        <Text style={styles.ctaTxt}>DECLINE</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                  <TouchableOpacity style={[styles.ctaBtn, styles.acceptBtn]}>
+                    <Text style={styles.ctaTxt}>ACCEPT</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.ctaBtn, styles.declineBtn]}>
+                    <Text style={styles.ctaTxt}>DECLINE</Text>
+                  </TouchableOpacity>
                 </>
-              );
-            })()}
+              )}
+            </View>
           </View>
         )}
-
-        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
@@ -474,9 +459,14 @@ const styles = StyleSheet.create({
   },
   verdict: {
     borderLeftWidth: 4,
+    borderLeftColor: '#ffb800',
     borderRadius: 12,
     padding: 14,
     marginBottom: 14,
+    color: '#ffb800',
+    fontFamily: F.bold,
+    fontSize: SZ.base,
+    lineHeight: 22,
   },
   verdictEye: {
     color: C.dim2,

@@ -56,8 +56,21 @@ async function mflSeason(): Promise<string> {
   return (await AsyncStorage.getItem(STORAGE_SEASON)) ?? String(new Date().getFullYear());
 }
 
+// MFL routes endpoints by host:
+//   - League-specific (league, rosters, freeAgents, leagueStandings, etc.)
+//     MUST go to the league's home host (e.g. www45.myfantasyleague.com).
+//   - League-independent globals (players, injuries, nflSchedule, …) MUST
+//     go to api.myfantasyleague.com — calling them on a www-host returns
+//     {"error":"Invalid request. This API request must go to
+//     api.myfantasyleague.com"} and the response is unusable.
+// We tag globals here so callers don't have to know the rule.
+const GLOBAL_TYPES = new Set([
+  'players', 'injuries', 'nflSchedule', 'adp', 'topAdds', 'topDrops',
+  'topStarters', 'topOwns', 'projectedScores',
+]);
+
 async function mflFetch<T>(type: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
-  const host = await mflHost();
+  const host = GLOBAL_TYPES.has(type) ? 'api.myfantasyleague.com' : await mflHost();
   const season = await mflSeason();
   const cleaned: Record<string, string> = { TYPE: type, JSON: '1' };
   for (const [k, v] of Object.entries(params)) {
@@ -105,8 +118,12 @@ export async function clearMflCredentials(): Promise<void> {
 
 // ─── player cache ─────────────────────────────────────────────────────────
 // MFL has a single huge `/players` export (~10MB). Cache it for 24h.
-const PLAYERS_CACHE_KEY = 'mfl_players_cache';
-const PLAYERS_CACHE_TS  = 'mfl_players_cache_ts';
+// _v2 cache key: bumped from `mfl_players_cache` so installs with the
+// broken pre-2026-05 cache (which stored {} because the API request was
+// being sent to the wrong host) get a fresh fetch on next launch instead
+// of waiting out the 24h TTL.
+const PLAYERS_CACHE_KEY = 'mfl_players_cache_v2';
+const PLAYERS_CACHE_TS  = 'mfl_players_cache_v2_ts';
 const PLAYERS_TTL = 24 * 60 * 60 * 1000;
 
 let playersMem: Record<string, any> | null = null;
