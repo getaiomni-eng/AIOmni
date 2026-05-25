@@ -21,7 +21,6 @@ import { getUser, getUserRow } from '../services/supabase';
 import { exchangeYahooCode } from '../services/yahoo';
 import { updatePassword } from '../services/auth';
 import { attachCustomerInfoListener, initPurchases, refreshTier } from '../services/purchases';
-import { registerPushNotifications } from '../services/notifications';
 import { pullCloudDataOnLogin } from '../services/userSync';
 import { dark } from './constants/tokens';
 
@@ -112,10 +111,6 @@ export default Sentry.wrap(function RootLayout() {
         // without requiring an app restart.
         await refreshTier();
         attachCustomerInfoListener();
-        // Fire-and-forget — don't gate the app behind permission prompts.
-        // If the user denies, registerPushNotifications returns null and
-        // subsequent server-side notification jobs skip them.
-        registerPushNotifications(user.id).catch(e => console.log('push register skipped:', e));
         try { await pullCloudDataOnLogin(); } catch (e) { console.log('Cloud sync skipped:', e); }
 
         const row = await getUserRow();

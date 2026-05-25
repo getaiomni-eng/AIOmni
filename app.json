@@ -48,14 +48,7 @@
         }
       ],
       "expo-web-browser",
-      "expo-font",
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/images/favicon.png",
-          "color": "#1be7ff"
-        }
-      ]
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,
