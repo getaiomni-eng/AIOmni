@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../services/supabase';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signOut } from '../../services/auth';
 import { clearESPNCredentials } from '../../services/espn';
+import { getNotificationPrefs, setNotificationPrefs } from '../../services/notifications';
 import { clearQuizResult } from '../../services/quiz/engine';
 import { dark, F, palette, SP } from '../constants/tokens';
 
@@ -20,11 +21,18 @@ export default function SettingsScreen() {
   const [mflLinked, setMflLinked] = useState(false);
   const [fleaflickerLinked, setFleaflickerLinked] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
-  const [notifications, setNotifications] = useState(true);
+  const [prefPlayerNews, setPrefPlayerNews]       = useState(true);
+  const [prefLineupWarning, setPrefLineupWarning] = useState(true);
+  const [prefPulseAlerts, setPrefPulseAlerts]     = useState(true);
 
   useEffect(() => {
     loadSettings();
   }, []);
+
+  // v2026-05-21: re-read connection state every time Settings comes into
+  // focus. Without this, returning from /fleaflicker-login or /mfl-login
+  // leaves the row showing "Connect →" even after successful save.
+  useFocusEffect(useCallback(() => { loadSettings(); }, []));
 
   const loadSettings = async () => {
     // ESPN/Yahoo connection state lives in AsyncStorage (it's the auth
@@ -71,6 +79,12 @@ export default function SettingsScreen() {
         setUsername(row.sleeper_username);
         await AsyncStorage.setItem('sleeper_username', row.sleeper_username);
       }
+
+      // Notification opt-in flags (defaults to all-on for a fresh user).
+      const prefs = await getNotificationPrefs(user.id);
+      setPrefPlayerNews(prefs.player_news);
+      setPrefLineupWarning(prefs.lineup_warning);
+      setPrefPulseAlerts(prefs.pulse_alerts);
     } catch (e) {
       // Network failure or DB error — AsyncStorage values already shown above
       console.warn('loadSettings: falling back to cached values', e);
@@ -250,14 +264,46 @@ export default function SettingsScreen() {
         {/* Notifications */}
         <Text style={s.sectionTitle}>NOTIFICATIONS</Text>
         <View style={s.card}>
-          <View style={[s.row, { borderBottomWidth: 0 }]}>
-            <Ionicons name="notifications-outline" size={20} color={palette.aqua} />
-            <Text style={s.rowLabel}>Push Notifications</Text>
+          <View style={s.row}>
+            <Ionicons name="newspaper-outline" size={20} color={palette.aqua} />
+            <Text style={s.rowLabel}>Player news on my roster</Text>
             <Switch
-              value={notifications}
-              onValueChange={setNotifications}
+              value={prefPlayerNews}
+              onValueChange={async (v) => {
+                setPrefPlayerNews(v);
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) setNotificationPrefs(user.id, { player_news: v });
+              }}
               trackColor={{ false: dark.border, true: palette.aqua }}
-              thumbColor={notifications ? dark.text : dark.textMuted}
+              thumbColor={prefPlayerNews ? dark.text : dark.textMuted}
+            />
+          </View>
+          <View style={s.row}>
+            <Ionicons name="alarm-outline" size={20} color={palette.aqua} />
+            <Text style={s.rowLabel}>Lineup not set warning</Text>
+            <Switch
+              value={prefLineupWarning}
+              onValueChange={async (v) => {
+                setPrefLineupWarning(v);
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) setNotificationPrefs(user.id, { lineup_warning: v });
+              }}
+              trackColor={{ false: dark.border, true: palette.aqua }}
+              thumbColor={prefLineupWarning ? dark.text : dark.textMuted}
+            />
+          </View>
+          <View style={[s.row, { borderBottomWidth: 0 }]}>
+            <Ionicons name="flame-outline" size={20} color={palette.aqua} />
+            <Text style={s.rowLabel}>Pulse alerts (trending players)</Text>
+            <Switch
+              value={prefPulseAlerts}
+              onValueChange={async (v) => {
+                setPrefPulseAlerts(v);
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) setNotificationPrefs(user.id, { pulse_alerts: v });
+              }}
+              trackColor={{ false: dark.border, true: palette.aqua }}
+              thumbColor={prefPulseAlerts ? dark.text : dark.textMuted}
             />
           </View>
         </View>
