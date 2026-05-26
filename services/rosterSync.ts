@@ -32,28 +32,24 @@ function normalize(name: string): string {
 }
 
 /**
- * Replace the user's full rostered_players cache with the provided list.
- * Coalesces — does nothing if the last sync was < MIN_INTERVAL_MS ago,
- * unless `force` is set (used when the user changes leagues).
+ * Replace the user's rostered_players for the league(s) represented in
+ * `players` with the provided list. PRESERVES rows for any league_id
+ * not present in the call — without this, opening League A would wipe
+ * League B's roster server-side, and notification jobs would only ever
+ * know about whichever league the user most recently viewed.
+ *
+ * Coalesces per-league: skips a league if its last sync was
+ * < MIN_INTERVAL_MS ago, unless `force` is set.
  */
 export async function syncRosteredPlayers(
   players: RosteredPlayer[],
   opts: { force?: boolean } = {},
 ): Promise<void> {
   try {
-    if (!opts.force) {
-      const lastStr = await AsyncStorage.getItem(LAST_SYNC_KEY);
-      if (lastStr) {
-        const last = parseInt(lastStr, 10);
-        if (Date.now() - last < MIN_INTERVAL_MS) return;
-      }
-    }
-
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // De-dupe within the same user — same player on multiple rosters
-    // collapses to one row per (user_id, normalized_name, league_id).
+    // Normalize the incoming list.
     const rows = players
       .filter(p => p?.name)
       .map(p => ({
@@ -71,21 +67,48 @@ export async function syncRosteredPlayers(
 
     if (rows.length === 0) return;
 
-    // Wipe the user's existing rows then re-insert. Cheaper than diffing
-    // server-side; the table holds at most ~200 rows per user (a handful
-    // of leagues × ~30 roster slots).
-    await supabase.from('user_rostered_players').delete().eq('user_id', user.id);
-    // Upsert in case any leftover row survives the delete (rare race).
-    const { error } = await supabase
+    // Per-league cooldown so refreshing one league doesn't gate syncing
+    // another. Each league_id has its own last-sync timestamp keyed in
+    // AsyncStorage.
+    const leagueIds = Array.from(new Set(rows.map(r => r.league_id)));
+    const now = Date.now();
+    const toSync: string[] = [];
+    for (const lid of leagueIds) {
+      if (opts.force) { toSync.push(lid); continue; }
+      const lastStr = await AsyncStorage.getItem(`${LAST_SYNC_KEY}:${lid}`);
+      if (lastStr && now - parseInt(lastStr, 10) < MIN_INTERVAL_MS) continue;
+      toSync.push(lid);
+    }
+    if (toSync.length === 0) return;
+
+    const syncSet = new Set(toSync);
+    const rowsToWrite = rows.filter(r => syncSet.has(r.league_id));
+
+    // Per-league wipe-then-upsert. We delete only the rows scoped to
+    // (user_id, league_id) being synced — other leagues' rows survive.
+    for (const lid of toSync) {
+      const { error: delErr } = await supabase
+        .from('user_rostered_players')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('league_id', lid);
+      if (delErr) {
+        console.log('[rosterSync] delete error:', lid, delErr.message);
+      }
+    }
+
+    const { error: upErr } = await supabase
       .from('user_rostered_players')
-      .upsert(rows, { onConflict: 'user_id,normalized_name,league_id' });
-    if (error) {
-      console.log('[rosterSync] upsert error:', error.message);
+      .upsert(rowsToWrite, { onConflict: 'user_id,normalized_name,league_id' });
+    if (upErr) {
+      console.log('[rosterSync] upsert error:', upErr.message);
       return;
     }
 
-    await AsyncStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
-  } catch (e) {
-    console.log('[rosterSync] error:', e);
+    for (const lid of toSync) {
+      await AsyncStorage.setItem(`${LAST_SYNC_KEY}:${lid}`, String(now));
+    }
+  } catch (e: any) {
+    console.log('[rosterSync] error:', e?.message);
   }
 }
