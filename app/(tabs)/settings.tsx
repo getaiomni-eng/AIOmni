@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signOut } from '../../services/auth';
+import { deleteAccount } from '../../services/deleteAccount';
 import { clearESPNCredentials } from '../../services/espn';
 import { getNotificationPrefs, setNotificationPrefs } from '../../services/notifications';
 import { clearQuizResult } from '../../services/quiz/engine';
@@ -102,6 +103,42 @@ export default function SettingsScreen() {
         }
       },
     ]);
+  };
+
+  // Two-step destructive confirmation. Apple's review team specifically
+  // looks for "Delete Account" in settings; rejected submissions cite
+  // 5.1.1(v).
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account?',
+      'This will permanently remove your account, league connections, AI Coach memory, prompt history, and rostered-player cache. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue', style: 'destructive', onPress: () => {
+            Alert.alert(
+              'Are you absolutely sure?',
+              'Last chance. Tap "Delete Forever" to permanently delete your AIOmni account.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Forever', style: 'destructive', onPress: async () => {
+                    const res = await deleteAccount();
+                    if (res.ok) {
+                      await AsyncStorage.clear();
+                      Alert.alert('Account Deleted', 'Your account has been removed.');
+                      router.replace('/onboarding');
+                    } else {
+                      Alert.alert('Deletion Failed', res.error ?? 'Please try again or contact support.');
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
   };
 
   const handleRetakeQuiz = () => {
@@ -348,6 +385,12 @@ export default function SettingsScreen() {
           <Text style={s.signOutTxt}>SIGN OUT</Text>
         </TouchableOpacity>
 
+        {/* Delete Account — required by Apple guideline 5.1.1(v). Two-tap
+            confirmation guards against accidental taps. */}
+        <TouchableOpacity style={s.deleteAcctBtn} onPress={handleDeleteAccount}>
+          <Text style={s.deleteAcctTxt}>DELETE ACCOUNT</Text>
+        </TouchableOpacity>
+
       </ScrollView>
     </View>
   );
@@ -363,4 +406,6 @@ const s = StyleSheet.create({
   dot:          { width: 8, height: 8, borderRadius: 4 },
   signOutBtn:   { backgroundColor: palette.flame + '15', borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 24, borderWidth: 1, borderColor: palette.flame + '30' },
   signOutTxt:   { fontFamily: F.bold, fontSize: 14, color: palette.flame, letterSpacing: 2 },
+  deleteAcctBtn:{ backgroundColor: 'transparent', borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 8, borderWidth: 1, borderColor: '#a83040' + '60' },
+  deleteAcctTxt:{ fontFamily: F.bold, fontSize: 12, color: '#a83040', letterSpacing: 2 },
 });
