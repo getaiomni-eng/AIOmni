@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI } from '../../services/ai';
+import { sanitizePromptInput } from '../../services/util/promptSafe';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../services/espn';
 import { fetchAllLiveData, formatLiveDataForPrompt } from '../../services/liveData';
 import { getSeasonContext2026 } from '../../services/seasonContext2026';
@@ -448,19 +449,26 @@ export default function CoachScreen() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
+      // Sanitize every user-authored message (current + history) before
+      // it's interpolated into the prompt. Assistant turns are trusted
+      // because they came from us. System prompt + player context are
+      // also trusted (we built them from DB data).
       const history = [...messages, userMsg]
         .filter(m => !m.isLoading)
-        .map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
+        .map(m => ({
+          role:    m.role === 'ai' ? 'assistant' : 'user',
+          content: m.role === 'ai' ? m.text : sanitizePromptInput(m.text),
+        }));
 
-      // ── Player Intelligence injection ────────────────────
       let playerContext = '';
       try { playerContext = await getPlayerContext(text); } catch {}
 
+      const safeText = sanitizePromptInput(text);
       const fullPrompt = [
         systemPromptRef.current,
         playerContext ? `\nPLAYER INTELLIGENCE FROM DATABASE:\n${playerContext}` : '',
         `\nConversation history:\n${history.slice(-6).map(h => `${h.role}: ${h.content}`).join('\n')}`,
-        `\nuser: ${text}`,
+        `\nuser: ${safeText}`,
       ].filter(Boolean).join('\n');
 
       const reply = await askAI(fullPrompt, 1000);

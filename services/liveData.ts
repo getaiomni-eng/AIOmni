@@ -1,10 +1,32 @@
 // services/liveData.ts
 // Live data layer — NFL injuries, weather, Vegas lines, advanced stats, college prospects, news
-// Injected into every AI Coach prompt before Claude responds
+// Injected into every AI Coach prompt before Claude responds.
+//
+// Third-party API keys (Odds API, OpenWeather, CFBD) used to be
+// hardcoded here — anyone with the IPA could extract them and burn the
+// quota. They now live in Supabase Edge Function env vars and are
+// reached via supabase/functions/external-api-proxy. The proxy
+// authenticates the caller and only forwards to allowlisted upstream
+// endpoints.
 
-const ODDS_API_KEY    = '1dc3181b24294523fb9a75fda64bd6b6';
-const WEATHER_API_KEY = '33088c749184a0c3277f533351c3b649';
-const CFBD_API_KEY    = 'FXYJqCTsSGNxj67UAcWxd6pDdgYZ15hvXE/WscfGOnUW09lvRDEvZe/xngs/bMuo';
+import { supabase } from './supabase';
+
+const PROXY_URL = 'https://khoruzvsprxyocisuhet.supabase.co/functions/v1/external-api-proxy';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtob3J1enZzcHJ4eW9jaXN1aGV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDc5MTEsImV4cCI6MjA5MDU4MzkxMX0.YUIDZOJJhUc0ubkQxB_pSyXeE_xjcrqY7jGmbttlfRw';
+
+async function proxyFetch(service: 'odds' | 'weather' | 'cfbd', params: Record<string, string> = {}): Promise<Response> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const userJwt = session?.access_token;
+  if (!userJwt) throw new Error('not_authenticated');
+
+  const qs = new URLSearchParams({ service, ...params }).toString();
+  return fetch(`${PROXY_URL}?${qs}`, {
+    headers: {
+      apikey:        SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${userJwt}`,
+    },
+  });
+}
 
 const NFL_STADIUMS: Record<string, { city: string; lat: number; lon: number; dome: boolean }> = {
   ARI: { city: 'Glendale, AZ',       lat: 33.5277, lon: -112.2626, dome: true  },
@@ -102,14 +124,13 @@ export async function fetchNFLInjuries(): Promise<InjuryReport[]> {
 }
 
 export async function fetchGameWeather(teams: string[]): Promise<WeatherReport[]> {
-  if (!WEATHER_API_KEY) return [];
   const reports: WeatherReport[] = [];
   const outdoorTeams = teams.filter(t => NFL_STADIUMS[t] && !NFL_STADIUMS[t].dome);
   await Promise.all(outdoorTeams.map(async (team) => {
     const stadium = NFL_STADIUMS[team];
     if (!stadium) return;
     try {
-      const res  = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${stadium.lat}&lon=${stadium.lon}&appid=${WEATHER_API_KEY}&units=imperial`);
+      const res  = await proxyFetch('weather', { lat: String(stadium.lat), lon: String(stadium.lon) });
       const data = await res.json();
       const tempF     = Math.round(data.main?.temp ?? 65);
       const windMph   = Math.round((data.wind?.speed ?? 0) * 1.15);
@@ -127,9 +148,8 @@ export async function fetchGameWeather(teams: string[]): Promise<WeatherReport[]
 }
 
 export async function fetchVegasLines(): Promise<VegasLine[]> {
-  if (!ODDS_API_KEY) return [];
   try {
-    const res  = await fetch(`https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/?apiKey=${ODDS_API_KEY}&regions=us&markets=spreads,totals&oddsFormat=american`);
+    const res  = await proxyFetch('odds');
     const data = await res.json();
     if (!Array.isArray(data)) return [];
     return data.map((game: any) => {
@@ -243,9 +263,8 @@ export async function fetchNFLNews(): Promise<NewsItem[]> {
 }
 
 export async function fetchCollegeProspects(year = 2025): Promise<string> {
-  if (!CFBD_API_KEY) return '';
   try {
-    const res  = await fetch(`https://api.collegefootballdata.com/draft/prospects?year=${year}`, { headers: { Authorization: `Bearer ${CFBD_API_KEY}` } });
+    const res  = await proxyFetch('cfbd', { path: `/draft/prospects?year=${year}` });
     const data = await res.json();
     if (!Array.isArray(data) || data.length === 0) return '';
     const top = data.slice(0, 30).map((p: any) => `${p.name} (${p.position}, ${p.school}) — Grade: ${p.grade ?? 'N/A'}, Round: ${p.projectedRound ?? 'N/A'}`).join('\n');
@@ -254,9 +273,8 @@ export async function fetchCollegeProspects(year = 2025): Promise<string> {
 }
 
 export async function fetchTopCollegeReceivers(year = 2024): Promise<string> {
-  if (!CFBD_API_KEY) return '';
   try {
-    const res  = await fetch(`https://api.collegefootballdata.com/stats/player/season?year=${year}&category=receiving`, { headers: { Authorization: `Bearer ${CFBD_API_KEY}` } });
+    const res  = await proxyFetch('cfbd', { path: `/stats/player/season?year=${year}&category=receiving` });
     const data = await res.json();
     if (!Array.isArray(data) || data.length === 0) return '';
     const top = data.sort((a: any, b: any) => (b.stat ?? 0) - (a.stat ?? 0)).slice(0, 20).map((p: any) => `${p.player} (${p.team}) — ${p.statType}: ${p.stat}`).join('\n');

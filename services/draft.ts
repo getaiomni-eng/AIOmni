@@ -5,6 +5,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchBlendedConsensus, fetchSleeperADP } from './rankingsData';
+import { sanitizePromptInput } from './util/promptSafe';
 
 const SLEEPER_BASE = 'https://api.sleeper.app/v1';
 
@@ -388,7 +389,7 @@ ${neededSlots.length > 0 ? neededSlots.join(', ') : 'Roster complete'}
 TOP AVAILABLE BY POSITION:
 ${availStr}
 
-${question ? `USER QUESTION: ${question}` : 'Who should I draft with my next pick? Consider roster needs, positional scarcity, ADP value, and format-specific player values. Give me your top 3 recommendations with brief reasoning for each. Be direct and decisive.'}`;
+${question ? `USER QUESTION: ${sanitizePromptInput(question)}` : 'Who should I draft with my next pick? Consider roster needs, positional scarcity, ADP value, and format-specific player values. Give me your top 3 recommendations with brief reasoning for each. Be direct and decisive.'}`;
 }
 
 // ─── PLAYER DATABASE (2025 ADP) ─────────────────────────────

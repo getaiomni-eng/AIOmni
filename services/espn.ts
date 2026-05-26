@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setSecure, getSecure, deleteSecure, migrateAsyncToSecure } from './util/secureStore';
 
 export const ESPN_BASE = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl';
 export const ESPN_SEASON = new Date().getFullYear();
@@ -10,14 +11,19 @@ export interface ESPNCredentials {
   teamName?: string;
 }
 
+// ESPN session cookies (espn_s2 + SWID) grant full account access to
+// any league the user is in. Stored in iOS Keychain via expo-secure-store
+// instead of AsyncStorage. Non-secret fields (league IDs, team name)
+// stay in AsyncStorage.
 export async function saveESPNCredentials(creds: ESPNCredentials) {
-  await AsyncStorage.setItem('espn_s2', creds.espnS2);
-  await AsyncStorage.setItem('espn_swid', creds.swid);
+  await setSecure('espn_s2',   creds.espnS2);
+  await setSecure('espn_swid', creds.swid);
 }
 
 export async function loadESPNCredentials(): Promise<ESPNCredentials | null> {
-  const espnS2 = await AsyncStorage.getItem('espn_s2');
-  const swid = await AsyncStorage.getItem('espn_swid');
+  // Auto-migrate any tokens left in AsyncStorage from earlier builds.
+  const espnS2 = await migrateAsyncToSecure('espn_s2');
+  const swid   = await migrateAsyncToSecure('espn_swid');
   if (!espnS2 || !swid) return null;
   const leagueIdsStr = await AsyncStorage.getItem('espn_league_ids');
   const teamName = await AsyncStorage.getItem('espn_team_name');
@@ -34,7 +40,11 @@ export async function loadESPNCredentials(): Promise<ESPNCredentials | null> {
 }
 
 export async function clearESPNCredentials() {
-  await AsyncStorage.multiRemove(['espn_s2', 'espn_swid', 'espn_league_ids']);
+  await Promise.all([
+    deleteSecure('espn_s2'),
+    deleteSecure('espn_swid'),
+  ]);
+  await AsyncStorage.multiRemove(['espn_s2', 'espn_swid', 'espn_league_ids', 'espn_team_name']);
 }
 
 async function espnFetch(path: string, creds: ESPNCredentials): Promise<any> {

@@ -1,7 +1,13 @@
 // services/ai.ts
-// Calls Claude via Supabase Edge Function proxy
+// Calls Claude via Supabase Edge Function proxy.
+//
+// Auth: sends the SIGNED-IN USER'S JWT in Authorization (not the anon key)
+// so the proxy can rate-limit per user AND so anonymous callers with just
+// the bundled anon key can't drain Anthropic quota. The proxy rejects
+// any request whose Bearer token is just the anon key.
 
 import { NFL_DATA_DICTIONARY } from './nflDataDictionary';
+import { supabase } from './supabase';
 
 const PROXY_URL = 'https://khoruzvsprxyocisuhet.supabase.co/functions/v1/claude-proxy';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtob3J1enZzcHJ4eW9jaXN1aGV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDc5MTEsImV4cCI6MjA5MDU4MzkxMX0.YUIDZOJJhUc0ubkQxB_pSyXeE_xjcrqY7jGmbttlfRw';
@@ -40,13 +46,17 @@ export async function askAI(
   const model = MODELS[tier];
 
   try {
-    // Always use the anon key for Authorization. Supabase user-session
-    // access tokens are ES256-signed and the edge function gateway only
-    // verifies HS256 — sending the session token causes 401.
+    // Pull the current user's session JWT — required by the hardened
+    // proxy (rejects requests whose Bearer is just the anon key).
+    // apikey header stays as the anon key per Supabase convention.
+    const { data: { session } } = await supabase.auth.getSession();
+    const userJwt = session?.access_token;
+    if (!userJwt) throw new Error('not_authenticated');
+
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type':  'application/json',
+      'apikey':        SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${userJwt}`,
     };
 
     const content = o.skipDictionary

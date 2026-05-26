@@ -294,18 +294,25 @@ export default function MflLoginScreen() {
           thirdPartyCookiesEnabled
           javaScriptEnabled
           domStorageEnabled
+          // Lock navigation to MFL only — prevents the injected probe
+          // from running on any third-party page if a redirect ever
+          // landed off-domain.
+          originWhitelist={['https://*.myfantasyleague.com', 'https://myfantasyleague.com']}
           userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
           // v2.1 (2026-05-21): MFL 301-redirects HTTPS → HTTP, which WKWebView
           // blocks (renders blank). Intercept and force the HTTPS variant.
           onShouldStartLoadWithRequest={(req) => {
             if (req.url.startsWith('http://')) {
               const httpsUrl = req.url.replace(/^http:\/\//, 'https://');
-              // Push the HTTPS version into the WebView and cancel this load
               setTimeout(() => webViewRef.current?.injectJavaScript(
                 `window.location.replace(${JSON.stringify(httpsUrl)}); true;`
               ), 0);
               return false;
             }
+            try {
+              const host = new URL(req.url).hostname;
+              if (!/(^|\.)myfantasyleague\.com$/i.test(host)) return false;
+            } catch { return false; }
             return true;
           }}
           onNavigationStateChange={() => { webViewRef.current?.injectJavaScript(INJECT_SCRIPT); }}

@@ -271,8 +271,14 @@ export default function FleaflickerLoginScreen() {
           thirdPartyCookiesEnabled
           javaScriptEnabled
           domStorageEnabled
+          // Lock navigation to Fleaflicker only — if the WebView ever
+          // got redirected to a third-party page (ad, OAuth provider,
+          // typo'd link), our injected probe could leak DOM data there.
+          originWhitelist={['https://*.fleaflicker.com', 'https://fleaflicker.com']}
           userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
           onShouldStartLoadWithRequest={(req) => {
+            // Upgrade any http:// to https:// — Fleaflicker has occasional
+            // mixed-content redirects.
             if (req.url.startsWith('http://')) {
               const httpsUrl = req.url.replace(/^http:\/\//, 'https://');
               setTimeout(() => webViewRef.current?.injectJavaScript(
@@ -280,6 +286,11 @@ export default function FleaflickerLoginScreen() {
               ), 0);
               return false;
             }
+            // Defense-in-depth: only allow fleaflicker.com hosts to load.
+            try {
+              const host = new URL(req.url).hostname;
+              if (!/(^|\.)fleaflicker\.com$/i.test(host)) return false;
+            } catch { return false; }
             return true;
           }}
           onNavigationStateChange={() => { webViewRef.current?.injectJavaScript(INJECT_SCRIPT); }}

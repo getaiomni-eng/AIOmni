@@ -6,6 +6,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOp
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI } from '../../services/ai';
 import { getCurrentTier } from '../../services/purchases';
+import { sanitizePromptInput } from '../../services/util/promptSafe';
 import { consumePrompt } from '../utils/promptCounter';
 import { C, F, R, SP, SZ } from '../constants/tokens';
 import { Icon } from '../components/AIOmniIcons';
@@ -65,14 +66,19 @@ export default function TradesScreen() {
       return;
     }
     try {
+      // Sanitize raw user input before interpolating into the prompt
+      // (highest-risk surface for prompt injection — both fields are
+      // free-text and go straight into the model context).
+      const safeGiving  = sanitizePromptInput(giving);
+      const safeGetting = sanitizePromptInput(getting);
       const prompt = `You are AIOmni, expert fantasy football trade analyst.
 Format: ${format.toUpperCase()}
 
 YOU ARE GIVING UP:
-${giving}
+${safeGiving}
 
 YOU ARE RECEIVING:
-${getting}
+${safeGetting}
 
 Grade EACH side of the trade on an A+ to F scale based on ${format === 'dynasty' ? 'dynasty value (age, contract, future production)' : 'rest-of-season value for redraft'}.
 Consider: positional value, injury status, depth chart, schedule, ${format === 'dynasty' ? 'age curves and rookie contracts' : 'weekly upside and floor'}.

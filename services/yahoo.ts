@@ -3,6 +3,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
+import { setSecure, getSecure, deleteSecure, migrateAsyncToSecure } from './util/secureStore';
 
 const YAHOO_CLIENT_ID   = 'dj0yJmk9R3ptbUJaU3FFUFloJmQ9WVdrOWJEZENkRkZVZG5rbWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PTZk';
 
@@ -59,19 +60,23 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
   return digest.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
+// Yahoo OAuth access + refresh tokens. Keychain instead of AsyncStorage
+// because possession of the refresh token = persistent access to the
+// user's Yahoo fantasy account.
 export async function saveYahooTokens(tokens: YahooTokens): Promise<void> {
-  await AsyncStorage.setItem('yahoo_tokens', JSON.stringify(tokens));
+  await setSecure('yahoo_tokens', JSON.stringify(tokens));
 }
 
 export async function loadYahooTokens(): Promise<YahooTokens | null> {
-  const raw = await AsyncStorage.getItem('yahoo_tokens');
+  const raw = await migrateAsyncToSecure('yahoo_tokens');
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
 }
 
 export async function clearYahooTokens(): Promise<void> {
-  await AsyncStorage.removeItem('yahoo_tokens');
-  await AsyncStorage.removeItem('yahoo_code_verifier');
+  await deleteSecure('yahoo_tokens');
+  await AsyncStorage.removeItem('yahoo_tokens');         // legacy cleanup
+  await AsyncStorage.removeItem('yahoo_code_verifier');  // not sensitive but tied to flow
 }
 
 function isExpired(tokens: YahooTokens): boolean {
