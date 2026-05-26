@@ -4,6 +4,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getNFLSeason } from '../../services/season';
+import { normalizePlayerName } from '../../services/util/normalizeName';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -324,11 +325,9 @@ export default function DraftCopilotScreen() {
         //
         //   redraft       → just mark rostered players isDrafted=true so
         //     they show greyed out, same as the Sleeper branch.
-        const normalize = (n: string) =>
-          (n ?? '').toLowerCase()
-            .replace(/[.'’]/g, '')
-            .replace(/\s+(jr|sr|ii|iii|iv|v)\.?$/, '')
-            .trim();
+        // Uses the shared pure-string normalize to avoid the Hermes
+        // regex-during-GC crash that hit big rostered-player lists.
+        const normalize = normalizePlayerName;
         try {
           const { getPlatform } = require('../../services/platform');
           const plat = getPlatform(settings.platform);

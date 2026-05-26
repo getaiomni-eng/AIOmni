@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
-import { setFleaflickerCredentials } from '../services/platform/fleaflicker';
+import { setFleaflickerLeagues, setFleaflickerCredentials } from '../services/platform/fleaflicker';
 import { C, F, SP, SZ } from './constants/tokens';
 
 const FLEAFLICKER_LOGIN_URL = 'https://www.fleaflicker.com/nfl/login';
@@ -115,8 +115,24 @@ export default function FleaflickerLoginScreen() {
         setShowFallback(true);
         return;
       }
-      setLeagueOptions(opts);
-      setStatus(`Found ${opts.length} league${opts.length > 1 ? 's' : ''} — tap one to connect.`);
+      // Auto-connect ALL of the user's Fleaflicker leagues at once. The
+      // previous flow surfaced a picker and the user had to pick a single
+      // league — now we just save them all and exit.
+      await setFleaflickerLeagues(opts.map(o => ({ leagueId: o.id, teamId: o.teamId })));
+      setConnected(true);
+      const label = opts.length === 1
+        ? opts[0].name
+        : `${opts.length} leagues`;
+      setStatus(`✓ Connected ${label}`);
+      setTimeout(() => {
+        Alert.alert(
+          '✓ Fleaflicker Connected',
+          opts.length === 1
+            ? `Connected to ${opts[0].name}.`
+            : `Connected ${opts.length} leagues:\n• ${opts.map(o => o.name).join('\n• ')}`,
+          [{ text: 'Done', onPress: () => router.back() }]
+        );
+      }, 400);
     } catch {
       setStatus('Could not load leagues. Paste your league URL below.');
       setShowFallback(true);
@@ -179,8 +195,19 @@ export default function FleaflickerLoginScreen() {
               teamId: String(l.ownedTeam?.id ?? ''),
             })).filter((l: LeagueLite) => l.id && l.teamId);
             if (opts.length > 0) {
-              setLeagueOptions(opts);
-              setStatus(`Found ${opts.length} league${opts.length > 1 ? 's' : ''} — tap one to connect.`);
+              await setFleaflickerLeagues(opts.map(o => ({ leagueId: o.id, teamId: o.teamId })));
+              setConnected(true);
+              const label = opts.length === 1 ? opts[0].name : `${opts.length} leagues`;
+              setStatus(`✓ Connected ${label}`);
+              setTimeout(() => {
+                Alert.alert(
+                  '✓ Fleaflicker Connected',
+                  opts.length === 1
+                    ? `Connected to ${opts[0].name}.`
+                    : `Connected ${opts.length} leagues:\n• ${opts.map(o => o.name).join('\n• ')}`,
+                  [{ text: 'Done', onPress: () => router.back() }]
+                );
+              }, 400);
               return;
             }
           }
@@ -259,18 +286,11 @@ export default function FleaflickerLoginScreen() {
         />
       )}
 
-      {diagnostic && !leagueOptions && !connected && (
-        <ScrollView style={styles.diagBox} contentContainerStyle={{ padding: 10 }}>
-          <Text style={styles.diagTitle}>Captured (for debug)</Text>
-          <Text style={styles.diagLine}>url: {diagnostic.url}</Text>
-          {diagnostic.email && <Text style={styles.diagLine}>email: {diagnostic.email}</Text>}
-          {diagnostic.userId && <Text style={styles.diagLine}>userId: {diagnostic.userId}</Text>}
-          <Text style={styles.diagLine}>cookies: {Object.keys(diagnostic.cookies || {}).join(', ') || '(none)'}</Text>
-          <TouchableOpacity onPress={() => setShowFallback(true)} style={{ marginTop: 6 }}>
-            <Text style={styles.diagLink}>Trouble? Paste your league URL instead →</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      )}
+      {/* Diagnostic "Captured (for debug)" panel was removed once the
+          login flow proved stable. If a future regression needs it back,
+          render based on diagnostic state and a __DEV__ guard. The
+          "paste your league URL" escape hatch lives inside the fallback
+          form above instead. */}
     </View>
   );
 }

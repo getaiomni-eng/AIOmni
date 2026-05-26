@@ -26,8 +26,9 @@ import {
 } from './types';
 
 const BASE = 'https://www.fleaflicker.com/api';
-const STORAGE_LEAGUE = 'fleaflicker_league_id';
-const STORAGE_TEAM = 'fleaflicker_team_id';
+const STORAGE_LEAGUE  = 'fleaflicker_league_id';   // legacy single-league
+const STORAGE_TEAM    = 'fleaflicker_team_id';     // legacy single-league
+const STORAGE_LEAGUES = 'fleaflicker_leagues_v2';  // JSON array of {leagueId,teamId}
 
 // ─── short-lived hot cache for read-heavy endpoints ──────────────────────
 const hot = new Map<string, { data: any; expires: number }>();
@@ -71,24 +72,75 @@ async function ff<T>(endpoint: string, params: Record<string, string | number> =
 }
 
 // ─── credential helpers ───────────────────────────────────────────────────
-async function getCreds(): Promise<{ leagueId: string; teamId: string } | null> {
+export type FleaflickerLeagueCreds = { leagueId: string; teamId: string };
+
+/**
+ * Read every Fleaflicker league the user has connected. Migrates the
+ * legacy single-league keys into the v2 array on first read.
+ */
+async function getAllCreds(): Promise<FleaflickerLeagueCreds[]> {
+  const raw = await AsyncStorage.getItem(STORAGE_LEAGUES);
+  if (raw) {
+    try {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return arr.filter((c: any) => c?.leagueId && c?.teamId);
+    } catch {}
+  }
+  // Legacy migration: promote the single-league pair into the v2 array.
   const [l, t] = await Promise.all([
     AsyncStorage.getItem(STORAGE_LEAGUE),
     AsyncStorage.getItem(STORAGE_TEAM),
   ]);
-  if (!l || !t) return null;
-  return { leagueId: l, teamId: t };
+  if (l && t) {
+    const arr: FleaflickerLeagueCreds[] = [{ leagueId: l, teamId: t }];
+    try { await AsyncStorage.setItem(STORAGE_LEAGUES, JSON.stringify(arr)); } catch {}
+    return arr;
+  }
+  return [];
 }
 
-export async function setFleaflickerCredentials(leagueId: string, teamId: string): Promise<void> {
+/** Backward-compat — returns the first connected league (or null). */
+async function getCreds(): Promise<FleaflickerLeagueCreds | null> {
+  const all = await getAllCreds();
+  return all[0] ?? null;
+}
+
+/** Return the {leagueId, teamId} pair for a specific league, or null. */
+async function getCredsForLeague(leagueId: string): Promise<FleaflickerLeagueCreds | null> {
+  const all = await getAllCreds();
+  return all.find(c => c.leagueId === String(leagueId)) ?? null;
+}
+
+/**
+ * Persist N leagues at once. Merge semantics: existing leagueIds are
+ * replaced with the new teamId, new leagueIds are appended. The single-
+ * league keys are also updated to the first entry for any code still
+ * using the legacy path.
+ */
+export async function setFleaflickerLeagues(leagues: FleaflickerLeagueCreds[]): Promise<void> {
+  if (!leagues || leagues.length === 0) return;
+  const existing = await getAllCreds();
+  const map = new Map<string, FleaflickerLeagueCreds>();
+  for (const c of existing) map.set(c.leagueId, c);
+  for (const c of leagues)  map.set(c.leagueId, c);
+  const merged = Array.from(map.values());
+  await AsyncStorage.setItem(STORAGE_LEAGUES, JSON.stringify(merged));
+  // Keep the legacy single-league keys pointed at the first entry so any
+  // older callers don't see stale data.
   await AsyncStorage.multiSet([
-    [STORAGE_LEAGUE, leagueId],
-    [STORAGE_TEAM, teamId],
+    [STORAGE_LEAGUE, merged[0].leagueId],
+    [STORAGE_TEAM,   merged[0].teamId],
   ]);
+  hot.clear();
+}
+
+/** Legacy single-league setter — kept for any old call sites. */
+export async function setFleaflickerCredentials(leagueId: string, teamId: string): Promise<void> {
+  await setFleaflickerLeagues([{ leagueId, teamId }]);
 }
 
 export async function clearFleaflickerCredentials(): Promise<void> {
-  await AsyncStorage.multiRemove([STORAGE_LEAGUE, STORAGE_TEAM]);
+  await AsyncStorage.multiRemove([STORAGE_LEAGUE, STORAGE_TEAM, STORAGE_LEAGUES]);
   hot.clear();
 }
 
@@ -189,7 +241,7 @@ async function fetchRoster(leagueId: string, teamId: string): Promise<Roster | n
     }
   }
 
-  const creds = await getCreds();
+  const creds = await getCredsForLeague(leagueId);
   const isMe = creds?.teamId === String(teamId);
 
   const roster: Roster = {
@@ -227,48 +279,50 @@ export const fleaflickerPlatform: FantasyPlatform = {
   },
 
   async getLeagues(): Promise<League[]> {
-    const creds = await getCreds();
-    if (!creds) return [];
+    const allCreds = await getAllCreds();
+    if (allCreds.length === 0) return [];
 
     const cached = hotGet<League[]>('leagues');
     if (cached) return cached;
 
-    // Primary: FetchLeague returns the richest payload (scoring rules,
-    // currentWeek, etc.). But Fleaflicker's public API inconsistently
-    // 404s this endpoint for some leagues that are otherwise fully
-    // readable via FetchLeagueStandings — so fall back to that on 404,
-    // synthesizing the same League shape with sensible defaults.
-    let league: any = null;
-    try {
-      const data = await ff<any>('FetchLeague', { league_id: creds.leagueId });
-      league = data?.league;
-    } catch (e) {
-      if (!(e instanceof FleaflickerNotFoundError)) throw e;
+    // Fan out one fetch per connected league. FetchLeague returns the
+    // richest payload (scoring rules, currentWeek); we fall back to
+    // FetchLeagueStandings on the inconsistent 404s the API sometimes
+    // throws there.
+    const results = await Promise.all(allCreds.map(async (creds) => {
+      let league: any = null;
       try {
-        const fallback = await ff<any>('FetchLeagueStandings', { league_id: creds.leagueId });
-        league = fallback?.league
-          ? { ...fallback.league, season: fallback.season ?? new Date().getFullYear() }
-          : null;
-      } catch {
-        return [];
+        const data = await ff<any>('FetchLeague', { league_id: creds.leagueId });
+        league = data?.league;
+      } catch (e) {
+        if (!(e instanceof FleaflickerNotFoundError)) return null;
+        try {
+          const fallback = await ff<any>('FetchLeagueStandings', { league_id: creds.leagueId });
+          league = fallback?.league
+            ? { ...fallback.league, season: fallback.season ?? new Date().getFullYear() }
+            : null;
+        } catch {
+          return null;
+        }
       }
-    }
-    if (!league) return [];
+      if (!league) return null;
+      const ret: League = {
+        id:            String(league.id),
+        platformId:    'fleaflicker',
+        name:          league.name ?? 'Fleaflicker League',
+        season:        String(league.season ?? new Date().getFullYear()),
+        teamCount:     league.capacity ?? 12,
+        scoringFormat: mapScoring(league.rules?.regularScoringPeriod),
+        leagueType:    isDynastyLeague(league) ? 'dynasty' : 'redraft',
+        currentWeek:   league.currentWeek ?? undefined,
+        avatarUrl:     league.logoUrl ?? undefined,
+      };
+      return ret;
+    }));
 
-    const result: League[] = [{
-      id:            String(league.id),
-      platformId:    'fleaflicker',
-      name:          league.name ?? 'Fleaflicker League',
-      season:        String(league.season ?? new Date().getFullYear()),
-      teamCount:     league.capacity ?? 12,
-      scoringFormat: mapScoring(league.rules?.regularScoringPeriod),
-      leagueType:    isDynastyLeague(league) ? 'dynasty' : 'redraft',
-      currentWeek:   league.currentWeek ?? undefined,
-      avatarUrl:     league.logoUrl ?? undefined,
-    }];
-
-    hotSet('leagues', result, 5 * 60 * 1000);
-    return result;
+    const valid = results.filter((r): r is League => r !== null);
+    hotSet('leagues', valid, 5 * 60 * 1000);
+    return valid;
   },
 
   async getLeague(leagueId: string): Promise<LeagueDetail> {
@@ -307,7 +361,7 @@ export const fleaflickerPlatform: FantasyPlatform = {
   },
 
   async getMyRoster(leagueId: string): Promise<Roster | null> {
-    const creds = await getCreds();
+    const creds = await getCredsForLeague(leagueId);
     if (!creds) return null;
     return await fetchRoster(leagueId, creds.teamId);
   },
@@ -321,7 +375,7 @@ export const fleaflickerPlatform: FantasyPlatform = {
 
     const data = await ff<any>('FetchLeagueRosters', { league_id: leagueId });
     const rosters: Roster[] = [];
-    const creds = await getCreds();
+    const creds = await getCredsForLeague(leagueId);
 
     for (const r of (data?.rosters ?? [])) {
       const team = r.team;
@@ -417,7 +471,7 @@ export const fleaflickerPlatform: FantasyPlatform = {
 
   async getStandings(leagueId: string): Promise<Standing[]> {
     const data = await ff<any>('FetchLeagueStandings', { league_id: leagueId });
-    const creds = await getCreds();
+    const creds = await getCredsForLeague(leagueId);
     const out: Standing[] = [];
     let rank = 1;
     for (const div of (data?.divisions ?? [])) {
@@ -446,7 +500,7 @@ export const fleaflickerPlatform: FantasyPlatform = {
     const params: any = { league_id: leagueId };
     if (week) params.scoring_period = week;
     const data = await ff<any>('FetchLeagueScoreboard', params);
-    const creds = await getCreds();
+    const creds = await getCredsForLeague(leagueId);
     const out: Matchup[] = [];
     for (const game of (data?.games ?? [])) {
       const w = data?.eligibleSchedulePeriods?.[0]?.value ?? week ?? 1;
@@ -496,7 +550,7 @@ export const fleaflickerPlatform: FantasyPlatform = {
       rows.length > 1 && r2FirstTeam === r1LastTeam ? 'snake'
         : 'linear';
 
-    const creds = await getCreds();
+    const creds = await getCredsForLeague(leagueId);
     const myTeamId = creds?.teamId ? String(creds.teamId) : null;
 
     // Slot 1 = round 1 column 1 for THIS user. Find the earliest cell that
@@ -543,7 +597,7 @@ export const fleaflickerPlatform: FantasyPlatform = {
       data = await ff<any>('FetchLeagueDraftBoard', { league_id: leagueId });
     } catch { return []; }
 
-    const creds = await getCreds();
+    const creds = await getCredsForLeague(leagueId);
     const myId = creds?.teamId ? String(creds.teamId) : null;
     const out: DraftPick[] = [];
     for (const row of (data?.rows ?? [])) {

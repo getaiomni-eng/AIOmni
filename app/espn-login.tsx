@@ -109,10 +109,10 @@ export default function ESPNLoginScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      <View style={[styles.statusBar, connected && { backgroundColor: 'rgba(30,140,66,0.08)', borderBottomColor: 'rgba(30,140,66,0.2)' }]}>
-        {connecting && !connected && <ActivityIndicator color={C.blueDeep} size="small" style={{ marginRight: 8 }} />}
-        {connected && <Text style={{ marginRight: 8 }}>✓</Text>}
-        <Text style={[styles.statusText, connected && { color: C.mint }]}>{status}</Text>
+      <View style={[styles.statusBar, connected && { backgroundColor: 'rgba(30,140,66,0.18)' }]}>
+        {connecting && !connected && <ActivityIndicator color="#1be7ff" size="small" style={{ marginRight: 8 }} />}
+        {connected && <Text style={{ marginRight: 8, color: '#1e8c42', fontSize: 18 }}>✓</Text>}
+        <Text style={[styles.statusText, connected && { color: '#1e8c42' }]}>{status}</Text>
       </View>
 
       <WebView
@@ -131,23 +131,30 @@ export default function ESPNLoginScreen() {
   );
 }
 
+// Dark theme to match the rest of the app (mirrors mfl-login + fleaflicker-login).
+const BG     = '#0a1214';
+const CARD   = '#12252e';
+const BORDER = '#1a3542';
+const TEXT   = '#f0f4f5';
+const AQUA   = '#1be7ff';
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: BG },
   header: {
-    paddingHorizontal: SP[3], paddingVertical: 12,
+    paddingHorizontal: SP[3], paddingVertical: 14,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderBottomWidth: 1.5, borderBottomColor: 'rgba(88,131,191,0.18)',
-    backgroundColor: 'rgba(255,255,237,0.95)',
+    borderBottomWidth: 1, borderBottomColor: BORDER,
+    backgroundColor: BG,
   },
   backBtn: {},
-  backText: { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.base },
-  title: { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg },
+  backText: { fontFamily: F.mono, color: AQUA, fontSize: SZ.base, letterSpacing: 0.3 },
+  title: { fontFamily: F.bold, color: TEXT, fontSize: SZ.lg, letterSpacing: 0.5 },
   statusBar: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SP[3], paddingVertical: 10,
-    backgroundColor: 'rgba(88,131,191,0.06)',
-    borderBottomWidth: 1, borderBottomColor: 'rgba(88,131,191,0.14)',
+    paddingHorizontal: SP[3], paddingVertical: 12,
+    backgroundColor: CARD,
+    borderBottomWidth: 1, borderBottomColor: BORDER,
   },
-  statusText: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm, flex: 1 },
-  webview: { flex: 1 },
+  statusText: { fontFamily: F.mono, color: TEXT, fontSize: SZ.base - 1, flex: 1, lineHeight: 18 },
+  webview: { flex: 1, backgroundColor: '#ffffff' },
 });

@@ -9,6 +9,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+import { normalizePlayerName as normalize } from './util/normalizeName';
 
 const LAST_SYNC_KEY = 'roster_sync_last_at';
 const MIN_INTERVAL_MS = 60 * 60 * 1000; // 1h
@@ -21,15 +22,6 @@ export type RosteredPlayer = {
   platform?:   string;     // 'sleeper' | 'espn' | 'yahoo' | 'mfl' | 'fleaflicker'
   isStarter?:  boolean;
 };
-
-// Match the normalization used in services/rankingsData.ts:fetchBlendedConsensus
-// so news-side matching joins cleanly across data sources.
-function normalize(name: string): string {
-  return (name ?? '')
-    .toLowerCase()
-    .replace(/\s+(jr|sr|ii|iii|iv|v)\.?$/, '')
-    .replace(/[^a-z]/g, '');
-}
 
 /**
  * Replace the user's rostered_players for the league(s) represented in

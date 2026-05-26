@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
-import { setMflCredentials } from '../services/platform/mfl';
+import { setMflCredentials, setMflLeagues } from '../services/platform/mfl';
 import { C, F, SP, SZ } from './constants/tokens';
 
 const MFL_LOGIN_URL = 'https://www.myfantasyleague.com/2026/login';
@@ -140,8 +140,25 @@ export default function MflLoginScreen() {
         setShowFallback(true);
         return;
       }
-      setLeagueOptions(opts);
-      setStatus(`Found ${opts.length} league${opts.length > 1 ? 's' : ''} — tap one to connect.`);
+      // Auto-connect ALL of the user's MFL leagues at once. The previous
+      // flow surfaced a picker requiring a single selection — now we just
+      // save them all and exit. setLeagueOptions(opts) still happens
+      // briefly so the diagnostic panel can disappear if needed.
+      await setMflLeagues(opts.map(o => ({
+        leagueId: o.id, franchiseId: o.franchiseId, host: o.host, season: SEASON,
+      })));
+      setConnected(true);
+      const label = opts.length === 1 ? opts[0].name : `${opts.length} leagues`;
+      setStatus(`✓ Connected ${label}`);
+      setTimeout(() => {
+        Alert.alert(
+          '✓ MyFantasyLeague Connected',
+          opts.length === 1
+            ? `Connected to ${opts[0].name}.`
+            : `Connected ${opts.length} leagues:\n• ${opts.map(o => o.name).join('\n• ')}`,
+          [{ text: 'Done', onPress: () => router.back() }]
+        );
+      }, 400);
     } catch (e: any) {
       trace.push(`unexpected: ${e?.message ?? e}`);
       setApiTrace(trace);
@@ -295,25 +312,10 @@ export default function MflLoginScreen() {
         />
       )}
 
-      {diagnostic && !leagueOptions && !connected && (
-        <ScrollView style={styles.diagBox} contentContainerStyle={{ padding: 10 }}>
-          <Text style={styles.diagTitle}>Captured (for debug)</Text>
-          <Text style={styles.diagLine}>url: {diagnostic.url}</Text>
-          {diagnostic.username && <Text style={styles.diagLine}>username: {diagnostic.username}</Text>}
-          <Text style={styles.diagLine}>cookies: {Object.keys(diagnostic.cookies || {}).join(', ') || '(none)'}</Text>
-          {apiTrace.length > 0 && (
-            <>
-              <Text style={[styles.diagTitle, { marginTop: 8 }]}>API trace</Text>
-              {apiTrace.map((line, i) => (
-                <Text key={i} style={styles.diagLine}>{line}</Text>
-              ))}
-            </>
-          )}
-          <TouchableOpacity onPress={() => setShowFallback(true)} style={{ marginTop: 6 }}>
-            <Text style={styles.diagLink}>Trouble? Paste your league URL instead →</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      )}
+      {/* Diagnostic "Captured (for debug)" + API trace panel removed.
+          The "paste your league URL instead" escape hatch lives in the
+          fallback form above. apiTrace state is still recorded for
+          console logs in dev; render guarded behind __DEV__ if needed. */}
     </View>
   );
 }

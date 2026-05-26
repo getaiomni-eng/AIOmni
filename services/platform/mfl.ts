@@ -30,10 +30,11 @@ import {
 } from './types';
 
 const USER_AGENT = 'AIOmni 1.0';
-const STORAGE_LEAGUE = 'mfl_league_id';
-const STORAGE_FRANCHISE = 'mfl_franchise_id';
-const STORAGE_SEASON = 'mfl_season';
-const STORAGE_HOST = 'mfl_host';   // e.g. 'www45.myfantasyleague.com' — found from initial league lookup
+const STORAGE_LEAGUE    = 'mfl_league_id';        // legacy single-league
+const STORAGE_FRANCHISE = 'mfl_franchise_id';     // legacy single-league
+const STORAGE_SEASON    = 'mfl_season';
+const STORAGE_HOST      = 'mfl_host';             // legacy single-league host
+const STORAGE_LEAGUES   = 'mfl_leagues_v2';       // JSON array of {leagueId, franchiseId, host, season}
 
 // ─── short-lived hot cache ────────────────────────────────────────────────
 const hot = new Map<string, { data: any; expires: number }>();
@@ -87,32 +88,84 @@ async function mflFetch<T>(type: string, params: Record<string, string | number 
 }
 
 // ─── credential helpers ───────────────────────────────────────────────────
-async function getCreds(): Promise<{ leagueId: string; franchiseId: string } | null> {
-  const [l, f] = await Promise.all([
+export type MflLeagueCreds = {
+  leagueId:    string;
+  franchiseId: string;
+  host?:       string;
+  season?:     string;
+};
+
+/**
+ * Read every MFL league the user has connected. Migrates the legacy
+ * single-league storage into the v2 array on first read.
+ */
+async function getAllCreds(): Promise<MflLeagueCreds[]> {
+  const raw = await AsyncStorage.getItem(STORAGE_LEAGUES);
+  if (raw) {
+    try {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return arr.filter((c: any) => c?.leagueId && c?.franchiseId);
+    } catch {}
+  }
+  const [l, f, season, host] = await Promise.all([
     AsyncStorage.getItem(STORAGE_LEAGUE),
     AsyncStorage.getItem(STORAGE_FRANCHISE),
+    AsyncStorage.getItem(STORAGE_SEASON),
+    AsyncStorage.getItem(STORAGE_HOST),
   ]);
-  if (!l || !f) return null;
-  return { leagueId: l, franchiseId: f };
+  if (l && f) {
+    const arr: MflLeagueCreds[] = [{
+      leagueId: l, franchiseId: f,
+      host: host ?? undefined, season: season ?? undefined,
+    }];
+    try { await AsyncStorage.setItem(STORAGE_LEAGUES, JSON.stringify(arr)); } catch {}
+    return arr;
+  }
+  return [];
 }
 
-export async function setMflCredentials(opts: {
-  leagueId: string;
-  franchiseId: string;
-  season?: string;
-  host?: string;
-}): Promise<void> {
+/** Backward-compat — returns the first connected league. */
+async function getCreds(): Promise<MflLeagueCreds | null> {
+  const all = await getAllCreds();
+  return all[0] ?? null;
+}
+
+async function getCredsForLeague(leagueId: string): Promise<MflLeagueCreds | null> {
+  const all = await getAllCreds();
+  return all.find(c => c.leagueId === String(leagueId)) ?? null;
+}
+
+/**
+ * Persist N leagues at once. Merge by leagueId — existing entries are
+ * replaced with the new data, new entries are appended. Legacy single-
+ * league keys are also updated to point at the first entry.
+ */
+export async function setMflLeagues(leagues: MflLeagueCreds[]): Promise<void> {
+  if (!leagues || leagues.length === 0) return;
+  const existing = await getAllCreds();
+  const map = new Map<string, MflLeagueCreds>();
+  for (const c of existing) map.set(c.leagueId, c);
+  for (const c of leagues)  map.set(c.leagueId, { ...map.get(c.leagueId), ...c });
+  const merged = Array.from(map.values());
+  await AsyncStorage.setItem(STORAGE_LEAGUES, JSON.stringify(merged));
+  // Sync the legacy single-league keys to the first entry.
   const items: [string, string][] = [
-    [STORAGE_LEAGUE, opts.leagueId],
-    [STORAGE_FRANCHISE, opts.franchiseId],
+    [STORAGE_LEAGUE,    merged[0].leagueId],
+    [STORAGE_FRANCHISE, merged[0].franchiseId],
   ];
-  if (opts.season) items.push([STORAGE_SEASON, opts.season]);
-  if (opts.host)   items.push([STORAGE_HOST,   opts.host]);
+  if (merged[0].season) items.push([STORAGE_SEASON, merged[0].season]);
+  if (merged[0].host)   items.push([STORAGE_HOST,   merged[0].host]);
   await AsyncStorage.multiSet(items);
+  hot.clear();
+}
+
+/** Legacy single-league setter. */
+export async function setMflCredentials(opts: MflLeagueCreds): Promise<void> {
+  await setMflLeagues([opts]);
 }
 
 export async function clearMflCredentials(): Promise<void> {
-  await AsyncStorage.multiRemove([STORAGE_LEAGUE, STORAGE_FRANCHISE, STORAGE_SEASON, STORAGE_HOST]);
+  await AsyncStorage.multiRemove([STORAGE_LEAGUE, STORAGE_FRANCHISE, STORAGE_SEASON, STORAGE_HOST, STORAGE_LEAGUES]);
   hot.clear();
 }
 
@@ -269,29 +322,38 @@ export const mflPlatform: FantasyPlatform = {
   },
 
   async getLeagues(): Promise<League[]> {
-    const creds = await getCreds();
-    if (!creds) return [];
+    const allCreds = await getAllCreds();
+    if (allCreds.length === 0) return [];
 
     const cached = hotGet<League[]>('leagues');
     if (cached) return cached;
 
-    const data = await mflFetch<any>('league', { L: creds.leagueId });
-    const league = data?.league;
-    if (!league) return [];
+    const season = await mflSeason();
+    const results = await Promise.all(allCreds.map(async (creds) => {
+      try {
+        const data = await mflFetch<any>('league', { L: creds.leagueId });
+        const league = data?.league;
+        if (!league) return null;
+        const ret: League = {
+          id:            String(league.id ?? creds.leagueId),
+          platformId:    'mfl',
+          name:          league.name ?? 'MFL League',
+          season,
+          teamCount:     parseInt(league.franchises?.count ?? '12', 10),
+          scoringFormat: inferScoringFormat(league),
+          leagueType:    isMflDynasty(league) ? 'dynasty' : 'redraft',
+          currentWeek:   undefined,
+        };
+        return ret;
+      } catch (e) {
+        console.log('MFL getLeagues entry error:', creds.leagueId, (e as any)?.message);
+        return null;
+      }
+    }));
 
-    const result: League[] = [{
-      id:            String(league.id ?? creds.leagueId),
-      platformId:    'mfl',
-      name:          league.name ?? 'MFL League',
-      season:        await mflSeason(),
-      teamCount:     parseInt(league.franchises?.count ?? '12', 10),
-      scoringFormat: inferScoringFormat(league),
-      leagueType:    isMflDynasty(league) ? 'dynasty' : 'redraft',
-      currentWeek:   undefined,
-    }];
-
-    hotSet('leagues', result, 5 * 60 * 1000);
-    return result;
+    const valid = results.filter((r): r is League => r !== null);
+    hotSet('leagues', valid, 5 * 60 * 1000);
+    return valid;
   },
 
   async getLeague(leagueId: string): Promise<LeagueDetail> {
@@ -324,7 +386,7 @@ export const mflPlatform: FantasyPlatform = {
   },
 
   async getMyRoster(leagueId: string): Promise<Roster | null> {
-    const creds = await getCreds();
+    const creds = await getCredsForLeague(leagueId);
     if (!creds) return null;
     const all = await this.getAllRosters(leagueId);
     return all.find(r => r.rosterId === creds.franchiseId) ?? null;
@@ -364,7 +426,7 @@ export const mflPlatform: FantasyPlatform = {
       if (r?.id) standingsByFranchise[r.id] = r;
     }
 
-    const creds = await getCreds();
+    const creds = await getCredsForLeague(leagueId);
     const rosters: Roster[] = [];
 
     const fRosters: any[] = Array.isArray(rostersData?.rosters?.franchise)
@@ -488,7 +550,7 @@ export const mflPlatform: FantasyPlatform = {
     ]);
     const rows = data?.leagueStandings?.franchise ?? [];
     const list = Array.isArray(rows) ? rows : [rows];
-    const creds = await getCreds();
+    const creds = await getCredsForLeague(leagueId);
 
     const franchiseMeta: Record<string, any> = {};
     const fList: any[] = leagueData?.league?.franchises?.franchise ?? [];
@@ -527,7 +589,7 @@ export const mflPlatform: FantasyPlatform = {
     const data = await mflFetch<any>('liveScoring', params);
     const matchups = data?.liveScoring?.matchup ?? [];
     const list = Array.isArray(matchups) ? matchups : [matchups];
-    const creds = await getCreds();
+    const creds = await getCredsForLeague(leagueId);
     const w = week ?? parseInt(data?.liveScoring?.week ?? '1', 10);
 
     const out: Matchup[] = [];

@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { syncRankingsToCloud, loadRankingsFromCloud } from './userSync';
 import { getActiveSleeperIds, getCurrentStatsSeason } from './nflPlayers';
+import { normalizePlayerName } from './util/normalizeName';
 
 // ─── TYPES ──────────────────────────────────────────────────
 
@@ -787,15 +788,11 @@ export async function fetchBlendedConsensus(
 
   if (sources.length === 0) return fetchSleeperADP(); // absolute fallback
 
-  // Strip Jr/Sr/II/III/IV/V suffix BEFORE the alpha-only collapse — without
-  // this, "James Cook" and "James Cook III" key to different buckets and the
-  // same player gets blended twice (showing up as adjacent ranks with split
-  // weights). Same trap with Kenneth Walker III, D.J. Moore vs DJ Moore, etc.
-  const normalize = (name: string) =>
-    (name ?? '')
-      .toLowerCase()
-      .replace(/\s+(jr|sr|ii|iii|iv|v)\.?$/, '')
-      .replace(/[^a-z]/g, '');
+  // Strip Jr/Sr/II/III/IV/V suffix BEFORE the alpha-only collapse so that
+  // "James Cook" and "James Cook III" key to the same bucket. Uses the
+  // pure-string implementation in util/normalizeName to avoid the Hermes
+  // GC regex crash this used to trigger over large player lists.
+  const normalize = normalizePlayerName;
 
   const playerMap = new Map<string, {
     name: string; position: string; team: string; id: string;
@@ -1094,9 +1091,10 @@ export async function fetchDedupedProspects(year = 2026): Promise<CollegeProspec
 
   // Same suffix-stripping normalization as fetchBlendedConsensus, so
   // "Kenneth Walker" (prospect) and "Kenneth Walker III" (active NFL) key
-  // to the same bucket and the prospect gets correctly filtered.
-  const normalizeName = (s: string) =>
-    (s ?? '').toLowerCase().replace(/\s+(jr|sr|ii|iii|iv|v)\.?$/, '').replace(/[^a-z]/g, '');
+  // Uses the pure-string implementation from util/normalizeName to avoid
+  // the Hermes GC regex crash. Same bucket-key semantics as the rankings
+  // blend.
+  const normalizeName = normalizePlayerName;
 
   const nflNames = new Set<string>();
   for (const p of Object.values(sleeperPlayers)) {
