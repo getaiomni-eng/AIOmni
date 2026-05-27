@@ -1062,7 +1062,13 @@ function DraftBoard({
           <PlayerRow
             player={item}
             isMyTurn={state.isMyTurn}
-            isCompanionMode={!isSleeperLive}
+            // Always show "DRAFTED (OTHER)" — even when a Sleeper draft
+            // is auto-syncing picks. Sleeper polling is best-effort and
+            // sometimes lags (mock drafts, paused drafts, network
+            // hiccups); without a manual override the user can't log
+            // other teams' picks at all. With both buttons present the
+            // auto-sync still works on top.
+            isCompanionMode={true}
             onDraftMe={() => handleDraftPlayer(item, true)}
             onDraftOther={() => handleDraftPlayer(item, false)}
           />

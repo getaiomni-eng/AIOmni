@@ -2,8 +2,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, KeyboardAvoidingView, Modal, Platform,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
@@ -62,6 +62,9 @@ type LeagueContext = {
   taxiSlots?: number;
   ownedPicks?: string;  // formatted: "2026: R1, R2, R3 / 2027: R1 (×2, BUF), R3"
   bestBall?: boolean;
+  // v2026-05-27: top-20 available FAs preloaded so the Coach can answer
+  // "who should I pick up" without burning a prompt to ask first.
+  available?: string[];
 };
 
 function getPaywallMessage(resetStr: string): string {
@@ -195,8 +198,13 @@ async function loadESPNContext(): Promise<LeagueContext[]> {
 }
 
 // Shared loader for any platform exposing the FantasyPlatform abstraction
-// (currently Fleaflicker + MFL). Pulls the league list, then for each one
-// fans out standings + roster in parallel and assembles a LeagueContext.
+// (currently Fleaflicker + MFL). Pulls league list, fans out standings +
+// FULL roster + top free-agents in parallel, assembles a LeagueContext.
+//
+// Bumped roster from slice(0, 20) → slice(0, 50) because dynasty rosters
+// with 25+ keepers (e.g. Dan Bailey league at FF) were getting truncated.
+// The Coach would then not know players in positions 21+ were on the
+// user's team and recommend trading for them.
 async function loadAbstractContext(
   platformId: 'fleaflicker' | 'mfl',
   platformLabel: 'Fleaflicker' | 'MFL',
@@ -210,30 +218,39 @@ async function loadAbstractContext(
       const fmt = `${l.scoringFormat === 'ppr' ? 'PPR' : l.scoringFormat === 'half' ? '0.5 PPR' : 'STD'}`;
       const week = l.currentWeek ?? 1;
       try {
-        const [standings, roster] = await Promise.all([
+        const [standings, roster, fas] = await Promise.all([
           plat.getStandings(l.id).catch(() => []),
           plat.getMyRoster(l.id).catch(() => null),
+          // Top 20 free agents so the Coach knows what's actually
+          // available without burning a prompt asking the user.
+          plat.getAvailablePlayers(l.id, { limit: 20 }).catch(() => []),
         ]);
         const me = (standings as any[]).find(s => s.isMe);
         const record = me ? `${me.record.wins}–${me.record.losses}` : '?';
         const rank = me?.rank > 0 ? `${me.rank} of ${standings.length}` : 'unknown';
         const slots = [...((roster as any)?.starters ?? []), ...((roster as any)?.bench ?? [])];
-        const rosterNames = slots.slice(0, 20).map((s: any) =>
-          `${s.player?.name ?? 'Unknown'} (${s.player?.position ?? 'FLEX'})`
+        // Include team so Hunter (WR JAX) is unambiguous from any Hunter
+        // also rostered, and so the Coach can reason about NFL team
+        // contexts (offensive scheme, target share competition).
+        const rosterNames = slots.slice(0, 50).map((s: any) =>
+          `${s.player?.name ?? 'Unknown'} (${s.player?.position ?? 'FLEX'}${s.player?.team ? ` · ${s.player.team}` : ''})`
+        );
+        const availableNames: string[] = (fas as any[]).slice(0, 20).map((p: any) =>
+          `${p.name ?? 'Unknown'} (${p.position ?? 'FLEX'}${p.team ? ` · ${p.team}` : ''})`
         );
         const lt: LeagueContext['leagueType'] = l.leagueType === 'dynasty' ? 'dynasty'
                                               : l.leagueType === 'keeper'  ? 'keeper'
                                               :                              'redraft';
         return {
           name: l.name, platform: platformLabel, format: fmt,
-          record, rank, roster: rosterNames, week,
+          record, rank, roster: rosterNames, available: availableNames, week,
           season: parseInt(l.season) || new Date().getFullYear(),
           leagueType: lt,
         };
       } catch {
         return {
           name: l.name, platform: platformLabel, format: fmt,
-          record: '?', rank: '?', roster: [], week,
+          record: '?', rank: '?', roster: [], available: [], week,
           season: parseInt(l.season) || new Date().getFullYear(),
         };
       }
@@ -246,6 +263,9 @@ function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueConte
   if (targets.length === 0) return `${BASE_SYSTEM}\n\nNo leagues loaded yet.`;
   // v2026-05-14: emit league type, taxi slots, owned picks (dynasty/keeper) so
   // the Coach answers "how many draft picks do I have" correctly.
+  // v2026-05-27: also emit top-20 available FAs so the Coach has the full
+  // picture (rosters + waiver pool + scoring + picks) on prompt 1 — user
+  // was burning 3 prompts feeding context manually.
   const leagueBlocks = targets.map(l => {
     const typeLabel = l.leagueType ? `[${l.leagueType.toUpperCase()}]` : '';
     const rosterStr = l.roster.length > 0 ? l.roster.join(', ') : 'Not loaded';
@@ -253,10 +273,13 @@ function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueConte
     const taxi = l.taxiSlots ? ` · Taxi slots: ${l.taxiSlots}` : '';
     const picks = l.ownedPicks ? `\nDraft picks owned — ${l.ownedPicks}` : '';
     const bestBall = l.bestBall ? ' [BEST BALL]' : '';
+    const avail = l.available && l.available.length > 0
+      ? `\nTop available (waiver/FA pool, sample): ${l.available.join(', ')}`
+      : '';
     return `
 League: ${l.name} (${l.platform} · ${l.format}) ${typeLabel}${bestBall}
 Record: ${l.record} · Rank: ${l.rank} · Season: ${l.season} · Week: ${l.week}${taxi}
-Roster${rosterMeta}: ${rosterStr}${picks}
+Roster${rosterMeta}: ${rosterStr}${picks}${avail}
 `;
   }).join('\n---\n');
   const focusNote  = selectedLeague ? `\n\nThe user has focused on ONE league: ${selectedLeague.name}. All advice should be specific to this league's scoring format and roster.` : '';
@@ -269,7 +292,32 @@ Roster${rosterMeta}: ${rosterStr}${picks}
   // playoffs, metrics, answering-principles. Pulled from FantasyPros,
   // FantasySixPack, PitcherList, etc. Replaces the old shallow FF_KNOWLEDGE.
   const seasonContext = getSeasonContext2026();
-  return `${BASE_SYSTEM}\n\nYou have loaded ${targets.length} league${targets.length > 1 ? 's' : ''}:\n${leagueBlocks}\n${FANTASY_FOOTBALL_KNOWLEDGE}${focusNote}${memoryBlock}\n\n${seasonContext}`;
+
+  // v2026-05-27: the NFL is in May 2026 offseason — between the 2026
+  // NFL Draft (Apr 24-26) and 2026 regular season (week 1 ~Sep 10).
+  // Fantasy users in this window are running ROOKIE DRAFTS for dynasty
+  // and KEEPER decisions. Earlier the Coach defaulted to 2025-rookie
+  // examples (Caleb Williams, Marvin Harrison Jr., etc.) instead of the
+  // 2026 class because the system prompt didn't pin the calendar. Be
+  // explicit so it stops happening.
+  const calendarFraming = `
+═══ CURRENT CALENDAR ═══
+Today's date: 2026-05-27 (NFL OFFSEASON).
+Last completed NFL season: 2025 (Super Bowl LX played Feb 2026).
+Next NFL season: 2026 (kicks off Sep 2026).
+The 2026 NFL Draft completed Apr 24-26, 2026 — the rookie class
+("2026 rookies") includes the players selected then. Do NOT cite 2025
+rookies (Caleb Williams, Marvin Harrison Jr., Jayden Daniels, Brock
+Bowers, Malik Nabers, Rome Odunze, etc.) as "this year's rookies" —
+they are now sophomore NFL players in their 2nd pro season.
+Most dynasty leagues right now are running ROOKIE DRAFTS or making
+KEEPER DECLARATIONS for the 2026 season. When the user asks about
+"rookies," "the draft," or "who should I pick," default to the 2026
+rookie class unless they specify otherwise.
+═══════════════════════
+`;
+
+  return `${BASE_SYSTEM}\n${calendarFraming}\nYou have loaded ${targets.length} league${targets.length > 1 ? 's' : ''}:\n${leagueBlocks}\n${FANTASY_FOOTBALL_KNOWLEDGE}${focusNote}${memoryBlock}\n\n${seasonContext}`;
 }
 
 // ── Verdict card (blue) ─────────────────────────────────────
@@ -396,6 +444,19 @@ export default function CoachScreen() {
       systemPromptRef.current = buildSystemPrompt(allLeagues, selectedLeague, memoriesRef.current) + liveDataRef.current;
     }
   }, [selectedLeague, allLeagues]);
+
+  // Refresh the prompt counter every time this tab gains focus. Without
+  // this, the badge shows the value captured at mount even if Trade /
+  // Draft / Start-Sit consumed prompts since (those flows write to
+  // AsyncStorage + cloud but don't touch this screen's React state).
+  useFocusEffect(useCallback(() => {
+    (async () => {
+      try {
+        const fresh = await getRemainingPrompts();
+        setRemaining(fresh);
+      } catch {}
+    })();
+  }, []));
 
   // Auto-send from URL param (when rankings/other screens route here with a question)
   useEffect(() => {
@@ -574,7 +635,7 @@ export default function CoachScreen() {
                 // AI bubble — cream bevel card (matches mockup)
                 <View key={i} style={styles.aiRow}>
                   <View style={styles.aiBubbleAvatar}>
-                    <Text style={{ fontSize: 12 }}>◎</Text>
+                    <AIOmniLogo size={20} />
                   </View>
                   <View style={[styles.aiBubble, { maxWidth: '85%' }]}>
                     <View style={styles.bevelShine} />

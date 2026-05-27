@@ -100,20 +100,35 @@ export default function FleaflickerLoginScreen() {
   async function loadLeaguesByEmail(email: string) {
     try {
       setStatus(`Fetching leagues for ${email}...`);
-      const url = `https://www.fleaflicker.com/api/FetchUserLeagues?email=${encodeURIComponent(email)}&sport=NFL&season=${SEASON}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const leagues = Array.isArray(data?.leagues) ? data.leagues : [];
-      const opts: LeagueLite[] = leagues.map((l: any) => ({
-        id: String(l.id),
-        name: l.name ?? `League ${l.id}`,
-        teamId: String(l.ownedTeam?.id ?? ''),
-      })).filter((l: LeagueLite) => l.id && l.teamId);
+      // Offseason fallback: try current season first, then walk back a
+      // year if FetchUserLeagues returns nothing. Most redraft FF leagues
+      // aren't spun up until Aug, so a user connecting in May/Jun gets
+      // an empty 2026 set even though they have valid 2025 dynasty
+      // teams. Without this they'd connect → see "no leagues" → paste a
+      // URL → which is what they meant by "disconnect right away."
+      const seasonCandidates = [SEASON, SEASON - 1];
+      let opts: LeagueLite[] = [];
+      let usedSeason = SEASON;
+      for (const s of seasonCandidates) {
+        const url = `https://www.fleaflicker.com/api/FetchUserLeagues?email=${encodeURIComponent(email)}&sport=NFL&season=${s}`;
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const data = await res.json();
+        const leagues = Array.isArray(data?.leagues) ? data.leagues : [];
+        opts = leagues.map((l: any) => ({
+          id: String(l.id),
+          name: l.name ?? `League ${l.id}`,
+          teamId: String(l.ownedTeam?.id ?? ''),
+        })).filter((l: LeagueLite) => l.id && l.teamId);
+        if (opts.length > 0) { usedSeason = s; break; }
+      }
       if (opts.length === 0) {
-        setStatus(`No leagues found under ${email}. Paste your league URL below.`);
+        setStatus(`No leagues found under ${email} for ${SEASON} or ${SEASON - 1}. Paste your league URL below.`);
         setShowFallback(true);
         return;
+      }
+      if (usedSeason !== SEASON) {
+        setStatus(`Found ${opts.length} ${usedSeason} league${opts.length > 1 ? 's' : ''} (no ${SEASON} leagues drafted yet).`);
       }
       // Auto-connect ALL of the user's Fleaflicker leagues at once. The
       // previous flow surfaced a picker and the user had to pick a single
@@ -185,31 +200,35 @@ export default function FleaflickerLoginScreen() {
       } else if (data.userId) {
         try {
           setConnecting(true);
-          const url = `https://www.fleaflicker.com/api/FetchUserLeagues?userId=${data.userId}&sport=NFL&season=${SEASON}`;
-          const r = await fetch(url);
-          if (r.ok) {
+          // Same offseason fallback as loadLeaguesByEmail above.
+          let opts: LeagueLite[] = [];
+          for (const s of [SEASON, SEASON - 1]) {
+            const url = `https://www.fleaflicker.com/api/FetchUserLeagues?userId=${data.userId}&sport=NFL&season=${s}`;
+            const r = await fetch(url);
+            if (!r.ok) continue;
             const j = await r.json();
             const leagues = Array.isArray(j?.leagues) ? j.leagues : [];
-            const opts: LeagueLite[] = leagues.map((l: any) => ({
+            opts = leagues.map((l: any) => ({
               id: String(l.id), name: l.name ?? `League ${l.id}`,
               teamId: String(l.ownedTeam?.id ?? ''),
             })).filter((l: LeagueLite) => l.id && l.teamId);
-            if (opts.length > 0) {
-              await setFleaflickerLeagues(opts.map(o => ({ leagueId: o.id, teamId: o.teamId })));
-              setConnected(true);
-              const label = opts.length === 1 ? opts[0].name : `${opts.length} leagues`;
-              setStatus(`✓ Connected ${label}`);
-              setTimeout(() => {
-                Alert.alert(
-                  '✓ Fleaflicker Connected',
-                  opts.length === 1
-                    ? `Connected to ${opts[0].name}.`
-                    : `Connected ${opts.length} leagues:\n• ${opts.map(o => o.name).join('\n• ')}`,
-                  [{ text: 'Done', onPress: () => router.back() }]
-                );
-              }, 400);
-              return;
-            }
+            if (opts.length > 0) break;
+          }
+          if (opts.length > 0) {
+            await setFleaflickerLeagues(opts.map(o => ({ leagueId: o.id, teamId: o.teamId })));
+            setConnected(true);
+            const label = opts.length === 1 ? opts[0].name : `${opts.length} leagues`;
+            setStatus(`✓ Connected ${label}`);
+            setTimeout(() => {
+              Alert.alert(
+                '✓ Fleaflicker Connected',
+                opts.length === 1
+                  ? `Connected to ${opts[0].name}.`
+                  : `Connected ${opts.length} leagues:\n• ${opts.map(o => o.name).join('\n• ')}`,
+                [{ text: 'Done', onPress: () => router.back() }]
+              );
+            }, 400);
+            return;
           }
         } catch {}
         setStatus('Logged in but couldn’t fetch leagues automatically. Paste your league URL below.');

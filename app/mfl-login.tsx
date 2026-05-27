@@ -100,34 +100,43 @@ export default function MflLoginScreen() {
       setStatus('Fetching your MFL leagues...');
       let opts: LeagueLite[] = [];
       let lastBody = '';
-      for (const h of candidates) {
-        const url = `https://${h}/${SEASON}/export?TYPE=myleagues&JSON=1`;
-        try {
-          const res = await fetch(url, {
-            headers: { 'User-Agent': 'AIOmni 1.0', 'Cookie': cookieHeader },
-          });
-          const body = await res.text();
-          lastBody = body;
-          trace.push(`[${res.status}] ${h} — ${body.length}b`);
-          if (!res.ok) continue;
-          let data: any = null;
-          try { data = JSON.parse(body); } catch { trace.push(`  parse fail @ ${h}`); continue; }
-          const raw = data?.leagues?.league;
-          const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
-          opts = arr.map((l: any) => {
-            const u = String(l.url || '');
-            const hm = u.match(/https?:\/\/([^/]+)/);
-            return {
-              id: String(l.league_id ?? ''),
-              name: String(l.name || `League ${l.league_id}`),
-              franchiseId: String(l.franchise_id ?? ''),
-              host: hm?.[1] ?? h,
-            };
-          }).filter((l: LeagueLite) => l.id && l.franchiseId);
-          trace.push(`  parsed ${arr.length} entries, ${opts.length} valid`);
-          if (opts.length > 0) break;
-        } catch (e: any) {
-          trace.push(`  fetch err @ ${h}: ${e?.message ?? e}`);
+      let usedSeason = SEASON;
+      // Offseason fallback: walk back a year if the current season returns
+      // nothing. MFL dynasty leagues persist across seasons but the
+      // myleagues export is year-scoped — a redraft player in May 2026
+      // before re-signups would otherwise see "no leagues found" even
+      // though their 2025 setup is still active in our codebase.
+      const seasonCandidates = [SEASON, String(parseInt(SEASON, 10) - 1)];
+      outer: for (const yr of seasonCandidates) {
+        for (const h of candidates) {
+          const url = `https://${h}/${yr}/export?TYPE=myleagues&JSON=1`;
+          try {
+            const res = await fetch(url, {
+              headers: { 'User-Agent': 'AIOmni 1.0', 'Cookie': cookieHeader },
+            });
+            const body = await res.text();
+            lastBody = body;
+            trace.push(`[${res.status}] ${h} ${yr} — ${body.length}b`);
+            if (!res.ok) continue;
+            let data: any = null;
+            try { data = JSON.parse(body); } catch { trace.push(`  parse fail @ ${h}`); continue; }
+            const raw = data?.leagues?.league;
+            const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
+            opts = arr.map((l: any) => {
+              const u = String(l.url || '');
+              const hm = u.match(/https?:\/\/([^/]+)/);
+              return {
+                id: String(l.league_id ?? ''),
+                name: String(l.name || `League ${l.league_id}`),
+                franchiseId: String(l.franchise_id ?? ''),
+                host: hm?.[1] ?? h,
+              };
+            }).filter((l: LeagueLite) => l.id && l.franchiseId);
+            trace.push(`  parsed ${arr.length} entries, ${opts.length} valid`);
+            if (opts.length > 0) { usedSeason = yr; break outer; }
+          } catch (e: any) {
+            trace.push(`  fetch err @ ${h}: ${e?.message ?? e}`);
+          }
         }
       }
       setApiTrace(trace);
@@ -145,7 +154,7 @@ export default function MflLoginScreen() {
       // save them all and exit. setLeagueOptions(opts) still happens
       // briefly so the diagnostic panel can disappear if needed.
       await setMflLeagues(opts.map(o => ({
-        leagueId: o.id, franchiseId: o.franchiseId, host: o.host, season: SEASON,
+        leagueId: o.id, franchiseId: o.franchiseId, host: o.host, season: usedSeason,
       })));
       setConnected(true);
       const label = opts.length === 1 ? opts[0].name : `${opts.length} leagues`;
