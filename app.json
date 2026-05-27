@@ -52,7 +52,8 @@
           "icon": "./assets/images/favicon.png",
           "color": "#1be7ff"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

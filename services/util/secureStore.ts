@@ -14,16 +14,31 @@
 // Lazy-load + defensive try/catch: if expo-secure-store native bindings
 // fail to initialize, callers see null (treated as "not connected")
 // instead of an app crash.
+//
+// 2026-05-26: build 162 crashed at boot on
+// ObjCTurboModule::performVoidMethodInvocation → abort(). Root cause was
+// a wrong-major npm install of expo-secure-store (56.x vs SDK-54's
+// 15.x). Downgraded via `npx expo install`. Sentry breadcrumbs added
+// below so the NEXT module-incompatibility crash captures which call
+// site triggered it instead of dying opaque.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Sentry from '@sentry/react-native';
+
+function crumb(category: string, message: string, level: Sentry.SeverityLevel = 'info', data?: any) {
+  try {
+    Sentry.addBreadcrumb({ category, message, level, data });
+  } catch {}
+}
 
 // Native module is loaded lazily so a broken pod link can't crash the
 // app on import. Pattern matches services/notifications.ts.
 function getSecureStore(): any | null {
   try {
     return require('expo-secure-store');
-  } catch (e) {
-    console.log('[secureStore] native module unavailable:', (e as any)?.message);
+  } catch (e: any) {
+    crumb('secureStore', 'native module require() failed', 'error', { msg: e?.message });
+    console.log('[secureStore] native module unavailable:', e?.message);
     return null;
   }
 }
@@ -31,17 +46,17 @@ function getSecureStore(): any | null {
 export async function setSecure(key: string, value: string): Promise<void> {
   const ss = getSecureStore();
   if (!ss) {
-    // Hard fallback to AsyncStorage so the feature still works on
-    // a broken install — UX > absolute security in that edge case.
     try { await AsyncStorage.setItem(`_fallback_${key}`, value); } catch {}
     return;
   }
+  crumb('secureStore', `setItemAsync(${key})`);
   try {
     await ss.setItemAsync(key, value, {
       keychainAccessible: ss.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
     });
-  } catch (e) {
-    console.log('[secureStore] set error:', key, (e as any)?.message);
+  } catch (e: any) {
+    crumb('secureStore', `setItemAsync(${key}) failed`, 'error', { msg: e?.message });
+    console.log('[secureStore] set error:', key, e?.message);
   }
 }
 
@@ -50,10 +65,12 @@ export async function getSecure(key: string): Promise<string | null> {
   if (!ss) {
     try { return await AsyncStorage.getItem(`_fallback_${key}`); } catch { return null; }
   }
+  crumb('secureStore', `getItemAsync(${key})`);
   try {
     return await ss.getItemAsync(key);
-  } catch (e) {
-    console.log('[secureStore] get error:', key, (e as any)?.message);
+  } catch (e: any) {
+    crumb('secureStore', `getItemAsync(${key}) failed`, 'error', { msg: e?.message });
+    console.log('[secureStore] get error:', key, e?.message);
     return null;
   }
 }
@@ -64,10 +81,12 @@ export async function deleteSecure(key: string): Promise<void> {
     try { await AsyncStorage.removeItem(`_fallback_${key}`); } catch {}
     return;
   }
+  crumb('secureStore', `deleteItemAsync(${key})`);
   try {
     await ss.deleteItemAsync(key);
-  } catch (e) {
-    console.log('[secureStore] delete error:', key, (e as any)?.message);
+  } catch (e: any) {
+    crumb('secureStore', `deleteItemAsync(${key}) failed`, 'error', { msg: e?.message });
+    console.log('[secureStore] delete error:', key, e?.message);
   }
 }
 

@@ -16,6 +16,11 @@
 //     throw. Callers fire-and-forget without an error handler.
 
 import { supabase } from './supabase';
+import * as Sentry from '@sentry/react-native';
+
+function crumb(message: string, level: Sentry.SeverityLevel = 'info', data?: any) {
+  try { Sentry.addBreadcrumb({ category: 'notifications', message, level, data }); } catch {}
+}
 
 export type NotificationPrefs = {
   player_news:    boolean;
@@ -43,6 +48,7 @@ export async function registerPushNotifications(authUserId: string): Promise<str
   // Lazy require — if expo-notifications native isn't initialized
   // correctly, this throws here and we catch + return null instead of
   // crashing the app at module-load time the way a top-level import did.
+  crumb('registerPushNotifications: enter');
   let Notifications: any;
   let Constants: any;
   let Platform: any;
@@ -50,15 +56,16 @@ export async function registerPushNotifications(authUserId: string): Promise<str
     Notifications = require('expo-notifications');
     Constants     = require('expo-constants').default;
     Platform      = require('react-native').Platform;
-  } catch (e) {
-    console.log('[push] native modules unavailable:', (e as any)?.message);
+  } catch (e: any) {
+    crumb('require() failed', 'error', { msg: e?.message });
+    console.log('[push] native modules unavailable:', e?.message);
     return null;
   }
 
   try {
-    // Foreground display behavior — install once.
     if (!handlerWired) {
       try {
+        crumb('setNotificationHandler');
         Notifications.setNotificationHandler({
           handleNotification: async () => ({
             shouldShowAlert:  true,
@@ -69,27 +76,32 @@ export async function registerPushNotifications(authUserId: string): Promise<str
           }),
         });
         handlerWired = true;
-      } catch (e) {
-        console.log('[push] setNotificationHandler failed:', (e as any)?.message);
+      } catch (e: any) {
+        crumb('setNotificationHandler failed', 'error', { msg: e?.message });
+        console.log('[push] setNotificationHandler failed:', e?.message);
       }
     }
 
+    crumb('getPermissionsAsync');
     const existing = await Notifications.getPermissionsAsync();
     let status = existing.status;
     if (status !== 'granted') {
+      crumb('requestPermissionsAsync');
       const req = await Notifications.requestPermissionsAsync();
       status = req.status;
     }
-    if (status !== 'granted') return null;
+    if (status !== 'granted') { crumb('permission denied', 'warning'); return null; }
 
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ??
       (Constants as any).easConfig?.projectId;
     if (!projectId) {
+      crumb('no EAS projectId', 'warning');
       console.log('[push] no EAS projectId — skipping (dev build?)');
       return null;
     }
 
+    crumb('getExpoPushTokenAsync');
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     if (!token) return null;
 
