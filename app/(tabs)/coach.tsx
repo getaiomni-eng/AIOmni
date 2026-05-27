@@ -13,7 +13,7 @@ import { askAI } from '../../services/ai';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../services/espn';
 import { fetchAllLiveData, formatLiveDataForPrompt } from '../../services/liveData';
-import { getSeasonContext2026 } from '../../services/seasonContext2026';
+import { getSeasonContext2026, ROOKIE_BOARD_2026_TEXT } from '../../services/seasonContext2026';
 import { FANTASY_FOOTBALL_KNOWLEDGE } from '../../services/fantasyKnowledge';
 import { getCurrentTier } from '../../services/purchases';
 import { getMemories, saveMemory } from '../../services/supabase';
@@ -293,31 +293,62 @@ Roster${rosterMeta}: ${rosterStr}${picks}${avail}
   // FantasySixPack, PitcherList, etc. Replaces the old shallow FF_KNOWLEDGE.
   const seasonContext = getSeasonContext2026();
 
-  // v2026-05-27: the NFL is in May 2026 offseason — between the 2026
-  // NFL Draft (Apr 24-26) and 2026 regular season (week 1 ~Sep 10).
-  // Fantasy users in this window are running ROOKIE DRAFTS for dynasty
-  // and KEEPER decisions. Earlier the Coach defaulted to 2025-rookie
-  // examples (Caleb Williams, Marvin Harrison Jr., etc.) instead of the
-  // 2026 class because the system prompt didn't pin the calendar. Be
-  // explicit so it stops happening.
+  // v2026-05-27a: calendar + training-cutoff framing. The 2026 NFL Draft
+  // happened AFTER your training cutoff (Jan 2026), so you don't know
+  // the 2026 rookie class from training. You MUST source 2026 rookie
+  // names from the "Rookies of note" section below — never from
+  // training data. The previous build hallucinated Ashton Jeanty as a
+  // 2026 rookie 1.01 (he's a 2025 rookie, drafted in April 2025).
   const calendarFraming = `
-═══ CURRENT CALENDAR ═══
-Today's date: 2026-05-27 (NFL OFFSEASON).
-Last completed NFL season: 2025 (Super Bowl LX played Feb 2026).
-Next NFL season: 2026 (kicks off Sep 2026).
-The 2026 NFL Draft completed Apr 24-26, 2026 — the rookie class
-("2026 rookies") includes the players selected then. Do NOT cite 2025
-rookies (Caleb Williams, Marvin Harrison Jr., Jayden Daniels, Brock
-Bowers, Malik Nabers, Rome Odunze, etc.) as "this year's rookies" —
-they are now sophomore NFL players in their 2nd pro season.
-Most dynasty leagues right now are running ROOKIE DRAFTS or making
-KEEPER DECLARATIONS for the 2026 season. When the user asks about
-"rookies," "the draft," or "who should I pick," default to the 2026
-rookie class unless they specify otherwise.
-═══════════════════════
+═══ CURRENT CALENDAR — READ FIRST ═══
+Today's date: 2026-05-27 (NFL OFFSEASON window).
+Last completed NFL season: 2025 (Super Bowl LX, Feb 2026).
+Next NFL season: 2026 (Week 1 ~Sep 10, 2026).
+
+Training cutoff: Jan 2026. This means:
+- You DO know the 2024 NFL Draft class (Caleb Williams, Marvin Harrison
+  Jr., Jayden Daniels, Brock Bowers, Malik Nabers, Rome Odunze, etc.)
+  — those players are now in their 3rd NFL season, NOT rookies.
+- You DO know the 2025 NFL Draft class (Cam Ward, Ashton Jeanty,
+  Travis Hunter, Tetairoa McMillan, Omarion Hampton, Emeka Egbuka,
+  Tyler Warren, Colston Loveland, etc.) — those players are now in
+  their 2nd NFL season, NOT rookies.
+- You DO NOT know the 2026 NFL Draft class — that draft happened
+  April 2026, AFTER your training cutoff. NEVER invent 2026 rookie
+  names from training. The 2026 rookie class is provided BELOW in the
+  season-context block — use ONLY those names.
+
+User asks about "the draft," "rookies," "1.01," or "who should I
+pick" in this offseason window → assume DYNASTY ROOKIE DRAFT for the
+2026 class. Source picks ONLY from the canonical 2026 rookie list
+below. If the user's question is ambiguous between rookie draft vs
+startup dynasty, ANSWER the rookie-draft case primarily and mention
+startup as a side note — most users asking in May/June with "1.01"
+are in a rookie draft.
+
+When recommending 2026 rookie draft picks, use ONLY names from the
+"Rookies of note" list in the season-context block at the END of
+this prompt. Do not substitute names from training data such as
+Ashton Jeanty, Travis Hunter, Omarion Hampton, Tetairoa McMillan,
+Emeka Egbuka — those are 2025 NFL Draft picks (now 2nd-year pros),
+not 2026 rookies. If a name you want to recommend isn't in that
+list, say "I'd need to check the live rookie board" instead of
+guessing.
+
+ALWAYS factor in the user's CURRENT ROSTER (listed in the league
+block above) when recommending picks. If they already have an elite
+RB1, don't recommend another RB at 1.01 — pivot to WR or BPA. If
+their roster shows "Not loaded," acknowledge that explicitly rather
+than answering blind.
+═══════════════════════════════════
 `;
 
-  return `${BASE_SYSTEM}\n${calendarFraming}\nYou have loaded ${targets.length} league${targets.length > 1 ? 's' : ''}:\n${leagueBlocks}\n${FANTASY_FOOTBALL_KNOWLEDGE}${focusNote}${memoryBlock}\n\n${seasonContext}`;
+  // Order matters: BASE_SYSTEM → calendar → canonical 2026 rookie
+  // board → leagues → knowledge → memories → season context. The
+  // rookie board is hoisted to the top because end-of-prompt
+  // placement let the model fall back to training-data rookies
+  // (Jeanty/Ward/Hunter) instead.
+  return `${BASE_SYSTEM}\n${calendarFraming}\n${ROOKIE_BOARD_2026_TEXT}\n\nYou have loaded ${targets.length} league${targets.length > 1 ? 's' : ''}:\n${leagueBlocks}\n${FANTASY_FOOTBALL_KNOWLEDGE}${focusNote}${memoryBlock}\n\n${seasonContext}`;
 }
 
 // ── Verdict card (blue) ─────────────────────────────────────

@@ -102,6 +102,32 @@ Rookies of note (R1 picks affecting depth charts):
   Bryce Young (CAR) — Year-3 development
 `.trim();
 
+// Standalone export of just the 2026 rookie list so the Coach
+// system prompt can hoist it to the top — the AI was burying the
+// list inside the larger season-context block and hallucinating
+// 2025 rookies (Jeanty, Hunter, Ward) from training data instead.
+export const ROOKIE_BOARD_2026_TEXT = `
+=== 2026 DYNASTY ROOKIE BOARD (CANONICAL — do not substitute) ===
+
+These are the ONLY names valid for 2026 rookie-draft recommendations.
+The 2026 NFL Draft (April 2026) occurred AFTER your training cutoff,
+so any rookie name you "remember" from training is a 2025 rookie —
+they are sophomores now, not rookies. Source 1.01-onward picks ONLY
+from this list:
+
+Jordyn Tyson (NO, R1 #8 WR) — dilutes Olave's target share
+Jeremiyah Love (ARI, R1 RB) — pushes James Conner's workload
+Carnell Tate (TEN, R1 WR)
+Fernando Mendoza (LV, R1 QB)
+
+If the user asks about a rookie not on this list, say "I'd need to
+check the live rookie board for that name" rather than guessing.
+2025-NFL-Draft players (Cam Ward, Ashton Jeanty, Travis Hunter,
+Tetairoa McMillan, Omarion Hampton, Emeka Egbuka, Tyler Warren,
+Colston Loveland, Jaxson Dart, etc.) are NOT 2026 rookies — they
+are 2nd-year pros.
+`.trim();
+
 export const INJURY_NOTES_2026_TEXT = `
 === 2026 INJURY STATUS NOTES ===
 
@@ -148,6 +174,35 @@ NOTES:
   - BAL runs both heavy 12 AND 21 — multi-back, multi-TE attack.
 `.trim();
 
+export const TEAM_SOS_2026_TEXT = `
+=== 2026 STRENGTH OF SCHEDULE ===
+
+Source: ESPN, based on 2025 opponent win-loss %. Rank 1 = hardest, 32 = easiest.
+This is OVERALL team SOS (combined opponent W%), not positional. It's a blunt
+signal — a team with "soft" SOS may still face tough pass defenses. Treat as
+secondary context, not a primary driver.
+
+HARDEST 5 (treat their offensive players with mild SOS caution):
+  1. CHI  .550   2. MIA  .542   3. ARI  .538   4. GB   .538   5. KC   .536
+
+EASIEST 5 (treat their offensive players with mild SOS tailwind):
+  32. CLE .429   31. NO  .434   30. CIN .450   29. ATL .465   28. IND .465
+
+FULL RANK ORDER (hardest → easiest):
+  1 CHI  2 MIA  3 ARI  4 GB   5 KC   6 NE   7 LV   8 BUF
+  9 LAC  10 CAR 11 MIN 12 NYJ 13 LAR 14 SEA 15 DEN 16 WAS
+  17 NYG 18 SF  19 PIT 20 DAL 21 TB  22 JAX 23 PHI 24 BAL
+  25 TEN 26 HOU 27 DET 28 IND 29 ATL 30 CIN 31 NO  32 CLE
+
+NOTES:
+  - 2025-based: doesn't account for 2026 team changes (coaching, free agency).
+  - Burrow/Chase/Higgins benefit from a soft CIN slate (rank 30).
+  - Mahomes/Worthy/Kelce face a tougher KC slate (rank 5).
+  - Stroud/Diggs face the easiest paper schedule among contenders (HOU 26).
+  - Positional SOS (vs QB / vs RB / vs WR / vs TE) is a better signal and
+    will replace this once scraped.
+`.trim();
+
 /**
  * Combined 2026 season context block for injection into AI Coach system prompt.
  * Roughly 4-5 KB; modest token cost (~1500 tokens) for substantial scheme
@@ -162,5 +217,7 @@ export function getSeasonContext2026(): string {
     INJURY_NOTES_2026_TEXT,
     '',
     TEAM_SCHEME_TENDENCIES_2025_TEXT,
+    '',
+    TEAM_SOS_2026_TEXT,
   ].join('\n');
 }
