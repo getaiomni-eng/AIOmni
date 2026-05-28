@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# AIOmni TikTok Launch — Batch generate all 17 Veo clips for the 5-script pack.
+#
+# Requires: GOOGLE_API_KEY in ~/.claude/.env or current shell
+# Each clip is ~3-6 min Veo job. Total runtime: ~30-50 min sequential.
+# Outputs to ./clips/ (relative to this script).
+#
+# Usage:  bash run-all.sh         # all 17 clips
+#         bash run-all.sh 01      # just Script 1's clips
+#         bash run-all.sh 01a     # just one specific clip
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GEN="$HOME/.claude/skills/video-generation/tools/Generate.ts"
+OUT="$SCRIPT_DIR/clips"
+FILTER="${1:-}"
+
+mkdir -p "$OUT"
+
+if [ ! -f "$HOME/.claude/.env" ] && [ -z "${GOOGLE_API_KEY:-}" ]; then
+  echo "ERROR: GOOGLE_API_KEY not found."
+  echo "Add to ~/.claude/.env: GOOGLE_API_KEY=AIza..."
+  echo "Get key at: https://aistudio.google.com/apikey"
+  exit 1
+fi
+
+# Helper: gen ID PROMPT DURATION PRESET
+gen() {
+  local id="$1"; local prompt="$2"; local dur="$3"; local preset="${4:-cinematic}"
+  if [ -n "$FILTER" ] && [[ "$id" != "$FILTER"* ]]; then return; fi
+  local out="$OUT/$id.mp4"
+  if [ -f "$out" ]; then echo "  ↳ $id already exists, skipping"; return; fi
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "→ Generating $id ($dur s, $preset)"
+  echo "═══════════════════════════════════════════════════════════════"
+  bun "$GEN" \
+    --prompt "$prompt" \
+    --duration "$dur" \
+    --aspect-ratio "9:16" \
+    --preset "$preset" \
+    --output "$out"
+}
+
+# ── Script 1 ─────────────────────────────────────────────────────────
+gen "01a-two-phones" \
+'Two iPhones standing upright side by side on a dark wood table. Both screens glow with a dark fantasy football app interface — one showing a green/lime ranking list with player cards, the other showing slightly different ordering. Top-down camera angle. Dramatic dark teal lighting, single rim light from upper right. Subtle smoke haze. The lime-yellow accent on each phone glows. Slow push-in. Premium product photography aesthetic.' \
+4 product-shot
+
+gen "01b-generic-app" \
+'Close-up tilted phone screen showing a bland white-and-gray generic fantasy football app, plain text rankings, no styling. Hand swipes upward. Cold flat fluorescent lighting.' \
+4 broll
+
+gen "01e-logo-outro" \
+'Tight close-up of the AIOmni Spectrum C logo mark slowly rotating counter-clockwise. The C-shape ring has a 5-color gradient: electric aqua, light green, neon chartreuse, amber flame, tiger flame orange. Black void background. Subtle volumetric light passing through. Text overlay appears: READS YOUR LEAGUE FIRST in Bebas Neue, white.' \
+6 product-shot
+
+# ── Script 2 ─────────────────────────────────────────────────────────
+gen "02a-qb-hook" \
+'Hand picks up a phone showing a generic fantasy football QB ranking in stark white-on-black. Camera dollies in fast. A red X stamps across the screen with motion lines. Hard cinematic lighting.' \
+4 cinematic
+
+gen "02d-draft-board" \
+'A fantasy football draft board on a phone screen, players being drafted one by one. Josh Allen name pulses in lime-yellow glow. Top-down angle. Soft warm light from above.' \
+6 product-shot
+
+# ── Script 3 ─────────────────────────────────────────────────────────
+gen "03a-trade-hero" \
+'Phone in hand, screen showing a trade proposal interface with player cards: LAMB plus ACHANE on one side, JSN plus HENRY on the other. Dark UI with lime accent. Cinematic close-up, fingers visible. Soft window light from left.' \
+6 product-shot
+
+# ── Script 4 ─────────────────────────────────────────────────────────
+gen "04a-disappointment" \
+'A hand drops a phone showing a generic PPR fantasy football ranking onto a wooden desk. Camera follows in slow motion. The phone screen catches the warm ambient light. Slight slow zoom.' \
+7 cinematic
+
+gen "04b-stat-overlay" \
+'Black void background, a glowing lime-yellow stat readout floats in 3D space: -8 PTS · LOST BY 4. Text in Bebas Neue, dramatic volumetric lighting beams. Slow camera dolly past the text.' \
+5 cinematic
+
+gen "04c-building" \
+'Fast paced montage: hands typing on a laptop with a code editor visible, the screen reflecting off the keys, dark room with a single lime-yellow desk lamp. Cuts to mosaic of fantasy football app UI mockups flying past camera. Documentary feel.' \
+8 broll
+
+# ── Script 5 ─────────────────────────────────────────────────────────
+gen "05a-two-wrs" \
+'Two iPhone-style player cards floating in 3D space against a dark gradient background. Left: TEE HIGGINS CIN. Right: JAXON SMITH-NJIGBA SEA. Both cards glow with electric-lime accent borders. Subtle particles in background.' \
+5 product-shot
+
+gen "05f-outro-long" \
+'AIOmni Spectrum C logo spinning, particles flowing through the gradient, then text reveals one line at a time in Bebas Neue: AIOMNI then READS YOUR LEAGUE FIRST then BETA SUMMER 2026. Dark background, dramatic lighting.' \
+13 cinematic
+
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo "DONE. Outputs in $OUT/"
+ls -lh "$OUT/" | grep '\.mp4$' || echo "(no clips yet)"
