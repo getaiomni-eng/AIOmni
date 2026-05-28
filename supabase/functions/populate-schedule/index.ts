@@ -63,6 +63,7 @@ serve(async (req) => {
       }
     }
 
+    let insertErrors: string[] = [];
     if (rows.length > 0) {
       // Wipe + insert this season
       await supabase.from('nfl_schedule').delete().eq('season', season);
@@ -71,15 +72,27 @@ serve(async (req) => {
         const { error } = await supabase
           .from('nfl_schedule')
           .insert(rows.slice(i, i + CHUNK));
-        if (error) console.error('insert error:', error);
+        if (error) {
+          console.error('insert error:', error);
+          insertErrors.push(error.message ?? String(error));
+        }
       }
     }
+
+    // Verify: count actual rows in DB after insert (service-role bypasses RLS)
+    const { count: dbCount, error: countErr } = await supabase
+      .from('nfl_schedule')
+      .select('*', { count: 'exact', head: true })
+      .eq('season', season);
 
     const duration = Math.round((Date.now() - startedAt) / 1000);
     return new Response(JSON.stringify({
       ok: true,
       season,
-      games_inserted: rows.length,
+      rows_attempted: rows.length,
+      db_rows_after: dbCount,
+      insert_errors: insertErrors,
+      count_error: countErr?.message ?? null,
       duration_seconds: duration,
       note: rows.length === 0 ? 'No games returned from ESPN -- 2026 schedule probably not released yet (typically mid-May).' : null,
     }), { headers: { ...CORS, 'Content-Type': 'application/json' } });

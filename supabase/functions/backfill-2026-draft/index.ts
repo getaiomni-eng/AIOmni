@@ -554,6 +554,44 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
     const startedAt = Date.now();
 
+    // v2026-05-07: restore mode. Runs a one-shot fix for rows that an
+    // earlier (pre-position-guard) version of this function corrupted.
+    // Justin Jefferson WR (00-0036322) was overwritten by 2026 LB rookie
+    // of the same name. Resets to verified pre-corruption state.
+    const url = new URL(req.url);
+    if (url.searchParams.get('mode') === 'restore') {
+      const restorations: Array<{ gsis_id: string; patch: Record<string, unknown> }> = [
+        {
+          gsis_id: '00-0036322',
+          patch: {
+            full_name:    'Justin Jefferson',
+            first_name:   'Justin',
+            last_name:    'Jefferson',
+            position:     'WR',
+            team:         'MIN',
+            age:          26,
+            rookie_year:  2020,
+            draft_year:   2020,
+            draft_round:  1,
+            draft_pick:   22,
+            is_active:    true,
+          },
+        },
+      ];
+      const results: Array<{ gsis_id: string; ok: boolean; error?: string }> = [];
+      for (const r of restorations) {
+        const { error } = await supabase
+          .from('nfl_players')
+          .update(r.patch)
+          .eq('gsis_id', r.gsis_id);
+        results.push({ gsis_id: r.gsis_id, ok: !error, error: error?.message });
+      }
+      return new Response(JSON.stringify({ ok: true, mode: 'restore', results }), {
+        status: 200,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Pull ALL nfl_players to attempt name matching across the whole table
     // (not just draft_year=2026, since nflverse may not have synced these yet).
     const allPlayers: any[] = [];
@@ -586,7 +624,13 @@ serve(async (req) => {
       const existing = byName.get(key);
       const team = PICK_TO_TEAM[pick.p] ?? null;
 
-      if (existing) {
+      // v2026-05-07: position-match guard. Without this, a 2026 LB rookie
+      // named "Justin Jefferson" overwrites the real WR Justin Jefferson's
+      // row. If the matched existing row has a different position, treat
+      // as a no-match and INSERT a synthetic row instead.
+      const positionMatches = existing && existing.position === pick.pos;
+
+      if (positionMatches) {
         // Update existing row with draft data
         const { error } = await supabase
           .from('nfl_players')

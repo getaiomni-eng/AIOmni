@@ -108,14 +108,20 @@ serve(async (req) => {
       byPos[pos].forEach((r, i) => { r.rank_vs_pos = i + 1; });
     }
 
-    // Wipe + insert
-    await supabase.from('nfl_dvp').delete().eq('season', season);
+    // Wipe + insert. v2026-05-08: surface insert errors instead of
+    // silently logging; previously rows_inserted reported success count
+    // even when every insert failed (table was empty despite "ok").
+    const { error: delErr } = await supabase.from('nfl_dvp').delete().eq('season', season);
+    if (delErr) throw new Error(`delete failed: ${delErr.message}`);
     const CHUNK = 100;
+    let actualInserted = 0;
     for (let i = 0; i < rows.length; i += CHUNK) {
-      const { error } = await supabase
+      const { error, data } = await supabase
         .from('nfl_dvp')
-        .insert(rows.slice(i, i + CHUNK));
-      if (error) console.error('insert error:', error);
+        .insert(rows.slice(i, i + CHUNK))
+        .select();
+      if (error) throw new Error(`insert failed at chunk ${i}: ${error.message} (${error.code ?? '?'}) details=${error.details ?? '?'} hint=${error.hint ?? '?'}`);
+      actualInserted += (data ?? []).length;
     }
 
     const duration = Math.round((Date.now() - startedAt) / 1000);
@@ -123,7 +129,8 @@ serve(async (req) => {
       ok: true,
       season,
       teams_processed: new Set(rows.map(r => r.team)).size,
-      rows_inserted: rows.length,
+      rows_attempted: rows.length,
+      rows_inserted: actualInserted,
       duration_seconds: duration,
     }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
   } catch (err: any) {

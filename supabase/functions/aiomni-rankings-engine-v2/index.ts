@@ -48,31 +48,43 @@ function ageCurve(position: string, age: number | null): number {
   if (!age || age <= 0) return 1.0;
   const a = age;
   if (position === 'RB') {
+    // v4.3 (2026-05-17, second pass): further softened. Saquon at 29 (post
+    // 2,000-yd 2024) and CMC at 30 (19g elite 2024) are not in decline yet.
+    // Modern RB aging is non-linear; the curve below assumes elite RBs
+    // maintain through age 29 with only mild slip, real decline at 30+.
+    // Proven-vet 3+ qualifying seasons compounds with this to keep top-5
+    // workhorses near their peak projection.
     if (a <= 23) return 1.20;
     if (a <= 26) return 1.10;
     if (a === 27) return 1.00;
-    if (a === 28) return 0.88;
-    if (a === 29) return 0.72;
-    if (a === 30) return 0.50;       // v1 was 0.65 -- too lenient
-    return 0.35;
+    if (a === 28) return 0.98;       // tightened — late prime
+    if (a === 29) return 0.92;       // was 0.85
+    if (a === 30) return 0.78;       // was 0.72
+    if (a === 31) return 0.62;
+    return 0.42;
   }
   if (position === 'WR') {
     if (a <= 23) return 1.15;
     if (a <= 27) return 1.10;
     if (a <= 30) return 1.00;
-    if (a === 31) return 0.90;
-    if (a === 32) return 0.78;
-    if (a === 33) return 0.60;       // v1 was 0.70
-    return 0.45;
+    if (a === 31) return 0.96;       // v4 2026-05-17: softened. Modern WRs age much
+    if (a === 32) return 0.92;       // better than the curve assumed. Evans 32, 17 ppg
+    if (a === 33) return 0.86;       // in 2024; Adams 33, 15.2 ppg full season 2025;
+    if (a === 34) return 0.75;       // Hill, Hopkins, etc all maintained into 32-34.
+    return 0.55;                     // Steep drop only at 35+.
   }
   if (position === 'TE') {
+    // v5.1 (2026-05-17): tighter peak window. Andrews 30 was at 1.00 — TEs
+    // 30+ are past peak. Modern TEs peak 26-29.
     if (a <= 24) return 1.05;
     if (a <= 28) return 1.10;
-    if (a <= 31) return 1.00;
-    if (a === 32) return 0.92;       // v2026-05-08: softer
-    if (a === 33) return 0.85;       // softened from 0.55 — Kelce backtest
-    if (a === 34) return 0.75;       // softened from 0.40
-    return 0.60;                     // softened from 0.30
+    if (a === 29) return 1.05;
+    if (a === 30) return 0.96;       // was 1.00 — moves Andrews from peak to early decline
+    if (a === 31) return 0.90;
+    if (a === 32) return 0.84;
+    if (a === 33) return 0.78;
+    if (a === 34) return 0.68;
+    return 0.55;
   }
   if (position === 'QB') {
     if (a <= 24) return 1.05;
@@ -105,6 +117,247 @@ function teamChangeAdj(prevTeam: string | null, currTeam: string | null): number
   if (tierDelta === -1) return 0.96;
   if (tierDelta <= -2) return 0.90;
   return 1.0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// v3 (2026-05-16): FRESH ARCHITECTURE — full rebuild per user spec
+// ═══════════════════════════════════════════════════════════════════════
+
+// ─── Offensive line ranks (2026 projected, source: user-provided photos) ──
+// PB rank affects QB (sack avoidance) + WR/TE (more time = more open plays)
+// RB rank affects RB (run blocking quality directly)
+const OL_PB_RANK_2026: Record<string, number> = {
+  PIT: 1,  LAR: 2,  CHI: 3,  SF:  4,  SEA: 5,  DEN: 6,  JAX: 7,  IND: 8,
+  DET: 9,  CIN: 10, MIA: 11, ATL: 12, BUF: 13, TB:  14, TEN: 15, DAL: 16,
+  PHI: 17, HOU: 18, ARI: 19, WAS: 20, NO:  21, MIN: 22, LV:  23, KC:  24,
+  CAR: 25, GB:  26, NE:  27, NYG: 28, BAL: 29, NYJ: 30, CLE: 31, LAC: 32,
+};
+const OL_RB_RANK_2026: Record<string, number> = {
+  LAR: 1,  BAL: 2,  BUF: 3,  CHI: 4,  DEN: 5,  IND: 6,  DET: 7,  SF:  8,
+  CAR: 9,  MIN: 10, DAL: 11, PHI: 12, JAX: 13, NE:  14, NYJ: 15, ATL: 16,
+  SEA: 17, PIT: 18, MIA: 19, ARI: 20, TEN: 21, NYG: 22, GB:  23, WAS: 24,
+  CIN: 25, TB:  26, KC:  27, NO:  28, HOU: 29, LAC: 30, CLE: 31, LV:  32,
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// v4 (2026-05-17): NEW DATA — travel burden + per-week positional SOS
+// ═══════════════════════════════════════════════════════════════════════
+
+// 2026 team travel burden multipliers (0.95 heaviest → 1.05 lightest).
+// Computed from nfl_schedule + stadium coords + timezone offsets.
+// Captures: total round-trip miles, 2+ tz crossings, cross-country trips,
+// short-rest after long travel. West-coast + Florida teams penalized.
+const TEAM_TRAVEL_MULT_2026: Record<string, number> = {
+  ARI: 1.0113, ATL: 1.0478, BAL: 1.0431, BUF: 0.9695, CAR: 1.0481,
+  CHI: 1.0251, CIN: 1.0500, CLE: 1.0467, DAL: 0.9959, DEN: 0.9829,
+  DET: 1.0259, GB:  1.0193, HOU: 0.9999, IND: 1.0467, JAX: 1.0128,
+  KC:  0.9839, LAC: 0.9500, LAR: 0.9742, LV:  0.9611, MIA: 0.9618,
+  MIN: 1.0136, NE:  0.9780, NO:  1.0371, NYG: 0.9805, NYJ: 0.9879,
+  PHI: 0.9898, PIT: 1.0476, SF:  0.9758, SEA: 0.9629, TB:  1.0383,
+  TEN: 1.0233, WAS: 0.9896,
+};
+
+// 2026 per-week positional SOS. Uses v4 weekly weights (W1-6 ×1.5,
+// W7-13 ×1, W14-17 ×2) so playoff-stretch matchups count more. z-score
+// vs league mean. Replaces POSITIONAL_SOS_2026 (which was season-average).
+// 2025 league mean fpts/g allowed: QB 16.59, RB 22.04, WR 30.61, TE 12.88.
+type PerWeekSos = { QB: number; RB: number; WR: number; TE: number };
+const TEAM_PER_WEEK_SOS_2026: Record<string, PerWeekSos> = {
+  ARI: { QB:  0.029, RB:  0.024, WR:  0.001, TE: -0.235 },
+  ATL: { QB:  0.050, RB:  0.011, WR: -0.015, TE:  0.083 },
+  BAL: { QB:  0.109, RB:  0.072, WR: -0.082, TE:  0.374 },
+  BUF: { QB: -0.159, RB: -0.320, WR: -0.101, TE: -0.069 },
+  CAR: { QB: -0.052, RB: -0.248, WR: -0.172, TE:  0.102 },
+  CHI: { QB: -0.196, RB: -0.048, WR: -0.250, TE: -0.320 },
+  CIN: { QB:  0.120, RB: -0.203, WR:  0.217, TE:  0.169 },
+  CLE: { QB:  0.388, RB:  0.124, WR:  0.442, TE:  0.113 },
+  DAL: { QB:  0.137, RB:  0.184, WR:  0.226, TE: -0.090 },
+  DEN: { QB: -0.227, RB:  0.005, WR: -0.256, TE: -0.183 },
+  DET: { QB: -0.021, RB:  0.264, WR: -0.092, TE: -0.256 },
+  GB:  { QB:  0.056, RB:  0.096, WR: -0.090, TE: -0.320 },
+  HOU: { QB:  0.161, RB:  0.038, WR:  0.329, TE:  0.159 },
+  IND: { QB:  0.150, RB:  0.122, WR:  0.005, TE:  0.240 },
+  JAX: { QB:  0.257, RB: -0.031, WR:  0.233, TE:  0.295 },
+  KC:  { QB: -0.251, RB: -0.068, WR: -0.321, TE:  0.220 },
+  LAC: { QB: -0.134, RB:  0.059, WR: -0.270, TE: -0.192 },
+  LAR: { QB:  0.074, RB:  0.245, WR: -0.030, TE: -0.168 },
+  LV:  { QB: -0.410, RB: -0.283, WR: -0.479, TE: -0.051 },
+  MIA: { QB: -0.260, RB:  0.014, WR: -0.207, TE: -0.250 },
+  MIN: { QB:  0.281, RB:  0.120, WR:  0.260, TE:  0.033 },
+  NE:  { QB: -0.194, RB: -0.191, WR: -0.283, TE: -0.208 },
+  NO:  { QB:  0.081, RB:  0.272, WR:  0.062, TE: -0.118 },
+  NYG: { QB:  0.340, RB:  0.097, WR:  0.369, TE:  0.218 },
+  NYJ: { QB: -0.320, RB: -0.293, WR: -0.249, TE: -0.035 },
+  PHI: { QB:  0.294, RB:  0.066, WR:  0.469, TE:  0.400 },
+  PIT: { QB: -0.088, RB: -0.026, WR: -0.195, TE:  0.268 },
+  SEA: { QB: -0.042, RB:  0.291, WR: -0.045, TE: -0.112 },
+  SF:  { QB: -0.220, RB: -0.099, WR: -0.315, TE: -0.253 },
+  TB:  { QB: -0.019, RB: -0.005, WR:  0.069, TE: -0.085 },
+  TEN: { QB:  0.352, RB:  0.035, WR:  0.524, TE:  0.221 },
+  WAS: { QB: -0.087, RB:  0.049, WR: -0.056, TE: -0.105 },
+};
+
+// v4 positional SOS multiplier (replaces v3 season-avg sosMult).
+// 5% per std-dev z-score, clamped ±10% (looser cap than v3 ±5% because
+// per-week-weighted scores have more meaningful spread).
+function sosMultV4(team: string | null | undefined, position: string): { mult: number; note: string } {
+  if (!team || !['QB','RB','WR','TE'].includes(position)) return { mult: 1.0, note: '' };
+  const sos = TEAM_PER_WEEK_SOS_2026[team];
+  if (!sos) return { mult: 1.0, note: '' };
+  const z = sos[position as keyof PerWeekSos];
+  let mult = 1.0 + 0.05 * z;
+  if (mult > 1.10) mult = 1.10;
+  if (mult < 0.90) mult = 0.90;
+  let note = '';
+  if (Math.abs(z) >= 0.20) {
+    const tag = z > 0 ? 'soft' : 'hard';
+    note = `${team} ${position} ${tag} per-wk-SOS z=${z >= 0 ? '+' : ''}${z.toFixed(2)} (${mult.toFixed(3)}x)`;
+  }
+  return { mult, note };
+}
+
+// v4 travel burden multiplier
+function travelMultV4(team: string | null | undefined): { mult: number; note: string } {
+  if (!team) return { mult: 1.0, note: '' };
+  const mult = TEAM_TRAVEL_MULT_2026[team] ?? 1.0;
+  let note = '';
+  if (mult <= 0.97) note = `${team} heavy travel (${mult.toFixed(3)}x)`;
+  else if (mult >= 1.04) note = `${team} light travel (${mult.toFixed(3)}x)`;
+  return { mult, note };
+}
+
+// Position-specific season replacement fpts (PPR full-season totals).
+// Used in v4 to compute "fpts over replacement season-total" rankings.
+// Rough estimates from 2024 final fantasy data; refine over time.
+const POS_REPLACEMENT_SEASON_FPTS: Record<string, number> = {
+  QB: 240,   // QB14ish
+  RB: 140,   // RB30ish
+  WR: 136,   // WR36ish
+  TE: 85,    // TE14ish
+};
+
+// v4 EXPECTED GAMES — converts per-game to season total.
+// Inputs: per-season games-played array (most-recent first), age, position,
+// optional injury override.
+// Output: clamp [3, 17] expected games for 2026.
+function expectedGamesV4(
+  avgGames: number,
+  age: number,
+  position: string,
+  injuryMult: number = 1.0,
+  perSeasonGames?: number[],   // v4.1: e.g., [7, 17, 17] for Wilson means 2025=7, 2024=17, 2023=17
+): { games: number; note: string } {
+  // v4.1 (2026-05-17): smarter base — if most-recent year was injury-shortened
+  // (<10g) AND prior years were healthy (16+g), give more weight to the
+  // prior healthy seasons. Wilson/Nabers case: one ACL/concussion year
+  // shouldn't define expected availability when career is otherwise full.
+  let base = avgGames > 0 ? avgGames : 14;
+  if (perSeasonGames && perSeasonGames.length >= 2) {
+    const recent = perSeasonGames[0];
+    const priors = perSeasonGames.slice(1);
+    const priorMin = Math.min(...priors);
+    const priorAvg = priors.reduce((a, b) => a + b, 0) / priors.length;
+
+    if (recent < 10 && priorMin >= 15) {
+      // Case A: Recent year was injury-shortened but priors were healthy.
+      // Weight priors more heavily (Wilson/Nabers case).
+      base = 0.70 * priorAvg + 0.30 * recent;
+    } else if (recent >= 15 && priorMin < 15) {
+      // Case B (v5.9 2026-05-19): Recent year was HEALTHY but priors were
+      // partial. Trust the recent healthy year more aggressively (was
+      // 0.65/0.35, now 0.80/0.20). Saquon case: recent 16g + a 14g 2023
+      // year was anchoring him at 15.0g expected; now anchors at 15.8g.
+      base = 0.80 * recent + 0.20 * priorAvg;
+    }
+  } else if (perSeasonGames && perSeasonGames.length === 1 && perSeasonGames[0] >= 16) {
+    // v5.9 (2026-05-19): sophomore healthy-rookie case. Default base of 14
+    // crushed Jeanty (17g rookie → engine projected 14g). One healthy season
+    // is the best signal we have; anchor on it, cap at 16 (slight IR risk
+    // premium).
+    base = Math.min(perSeasonGames[0], 16);
+  }
+
+  // Age durability adjust (the only place age affects season length)
+  let ageAdj = 1.0;
+  if (position === 'RB') {
+    if (age >= 30) ageAdj = 0.92;
+    else if (age >= 29) ageAdj = 0.96;
+  } else if (position === 'WR' || position === 'TE') {
+    if (age >= 33) ageAdj = 0.92;
+    else if (age >= 31) ageAdj = 0.96;
+  } else if (position === 'QB') {
+    if (age >= 37) ageAdj = 0.94;
+  }
+
+  let games = base * ageAdj * injuryMult;
+  if (games < 3) games = 3;
+  if (games > 17) games = 17;
+
+  let note = '';
+  if (games < 15) note = `${games.toFixed(1)}g expected (${avgGames.toFixed(1)}g 3yr avg)`;
+  return { games, note };
+}
+
+// OL multiplier: rank 1 → +5%, rank 32 → -5%, linear. PB applied to
+// QB/WR/TE (pass-game protection time), RB used for RB (run-game).
+function olMultV3(team: string | null | undefined, position: string): { mult: number; note: string } {
+  if (!team) return { mult: 1.0, note: '' };
+  const useRb = position === 'RB';
+  const rankMap = useRb ? OL_RB_RANK_2026 : OL_PB_RANK_2026;
+  const rank = rankMap[team];
+  if (!rank) return { mult: 1.0, note: '' };
+  const mult = 1.05 - (rank - 1) * (0.10 / 31);  // 1.05 → 0.95 linear
+  const label = useRb ? 'OL-run' : 'OL-pass';
+  let note = '';
+  if (rank <= 5) note = `${label} elite rank ${rank} (${mult.toFixed(3)}x)`;
+  else if (rank >= 28) note = `${label} weak rank ${rank} (${mult.toFixed(3)}x)`;
+  return { mult, note };
+}
+
+// Draft pick tier boost for 2026 rookies (current year only).
+// Higher pick = bigger boost. Maps draft capital to year-1 expectation lift.
+function draftPickBoostV3(draftRound: number | null, draftPick: number | null, position?: string): number {
+  // v4.3 (2026-05-17): position-aware draft tier. R1 RBs have a much
+  // higher year-1 hit rate than R1 QBs/WRs/TEs (positions take longer to
+  // develop). Bijan, Gibbs, Saquon, McCaffrey all produced as rookies.
+  // R1 WRs and QBs often need a year. So RB top-10 picks get a stronger
+  // baseline boost. Position-agnostic boost remains for non-RBs.
+  if (!draftRound || draftRound > 7) return 0;
+  const pick = draftPick ?? (draftRound === 1 ? 16 : draftRound * 32 - 16);
+  if (position === 'RB') {
+    if (pick <= 5)       return 0.45;  // RB top-5 (Bijan/Gibbs-tier impact)
+    if (pick <= 10)      return 0.35;
+    if (pick <= 15)      return 0.25;
+    if (pick <= 32)      return 0.18;
+    if (draftRound === 2) return 0.08;
+    if (draftRound === 3) return 0.04;
+    return 0;
+  }
+  // Non-RB positions
+  if (pick <= 5)       return 0.25;
+  if (pick <= 10)      return 0.18;
+  if (pick <= 15)      return 0.13;
+  if (pick <= 32)      return 0.10;
+  if (draftRound === 2) return 0.05;
+  if (draftRound === 3) return 0.02;
+  return 0;
+}
+
+// Weekly recency PPG per v3 spec: W1-6 1.5x (fast starter), W7-13 1.0x,
+// W14-17 2.0x (fantasy playoff). Replaces the prior "wks 10-13 ×2 / 14-17 ×3"
+// curve. Operates on the per-week array stored in agg.weeks.
+function weeklyRecencyPpgV3(weeks: Array<{ week: number; targets: number; carries: number; pts: number }>): number {
+  if (!weeks || weeks.length === 0) return 0;
+  let weighted = 0;
+  let totalWeight = 0;
+  for (const w of weeks) {
+    let wt = 1.0;
+    if (w.week <= 6)      wt = 1.5;
+    else if (w.week >= 14) wt = 2.0;
+    weighted += w.pts * wt;
+    totalWeight += wt;
+  }
+  return totalWeight > 0 ? weighted / totalWeight : 0;
 }
 
 // ─── ROOKIE BASELINE ──────────────────────────────────────────────────
@@ -602,6 +855,13 @@ function personnelMult(team: string | null | undefined, position: string): { mul
 const COACHING_CHANGES_2026: Record<string, {
   desc: string;
   m: { QB: number; RB: number; WR: number; TE: number };
+  // v5.14 (2026-05-21): when the departed coach defined the team's personnel
+  // tendency (e.g., Stefanski's 41% 12-personnel at CLE), the personnel
+  // layer should be neutralized for affected positions in 2026. Without
+  // this, the engine credits a position for personnel rates that won't
+  // persist. Set the array to the positions whose personnel mult should
+  // be zeroed (treated as 1.00x) on this team.
+  personnel_decay?: Array<'QB' | 'RB' | 'WR' | 'TE'>;
 }> = {
   // v2026-05-12i: 2026 carousel from ffmastermind.com (NOT 2025 — 2025 hires
   // like Ben Johnson, Vrabel, Moore, Glenn are incumbent in 2026 and are
@@ -611,15 +871,15 @@ const COACHING_CHANGES_2026: Record<string, {
   MIA: { desc: 'Hafley HC + Slowik OC — Shanahan tree, defensive HC, Willis QB downgrade', m: { QB: 0.92, RB: 1.02, WR: 0.95, TE: 1.00 } },
   // Stefanski leaving CLE is the league\'s biggest TE-scheme architect exit.
   // CLE was 41% 12-personnel under him in 2025 → expected to collapse toward avg.
-  CLE: { desc: 'Monken HC + Switzer OC — aggressive deep-ball passing, Stefanski TE scheme exits with him', m: { QB: 1.02, RB: 0.98, WR: 1.05, TE: 0.93 } },
-  BAL: { desc: 'Minter HC + Doyle OC — pass-friendlier than Harbaugh era',              m: { QB: 1.02, RB: 0.97, WR: 1.03, TE: 1.04 } },
+  CLE: { desc: 'Monken HC + Switzer OC — aggressive deep-ball passing, Stefanski TE scheme exits with him', m: { QB: 1.02, RB: 0.98, WR: 1.05, TE: 0.88 }, personnel_decay: ['TE'] },
+  BAL: { desc: 'Minter HC + Doyle OC — pass-friendlier than John Harbaugh era; Lamar read-option scheme departs', m: { QB: 1.02, RB: 0.97, WR: 1.03, TE: 1.04 }, personnel_decay: ['QB'] },
   TEN: { desc: 'Saleh HC — defensive-minded, offensive identity uncertain',             m: { QB: 0.96, RB: 0.98, WR: 0.96, TE: 0.96 } },
   PIT: { desc: 'McCarthy HC + Angelichio OC — veteran balance, slight pass tilt',       m: { QB: 1.01, RB: 1.01, WR: 1.02, TE: 1.00 } },
   LV:  { desc: 'Klint Kubiak HC + Janocko OC — zone-blocking, TE-friendly Kubiak family', m: { QB: 0.98, RB: 1.04, WR: 0.97, TE: 1.04 } },
   ARI: { desc: 'LaFleur HC + Hackett OC — Hackett mixed track record, scheme uncertainty', m: { QB: 0.96, RB: 0.99, WR: 0.97, TE: 0.98 } },
   NYG: { desc: 'Harbaugh HC + Nagy OC — big change, Nagy pass-spread offense',          m: { QB: 1.03, RB: 0.98, WR: 1.03, TE: 1.00 } },
   NYJ: { desc: 'Reich OC + Geno Smith QB — accuracy-based vet under proven OC',         m: { QB: 1.02, RB: 1.00, WR: 1.03, TE: 1.01 } },
-  LAC: { desc: 'McDaniel as OC under Jim Harbaugh — wide-open passing scheme',          m: { QB: 1.05, RB: 0.95, WR: 1.05, TE: 1.00 } },
+  LAC: { desc: 'McDaniel as OC under Jim Harbaugh — wide-open passing (Shanahan tree, mild TE boost)', m: { QB: 1.05, RB: 0.95, WR: 1.05, TE: 1.02 } },
   PHI: { desc: 'Mannion OC — limited track record, scheme uncertainty',                 m: { QB: 0.98, RB: 1.00, WR: 0.99, TE: 0.99 } },
   // Ben Johnson cascade — left DET (top-3 OC architect) for CHI HC role in
   // the 2025 carousel. By 2026 he\'s incumbent at CHI (handled via personnel
@@ -718,16 +978,145 @@ function sosMult(team: string | null | undefined, position: string): { mult: num
   return { mult, note };
 }
 
+// v5.6 (2026-05-18): QB RUSHING PROFILE — modern fantasy QBs derive a
+// material % of their fpts from rushing. The engine projects total fpts
+// correctly (rushing is in the data), but doesn't credit the FLOOR
+// advantage rushing provides (less variance, TD upside). Add a per-QB
+// premium based on 2024-2025 rushing share of total fpts.
+//   very-high (≥30%): +8% — Allen, Daniels
+//   high (20-30%):    +5% — Hurts, Lawrence, Mahomes, Maye, Lamar, Nix
+//   medium (10-20%):  +2% — Purdy, Baker, Burrow
+//   pocket (<10%):    -3% — Goff, Stafford, traditional pocket QBs
+const QB_RUSHING_PROFILE_2026: Record<string, number> = {
+  joshallen:        1.08,  // 39% rush share
+  jaydendaniels:    1.08,  // 34%
+  jalenhurts:       1.05,  // 29%
+  trevorlawrence:   1.05,  // 26%
+  patrickmahomes:   1.05,  // 25%
+  drakemaye:        1.05,  // 22%
+  bonix:            1.05,  // 21% (note: discounted via injury-context too)
+  lamarjackson:     1.05,  // 21%
+  calebwilliams:    1.05,  // 17% — missing from initial map; 2025 had 383 rush yd + 3 rTD
+  brockpurdy:       1.02,  // 19%
+  bakermayfield:    1.02,  // 16%
+  joeburrow:        1.00,  // 3% — but his passing volume is elite
+  cjstroud:         1.00,  // 12%
+  // Pocket QBs — no penalty in v5.6 final. Goff's elite passing volume on
+  // DET compensates for zero rushing floor. Rushers get a boost; pockets
+  // stay neutral. Eliminates target-chasing for Goff specifically.
+  jaredgoff:        1.00,
+  matthewstafford:  1.00,
+  dakprescott:      1.00,
+};
+
+// v5.14 (2026-05-21): TE-targeting QB chemistry premium.
+// Some QBs target TEs disproportionately as safety valves or red-zone
+// weapons. Map their lowercase-name keys; engine applies +TE_FRIENDLY_MULT
+// to any TE on a team where the projected QB1 (depth_chart_order=1) is in
+// this map. Catches the chemistry premium QB-cast layer misses.
+//
+// Sourced from 2024-2025 TE-target-share patterns:
+// - Mahomes (KC): Kelce era + Bowers now, historically 22-26% to TE
+// - Kyler (now MIN): McBride was TE1 2024-2025 with him
+// - Allen (BUF): Knox/Kincaid steady TE involvement
+// - Goff (DET): LaPorta breakout 2023; sustained TE feeder
+// - Lamar (BAL): Andrews lifetime, even with WR room
+// - Burrow (CIN): less but TE involvement notable
+const TE_FRIENDLY_QBS_2026: Record<string, number> = {
+  patrickmahomes:   1.04,
+  kylermurray:      1.04,
+  joshallen:        1.03,
+  jaredgoff:        1.03,
+  lamarjackson:     1.03,
+  joeburrow:        1.02,
+  cjstroud:         1.02,
+  jaydendaniels:    1.02,
+};
+
 const INJURY_OVERRIDES_2026: Record<string, InjuryStatus> = {
-  // Kittle: lingering 2025 injury, plays through when on field but
-  // missed games. Moderate discount — better than the 0.50 default,
-  // worse than fully healthy.
-  // v2026-05-12d: Achilles tear — missing ~half the season. Even when back,
-  // produces at reduced capacity. 9 of 17 games missed = ~53% of points + 10% return-discount.
+  // Lingering / chronic 2026 status (multiplier on baseline, severe cases).
   georgekittle:    { status: 'Out', injury: 'Achilles tear (half-season)', multiplier: 0.45 },
-  // Penix: significant injury, likely out extended time. Heavy discount
-  // and skipped from ATL QB1 selection (opens slot for Tua).
-  michaelpenixjr:  { status: 'Out',      injury: 'Significant injury', multiplier: 0.30 },
+  michaelpenixjr:  { status: 'Out', injury: 'Significant injury', multiplier: 0.30 },
+};
+
+// v5.3 (2026-05-18): 2025 INJURY CONTEXT for 2026 recovery projection.
+// The engine's `expected_games` defaults to a 3yr rolling avg, which pulls
+// down a player's projection when they missed games to a one-off injury.
+// This map adds explicit 2026 expected_games + per-game recovery discount
+// based on KNOWN 2025 injuries. Allows the engine to differentiate:
+//   - "fully recovered, back to normal" (Burrow/Daniels/Rice — wrist, knee, MCL)
+//   - "year-1 back from major injury" (Nabers/Hill — ACL, lingering)
+//   - "chronic / not back yet" (Kittle Achilles handled above; Penix)
+// Format: { games: expected 2026 games, mult: per-game performance retention }
+type InjuryContext = { games: number; mult: number; note: string };
+const INJURY_CONTEXT_2026: Record<string, InjuryContext> = {
+  // FULLY recovered — expected 16-17g at full strength
+  joeburrow:        { games: 16, mult: 1.00, note: 'wrist surgery — fully recovered' },
+  // v5.5: Daniels mult lifted from 1.00 to 1.05 — his rookie-year 2024
+  // was 428 fpts (QB3-5 territory), and injury-yr inversion blend only
+  // gave that year 60% weight. Bumping mult restores some of that ceiling.
+  jaydendaniels:    { games: 16, mult: 1.05, note: 'knee/hamstring — full recovery + Y3 ascent expected' },
+  drakemaye:        { games: 16, mult: 1.13, note: 'healthy Y3 ascent — top-10 PPG pace on bad-OL team; 2025 was 347 fpts' },
+  rasheerice:       { games: 15, mult: 1.00, note: 'MCL tear — recovered, slight games-risk premium' },
+  garrettwilson:    { games: 16, mult: 1.00, note: 'knee — recovered' },
+  brockpurdy:       { games: 16, mult: 1.00, note: 'turf toe — recovered' },
+  drakelondon:      { games: 16, mult: 1.00, note: 'soft tissue — recovered' },
+  buckyirving:      { games: 16, mult: 1.00, note: 'minor — recovered' },
+  brockbowers:      { games: 16, mult: 1.00, note: 'minor — recovered' },
+  tuckerkraft:      { games: 16, mult: 1.00, note: 'shoulder/knee — recovered' },
+  jjmccarthy:       { games: 15, mult: 0.97, note: 'meniscus — slight games risk' },
+  romeodunze:       { games: 16, mult: 1.00, note: 'minor — recovered' },
+  // ACL / Achilles — year-1 back at reduced capacity
+  maliknabers:      { games: 13, mult: 0.88, note: 'ACL — year-1 back, ~85% capacity + games risk' },
+  tyreekhill:       { games: 13, mult: 0.92, note: 'wrist surgery + lingering — partial recovery' },
+  // Chronic / multi-year struggle
+  kylermurray:      { games: 13, mult: 0.92, note: 'knee — chronic concern, partial year' },
+  // Rookies/Sophs returning from injury
+  camskattebo:      { games: 14, mult: 0.92, note: 'ankle (rookie) — soft year-2 expectation' },
+  omarionhampton:   { games: 14, mult: 0.92, note: 'collarbone — soft year-2 expectation' },
+  // Veterans with mild 2025 injuries (13-14g) — engine misses these because
+  // they're above the <10g hard threshold but their season-shortening hurts
+  // 3yr avg games. Apply explicit recovery projection.
+  lamarjackson:     { games: 16, mult: 1.00, note: 'minor 2025 missed games — back to elite' },
+  // v5.5: ACL recovery softened (was 13g/0.85) — Rodgers 2024 played 17g
+  // post-ACL at ~93% of his pre-injury pace. Mahomes timeline + KC offense
+  // resilience supports 15g/0.92 not 13g/0.85.
+  patrickmahomes:   { games: 15, mult: 0.92, note: 'ACL tear 2025 — Y1-back recovery, KC offense built around him' },
+  // v5.7 REVERTED (2026-05-19): CMC name-specific override removed. The
+  // "career-high workload + age 30 = regression" pattern needs to be a
+  // RB-position rule, not a CMC patch. Pending RB-specific scoring algo.
+  ajbrown:          { games: 16, mult: 1.00, note: 'minor 2025 — recovered' },
+  amonrastbrown:    { games: 16, mult: 1.00, note: 'minor — healthy' },
+  mikeevans:        { games: 14, mult: 0.95, note: 'aging 32yo — modest games risk' },
+  // v5.13 (2026-05-20): Puka therapy/rehab situation — modest games + per-game
+  // discount. User flagged offseason rehab/mental-health stay; uncertain
+  // return timeline. Light cap pending more clarity.
+  pukanacua:        { games: 15, mult: 0.97, note: 'offseason rehab — modest games + per-game risk' },
+  // v5.7 (2026-05-19): Derrick Henry — defies the age-32 RB cliff (0.42x
+  // in the curve is brutal). His 2025 was 280 fpts (RB8) at age 32. The
+  // age curve is a population average; outlier workhorses like Henry
+  // need an override. Mult 1.55 brings him from 9.9 → 15.3 ppg projection.
+  // v5.7 (2026-05-19 final): softer Henry override. 1.55 was too generous
+  // — projected him over healthy younger workhorses (Saquon, Jacobs, Jeanty)
+  // which is indefensible at age 32 + heavy 2025 workload. 1.15 gets him
+  // into RB18-22 territory (below the prime-age workhorses) while
+  // acknowledging his 2025 production proves he's not in full decline.
+  // v5.7 REVERTED: Henry and Etienne RB-specific patches removed. Pending
+  // RB-position scoring algo that handles workload-aging and vet-defies-cliff
+  // as RULES, not name-by-name overrides.
+  // v5.6 (2026-05-18): Herbert McDaniel scheme upgrade lift. LAC env layer
+  // has +5% coaching but it gets canceled by OL rank 32 + heavy travel.
+  // Industry expects McDaniel's scheme to offset those — explicit upside.
+  justinherbert:    { games: 16, mult: 1.05, note: 'McDaniel OC scheme upgrade — wide-open passing offset to OL/travel' },
+  // v5.6 (2026-05-18): Bo Nix ankle surgery + tougher 2026 SOS (DEN QB
+  // per-week z=-0.23). Two-year QB7 pace, but surgery year and harder
+  // slate suggest mild regression. Conservative discount.
+  // v5.6 (2026-05-18) final: removed surgery discount. Offseason ankle
+  // surgery typically has full recovery by Y3 OTA timeline. The harder
+  // 2026 schedule is ALREADY in the per-week SOS layer — double-counting
+  // it via injury-context would penalize him twice. Trust the 2024-2025
+  // QB7 consistency + rushing-profile floor.
+  bonix:            { games: 17, mult: 1.00, note: 'ankle surgery recovered; harder SOS handled in per-week SOS layer' },
 };
 
 async function fetchInjuryMap(): Promise<Map<string, InjuryStatus>> {
@@ -786,10 +1175,14 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     fetchSeason(supabase, asOfSeason - 3, ptsCol),
     fetchSeason(supabase, asOfSeason - 4, ptsCol),
     fetchSeason(supabase, asOfSeason - 5, ptsCol),
+    // v4.1 (2026-05-17): REMOVED is_active filter. Sleeper-derived flag
+    // was wrongly marking 45+ real NFL players inactive (Hill, Diggs,
+    // Rodgers, Keenan, Deebo, Hunt, etc.). Engine now reads ALL skill
+    // players; downstream `if (baseline <= 0) continue` filters truly
+    // dead players (retirees with no recent stats).
     supabase.from('nfl_players')
       .select('gsis_id, full_name, position, team, age, rookie_year, draft_year, draft_round, draft_pick, depth_chart_position, depth_chart_order')
-      .in('position', ['QB', 'RB', 'WR', 'TE'])
-      .eq('is_active', true),
+      .in('position', ['QB', 'RB', 'WR', 'TE']),
     // Broader roster fetch (active + inactive) for vacancy detection.
     supabase.from('nfl_players')
       .select('gsis_id, full_name, position, team, is_active, depth_chart_position, depth_chart_order')
@@ -815,6 +1208,28 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     if (!players.find((p: any) => p.gsis_id === inj.gsis_id || (p.full_name || '').toLowerCase() === inj.full_name.toLowerCase())) {
       players.push(inj as any);
       console.log(`[${format}] manual-injected ${inj.full_name} (${inj.position}/${inj.team})`);
+    }
+  }
+
+  // v5.13c (2026-05-20): TEAM OVERRIDES for confirmed signings Sleeper
+  // hasn't synced yet. Updates an existing player's team/depth/active flags.
+  // Use full_name (lowercased) match. Add entries as news breaks; remove
+  // once Sleeper catches up.
+  const TEAM_OVERRIDES_2026: Array<{
+    nameLower: string; team: string; is_active?: boolean;
+    depth_chart_position?: string; depth_chart_order?: number;
+  }> = [
+    { nameLower: 'jauan jennings', team: 'MIN', is_active: true, depth_chart_position: 'RWR', depth_chart_order: 2 },
+  ];
+  for (const ov of TEAM_OVERRIDES_2026) {
+    const p = players.find((p: any) => (p.full_name || '').toLowerCase() === ov.nameLower);
+    if (p) {
+      const oldTeam = p.team;
+      p.team = ov.team;
+      if (ov.is_active !== undefined) (p as any).is_active = ov.is_active;
+      if (ov.depth_chart_position) (p as any).depth_chart_position = ov.depth_chart_position;
+      if (ov.depth_chart_order !== undefined) (p as any).depth_chart_order = ov.depth_chart_order;
+      console.log(`[${format}] team-override ${p.full_name}: ${oldTeam} → ${ov.team}`);
     }
   }
 
@@ -924,6 +1339,78 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
   const teamTotalReceiverTargets: Record<string, number> = {};
   const teamTotalRBCarries:       Record<string, number> = {};
 
+  // v2 (2026-05-16): per-week team totals for "share-when-active" calc.
+  // Players who miss games get their share UNDERESTIMATED if we divide
+  // by season-total team targets — Garrett Wilson at 7g/59 tgts looks
+  // like 10% (59/600) when his actual when-active share is ~24%
+  // (59/250 over his 7 weeks). teamTargetsByWeek lets us compute share
+  // normalized to weeks the player was actually on the field.
+  const teamTargetsByWeek: Record<string, Record<number, number>> = {};   // team -> week -> receiver tgts
+  const teamCarriesByWeek: Record<string, Record<number, number>> = {};   // team -> week -> rb carries
+
+  // v5.13 (2026-05-20): team QB-chaos detection for 2025 + 2026 QB1 stability.
+  // Identify teams where 2025 QB1 missed games OR 2+ QBs had ≥4 starts.
+  // ALSO compute 2026 projected QB1 from depth_chart_order=1, and whether
+  // that QB has demonstrated starter-quality stability (15+g, 17+ppg in
+  // any prior 3yr year). QB-collapse-recovery rule fires only when 2025
+  // had chaos AND 2026 QB1 is established — otherwise the chaos likely
+  // continues (McCarthy projected QB1 on MIN in 2026 = still unresolved).
+  const teamQbStarts: Record<string, Record<string, number>> = {};
+  for (const w of w2025) {
+    if (positionByGsis[w.gsis_id] !== 'QB') continue;
+    const team = normTeamCode(w.team);
+    if (!team) continue;
+    const pts = Number((w as any)[ptsCol] ?? 0);
+    if (pts >= 6) {
+      teamQbStarts[team] = teamQbStarts[team] ?? {};
+      teamQbStarts[team][w.gsis_id] = (teamQbStarts[team][w.gsis_id] ?? 0) + 1;
+    }
+  }
+  const teamHadQbChaos: Record<string, boolean> = {};
+  for (const [team, qbs] of Object.entries(teamQbStarts)) {
+    const startsArr = Object.values(qbs).sort((a, b) => b - a);
+    const qb1Starts = startsArr[0] ?? 0;
+    const qb2Starts = startsArr[1] ?? 0;
+    if (qb1Starts <= 13 || qb2Starts >= 4) {
+      teamHadQbChaos[team] = true;
+    }
+  }
+  // 2026 QB1 stability: per team, find projected QB1 (depth_chart_order=1
+  // among QBs) and check their prior 3yr seasons for any 15+g 17+ppg year.
+  const teamProjectedQb1: Record<string, string> = {};  // team → gsis_id
+  for (const p of players) {
+    if (p.position !== 'QB' || !p.team) continue;
+    if (p.depth_chart_order === 1) {
+      teamProjectedQb1[p.team] = p.gsis_id;
+    }
+  }
+  const teamHas2026StableQb: Record<string, boolean> = {};
+  for (const [team, qbGsis] of Object.entries(teamProjectedQb1)) {
+    const q25 = agg2025.get(qbGsis);
+    const q24 = agg2024.get(qbGsis);
+    const q23 = agg2023.get(qbGsis);
+    const hasStableYr = [q25, q24, q23].some(a => a && a.games >= 15 && a.ppg >= 17);
+    // v5.13b: also exclude QBs whose INJURY_CONTEXT_2026 entry projects <15g.
+    // Kyler Murray on MIN: nominal QB1, but injury-flagged with 13g/0.92 →
+    // chaos likely continues, don't trigger WR recovery.
+    const qbPlayer = players.find(p => p.gsis_id === qbGsis);
+    const qbInjKey = (qbPlayer?.full_name || '').toLowerCase().replace(/[^a-z]/g, '');
+    const qbInjGames = INJURY_CONTEXT_2026[qbInjKey]?.games ?? 17;
+    const reliableInj = qbInjGames >= 15;
+    if (hasStableYr && reliableInj) teamHas2026StableQb[team] = true;
+  }
+  // v5.14 (2026-05-21): per-team TE-friendly QB chemistry mult.
+  // Lookup TE_FRIENDLY_QBS_2026 by projected QB1's name. Applied to TEs in
+  // layer6 environment.
+  const teamTeFriendlyQbMult: Record<string, number> = {};
+  for (const [team, qbGsis] of Object.entries(teamProjectedQb1)) {
+    const qbPlayer = players.find(p => p.gsis_id === qbGsis);
+    const qbKey = (qbPlayer?.full_name || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (TE_FRIENDLY_QBS_2026[qbKey]) {
+      teamTeFriendlyQbMult[team] = TE_FRIENDLY_QBS_2026[qbKey];
+    }
+  }
+
   for (const w of w2025) {
     const team = w.team;
     if (!team) continue;
@@ -934,12 +1421,82 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       (teamReceiverTargets[team] = teamReceiverTargets[team] ?? {});
       teamReceiverTargets[team][w.gsis_id] = (teamReceiverTargets[team][w.gsis_id] ?? 0) + tgts;
       teamTotalReceiverTargets[team] = (teamTotalReceiverTargets[team] ?? 0) + tgts;
+      teamTargetsByWeek[team] = teamTargetsByWeek[team] ?? {};
+      teamTargetsByWeek[team][w.week] = (teamTargetsByWeek[team][w.week] ?? 0) + tgts;
     }
     if (pos === 'RB') {
       (teamRusherCarries[team] = teamRusherCarries[team] ?? {});
       teamRusherCarries[team][w.gsis_id] = (teamRusherCarries[team][w.gsis_id] ?? 0) + car;
       teamTotalRBCarries[team] = (teamTotalRBCarries[team] ?? 0) + car;
+      teamCarriesByWeek[team] = teamCarriesByWeek[team] ?? {};
+      teamCarriesByWeek[team][w.week] = (teamCarriesByWeek[team][w.week] ?? 0) + car;
     }
+  }
+
+  // ─── v4.1 (2026-05-17): TEAMMATE-CONTEXT DECOMPOSITION ───────────────
+  // Identify each team's 2025 positional alpha by TARGETS/GAME (not season
+  // total). Lamb missed 4 games but had higher per-game target rate than
+  // Pickens — true alpha. Without per-game rate, Pickens (who played all
+  // 17g) would be falsely flagged as DAL's alpha because his season-total
+  // targets exceeded Lamb's reduced 13-game total.
+  //
+  // Then decompose each player's 2025 by whether the alpha was active.
+  // Pickens case: 15.0 ppg w/ Lamb / 24.2 ppg w/o Lamb → project 2026
+  // (Lamb healthy) off the with-Lamb rate.
+
+  // Player-week activity: set of weeks where player had any meaningful stat.
+  // Built BEFORE alpha ID since alpha calc needs game counts.
+  const playerActiveWeeks: Map<string, Set<number>> = new Map();
+  for (const w of w2025) {
+    const tgts = Number(w.targets ?? 0);
+    const car  = Number(w.carries ?? 0);
+    const pts  = Number((w as any).fantasy_pts_ppr ?? 0);
+    if (tgts > 0 || car > 0 || pts > 0) {
+      if (!playerActiveWeeks.has(w.gsis_id)) playerActiveWeeks.set(w.gsis_id, new Set());
+      playerActiveWeeks.get(w.gsis_id)!.add(w.week);
+    }
+  }
+
+  const teamWRTEAlpha2025: Record<string, string | null> = {};
+  const teamRBAlpha2025: Record<string, string | null> = {};
+  for (const team of Object.keys(teamReceiverTargets)) {
+    let bestWRTE: string | null = null;
+    let maxRate = 0;
+    for (const [gid, tgts] of Object.entries(teamReceiverTargets[team])) {
+      const tp = positionByGsis[gid];
+      if (tp === 'WR' || tp === 'TE') {
+        const games = (playerActiveWeeks.get(gid) ?? new Set()).size;
+        if (games < 4) continue;  // require 4+ game sample
+        const rate = tgts / games;
+        if (rate > maxRate) { maxRate = rate; bestWRTE = gid; }
+      }
+    }
+    teamWRTEAlpha2025[team] = bestWRTE;
+  }
+  for (const team of Object.keys(teamRusherCarries)) {
+    let bestRB: string | null = null;
+    let maxRate = 0;
+    for (const [gid, c] of Object.entries(teamRusherCarries[team])) {
+      const games = (playerActiveWeeks.get(gid) ?? new Set()).size;
+      if (games < 4) continue;
+      const rate = c / games;
+      if (rate > maxRate) { maxRate = rate; bestRB = gid; }
+    }
+    teamRBAlpha2025[team] = bestRB;
+  }
+
+  // Helper: team's receiver targets DURING the weeks the player was active.
+  function teamTgtsActive(team: string, playerWeeks: number[]): number {
+    const byWk = teamTargetsByWeek[team] ?? {};
+    let sum = 0;
+    for (const wk of playerWeeks) sum += (byWk[wk] ?? 0);
+    return sum;
+  }
+  function teamCarActive(team: string, playerWeeks: number[]): number {
+    const byWk = teamCarriesByWeek[team] ?? {};
+    let sum = 0;
+    for (const wk of playerWeeks) sum += (byWk[wk] ?? 0);
+    return sum;
   }
 
   // ─── Target-share trend signal (v2026-05-08) ───────────────────────
@@ -953,7 +1510,11 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
   const teamRBLoadHalves: Record<string, LoadHalves> = {};
   const playerLoadHalves: Record<string, LoadHalves> = {};
   for (const w of w2025) {
-    const team = w.team;
+    // v5.10 (2026-05-19): normalize team code (LA→LAR, JAC→JAX, WSH→WAS)
+    // so lookups against a25.lastTeam (already normalized) hit. Without
+    // this, teamRBLoadHalves['LA'] would silently no-op for the share-
+    // trend/decay rules on Rams/Chargers/Jags/Commanders players.
+    const team = normTeamCode(w.team);
     if (!team) continue;
     const half = w.week <= 8 ? 'h1' : (w.week >= 10 ? 'h2' : null);
     if (!half) continue;
@@ -1268,6 +1829,12 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
   //
   // Saints case (Tyson R1 pick 8 + Etienne FA): NO dilution ≈ 0.20, which
   // moves Olave's 29% share → adjusted 23.2% → falls out of alpha band.
+  // v5.13c (2026-05-20): production-weighted dilution. Was treating every
+  // team-change WR/TE as 0.07 regardless of whether they're a real threat.
+  // DET case: Conklin (backup TE, ~20 tgts) + Dortch (backup WR, ~30 tgts)
+  // + Law (R4 rookie) all triggering full dilution → 0.20 cap → wrongly
+  // crushed ARSB's alpha share by -19%. Now: only count arrivals with
+  // material prior production.
   const teamShareDilution: Record<string, number> = {};
   for (const p of players) {
     if (!p.team) continue;
@@ -1285,10 +1852,23 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       else if (round === 2)               consumed = 0.06;
       else if (round === 3)               consumed = 0.03;
     } else if (teamChanged && (p.position === 'WR' || p.position === 'TE')) {
-      consumed = 0.07;
+      // Production-gated: only count if arrival had material prior role.
+      // Use targets/game from 2025 if available, else 2024.
+      const refAgg = aTeam25 ?? aTeam24;
+      const totTgts = refAgg ? (refAgg.weeks || []).reduce((s, w) => s + (w.targets || 0), 0) : 0;
+      const g = refAgg?.games ?? 0;
+      const tgPerG = g > 0 ? totTgts / g : 0;
+      if (tgPerG >= 6.5)      consumed = 0.10;  // alpha-tier (Adams-class, 110+ tgts/16g)
+      else if (tgPerG >= 4.5) consumed = 0.07;  // WR2 / starting TE
+      else if (tgPerG >= 2.5) consumed = 0.03;  // WR3 / TE2
+      else                    consumed = 0;     // depth (Conklin/Dortch-class)
     } else if (teamChanged && p.position === 'RB') {
-      // Pass-catching RB heuristic: estimate from prior reception work
-      consumed = 0.05;
+      const refAgg = aTeam25 ?? aTeam24;
+      const totTgts = refAgg ? (refAgg.weeks || []).reduce((s, w) => s + (w.targets || 0), 0) : 0;
+      const g = refAgg?.games ?? 0;
+      const tgPerG = g > 0 ? totTgts / g : 0;
+      if (tgPerG >= 3.0)      consumed = 0.05;  // pass-catching RB
+      else                    consumed = 0;
     }
     if (consumed > 0) {
       teamShareDilution[p.team] = (teamShareDilution[p.team] ?? 0) + consumed;
@@ -1310,151 +1890,412 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     // Hoisted (v2.5): injuryNameKey available throughout the loop body
     const injuryNameKey = (p.full_name || '').toLowerCase().replace(/[^a-z]/g, '');
 
-    // ── Multi-year weighted baseline using RECENCY-WEIGHTED ppg ──
-    // Within each season we use recencyPpg (last-6-games weighted 3x)
-    // instead of plain season-average ppg. This catches mid-season
-    // collapses (Taylor 2025) and rewards late-season risers.
-    //
-    // Young players (<=27): blend 3 years 60/30/10 if available.
-    // Older players (28+):  recent year only.
+    // ═══ v3 (2026-05-16): NEW BASELINE per user spec ═══════════════════
+    // - 3yr default blend with NEW weekly weights (W1-6 ×1.5, W7-13 ×1, W14-17 ×2)
+    // - Expand to 5yr ONLY if player has top-10 finish but 3yr doesn't reflect it
+    // - Rookies: flat 7.5 ppg × (1 + draft pick tier boost)
+    // - Sample-size discount preserved (partial seasons get less weight)
+    // - Old paths (injury rebound, twice-proven, eliteVetStabilize) REMOVED.
+    //   Elite history is now handled via the top-10 expansion trigger only.
     let baseline = 0;
     let baselineSource = '';
-    let highVolatility = false;
-    // v2026-05-08: QBs use multi-year blend regardless of age. The <=27
-    // cap is reasonable for RBs (cliff at 30) but excludes prime-tier
-    // QBs in their late 20s / early 30s (Burrow 29, Mahomes 30, Stafford
-    // 38, Brady-era Rodgers). QB skill decline is gradual; one
-    // injury-shortened year shouldn't anchor their projection.
-    const useMultiYear = age <= 27 || p.position === 'QB';
+    let highVolatility = false; // retained for downstream method-string compat
+    const eliteVetStabilize = false; // v3: replaced by top-10 expansion trigger; stubbed for downstream refs
     const has25 = a25 && a25.games >= 4;
     const has24 = a24 && a24.games >= 4;
     const has23 = a23 && a23.games >= 4;
     const has22 = a22 && a22.games >= 4;
     const has21 = a21 && a21.games >= 4;
 
-    // INJURY-YEAR REBOUND check (v2.5):
-    // If the player\'s prior 2 years averaged >= 14 PPG and most recent
-    // year was < 12 PPG, and we see them in the injury feed -- they had
-    // a down year due to injury, not decline. Use prior years as anchor.
-    const priorAvg = ((has24 ? a24!.recencyPpg : 0) + (has23 ? a23!.recencyPpg : 0))
-                   / ((has24 ? 1 : 0) + (has23 ? 1 : 0) || 1);
-    const recentPpg = has25 ? a25!.recencyPpg : 0;
-    const injuryRebound = (
-      has24 && has23 && has25 &&
-      priorAvg >= 14 &&
-      recentPpg < 12 &&
-      injuryMap.has(injuryNameKey)
-    );
-    // Sample-size confidence weight (v2026-05-07): each year's contribution
-    // to the multi-year blend is scaled by gameCountWeight so a 9-game spike
-    // doesn't carry the same authority as a 16-game full season. Linear
-    // interpolation: 16+ games = 1.0×, 8 games = 0.7×, in between = linear.
-    // Closes the Purdy-overrate-from-9-game-sample gap surfaced 2026-05-07.
+    // Compute per-year recencyPpg using NEW v3 weekly weights
+    const r25 = a25 ? weeklyRecencyPpgV3(a25.weeks) : 0;
+    const r24 = a24 ? weeklyRecencyPpgV3(a24.weeks) : 0;
+    const r23 = a23 ? weeklyRecencyPpgV3(a23.weeks) : 0;
+    const r22 = a22 ? weeklyRecencyPpgV3(a22.weeks) : 0;
+    const r21 = a21 ? weeklyRecencyPpgV3(a21.weeks) : 0;
+
+    // Sample-size confidence (preserved from prior).
     const gameCountWeight = (games: number): number => {
       if (games >= 16) return 1.0;
       if (games <= 8)  return 0.7;
       return 0.7 + (games - 8) * (0.3 / 8);
     };
-    // Weighted-blend helper: weights are baseW * gameCountWeight, normalized.
     const blend = (parts: Array<{ baseW: number; ppg: number; games: number }>): number => {
       const totalW = parts.reduce((s, c) => s + c.baseW * gameCountWeight(c.games), 0);
       if (totalW <= 0) return 0;
       return parts.reduce((s, c) => s + c.baseW * gameCountWeight(c.games) * c.ppg, 0) / totalW;
     };
 
-    // ── Elite-vet 5yr stabilization gate (v2026-05-07) ──
-    // Trigger when a player has elite history (2× top-10 or 1× top-5 PPG
-    // finishes at position in 2023-2025) AND a collapse signal in 2025
-    // (recent year >25% below prior 2-year avg, or in injury feed).
-    // Uses 5yr blend with rebalanced weights 0.30/0.25/0.20/0.15/0.10
-    // (2025→2021) to soften one-year cratering for true-talent WR1/RB1s.
-    // JJ case: 2024 PPR top-5, 2025 cratered behind QB play, 2021/2022
-    // were elite — the model should anchor to career production, not
-    // the worst year alone.
     const eliteCounts = eliteVetMap.get(p.gsis_id) ?? { top10: 0, top5: 0 };
-    const eliteHistory = eliteCounts.top10 >= 2 || eliteCounts.top5 >= 1;
-    const dropRatio = priorAvg > 0 ? (recentPpg / priorAvg) : 1;
-    // Games-played collapse: 2025 sample is <60% of historical games avg.
-    // Burrow case: 8 games in 2025 vs ~17 prior — per-game PPG was OK
-    // but he missed half the season. That's a collapse the dropRatio
-    // (which is per-game) would never catch. CMC's 2025 was 19 games
-    // (recovery), so this rule does NOT false-positive on him.
-    const histGamesCount = (has24 ? 1 : 0) + (has23 ? 1 : 0);
-    const histGamesAvg = histGamesCount > 0
-      ? ((has24 ? a24!.games : 0) + (has23 ? a23!.games : 0)) / histGamesCount
-      : 0;
-    const gamesCollapse = !!(a25 && histGamesAvg > 0 && a25.games < 0.6 * histGamesAvg);
-    const collapseSignal = (has25 && has24 && has23 && dropRatio < 0.75) ||
-                           gamesCollapse ||
-                           injuryMap.has(injuryNameKey);
-    // v2026-05-08: relaxed from "all 5 years" to "3+ of 5". A fully missed
-    // season (CMC 2024 achilles, Saquon 2020 ACL) is exactly the kind of
-    // profile this gate should catch, but the strict version was bouncing
-    // them off the data-completeness check. blend() normalizes weights so
-    // missing years just drop out of the average.
-    const yearCount = (has25?1:0) + (has24?1:0) + (has23?1:0) + (has22?1:0) + (has21?1:0);
-    // v2026-05-12e: "twice-proven" pathway. Pitts case — 2+ top-10 finishes
-    // in 5yr window with a non-collapse 2025 was falling through the
-    // stabilization gate (no collapseSignal) and getting 3yr blend +
-    // volatility + inconsistency penalty stacked. If a player has shown
-    // top-10 production twice, we trust the full career arc regardless of
-    // collapse status.
-    const twiceProven = eliteCounts.top10 >= 2;
-    const eliteVetStabilize = !isRookie && has25 && yearCount >= 3 && (
-      (eliteHistory && collapseSignal) ||
-      twiceProven
-    );
     let eliteVetTag = '';
 
-    if (eliteVetStabilize) {
-      const parts5: Array<{ baseW: number; ppg: number; games: number }> = [];
-      if (has25) parts5.push({ baseW: 0.30, ppg: a25!.recencyPpg, games: a25!.games });
-      if (has24) parts5.push({ baseW: 0.25, ppg: a24!.recencyPpg, games: a24!.games });
-      if (has23) parts5.push({ baseW: 0.20, ppg: a23!.recencyPpg, games: a23!.games });
-      if (has22) parts5.push({ baseW: 0.15, ppg: a22!.recencyPpg, games: a22!.games });
-      if (has21) parts5.push({ baseW: 0.10, ppg: a21!.recencyPpg, games: a21!.games });
-      baseline = blend(parts5);
-      baselineSource = `5yr stabilized blend (${yearCount}/5 yrs)`;
-      eliteVetTag = `elite-vet 5yr stabilize (${eliteCounts.top10}× top-10, ${eliteCounts.top5}× top-5)`;
-    } else if (injuryRebound) {
-      // Rebound case: prior years anchor, recent year is partial signal.
-      // Sample-size weighting applied to both sides for consistency.
-      const priorParts: Array<{ baseW: number; ppg: number; games: number }> = [];
-      if (has24) priorParts.push({ baseW: 0.5, ppg: a24!.recencyPpg, games: a24!.games });
-      if (has23) priorParts.push({ baseW: 0.5, ppg: a23!.recencyPpg, games: a23!.games });
-      const priorWeighted = blend(priorParts);
-      baseline = 0.6 * priorWeighted + 0.4 * recentPpg;
-      baselineSource = 'rebound';
-    } else if (useMultiYear && has25 && has24 && has23) {
+    // Fix #2 (v3 2026-05-17): injury-year baseline inversion.
+    // ONLY fires when player has actual career top-10 history. Without this
+    // gate, chronic-injury players (Rice: 0 career top-10) get falsely
+    // anchored to small healthy samples. We're not "rescuing" players who
+    // never were elite — we're correcting under-projection for players
+    // whose proven peak got buried by an injury year.
+    const eliteCountsForGate = eliteVetMap.get(p.gsis_id) ?? { top10: 0, top5: 0 };
+    const hasTop10History = eliteCountsForGate.top10 >= 1;
+    const injury2025 = !!(a25 && a25.games < 10);
+    const has24Healthy = !!(a24 && a24.games >= 8 && r24 >= 14);  // tightened back to 8g
+
+    if (isRookie) {
+      // Flat 7.5 ppg × draft pick tier boost.
+      const pickBoost = draftPickBoostV3(p.draft_round, p.draft_pick, p.position);
+      baseline = 7.5 * (1 + pickBoost);
+      const pickTag = p.draft_pick ? `#${p.draft_pick}` : (p.draft_round ? `R${p.draft_round}` : 'undrafted');
+      baselineSource = `rookie 7.5 base × pick ${pickTag} +${(pickBoost*100).toFixed(0)}%`;
+    } else if (injury2025 && has24Healthy && hasTop10History) {
+      // Inverted blend: 2024 as anchor (60%), 2025 partial (25%), 2023 (15%)
+      const parts: Array<{ baseW: number; ppg: number; games: number }> = [
+        { baseW: 0.60, ppg: r24, games: a24!.games },
+      ];
+      if (has25) parts.push({ baseW: 0.25, ppg: r25, games: a25!.games });
+      if (has23) parts.push({ baseW: 0.15, ppg: r23, games: a23!.games });
+      baseline = blend(parts);
+      baselineSource = `injury-yr inverted (2024 anchor + 2025 ${a25!.games}g + 2023)`;
+    } else if (has25 && has24 && has23) {
+      // 3yr default (60/30/10) using v3 weekly recency
       baseline = blend([
-        { baseW: 0.6, ppg: a25!.recencyPpg, games: a25!.games },
-        { baseW: 0.3, ppg: a24!.recencyPpg, games: a24!.games },
-        { baseW: 0.1, ppg: a23!.recencyPpg, games: a23!.games },
+        // v5.9 (2026-05-19): further softened from 0.50/0.30/0.20.
+        // 50% weight on 2025 over-punished vets like Saquon whose 2024
+        // monster (355 fpts) was being undercounted vs their down 2025.
+        { baseW: 0.45, ppg: r25, games: a25!.games },
+        { baseW: 0.32, ppg: r24, games: a24!.games },
+        { baseW: 0.23, ppg: r23, games: a23!.games },
       ]);
-      baselineSource = `3yr blend (sample-weighted)`;
-    } else if (useMultiYear && has25 && has24) {
+      baselineSource = `3yr v3 blend`;
+    } else if (has25 && has24) {
       baseline = blend([
-        { baseW: 0.7, ppg: a25!.recencyPpg, games: a25!.games },
-        { baseW: 0.3, ppg: a24!.recencyPpg, games: a24!.games },
+        { baseW: 0.7, ppg: r25, games: a25!.games },
+        { baseW: 0.3, ppg: r24, games: a24!.games },
       ]);
-      baselineSource = `2yr blend (sample-weighted)`;
+      baselineSource = `2yr v3 blend`;
     } else if (has25) {
-      // Single-year case: still apply sample-size discount for partial seasons.
-      baseline = a25!.recencyPpg * gameCountWeight(a25!.games);
-      baselineSource = `2025 recency (${a25!.games}g, ${gameCountWeight(a25!.games).toFixed(2)}x sample)`;
+      baseline = r25 * gameCountWeight(a25!.games);
+      baselineSource = `2025 v3 recency (${a25!.games}g)`;
     } else if (has24) {
-      // Injured 2025? Use 2024 with the existing 0.85 absence-discount,
-      // then sample-size on top.
-      baseline = a24!.recencyPpg * 0.85 * gameCountWeight(a24!.games);
-      baselineSource = `2024 (no 2025, sample-weighted)`;
-    } else if (isRookie) {
-      baseline = rookieBaselineByPos(p.position, p.draft_round, format);
-      baselineSource = `rookie R${p.draft_round ?? '?'}`;
+      baseline = r24 * 0.85 * gameCountWeight(a24!.games);
+      baselineSource = `2024 v3 recency (no 2025)`;
     } else {
       continue;
     }
 
     if (baseline <= 0) continue;
+
+    // Fix #4 (v3 2026-05-17): sophomore jump for R1 WR/TE.
+    // R1 rookie WR/TEs typically jump +10-20% in PPG in year 2 (better
+    // route concepts, target share growth, QB/coach familiarity). The
+    // engine treats them as 1yr-data players and stalls them at rookie
+    // PPG. McMillan case: 11 ppg rookie year → industry projects ~14 ppg
+    // year 2 → engine projects 10 ppg.
+    // v3 fix: sophomore jump for WR/TE who was an ACTUAL rookie in 2025.
+    // Strict check via rookie_year / draft_year (was failing on Rice who
+    // played 3g in 2024, fell below the !has24 threshold, and got falsely
+    // tagged as sophomore in year 4). McMillan = true sophomore.
+    // v5.13 (2026-05-20): QB-collapse-recovery rule.
+    // Detect WR/TE with elite history who collapsed in 2025 because team had
+    // QB chaos. Lift baseline by replacing 2025 ppg with prior 3yr "what-if"
+    // avg. JJ case considered: 19.4/21.7/20.4/18.7/11.9 trajectory + MIN
+    // had McCarthy meniscus chaos in 2025.
+    // v5.13b GATE (2026-05-20): only fire if the player's 2026 team has an
+    // ESTABLISHED QB1 (15+g 17+ppg in prior 3yr). If 2026 QB1 is the same
+    // unproven QB who caused 2025's chaos, the chaos likely continues —
+    // don't lift. JJ on MIN-with-McCarthy-still-QB1 = chaos persists.
+    if (!isRookie && (p.position === 'WR' || p.position === 'TE')
+        && has25 && (has24 || has23)) {
+      const team2025 = a25!.lastTeam;
+      const team2026 = p.team;
+      const teamChaos = team2025 ? teamHadQbChaos[team2025] : false;
+      const stable2026Qb = team2026 ? teamHas2026StableQb[team2026] : false;
+      if (teamChaos && stable2026Qb) {
+        // Career-best ppg in 5yr window
+        const careerBestPpg = Math.max(
+          a25?.ppg ?? 0, a24?.ppg ?? 0, a23?.ppg ?? 0, a22?.ppg ?? 0, a21?.ppg ?? 0
+        );
+        // Prior 3yr avg (2024 + 2023 + 2022 where available, ≥10g)
+        const priors: number[] = [];
+        if (a24 && a24.games >= 10) priors.push(a24.ppg);
+        if (a23 && a23.games >= 10) priors.push(a23.ppg);
+        if (a22 && a22.games >= 10) priors.push(a22.ppg);
+        const priorAvg = priors.length > 0 ? priors.reduce((s, v) => s + v, 0) / priors.length : 0;
+        const drop = priorAvg > 0 ? 1 - (a25!.ppg / priorAvg) : 0;
+        // Trigger: elite history (≥18 ppg career best) AND 30%+ drop AND chaos
+        if (careerBestPpg >= 18 && drop >= 0.30 && priorAvg > 0) {
+          // Recompute baseline replacing 2025 with priorAvg in the blend
+          // Use same 3yr weights (0.45/0.32/0.23) but substitute priorAvg for r25
+          const adjBlend = blend([
+            { baseW: 0.45, ppg: priorAvg, games: 16 },
+            { baseW: 0.32, ppg: r24, games: a24?.games ?? 0 },
+            { baseW: 0.23, ppg: r23, games: a23?.games ?? 0 },
+          ]);
+          if (adjBlend > baseline) {
+            const oldBaseline = baseline;
+            baseline = adjBlend;
+            baselineSource += ` × QB-chaos recovery ${oldBaseline.toFixed(1)}→${baseline.toFixed(1)} (team chaos ${team2025}; 2025 ${a25!.ppg.toFixed(1)} vs prior ${priorAvg.toFixed(1)})`;
+          }
+        }
+      }
+    }
+
+    const wasRookieIn2025 = p.rookie_year === asOfSeason - 1 || p.draft_year === asOfSeason - 1;
+    const isSophomore = wasRookieIn2025 && has25 && (p.position === 'WR' || p.position === 'TE' || p.position === 'RB');
+    if (isSophomore && r25 >= 9.0) {
+      // v4.2 (2026-05-17): bumped down from 1.12 to 1.06. Sophomore Y2
+      // improvement is real but smaller than the 12% bump implied.
+      baseline = baseline * 1.06;
+      baselineSource += ` + sophomore jump ${p.position} (+6% on ${r25.toFixed(1)} rookie ppg)`;
+    }
+
+    // v5.12 (2026-05-20): sustained-breakout bonus.
+    // Y2/Y3 WR/TE whose 2025 was alpha-tier (18+ ppg) gets +5% on baseline.
+    // JSN-class: real WR2 finisher whose age-curve + base blend still
+    // under-shoots. Distinct from sophomore jump (which is rookie→Y2);
+    // this catches Y3 ascenders too (e.g., Nico Collins-class trajectory).
+    // Gated to: ≤3 years experience AND 2025 alpha-ppg.
+    const rookieAnchor = p.rookie_year ?? p.draft_year ?? null;
+    const yearsExp = rookieAnchor ? (asOfSeason - rookieAnchor) : 99;
+    const breakoutEligible = (p.position === 'WR' || p.position === 'TE')
+      && !isRookie && yearsExp >= 1 && yearsExp <= 3 && a25 && a25.ppg >= 18 && a25.games >= 12;
+    if (breakoutEligible) {
+      baseline = baseline * 1.05;
+      baselineSource += ` + sustained-breakout +5% (Y${yearsExp} alpha ${a25!.ppg.toFixed(1)} ppg)`;
+    }
+
+    // ─── v5 (2026-05-17): ONE-YEAR-WONDER REGRESSION ──────────────────
+    // Single outlier season ≥1.40× of the player's other-years average.
+    // Baker 2024 was 22 ppg vs his 14-16 ppg prior career → regression
+    // expected toward career mean. Apply 0.92x baseline. Doesn't fire
+    // for proven-vets (their elite years are recurring, not aberrations).
+    const yearsForOYW = (has25 ? 1 : 0) + (has24 ? 1 : 0) + (has23 ? 1 : 0);
+    // v5.2 (2026-05-18) PERMANENT: detect Baker-class one-year-wonder QBs
+    // even when 5yr-expansion fires. Engine was missing them because the
+    // proven-vet check uses ppg >= 17 strict threshold (Baker's 2024 was
+    // 22ppg but other yrs 10-16, so qualCount=1, but eliteCounts.top10
+    // was 2 from his 2024 top-3 finish + a 2021 top-10. So 5yr-expansion
+    // anchored him on his elite year — but engine never applied OYW
+    // because... let's force it. Position-aware aggressive OYW for QBs.
+    let oywFired = false;  // v5.11: track to prevent double-firing post-5yr
+    if (!isRookie && yearsForOYW >= 3) {
+      const allPpgs: number[] = [];
+      if (a25 && a25.games >= 10) allPpgs.push(a25.ppg);
+      if (a24 && a24.games >= 10) allPpgs.push(a24.ppg);
+      if (a23 && a23.games >= 10) allPpgs.push(a23.ppg);
+      if (a22 && a22.games >= 10) allPpgs.push(a22.ppg);
+      if (a21 && a21.games >= 10) allPpgs.push(a21.ppg);
+      if (allPpgs.length >= 3) {
+        const maxYr = Math.max(...allPpgs);
+        const otherAvg = (allPpgs.reduce((s, v) => s + v, 0) - maxYr) / (allPpgs.length - 1);
+        // Check: does proven-vet already cover this? If 3+ qualifying seasons, skip.
+        const ppgThreshOYW = p.position === 'QB' ? 17 : p.position === 'TE' ? 9 : 12;
+        const qualCount = [a25, a24, a23, a22, a21].filter(
+          a => a && a.games >= 15 && a.ppg >= ppgThreshOYW
+        ).length;
+        // v5.2 (2026-05-18): QBs get a tighter OYW threshold + stronger
+        // penalty. Baker case: his 2024 22 ppg was a 1.47× outlier vs his
+        // 14-16 ppg prior career. The general 1.40/0.92 wasn't enough.
+        const oywRatioThresh = p.position === 'QB' ? 1.30 : 1.40;
+        const oywPenalty     = p.position === 'QB' ? 0.88 : 0.92;
+        // v5.11 (2026-05-20): ascent exemption for non-QB. If the peak year
+        // is the MOST RECENT year (a25), it's a breakout ascending trajectory,
+        // not a fluke. JSN sophomore 21 ppg vs Y1 11 ppg = ascent, not OYW.
+        // v5.12 (2026-05-20): also exempt sustained breakouts — peak in a24
+        // AND a25 within 20% of peak. Nico Collins 17.6/15.1/12.0 trajectory
+        // is sustained ascender, not fluke.
+        const ascendingPeak = (p.position !== 'QB') && (a25 && a25.ppg >= 10) && (a25.ppg === maxYr);
+        const sustainedBreakout = (p.position !== 'QB') && (a25 && a24)
+          && (a24.ppg === maxYr) && (a25.ppg >= maxYr * 0.80);
+        if (otherAvg > 0 && maxYr / otherAvg >= oywRatioThresh && qualCount < 3
+            && !ascendingPeak && !sustainedBreakout) {
+          baseline = baseline * oywPenalty;
+          baselineSource += ` × OYW regression (peak ${maxYr.toFixed(1)} vs ${otherAvg.toFixed(1)} avg)`;
+          oywFired = true;
+        }
+      }
+    }
+
+    // ─── v4.2 (2026-05-17): YOUNG-ELITE-FLOOR (rookie-year-was-elite) ───
+    // Catches McConkey-type players: 2nd or 3rd-year pro whose rookie or
+    // sophomore year cracked top-15 at position. The talent is established
+    // even though the career sample is small. Boost +10% baseline.
+    //
+    // Position thresholds for "top-15 finish":
+    //   QB top-15: ~270 fpts season total
+    //   RB top-15: ~190 fpts
+    //   WR top-15: ~210 fpts
+    //   TE top-10: ~110 fpts (TE pool is smaller)
+    const yearsOfDataInline = (has25 ? 1 : 0) + (has24 ? 1 : 0) + (has23 ? 1 : 0);
+    if (!isRookie && yearsOfDataInline <= 2 && (p.position === 'WR' || p.position === 'TE' || p.position === 'RB' || p.position === 'QB')) {
+      // v5.1 (2026-05-17): QB-specific tighter threshold + smaller boost.
+      // Old QB threshold (270 fpts) was too low — Bo Nix/Caleb's decent
+      // rookie years qualified, lifting them to top-3 QBs. New QB bar 320+
+      // only includes truly elite rookie seasons (Daniels-tier).
+      const thresholds: Record<string, number> = { QB: 320, RB: 190, WR: 210, TE: 110 };
+      const boosts:     Record<string, number> = { QB: 1.05, RB: 1.10, WR: 1.10, TE: 1.10 };
+      const threshold = thresholds[p.position] ?? 180;
+      const boost = boosts[p.position] ?? 1.10;
+      const careerSeasons: number[] = [];
+      if (a25 && a25.games >= 12) careerSeasons.push(a25.ppg * a25.games);
+      if (a24 && a24.games >= 12) careerSeasons.push(a24.ppg * a24.games);
+      const careerBest = careerSeasons.length ? Math.max(...careerSeasons) : 0;
+      if (careerBest >= threshold) {
+        baseline = baseline * boost;
+        baselineSource += ` + young-elite-floor (${careerBest.toFixed(0)} fpts best, ≥${threshold})`;
+      }
+    }
+
+    // Fix #1 (v3 2026-05-17): team-change baseline discount for WR/TE.
+    // Player's historical baseline reflects their OLD role/team. A WR1 on
+    // PIT becomes a WR2 on DAL — their PIT production overstates DAL
+    // projection. Discount 15% for WR/TE team-change cases (RB less so
+    // because RB workload is more team-dependent and is already captured
+    // in role/share). Pickens, Wan'Dale, DJ Moore, Davante Adams cases.
+    if (!isRookie && a25?.lastTeam && p.team && a25.lastTeam !== p.team
+        && (p.position === 'WR' || p.position === 'TE')) {
+      baseline = baseline * 0.85;
+      baselineSource += ` × 0.85 team-change (${a25.lastTeam}→${p.team})`;
+    }
+
+    // ─── v4.1 (2026-05-17): TEAMMATE-CONTEXT DECOMPOSITION ────────────
+    // Decompose 2025 production by whether team's positional alpha was
+    // active. If player benefited from alpha's absence (WITHOUT-rate
+    // materially higher than WITH-rate), discount baseline assuming alpha
+    // is healthy in 2026. Pickens case: 15.0 ppg with Lamb / 24.2 ppg
+    // without — projected 2026 (Lamb healthy) ≈ 15.6 ppg, not 17.2.
+    //
+    // Default assumption: 2026 alpha plays 16/17 games (92% weight).
+    // Inverse case (player MISSED games while alpha played) is already
+    // handled by expectedGamesV4 → no double-count.
+    if (!isRookie && a25 && p.team && (p.position === 'WR' || p.position === 'TE' || p.position === 'RB')) {
+      const alpha = p.position === 'RB' ? teamRBAlpha2025[p.team] : teamWRTEAlpha2025[p.team];
+      if (alpha && alpha !== p.gsis_id) {
+        const alphaWks = playerActiveWeeks.get(alpha) ?? new Set<number>();
+        let withPts = 0, withG = 0, withoutPts = 0, withoutG = 0;
+        for (const w of a25.weeks) {
+          if (alphaWks.has(w.week)) { withPts += w.pts; withG += 1; }
+          else { withoutPts += w.pts; withoutG += 1; }
+        }
+        // Require meaningful split sample
+        if (withG >= 3 && withoutG >= 2) {
+          const withPpg = withPts / withG;
+          const withoutPpg = withoutPts / withoutG;
+          const gap = withoutPpg - withPpg;
+          // Only adjust when alpha-absence boost is material (≥3 ppg lift)
+          // AND directionally correct (player benefited from alpha being out)
+          if (gap >= 3.0) {
+            // Re-blend assuming 2026 alpha plays 16/17 games (0.92 weight)
+            const adjustedPpg = 0.92 * withPpg + 0.08 * withoutPpg;
+            const observed25Ppg = (withPts + withoutPts) / (withG + withoutG);
+            if (observed25Ppg > 0) {
+              const ratio = adjustedPpg / observed25Ppg;
+              baseline = baseline * ratio;
+              baselineSource += ` × teammate-ctx ${ratio.toFixed(2)} (w/alpha ${withPpg.toFixed(1)} / w/o ${withoutPpg.toFixed(1)})`;
+            }
+          }
+        }
+      }
+    }
+
+    // ── 5yr EXPANSION TRIGGER (per user spec) ──
+    // If player has ≥1 actual top-10 season finish at their position but the
+    // 3yr blend wouldn't project them top-10, expand to 5yr to capture
+    // elite peak years that recent seasons buried. Position thresholds are
+    // the rough top-10 PPG line at each spot.
+    const POS_TOP10_PPG_THRESHOLDS: Record<string, number> = {
+      QB: 19.0, RB: 15.0, WR: 14.0, TE: 11.0,
+    };
+    const top10Threshold = POS_TOP10_PPG_THRESHOLDS[p.position] ?? 12.0;
+    let fiveYrExpanded = false;  // v5.11: gate post-expansion OYW
+    if (!isRookie && eliteCounts.top10 >= 1 && baseline < top10Threshold && (has22 || has21)) {
+      const parts5: Array<{ baseW: number; ppg: number; games: number }> = [];
+      if (has25) parts5.push({ baseW: 0.30, ppg: r25, games: a25!.games });
+      if (has24) parts5.push({ baseW: 0.25, ppg: r24, games: a24!.games });
+      if (has23) parts5.push({ baseW: 0.20, ppg: r23, games: a23!.games });
+      if (has22) parts5.push({ baseW: 0.15, ppg: r22, games: a22!.games });
+      if (has21) parts5.push({ baseW: 0.10, ppg: r21, games: a21!.games });
+      const expanded = blend(parts5);
+      if (expanded > baseline) {
+        baseline = expanded;
+        baselineSource = `5yr v3 blend (top-10 expansion: ${eliteCounts.top10}× career top-10)`;
+        eliteVetTag = `top-10 history (${eliteCounts.top10}× top-10, ${eliteCounts.top5}× top-5)`;
+        fiveYrExpanded = true;
+      }
+    }
+
+    // ─── v5.2 (2026-05-18): OYW regression POST-5yr-expansion ──────────
+    // Has to run AFTER 5yr expansion because expansion overwrites baseline.
+    // Catches Baker-class: had a top-10 finish (so 5yr expansion fires)
+    // but ALSO has career outlier season (2024 22ppg vs other yrs 10-16).
+    // v5.11 (2026-05-20): ONLY fire if 5yr expansion actually fired AND
+    // pre-expansion OYW didn't already fire. Previously fired unconditionally
+    // → double-firing the penalty on JSN/Nico-class breakouts (0.92² = 0.85).
+    if (!isRookie && yearsForOYW >= 3 && fiveYrExpanded && !oywFired) {
+      const allPpgsP: number[] = [];
+      if (a25 && a25.games >= 10) allPpgsP.push(a25.ppg);
+      if (a24 && a24.games >= 10) allPpgsP.push(a24.ppg);
+      if (a23 && a23.games >= 10) allPpgsP.push(a23.ppg);
+      if (a22 && a22.games >= 10) allPpgsP.push(a22.ppg);
+      if (a21 && a21.games >= 10) allPpgsP.push(a21.ppg);
+      if (allPpgsP.length >= 3) {
+        const maxYrP = Math.max(...allPpgsP);
+        const otherAvgP = (allPpgsP.reduce((s, v) => s + v, 0) - maxYrP) / (allPpgsP.length - 1);
+        const ppgThreshP = p.position === 'QB' ? 17 : p.position === 'TE' ? 9 : 12;
+        const qualCountP = [a25, a24, a23, a22, a21].filter(
+          a => a && a.games >= 15 && a.ppg >= ppgThreshP
+        ).length;
+        const ratioThreshP = p.position === 'QB' ? 1.30 : 1.40;
+        const penaltyP     = p.position === 'QB' ? 0.88 : 0.92;
+        const ascendingPeakP = (p.position !== 'QB') && (a25 && a25.ppg >= 10) && (a25.ppg === maxYrP);
+        const sustainedBreakoutP = (p.position !== 'QB') && (a25 && a24)
+          && (a24.ppg === maxYrP) && (a25.ppg >= maxYrP * 0.80);
+        if (otherAvgP > 0 && maxYrP / otherAvgP >= ratioThreshP && qualCountP < 3
+            && !ascendingPeakP && !sustainedBreakoutP) {
+          baseline = baseline * penaltyP;
+          baselineSource += ` × OYW regression (peak ${maxYrP.toFixed(1)} vs ${otherAvgP.toFixed(1)} avg)`;
+        }
+      }
+    }
+
+    // ─── v2 (2026-05-16): CEILING-WEIGHTED BASELINE ──────────────────────
+    // Players whose recent baseline is materially below their career ceiling
+    // are usually injury/role-disruption cases (Wilson NYJ-chaos 2024;
+    // McConkey lost target share to LAC offseason additions; Olave 2024
+    // concussion year). The recency-weighted blend understates their true
+    // talent. Blend in their career-best season at 25-30% weight when the
+    // gap is significant (max prior ≥ 1.15× current baseline).
+    //
+    // Caps: ceiling weight capped at 0.30, only triggers when gap is real,
+    // and never used for rookies (no prior data) or elite-vet 5yr blends
+    // (which already smoothed multi-year peaks).
+    if (!isRookie && !eliteVetStabilize) {
+      // Use recencyPpg (same scale as the baseline blend uses) for the
+      // ceiling comparison. Raw ppg would mix scales and never trigger
+      // for late-season-faded players. Also include the player's BEST
+      // raw ppg as a secondary signal — talent is real even if recency
+      // suppressed it.
+      const priorRecencyPpgs: number[] = [];
+      const priorRawPpgs: number[] = [];
+      const seasons = [a25, a24, a23, a22, a21];
+      for (const s of seasons) {
+        if (s && s.games >= 8) {
+          priorRecencyPpgs.push(s.recencyPpg);
+          priorRawPpgs.push(s.ppg);
+        }
+      }
+      if (priorRecencyPpgs.length >= 2) {
+        const ceilingRecency = Math.max(...priorRecencyPpgs);
+        const ceilingRaw = Math.max(...priorRawPpgs) * 0.95;
+        const ceiling = Math.max(ceilingRecency, ceilingRaw);
+        if (ceiling >= baseline * 1.15) {
+          const gap = ceiling / baseline;
+          const ceilingWeight = Math.min(0.30, 0.15 + (gap - 1.15) * 0.5);
+          const newBaseline = baseline * (1 - ceilingWeight) + ceiling * ceilingWeight;
+          baseline = newBaseline;
+          baselineSource += ` + ceiling ${ceiling.toFixed(1)}@${(ceilingWeight*100).toFixed(0)}%`;
+        }
+      }
+    }
 
     // ── Vacated workload boost (v2026-05-08) ──
     // Auto-detected: this player is the most-likely heir to a 2025
@@ -1497,12 +2338,51 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     const yearsOfData = (has25 ? 1 : 0) + (has24 ? 1 : 0) + (has23 ? 1 : 0);
     const hadStarterRecentYear =
       p.position === 'QB' && a25 && a25.games >= 12 && a25.ppg >= 16;
-    if (yearsOfData === 1 && !isRookie) {
-      baseline = baseline * (hadStarterRecentYear ? 0.95 : 0.90);
+    // v5.9 (2026-05-19): proven-sophomore exemption. A sophomore whose
+    // rookie year was ≥10 ppg already has strong NFL evidence; the 0.80
+    // penalty was treating Jeanty (14.3 ppg as R) like an unproven flier.
+    const provenSophomore = isSophomore && r25 >= 10.0;
+    if (yearsOfData === 1 && !isRookie && !provenSophomore) {
+      // v4.2 (2026-05-17): tightened from 0.90 to 0.80. Single-year samples
+      // are unreliable; engine was over-projecting 1yr-data players (esp.
+      // sophomores whose rookie year became their only baseline anchor).
+      baseline = baseline * (hadStarterRecentYear ? 0.92 : 0.80);
       sampleSizePenalty = true;
     } else if (yearsOfData === 2 && !isRookie) {
-      baseline = baseline * (hadStarterRecentYear ? 0.97 : 0.95);
+      baseline = baseline * (hadStarterRecentYear ? 0.97 : 0.92);
       sampleSizePenalty = true;
+    }
+
+    // ─── v4.2 (2026-05-17): PROVEN-CONSISTENCY VET BOOST ───────────────
+    // Rewards multi-year established producers. Engine was systematically
+    // under-valuing track-record vets (Wilson, Hill, Adams, etc.) vs
+    // unproven sophomores.
+    //
+    // Logic: look at the player's full 5-yr window. Count seasons that
+    // qualify as "meaningful production" (15+g AND ppg ≥ position threshold).
+    // - 3+ qualifying seasons: +6% (proven vet)
+    // - 2 qualifying + 1+ recent year of data: +3% (established but recent gap)
+    //
+    // Catches Hill (3+ elite seasons 2021-2023, even though 2024-2025 dropped)
+    // and Wilson (3+ consistent 2022-2024 even though 2025 was injury-shortened).
+    // v5 (2026-05-17): scaled proven-vet boost. 3 qual = +6%, 4 = +9%, 5 = +12%.
+    // Hill (5 career elite seasons) deserves more weight than a 3-yr vet.
+    // Closes the gap on chronic-injury elites where industry bets on bounce-back.
+    if (!isRookie && (p.position === 'WR' || p.position === 'TE' || p.position === 'RB' || p.position === 'QB')) {
+      const ppgThresh = p.position === 'QB' ? 17 : p.position === 'TE' ? 9 : 12;
+      const consistentSeasons = [a25, a24, a23, a22, a21].filter(
+        a => a && a.games >= 15 && a.ppg >= ppgThresh
+      ).length;
+      let vetMult = 1.0;
+      let vetLabel = '';
+      if      (consistentSeasons >= 5) { vetMult = 1.12; vetLabel = `5-qual-vet (+12%)`; }
+      else if (consistentSeasons === 4) { vetMult = 1.09; vetLabel = `4-qual-vet (+9%)`; }
+      else if (consistentSeasons === 3) { vetMult = 1.06; vetLabel = `3-qual-vet (+6%)`; }
+      else if (consistentSeasons === 2 && (has25 || has24)) { vetMult = 1.03; vetLabel = `emerging-vet (+3%)`; }
+      if (vetMult > 1.0) {
+        baseline = baseline * vetMult;
+        baselineSource += ` + ${vetLabel}`;
+      }
     }
 
     // ── Breakout-year regression (v2026-05-08) ──
@@ -1544,7 +2424,7 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
           // v2026-05-12: use dilution-adjusted share so offseason competition
           // (Tyson + Etienne arriving on NO) doesn't grandfather Olave's
           // 2025 alpha status into 2026 immunity from breakout regression.
-          const dil = Math.min(0.22, teamShareDilution[p.team ?? ''] ?? 0);
+          const dil = Math.min(0.20, teamShareDilution[p.team ?? ''] ?? 0);
           const share = rawShare * (1 - dil);
           if (share >= 0.25) isExemptAlpha = true;
         } else if (p.position === 'RB') {
@@ -1597,9 +2477,12 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     // a stronger penalty (0.85×) because WRs have the highest year-to-
     // year volatility — single-elite-year over-projections like Jeudy
     // need a steeper correction. Other positions stay at 0.93×.
-    if (breakoutRegression || inconsistencyPenalty) {
-      const mult = (breakoutRegression && p.position === 'WR') ? 0.85 : 0.93;
-      baseline = baseline * mult;
+    // v2 (2026-05-16): breakout regression DISABLED. Was over-firing on
+    // return-to-form cases (Olave 2025 after 2024 concussion). The recency-
+    // weighted baseline + sample-size logic already deweight one-year spikes.
+    // Inconsistency penalty kept — captures volatile profiles distinctly.
+    if (inconsistencyPenalty) {
+      baseline = baseline * 0.93;
     }
 
     // v2026-05-12c: late-season tear bonus.
@@ -1676,11 +2559,80 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
         else if (avgGames >= 11) durabilityMult = 0.73;
         else if (avgGames >= 10) durabilityMult = 0.68;
         else                     durabilityMult = 0.60;
-        baseline = baseline * durabilityMult;
+        // v4 (2026-05-17): DO NOT apply durability to baseline. Season-total
+        // framing handles availability via expectedGamesV4 — multiplying
+        // baseline by durability would double-count missed games.
+        // baseline = baseline * durabilityMult;  // disabled for v4
       }
     }
 
-    const ageMult = ageCurve(p.position, age);
+    let ageMult = ageCurve(p.position, age);
+
+    // ─── v5.8 (2026-05-19): RB-SPECIFIC POSITION ALGORITHM ─────────────
+    // RBs need their own scoring rules. Workload accumulates damage,
+    // year-after-RB1 finishers regress, and late-career elites who hit
+    // top-10 recently defy the age cliff. All applied as RULES, not patches.
+    if (p.position === 'RB' && !isRookie) {
+      // Compute 3yr rolling workload (carries + targets ≈ touches/opportunities)
+      const workloads: number[] = [];
+      for (const agg of [a25, a24, a23]) {
+        if (agg && agg.games >= 8) {
+          const tc = (agg.weeks || []).reduce((s, w) => s + (w.carries || 0), 0);
+          const tt = (agg.weeks || []).reduce((s, w) => s + (w.targets || 0), 0);
+          workloads.push(tc + tt);
+        }
+      }
+      const avgWorkload = workloads.length > 0
+        ? workloads.reduce((s, w) => s + w, 0) / workloads.length
+        : 0;
+
+      // RB Rule 1: workload modifier on age curve, but ONLY for RBs at/past peak.
+      // Young RBs (≤26) with heavy workload aren't accumulating damage yet —
+      // they're built for it. Damage compounds when workload meets aging.
+      // Jeanty fix: age 21 + 320 touches = no penalty. CMC age 30 + 320 = penalty.
+      let workloadMod = 1.00;
+      let wlNote = '';
+      if (age >= 27) {
+        if (avgWorkload >= 320) { workloadMod = 0.93; wlNote = `elite-workhorse workload ${avgWorkload.toFixed(0)} at age ${age} (×0.93)`; }
+        else if (avgWorkload >= 260) { workloadMod = 0.97; wlNote = `heavy workload ${avgWorkload.toFixed(0)} at age ${age} (×0.97)`; }
+        else if (avgWorkload < 150 && avgWorkload > 0) { workloadMod = 1.03; wlNote = `light-touch workload ${avgWorkload.toFixed(0)} (×1.03 preservation)`; }
+      }
+
+      // RB Rule 2: late-career age-defiance — vets 29+ with recent top-10 finish
+      // pull their age multiplier halfway back toward 1.0. Henry 32 with RB8
+      // 2025 (280 fpts) → 0.42 → 0.65. Honors actual production over population avg.
+      let defyNote = '';
+      if (age >= 29) {
+        const recentTop10 = [
+          (a25 && a25.games >= 12 && a25.ppg * a25.games >= 240),
+          (a24 && a24.games >= 12 && a24.ppg * a24.games >= 240),
+        ].filter(Boolean).length;
+        if (recentTop10 >= 1 && ageMult < 1.0) {
+          // v5.8: 30% pull toward 1.0 (was 40%). Softens cliff without
+          // promoting vets over prime-age workhorses with similar profiles.
+          const softened = ageMult + (1 - ageMult) * 0.30;
+          defyNote = `age-defiance softens ${ageMult.toFixed(2)}→${softened.toFixed(2)} (recent top-10 finish)`;
+          ageMult = softened;
+        }
+      }
+      // Apply workload mod to (potentially defiance-softened) ageMult
+      if (workloadMod !== 1.00) ageMult = ageMult * workloadMod;
+      if (wlNote || defyNote) {
+        baselineSource += ` | RB: ${[wlNote, defyNote].filter(Boolean).join(' + ')}`;
+      }
+
+      // RB Rule 3: year-after-RB1-finish regression
+      // RB1-tier finishers (350+ fpts) typically regress ~12% YoY
+      // due to career-high workload + bad-luck-mean-reversion + age progression.
+      // Fires on CMC 2025 (417 fpts).
+      if (a25 && a25.games >= 15) {
+        const a25Total = a25.ppg * a25.games;
+        if (a25Total >= 350) {
+          baseline = baseline * 0.88;
+          baselineSource += ` × RB1-finish regression (was ${a25Total.toFixed(0)} fpts; -12%)`;
+        }
+      }
+    }
     let teamMult = teamChangeAdj(a25?.lastTeam ?? a24?.lastTeam ?? null, p.team);
     // Weak-team penalty (v2.5): skill-position players on tier-5 offenses
     // (currently NE, NYG) get a 0.95x dampener. Will be replaced with
@@ -1726,7 +2678,19 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     // Positive opp adj = late-season rebound (Burrow post-injury) ->
     // real forward-looking signal, keep as is.
     const rawOppAdj = a25 ? opportunityAdj(a25.weeks) : 0;
-    const oppAdj = (eliteVetStabilize && rawOppAdj < 0) ? 0 : rawOppAdj;
+    // v3: zero out opp-trend for (a) injury-shortened seasons (<10 of 17g)
+    // and (b) sophomores — a rookie's within-season H1/H2 pattern reflects
+    // role-finding noise more than predictive 2026 signal. McMillan case:
+    // CAR was a bad team, his late-season weeks were partly trash time;
+    // -8% penalty on his 2026 projection makes no sense.
+    const injuryShortened = !!(a25 && a25.games < 10);
+    // v5.2 (2026-05-18): also skip opp-signals for team-change WR/TEs.
+    // Wan'Dale case: his NYG late-2025 trend doesn't predict his TEN role.
+    // His old-team H1/H2 share spike is irrelevant for the new context.
+    const teamChangedWR = (p.position === 'WR' || p.position === 'TE')
+                       && a25?.lastTeam && p.team && a25.lastTeam !== p.team;
+    const skipOppSignals = injuryShortened || isSophomore || teamChangedWR;
+    const oppAdj = skipOppSignals ? 0 : ((eliteVetStabilize && rawOppAdj < 0) ? 0 : rawOppAdj);
     const formatAdj = formatPositionAdj(format, p.position, age);
 
     // ── System context multiplier (Tier 1, v2026-05-07) ──
@@ -1745,17 +2709,43 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     } else if (p.position === 'WR' || p.position === 'TE') {
       const teamChanged = !!(a25?.lastTeam && a25.lastTeam !== p.team);
       const myT = teamReceiverTargets[playerTeam]?.[p.gsis_id] ?? 0;
-      const totT = teamTotalReceiverTargets[playerTeam] ?? 0;
+      // v2 (2026-05-16): SHARE-WHEN-ACTIVE. Use team targets ONLY from the
+      // weeks the player was active. Otherwise Garrett Wilson (7g/59 tgts)
+      // shows up as 10% share (59/600 season-total) instead of his real
+      // ~24% (59/250 over his weeks). Same bug torched Olave/Rice/McConkey.
+      const playerWeeks = (agg2025.get(p.gsis_id)?.weeks ?? []).map(w => w.week);
+      const totTActive = teamTgtsActive(playerTeam, playerWeeks);
+      const totT = totTActive > 0 ? totTActive : (teamTotalReceiverTargets[playerTeam] ?? 0);
       const rawShare = totT > 0 ? myT / totT : 0;
-      // v2026-05-12: dilute incumbents' 2025 share by team's offseason
-      // target consumers (rookie WRs, FA signings, pass-catching RB adds).
-      const dil = Math.min(0.22, teamShareDilution[playerTeam] ?? 0);
+      const dil = Math.min(0.20, teamShareDilution[playerTeam] ?? 0);
       const share = rawShare * (1 - dil);
       if (teamChanged) {
-        // v2026-05-11: team change → reset target-share signal. Pickens'
-        // 27% share from PIT isn't predictive of his DAL role behind Lamb.
-        sysCtxMult = 1.0;
-        sysCtxNote = `team change — share reset (${a25!.lastTeam}→${p.team})`;
+        // v5.2 (2026-05-18): smarter team-change share treatment. Instead
+        // of flat reset to neutral, check if the destination team drafted
+        // a top-15 WR THIS year (Tate to TEN). If so, the incoming WR is
+        // likely WR2 → apply -5% band. If the team drafted a top-5 WR,
+        // even harsher (-8%). Otherwise neutral (Pickens to DAL case).
+        let teamGotEliteRookieWR = false;
+        let teamGotTop5WR = false;
+        for (const otherP of players) {
+          if (otherP.team !== p.team) continue;
+          if (otherP.position !== 'WR') continue;
+          if (otherP.draft_year !== asOfSeason) continue;  // 2026 rookie
+          if (otherP.draft_round === 1) {
+            teamGotEliteRookieWR = true;
+            if ((otherP.draft_pick ?? 99) <= 5) teamGotTop5WR = true;
+          }
+        }
+        if (teamGotTop5WR) {
+          sysCtxMult = 0.92;
+          sysCtxNote = `team change behind top-5 rookie WR ${a25!.lastTeam}→${p.team} (-8%)`;
+        } else if (teamGotEliteRookieWR) {
+          sysCtxMult = 0.95;
+          sysCtxNote = `team change behind R1 rookie WR ${a25!.lastTeam}→${p.team} (-5%)`;
+        } else {
+          sysCtxMult = 1.0;
+          sysCtxNote = `team change — share reset (${a25!.lastTeam}→${p.team})`;
+        }
       } else if (myT > 0) {
         // v2026-05-11: graduated target-share bands. The previous neutral
         // 0.10-0.25 zone over-rewarded WR2s in elite offenses (Higgins 18%,
@@ -1776,7 +2766,43 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
         const teamSortedTgts = Object.values(teamReceiverTargets[playerTeam] ?? {}).sort((a, b) => b - a);
         const iAmTeamAlpha = myRawTgts > 0 && myRawTgts === (teamSortedTgts[0] ?? 0);
         const stuckBehindAlpha = !iAmTeamAlpha && (teamAlphaShare[playerTeam] ?? 0) >= 0.28;
-        if (share >= 0.25)      { sysCtxMult = 1.03; sysCtxNote = `alpha read +3% (${(share*100).toFixed(0)}% team tgts${dilTag})`; }
+        // v5.14 (2026-05-20): TE-specific share bands. TEs typically earn
+        // 14-22% of team targets as their alpha role — penalizing them as
+        // "WR2 zone" because they're not above 25% wrongly crushed every
+        // legit TE1 in the league. Kelce, Ferguson, Hunter Henry, Goedert
+        // all fell to TE17-19 from this bug. TE thresholds reflect actual
+        // TE1 usage patterns.
+        if (p.position === 'TE') {
+          if (share >= 0.22) {
+            // McBride/Bowers-tier — premium TE1 alpha
+            sysCtxMult = 1.05;
+            sysCtxNote = `TE1 alpha +5% (${(share*100).toFixed(0)}% team tgts${dilTag})`;
+          } else if (share >= 0.14) {
+            // Standard TE1 — neutral (this is just doing your job as TE1)
+            sysCtxMult = 1.00;
+            sysCtxNote = `TE1 standard (${(share*100).toFixed(0)}% team tgts${dilTag})`;
+          } else if (share >= 0.10) {
+            sysCtxMult = 0.95;
+            sysCtxNote = `TE2 zone -5% (${(share*100).toFixed(0)}% team tgts${dilTag})`;
+          } else {
+            sysCtxMult = 0.90;
+            sysCtxNote = `TE depth -10% (${(share*100).toFixed(0)}% team tgts${dilTag})`;
+          }
+        } else if (share >= 0.25)      {
+          // WR bands below (unchanged for WRs)
+          // v5.13c (2026-05-20): alpha-dilution made real. When new arrivals
+          // (team-change WR or top-10 rookie WR) consumed >5% of share,
+          // reduce alpha read proportionally. JJ + Jennings case: dil=0.07
+          // → 1.03 × 0.93 = 0.96. Adams-stayed-LAR doesn't trigger (no
+          // consumed share). Only new mouths matter.
+          if (dil > 0.05) {
+            sysCtxMult = 1.03 * (1 - dil);
+            sysCtxNote = `alpha read diluted to ${sysCtxMult.toFixed(2)}x (${(share*100).toFixed(0)}% team tgts${dilTag})`;
+          } else {
+            sysCtxMult = 1.03;
+            sysCtxNote = `alpha read +3% (${(share*100).toFixed(0)}% team tgts${dilTag})`;
+          }
+        }
         else if (share >= 0.20) {
           if (stuckBehindAlpha) { sysCtxMult = 0.94; sysCtxNote = `mid-share behind ${(teamAlphaShare[playerTeam]*100).toFixed(0)}% alpha -6% (${(share*100).toFixed(0)}% team tgts${dilTag})`; }
           else                  { sysCtxMult = 1.00; sysCtxNote = `mid-share (${(share*100).toFixed(0)}% team tgts${dilTag})`; }
@@ -1790,7 +2816,10 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       }
     } else if (p.position === 'RB') {
       const myC = teamRusherCarries[playerTeam]?.[p.gsis_id] ?? 0;
-      const totC = teamTotalRBCarries[playerTeam] ?? 0;
+      // v2 (2026-05-16): share-when-active for RBs too
+      const playerWeeksRb = (agg2025.get(p.gsis_id)?.weeks ?? []).map(w => w.week);
+      const totCActive = teamCarActive(playerTeam, playerWeeksRb);
+      const totC = totCActive > 0 ? totCActive : (teamTotalRBCarries[playerTeam] ?? 0);
       const share = totC > 0 ? myC / totC : 0;
       if (myC > 0) {
         if (share > 0.60)      { sysCtxMult = 1.03; sysCtxNote = `workhorse +3% (${(share*100).toFixed(0)}% team carries)`; }
@@ -1800,7 +2829,9 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
 
     const playerLastTeam = a25?.lastTeam ?? a24?.lastTeam ?? null;
     const cast = castMultFor(p.team ?? null, p.position, playerLastTeam);
-    const trend = targetShareTrend(p);
+    // v3: same gate for share trend — zero for injury-shortened OR sophomore
+    const rawTrend = targetShareTrend(p);
+    const trend = skipOppSignals ? { mult: 1.0, note: '' } : rawTrend;
 
     // v2026-05-11: cap QB-cast boost for low-share receivers. Prevents
     // "elite QB + WR2 with 18% target share" from stacking into top-10.
@@ -1809,9 +2840,12 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     let effectiveCastNote = cast.note;
     if ((p.position === 'WR' || p.position === 'TE') && cast.mult > 1.02) {
       const myT_qc = teamReceiverTargets[p.team ?? '']?.[p.gsis_id] ?? 0;
-      const totT_qc = teamTotalReceiverTargets[p.team ?? ''] ?? 0;
+      // v2 (2026-05-16): share-when-active here too
+      const wks_qc = (agg2025.get(p.gsis_id)?.weeks ?? []).map(w => w.week);
+      const totTAct_qc = teamTgtsActive(p.team ?? '', wks_qc);
+      const totT_qc = totTAct_qc > 0 ? totTAct_qc : (teamTotalReceiverTargets[p.team ?? ''] ?? 0);
       const rawShare_qc = totT_qc > 0 ? myT_qc / totT_qc : 0;
-      const dil_qc = Math.min(0.22, teamShareDilution[p.team ?? ''] ?? 0);
+      const dil_qc = Math.min(0.20, teamShareDilution[p.team ?? ''] ?? 0);
       const share_qc = rawShare_qc * (1 - dil_qc);
       // v2026-05-12: cap +2% if low diluted share (Higgins/Williams case).
       if (share_qc > 0 && share_qc < 0.22) {
@@ -1932,9 +2966,19 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     let persMult = 1.0;
     let persNote = '';
     if (p.team && (p.position === 'QB' || p.position === 'RB' || p.position === 'WR' || p.position === 'TE')) {
-      const pm = personnelMult(p.team, p.position);
-      persMult = pm.mult;
-      persNote = pm.note;
+      // v5.14 (2026-05-21): scheme-decay flag. If COACHING_CHANGES_2026 marks
+      // this position's personnel tendency as decayed (departed coach defined
+      // it), neutralize the personnel mult. CLE case: Stefanski's 41% 12-personnel
+      // boost shouldn't persist into 2026 under Monken.
+      const ccDecay = (p.team && COACHING_CHANGES_2026[p.team]?.personnel_decay) || [];
+      if (ccDecay.includes(p.position as any)) {
+        persMult = 1.0;
+        persNote = 'personnel decayed (scheme-architect exit)';
+      } else {
+        const pm = personnelMult(p.team, p.position);
+        persMult = pm.mult;
+        persNote = pm.note;
+      }
     }
 
     // Combined scheme adjustment, capped ±12%
@@ -1942,44 +2986,292 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     if (combinedSchemeMult > 1.12) combinedSchemeMult = 1.12;
     if (combinedSchemeMult < 0.88) combinedSchemeMult = 0.88;
 
-    // v2026-05-15: Positional SOS (z-score per position vs league mean,
-    // computed from 2025 opp fpts-allowed × 2026 schedule). ±5% clamped;
-    // typical effect is ±2-3%.
-    const sos = sosMult(p.team, p.position);
+    // v4 (2026-05-17): per-week positional SOS (replaces season-average).
+    // Weights playoff weeks (14-17) ×2 so the WR who faces brutal late D's
+    // gets dinged for it. ±10% capped, typical ±2-4%.
+    const sos = sosMultV4(p.team, p.position);
 
-    const forwardLayer = baseline * ageMult * teamMult * (1 + rookieBoost) * (1 + oppAdj) * formatAdj * sysCtxMult * effectiveCastMult * trend.mult * woprMult * epaMult * depthMult * combinedSchemeMult * sos.mult;
-    const score = baseline * 0.25 + forwardLayer * 0.75;
+    // v4: travel burden (±5% by team). LAC/MIA/SEA/LV get penalized for
+    // brutal 2026 travel schedules; east-coast teams (CIN/PIT/ATL/CAR)
+    // benefit slightly.
+    const travel = travelMultV4(p.team);
 
-    // Build readable method
+    // ─── v2 (2026-05-16): 6-layer consolidated multiplier chain ─────────
+    // Old chain compounded 14 multipliers, producing absurd swings
+    // (Wan'Dale: opp +15% × team +4% × trend +5% all said "more
+    // opportunity"). New chain groups by signal type and takes the
+    // strongest signal per group instead of compounding overlapping ones.
+    //
+    // Layer 1: AGE/EXPERIENCE — ageMult × rookieBoost (already separate)
+    let layer1_ageExp = ageMult * (1 + rookieBoost);
+    //
+    // Layer 2: ROLE & SHARE — sysCtxMult (depth+share-band) × depthMult
+    //   (sysCtxMult already includes the dilution-aware band selection
+    //   from v2026-05-16; depthMult adds WR slot adjustment)
+    const layer2_roleShare = sysCtxMult * depthMult;
+    //
+    // Layer 3: OPPORTUNITY CHANGE — take MAX of these "new opportunity"
+    //   signals instead of compounding: oppAdj, teamMult, trend.mult.
+    //   Wan'Dale case: all three said +5-15%, compounded to +27%. Now
+    //   takes only the strongest single signal, capped ±15%.
+    const oppSignals = [oppAdj, teamMult - 1, trend.mult - 1];
+    const oppPos = Math.max(0, ...oppSignals.filter(v => v > 0));
+    const oppNeg = Math.min(0, ...oppSignals.filter(v => v < 0));
+    let oppNet = oppPos + oppNeg;
+    if (oppNet > 0.15) oppNet = 0.15;
+    // Fix #3 (v3 2026-05-17): cap opportunity downside at -10% (was -15%).
+    // McConkey case: 2025 decline from alpha → WR2 fired -15% but the player
+    // is still a starter. -15% on top of -5% role-share band was crushing
+    // legitimate WR2s into WR40+ territory.
+    if (oppNet < -0.10) oppNet = -0.10;
+    // v5.10 (2026-05-19): RB share-decay rule (Kyren-Corum case).
+    // The existing share-trend signal is capped at ±5% and MAX-of'd against
+    // opp-trend, so big committee shifts (Kyren: 71% H1 → 58% H2 carries)
+    // get swallowed. Apply an ADDITIONAL share-decay/gain adjustment
+    // OUTSIDE the MAX-of, additively. Only RB. Only triggers on >8pp move.
+    let shareDecayAdj = 0;
+    let shareDecayNote = '';
+    if (p.position === 'RB' && !skipOppSignals) {
+      const t2025 = a25?.lastTeam ?? p.team;
+      const pl = playerLoadHalves[p.gsis_id];
+      const tl = t2025 ? teamRBLoadHalves[t2025] : null;
+      if (pl && tl && tl.h1 > 0 && tl.h2 > 0) {
+        const h1s = pl.h1 / tl.h1;
+        const h2s = pl.h2 / tl.h2;
+        if (h1s >= 0.10 || h2s >= 0.10) {  // meaningful sample
+          const delta = h2s - h1s;
+          // Decay (lost ≥8pp): additional -3% per 5pp beyond 5pp lost. Cap -7%.
+          if (delta <= -0.08) {
+            shareDecayAdj = Math.max(-0.07, (delta + 0.05) * 1.5);
+            shareDecayNote = `RB share decay ${(h1s*100).toFixed(0)}%→${(h2s*100).toFixed(0)}% (${(shareDecayAdj*100).toFixed(0)}%)`;
+          } else if (delta >= 0.08) {
+            // Mirror boost for back gaining share. Cap +7%.
+            shareDecayAdj = Math.min(0.07, (delta - 0.05) * 1.5);
+            shareDecayNote = `RB share gain ${(h1s*100).toFixed(0)}%→${(h2s*100).toFixed(0)}% (+${(shareDecayAdj*100).toFixed(0)}%)`;
+          }
+        }
+      }
+    }
+    let layer3_opportunity = (1.0 + oppNet) * (1.0 + shareDecayAdj);
+    //
+    // Layer 4: EFFICIENCY — EPA × WOPR × QB cast × format (mostly
+    //   orthogonal signals about per-target/per-format quality)
+    const layer4_efficiency = epaMult * woprMult * effectiveCastMult * formatAdj;
+    //
+    // Layer 5: AVAILABILITY — durability already applied to baseline
+    //   above; no additional layer-5 mult needed here. Captured.
+    const layer5_availability = 1.0;
+    //
+    // Layer 6: SCHEME + SOS — already consolidated by the personnelMult
+    //   × coachMult cap (±12%) + sos.mult (±5%)
+    // v3: OL rank multiplier (PB for QB/WR/TE, RB for RB)
+    const ol = olMultV3(p.team, p.position);
+    // Layer 6: scheme × SOS × OL × travel (all environment factors)
+    let layer6_environment = combinedSchemeMult * sos.mult * ol.mult * travel.mult;
+    // v5.14 (2026-05-21): TE-friendly QB chemistry. Adds small boost when
+    // the team's projected QB1 is a known TE-targeting passer (Mahomes,
+    // Kyler, Allen, Goff, Lamar, etc.). Per TE_FRIENDLY_QBS_2026 map.
+    let teQbChemNote = '';
+    if (p.position === 'TE' && p.team) {
+      const teMult = teamTeFriendlyQbMult[p.team];
+      if (teMult && teMult > 1.0) {
+        layer6_environment = layer6_environment * teMult;
+        teQbChemNote = `TE-QB chem +${((teMult - 1) * 100).toFixed(0)}%`;
+      }
+    }
+    // Cap combined ±15%
+    if (layer6_environment > 1.15) layer6_environment = 1.15;
+    if (layer6_environment < 0.85) layer6_environment = 0.85;
+
+    // v4 (2026-05-17): SEASON-TOTAL FRAMING.
+    // v5.12 (2026-05-20): vet WR/TE 32+ compound floor.
+    // Adams case: age 33 (0.86) × team-change opp (0.90) × eff (1.08) × env...
+    // compounded too hard for a still-producing vet (15.9 ppg in 14g 2025).
+    // Floor the age × opp product at 0.80 for WR/TE 32+ who played 12+ games
+    // most recent year (still active, not retired/IR). Still penalized.
+    if ((p.position === 'WR' || p.position === 'TE') && age >= 32 && a25 && a25.games >= 12) {
+      const ageOpp = layer1_ageExp * layer3_opportunity;
+      if (ageOpp < 0.80) {
+        // Distribute the lift back into the two factors proportionally
+        const lift = 0.80 / ageOpp;
+        layer1_ageExp = layer1_ageExp * Math.sqrt(lift);
+        layer3_opportunity = layer3_opportunity * Math.sqrt(lift);
+        baselineSource += ` | vet 32+ compound floor ${ageOpp.toFixed(2)}→0.80`;
+      }
+    }
+    const projectedPpg = baseline
+                       * layer1_ageExp
+                       * layer2_roleShare
+                       * layer3_opportunity
+                       * layer4_efficiency
+                       * layer6_environment;
+
+    // Pull avgGames already computed above for durability bucketing
+    const injuryMultForGames = injuryMult; // already incorporated 0.45 for Kittle etc.
+    // v4.1: pass per-season games array so injury-yr cases get smarter expected games
+    const perSeasonGames: number[] = [];
+    if (a25) perSeasonGames.push(a25.games);
+    if (a24) perSeasonGames.push(a24.games);
+    if (a23) perSeasonGames.push(a23.games);
+    let gamesEst = expectedGamesV4(avgGames, age, p.position, injuryMultForGames, perSeasonGames);
+
+    // v5.2 (2026-05-18): when injury-yr inversion fires AND player has a
+    // healthy elite year to anchor on, expected_games should reflect that
+    // healthy year's availability (with risk premium), not the chronic
+    // 3yr avg pulled down by the injury sample.
+    // Daniels: 2024 healthy 20g elite → expected 2026 ≈ 15.3g, not 14g.
+    // Burrow: 2024 healthy 17g → expected ≈ 15.3g, not 11.7g.
+    const wasInversion = baselineSource.startsWith('injury-yr inverted');
+    if (wasInversion) {
+      // Find the healthiest qualifying prior year
+      const healthyPriorGames = Math.max(
+        (a24?.games ?? 0) >= 15 ? Math.min(a24!.games, 17) : 0,
+        (a23?.games ?? 0) >= 15 ? Math.min(a23!.games, 17) : 0,
+        (a22?.games ?? 0) >= 15 ? Math.min(a22!.games, 17) : 0,
+      );
+      if (healthyPriorGames >= 15) {
+        // Anchor at healthy-year × 0.90 (10% recurrence risk premium)
+        const anchored = healthyPriorGames * 0.90;
+        if (anchored > gamesEst.games) {
+          gamesEst = {
+            games: anchored,
+            note: `${anchored.toFixed(1)}g (injury-rebound anchor on healthy ${healthyPriorGames}g)`,
+          };
+        }
+      }
+    }
+
+    // v5.3 (2026-05-18): apply explicit 2025-injury recovery context.
+    // Overrides derived expected_games with player-specific recovery
+    // projection. Also applies a recovery-mult to per-game pace for
+    // year-1-back ACL/Achilles cases (Nabers ~88%, Hill ~92%).
+    const injuryKey = (p.full_name || '').toLowerCase().replace(/[^a-z]/g, '');
+    let recoveredProjectedPpg = projectedPpg;
+    if (INJURY_CONTEXT_2026[injuryKey]) {
+      const ctx = INJURY_CONTEXT_2026[injuryKey];
+      gamesEst = { games: ctx.games, note: ctx.note };
+      // v5.5: apply mult either direction. <1.0 = recovery discount,
+      // >1.0 = upside boost for ascending young QBs (Daniels/Maye Y3).
+      if (ctx.mult !== 1.0) {
+        recoveredProjectedPpg = projectedPpg * ctx.mult;
+      }
+    }
+
+    // v5.6 (2026-05-18): QB rushing premium. Rushers have higher floor
+    // (rushing fpts come even on bad passing days) which the per-game
+    // projection misses. Apply per-player adjustment from profile map.
+    let rushingPremiumNote = '';
+    if (p.position === 'QB' && QB_RUSHING_PROFILE_2026[injuryKey]) {
+      const rushMult = QB_RUSHING_PROFILE_2026[injuryKey];
+      if (rushMult !== 1.0) {
+        recoveredProjectedPpg = recoveredProjectedPpg * rushMult;
+        const dir = rushMult > 1.0 ? '+' : '';
+        rushingPremiumNote = `rushing-profile ${dir}${((rushMult - 1) * 100).toFixed(0)}%`;
+      }
+    }
+    const projectedSeasonTotal = recoveredProjectedPpg * gamesEst.games;
+
+    // v4: career-best sanity guardrail. Prevent wild over-projection.
+    // Skip for rookies/sophomores (no prior baseline) and elite-vet stabilize.
+    // v5.9 (2026-05-19): tightened cap for non-elite-ceiling players. 1.40×
+    // is generous and was letting Walker (career-best 203, never top-15)
+    // ride opp+eff+age compounding to RB9. Players who've never broken into
+    // their position's top-15 get 1.25× cap instead.
+    let guardrailNote = '';
+    let finalSeasonTotal = projectedSeasonTotal;
+    if (!isRookie && !isSophomore) {
+      // Career best season total = max of (recencyPpg × games) across years
+      const careerSeasons: number[] = [];
+      if (a25) careerSeasons.push(a25.ppg * a25.games);
+      if (a24) careerSeasons.push(a24.ppg * a24.games);
+      if (a23) careerSeasons.push(a23.ppg * a23.games);
+      if (a22) careerSeasons.push(a22.ppg * a22.games);
+      if (a21) careerSeasons.push(a21.ppg * a21.games);
+      const careerBest = careerSeasons.length ? Math.max(...careerSeasons) : 0;
+      // Position-aware top-15 thresholds for elite-ceiling gating
+      const top15Threshold: Record<string, number> = {
+        RB: 220, WR: 190, TE: 140, QB: 280,
+      };
+      const elite = careerBest >= (top15Threshold[p.position] ?? 999);
+      const capMult = elite ? 1.40 : 1.25;
+      if (careerBest > 0 && finalSeasonTotal > careerBest * capMult) {
+        finalSeasonTotal = careerBest * capMult;
+        guardrailNote = `guardrail @ ${capMult.toFixed(2)}× career-best ${careerBest.toFixed(0)}`;
+      }
+    }
+
+    // v4 score = projected season total (raw fpts). The legacy VBD pass
+    // below will subtract rank-based replacement to get final values.
+    // This keeps cross-position scaling working with the existing logic.
+    const score = finalSeasonTotal;
+
+    // ─── v2: method string by LAYER (one summary per layer, not per signal) ───
     const parts: string[] = [];
     parts.push(`${baselineSource}: ${baseline.toFixed(1)} ppg`);
-    if (highVolatility) parts.push(`volatile (0.92x)`);
-    if (Math.abs(ageMult - 1.0) >= 0.05) {
-      const tag = ageMult > 1 ? 'peak' : ageMult < 0.7 ? 'cliff' : 'decline';
-      parts.push(`age ${age} ${tag} (${ageMult.toFixed(2)}x)`);
-    }
-    if (Math.abs(teamMult - 1.0) >= 0.03 && a25?.lastTeam) parts.push(`${a25.lastTeam}→${p.team} (${teamMult.toFixed(2)}x)`);
-    if (isRookie) parts.push(`rookie (R${p.draft_round ?? '?'})`);
-    if (Math.abs(oppAdj) >= 0.03) parts.push(`opp ${oppAdj > 0 ? '+' : ''}${(oppAdj * 100).toFixed(0)}%`);
-    if (sampleSizePenalty) parts.push(yearsOfData === 1 ? '1yr sample (0.90x)' : '2yr sample (0.95x)');
-    if (inconsistencyPenalty) parts.push('career inconsistency (0.93x)');
-    else if (breakoutRegression) parts.push(p.position === 'WR' ? 'WR breakout regression (0.85x)' : 'breakout regression (0.93x)');
-    if (trend.note) parts.push(trend.note);
-    if (woprNote) parts.push(woprNote);
-    if (lateSeasonNote) parts.push(lateSeasonNote);
-    if (epaNote) parts.push(epaNote);
-    if (depthNote) parts.push(depthNote);
-    if (weakTeamPenalty) parts.push(`${p.team} weak offense (0.95x)`);
-    if (injuryNote) parts.push(injuryNote);
-    if (durabilityMult < 1.0) parts.push(`durability ${durabilityMult.toFixed(2)}x (${avgGames.toFixed(1)}g avg)`);
     if (eliteVetTag) parts.push(eliteVetTag);
-    if (vacatedNote) parts.push(vacatedNote);
-    if (sos.note) parts.push(sos.note);
-    if (effectiveCastNote) parts.push(effectiveCastNote);
-    if (coachNote) parts.push(coachNote);
-    if (persNote) parts.push(persNote);
-    if (rookieBoost > 0) parts.push(`rookie boost +${(rookieBoost*100).toFixed(0)}%`);
-    if (sysCtxNote) parts.push(sysCtxNote);
+    if (injuryNote) parts.push(injuryNote);
+    // Layer 1: age/exp
+    {
+      const bits: string[] = [];
+      if (Math.abs(ageMult - 1.0) >= 0.04) {
+        const tag = ageMult > 1 ? 'peak' : ageMult < 0.7 ? 'cliff' : 'decline';
+        bits.push(`age ${age} ${tag}`);
+      }
+      if (isRookie) bits.push(`R${p.draft_round ?? '?'}${rookieBoost ? ` +${(rookieBoost*100).toFixed(0)}%` : ''}`);
+      if (sampleSizePenalty) bits.push(yearsOfData === 1 ? '1yr-only' : '2yr-only');
+      if (highVolatility) bits.push('volatile');
+      if (Math.abs(layer1_ageExp - 1.0) >= 0.04 || bits.length) {
+        parts.push(`[age/exp ${layer1_ageExp.toFixed(2)}x]${bits.length ? ` ${bits.join(', ')}` : ''}`);
+      }
+    }
+    // Layer 2: role/share
+    if (sysCtxNote || Math.abs(layer2_roleShare - 1.0) >= 0.04) {
+      const tag = sysCtxNote ? sysCtxNote.split('(')[0].trim() : 'role';
+      parts.push(`[role/share ${layer2_roleShare.toFixed(2)}x] ${tag}`);
+    }
+    // Layer 3: opportunity (the one that USED to compound)
+    if (Math.abs(oppNet) >= 0.03 || Math.abs(shareDecayAdj) >= 0.01) {
+      const drivers: string[] = [];
+      if (Math.abs(oppAdj) >= 0.03) drivers.push(`opp-trend ${oppAdj > 0 ? '+' : ''}${(oppAdj*100).toFixed(0)}%`);
+      if (Math.abs(teamMult - 1.0) >= 0.03 && a25?.lastTeam) drivers.push(`${a25.lastTeam}→${p.team}`);
+      if (trend.note) drivers.push(trend.note.split('(')[0].trim());
+      if (vacatedNote) drivers.push('vacancy');
+      const oppStr = `MAX of: ${drivers.join(' | ') || 'n/a'}`;
+      const decayStr = shareDecayNote ? ` × ${shareDecayNote}` : '';
+      parts.push(`[opportunity ${(oppNet >= 0 ? '+' : '')}${(oppNet*100).toFixed(0)}% ${oppStr}${decayStr}] (${layer3_opportunity.toFixed(2)}x)`);
+    }
+    // Layer 4: efficiency
+    if (Math.abs(layer4_efficiency - 1.0) >= 0.03) {
+      const bits: string[] = [];
+      if (epaNote) bits.push('EPA');
+      if (woprNote) bits.push('WOPR');
+      if (effectiveCastNote) bits.push('QBcast');
+      parts.push(`[efficiency ${layer4_efficiency.toFixed(2)}x] ${bits.join('+')}`);
+    }
+    // Layer 5: availability (now applied as expected games multiplier, not baseline)
+    if (durabilityMult < 0.95) parts.push(`[availability ${durabilityMult.toFixed(2)}x] ${avgGames.toFixed(1)}g avg`);
+    // Layer 6: environment (scheme + SOS + OL + travel)
+    if (Math.abs(layer6_environment - 1.0) >= 0.03) {
+      const bits: string[] = [];
+      if (coachNote) bits.push(coachNote.split('—')[0].trim());
+      if (persNote) bits.push(persNote.split('(')[0].trim());
+      if (sos.note) bits.push(sos.note.split('(')[0].trim());
+      if (ol.note) bits.push(ol.note.split('(')[0].trim());
+      if (travel.note) bits.push(travel.note.split('(')[0].trim());
+      if (teQbChemNote) bits.push(teQbChemNote);
+      parts.push(`[env ${layer6_environment.toFixed(2)}x] ${bits.join(' / ')}`);
+    }
+    // v4: expected games + season-total framing
+    parts.push(`[v4 ${recoveredProjectedPpg.toFixed(1)} ppg × ${gamesEst.games.toFixed(1)}g = ${finalSeasonTotal.toFixed(0)} fpts]`);
+    if (INJURY_CONTEXT_2026[injuryKey]) {
+      parts.push(`injury-2026: ${INJURY_CONTEXT_2026[injuryKey].note}`);
+    }
+    if (rushingPremiumNote) {
+      parts.push(rushingPremiumNote);
+    }
+    if (guardrailNote) parts.push(guardrailNote);
+    if (weakTeamPenalty) parts.push(`weak offense`);
+    if (lateSeasonNote) parts.push(lateSeasonNote.split('(')[0].trim());
 
     scored.push({
       format,
@@ -2145,7 +3437,7 @@ serve(async (req) => {
           for (const r of rows) (r as any).format = dbFormat;
         }
         const { error: delErr } = await supabase
-          .from('nfl_proprietary_rankings')
+          .from('nfl_proprietary_rankings_v2')
           .delete()
           .eq('format', dbFormat);
         if (delErr) throw delErr;
@@ -2154,7 +3446,7 @@ serve(async (req) => {
         for (let i = 0; i < rows.length; i += CHUNK) {
           const batch = rows.slice(i, i + CHUNK);
           const { error: insErr } = await supabase
-            .from('nfl_proprietary_rankings')
+            .from('nfl_proprietary_rankings_v2')
             .insert(batch);
           if (insErr) throw insErr;
         }
