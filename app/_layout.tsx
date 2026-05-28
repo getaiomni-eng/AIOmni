@@ -18,7 +18,7 @@ import { syncUserBehavioralData } from '../services/behavioralSync';
 import { Alert, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getUser, getUserRow } from '../services/supabase';
-import { exchangeYahooCode } from '../services/yahoo';
+import { exchangeYahooCode, loadYahooTokens } from '../services/yahoo';
 import { updatePassword } from '../services/auth';
 import { attachCustomerInfoListener, initPurchases, refreshTier } from '../services/purchases';
 import { registerPushNotifications } from '../services/notifications';
@@ -121,7 +121,10 @@ export default Sentry.wrap(function RootLayout() {
         const row = await getUserRow();
         const hasSleeper = Boolean(row?.sleeper_username);
         const espnIds = await AsyncStorage.getItem('espn_league_ids');
-        const yahooTokens = await AsyncStorage.getItem('yahoo_tokens');
+        // Yahoo tokens moved to SecureStore in the 2026-05-26 keychain
+        // migration — AsyncStorage.getItem('yahoo_tokens') always returns
+        // null now.
+        const yahooTokens = await loadYahooTokens();
         const hasLeagues = hasSleeper || Boolean(espnIds) || Boolean(yahooTokens);
 
         if (false && !hasLeagues) {

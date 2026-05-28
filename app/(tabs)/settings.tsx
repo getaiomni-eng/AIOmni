@@ -7,7 +7,8 @@ import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity,
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signOut } from '../../services/auth';
 import { deleteAccount } from '../../services/deleteAccount';
-import { clearESPNCredentials } from '../../services/espn';
+import { clearESPNCredentials, loadESPNCredentials } from '../../services/espn';
+import { loadYahooTokens } from '../../services/yahoo';
 import { getNotificationPrefs, setNotificationPrefs } from '../../services/notifications';
 import { clearQuizResult } from '../../services/quiz/engine';
 import { dark, F, palette, SP } from '../constants/tokens';
@@ -36,11 +37,13 @@ export default function SettingsScreen() {
   useFocusEffect(useCallback(() => { loadSettings(); }, []));
 
   const loadSettings = async () => {
-    // ESPN/Yahoo connection state lives in AsyncStorage (it's the auth
-    // token cache). Fetch those first — they don't depend on the network.
-    const espn = await AsyncStorage.getItem('espn_s2');
+    // ESPN/Yahoo auth tokens live in SecureStore (keychain) since the
+    // 2026-05-26 security hardening — read via their service loaders, not
+    // AsyncStorage. MFL/Fleaflicker only stash a league ID (not a token),
+    // so they stay in AsyncStorage.
+    const espn = await loadESPNCredentials();
     setEspnLinked(!!espn);
-    const yahoo = await AsyncStorage.getItem('yahoo_tokens');
+    const yahoo = await loadYahooTokens();
     setYahooLinked(!!yahoo);
     const mfl = await AsyncStorage.getItem('mfl_league_id');
     setMflLinked(!!mfl);
