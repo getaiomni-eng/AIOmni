@@ -2,115 +2,768 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AIOmni — Branding & Features</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#03030a" />
+  <title>AIOmni — Fantasy football, but it actually reads your league</title>
+  <meta name="description" content="AIOmni is the only fantasy football app that reads your scoring format, roster construction, and waiver rules before giving advice. PPR. 6pt TDs. TE Premium. SuperFlex. Your actual roster — not a generic answer." />
+  <meta property="og:title" content="AIOmni — Fantasy football that reads your league first" />
+  <meta property="og:description" content="The only fantasy app built around your league's exact scoring, roster construction, and waiver rules. Deploying Summer 2026." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://getaiomni.com" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Outfit:wght@400;500;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    :root{
-      --bg-top: #5f7878; /* from tokens C.bgTop */
-      --bg-bot: #354848; /* from tokens C.bgBot */
-      --gold: #FEE229;   /* primary accent */
-      --sage: #2d7a5e;
-      --mint: #7ec8b8;
+    :root {
+      --void: #03030a;
+      --bg: #0a0a0a;
+      --bg-elev: #0e0e18;
+      --surface: rgba(14,14,24,0.72);
+      --surface-2: rgba(20,20,32,0.85);
+      --y: #D4FF00;
+      --y-hot: #eeff55;
+      --y-glow: rgba(212,255,0,0.12);
+      --y-glow-hi: rgba(212,255,0,0.28);
+      --y-glow-xl: rgba(212,255,0,0.55);
+      --aqua: #33ddff;
+      --amber: #ffb800;
+      --green: #00ffaa;
+      --rose: #ff5e7a;
       --ink: #ffffff;
-      --glass: rgba(255,255,255,0.12);
+      --offW: #c6d2e0;
+      --dim: rgba(255,255,255,0.62);
+      --dim-lo: rgba(255,255,255,0.38);
+      --border: rgba(255,255,255,0.07);
+      --border-hi: rgba(212,255,0,0.32);
+      --line: rgba(255,255,255,0.06);
     }
-    html,body{height:100%;margin:0;font-family:Outfit,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
-    body{background:linear-gradient(180deg,var(--bg-top),var(--bg-bot));color:var(--ink);-webkit-font-smoothing:antialiased}
-    .wrap{max-width:1100px;margin:36px auto;padding:28px}
-    .hero{display:flex;gap:24px;align-items:center}
-    .logo{width:140px;height:140px;flex:0 0 140px}
-    .title{font-size:34px;font-weight:800;line-height:1}
-    .tag{color:var(--gold);font-weight:700;margin-top:6px}
-    .glass{background:var(--glass);border:1px solid rgba(255,255,255,0.18);backdrop-filter:blur(6px);padding:18px;border-radius:12px}
-    .section{margin-top:22px}
-    .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:12px}
-    .feat{padding:14px;border-radius:10px;background:rgba(0,0,0,0.06);border:1px solid rgba(255,255,255,0.04)}
-    .palette{display:flex;gap:12px;align-items:center}
-    .swatch{width:96px;height:96px;border-radius:8px;display:flex;align-items:flex-end;justify-content:center;padding:8px;color:#000;font-weight:700}
-    .swatch small{background:rgba(255,255,255,0.85);padding:2px 6px;border-radius:6px;font-size:12px}
-    .assets{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
-    img.asset{height:88px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:#fff;padding:6px}
-    footer{opacity:0.9;margin-top:28px;font-size:13px;color:rgba(255,255,255,0.85)}
-    code{background:rgba(0,0,0,0.25);padding:4px 8px;border-radius:6px}
-    .fonts sample{font-family:Outfit;font-weight:700}
-    .mono{font-family:'DM Mono',monospace}
-    @media(max-width:640px){.hero{flex-direction:column;align-items:flex-start}.logo{width:96px;height:96px;flex:0 0 96px}.title{font-size:24px}}
+    * { box-sizing: border-box }
+    html, body { margin: 0; padding: 0; color: var(--ink); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility }
+    body {
+      font-family: 'Outfit', system-ui, -apple-system, 'SF Pro Text', Segoe UI, Roboto, 'Helvetica Neue', Arial;
+      font-size: 16px;
+      line-height: 1.55;
+      background:
+        radial-gradient(1400px 700px at 50% -15%, var(--y-glow), transparent 55%),
+        radial-gradient(900px 500px at 90% 12%, rgba(51,221,255,0.05), transparent 55%),
+        radial-gradient(700px 400px at 0% 60%, rgba(255,184,0,0.04), transparent 55%),
+        linear-gradient(180deg, var(--void) 0%, var(--bg) 60%, var(--bg-elev) 100%);
+      min-height: 100vh;
+      background-attachment: fixed;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none }
+    .display { font-family: 'Audiowide', 'SF Pro Display', system-ui, sans-serif; letter-spacing: .015em }
+    .mono { font-family: 'DM Mono', ui-monospace, Menlo, monospace; letter-spacing: .06em }
+
+    /* ─── Layout ─────────────────────────────────────── */
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 0 28px }
+    .container-tight { max-width: 880px; margin: 0 auto }
+    section { padding: 96px 0; position: relative }
+
+    /* ─── Nav ────────────────────────────────────────── */
+    .nav {
+      position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(18px) saturate(140%);
+      -webkit-backdrop-filter: blur(18px) saturate(140%);
+      background: rgba(3,3,10,0.72);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner { display: flex; justify-content: space-between; align-items: center; padding: 16px 0 }
+    .brand { display: flex; align-items: center; gap: 12px }
+    .brand-mark {
+      width: 36px; height: 36px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--y), #b8e600);
+      display: grid; place-items: center;
+      color: #000; font-family: 'Audiowide', sans-serif; font-size: 17px;
+      box-shadow: 0 0 24px var(--y-glow-hi);
+    }
+    .brand-name { font-family: 'Audiowide', sans-serif; font-size: 19px; letter-spacing: .04em }
+    .brand-name .accent { color: var(--y) }
+    .nav-links { display: flex; gap: 4px; align-items: center }
+    .nav-link { font-family: 'DM Mono', monospace; font-size: 11px; padding: 8px 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); border-radius: 6px; transition: color .15s ease, background .15s ease }
+    .nav-link:hover { color: var(--ink); background: var(--surface) }
+    .nav-cta {
+      font-family: 'Audiowide', sans-serif; font-size: 11px;
+      background: var(--y); color: #000;
+      padding: 11px 18px; border-radius: 6px;
+      letter-spacing: .12em; margin-left: 10px;
+      box-shadow: 0 0 20px var(--y-glow-hi);
+      transition: transform .12s ease, box-shadow .15s ease;
+    }
+    .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 0 32px var(--y-glow-xl) }
+    @media (max-width: 720px) { .nav-links .nav-link { display: none } .nav-cta { margin-left: 0 } }
+
+    /* ─── Hero ───────────────────────────────────────── */
+    .hero { padding: 64px 0 0; text-align: center }
+    .kicker {
+      display: inline-flex; align-items: center; gap: 10px;
+      font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .22em;
+      color: var(--y); padding: 8px 16px; border-radius: 999px;
+      background: rgba(212,255,0,0.05);
+      border: 1px solid var(--border-hi);
+      text-transform: uppercase;
+    }
+    .kicker::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--y); box-shadow: 0 0 12px var(--y); animation: pulse 1.8s ease-in-out infinite }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
+
+    h1.hero-title {
+      font-family: 'Audiowide', sans-serif; font-weight: 400;
+      font-size: clamp(40px, 6.4vw, 84px);
+      line-height: 1.02; letter-spacing: .005em;
+      margin: 28px auto 26px;
+      max-width: 16ch;
+    }
+    h1.hero-title .y { color: var(--y); position: relative; display: inline-block }
+    h1.hero-title .y::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: -4px; height: 3px;
+      background: var(--y); box-shadow: 0 0 16px var(--y-glow-xl);
+      transform: scaleX(0.92);
+    }
+    p.hero-sub {
+      font-size: clamp(17px, 1.7vw, 20px); line-height: 1.55;
+      color: var(--offW); max-width: 700px; margin: 0 auto;
+    }
+    .hero-ctas { display: flex; gap: 12px; justify-content: center; margin: 36px 0 56px; flex-wrap: wrap }
+
+    .btn {
+      font-family: 'Audiowide', sans-serif; font-size: 13px;
+      padding: 16px 28px; border-radius: 6px; letter-spacing: .12em;
+      display: inline-flex; align-items: center; gap: 8px;
+      border: 1px solid transparent; cursor: pointer;
+      transition: transform .12s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
+      white-space: nowrap;
+    }
+    .btn:hover { transform: translateY(-1px) }
+    .btn-primary { background: var(--y); color: #000; box-shadow: 0 0 28px var(--y-glow-hi) }
+    .btn-primary:hover { box-shadow: 0 0 40px var(--y-glow-xl) }
+    .btn-ghost { background: transparent; color: var(--ink); border-color: var(--border-hi) }
+    .btn-ghost:hover { background: var(--y-glow); border-color: var(--y) }
+    .btn-arrow { transition: transform .15s ease }
+    .btn:hover .btn-arrow { transform: translateX(3px) }
+
+    /* Trust strip */
+    .platforms {
+      display: flex; gap: 32px; justify-content: center; flex-wrap: wrap;
+      padding: 22px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    }
+    .platform {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      letter-spacing: .22em; color: var(--dim);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .platform::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--y); box-shadow: 0 0 8px var(--y-glow-hi) }
+
+    /* Stat strip */
+    .stats {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+      padding: 32px 0 24px; border-bottom: 1px solid var(--line);
+    }
+    .stat { text-align: center; padding: 0 16px; border-right: 1px solid var(--line) }
+    .stat:last-child { border-right: 0 }
+    .stat-num { font-family: 'Audiowide', sans-serif; font-size: clamp(28px, 3.6vw, 40px); color: var(--y); line-height: 1; text-shadow: 0 0 18px var(--y-glow-hi) }
+    .stat-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .22em; color: var(--dim); margin-top: 12px; text-transform: uppercase }
+    @media (max-width: 720px) {
+      .stats { grid-template-columns: repeat(2, 1fr) }
+      .stat:nth-child(1), .stat:nth-child(2) { border-bottom: 1px solid var(--line); padding-bottom: 20px }
+      .stat:nth-child(2) { border-right: 0 }
+      .stat:nth-child(3), .stat:nth-child(4) { padding-top: 20px }
+    }
+
+    /* ─── Section primitives ─────────────────────────── */
+    .eyebrow {
+      font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .28em;
+      color: var(--y); text-transform: uppercase; font-weight: 500;
+    }
+    h2.section-title {
+      font-family: 'Audiowide', sans-serif; font-weight: 400;
+      font-size: clamp(30px, 4vw, 48px); line-height: 1.1;
+      margin: 14px 0 18px; letter-spacing: .005em;
+    }
+    h2.section-title .y { color: var(--y) }
+    .section-lede { color: var(--offW); max-width: 720px; font-size: 17px; line-height: 1.6 }
+    .section-header { text-align: center; margin-bottom: 56px }
+    .section-header .section-lede { margin: 0 auto }
+
+    /* ─── Differentiator ─────────────────────────────── */
+    .diff-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 56px; align-items: center }
+    @media (max-width: 880px) { .diff-grid { grid-template-columns: 1fr; gap: 36px } }
+    .diff-list { list-style: none; padding: 0; margin: 28px 0 0 }
+    .diff-list li { padding: 16px 0; border-bottom: 1px solid var(--line); font-size: 17px; color: var(--offW); display: flex; gap: 14px; align-items: flex-start }
+    .diff-list li:last-child { border-bottom: 0 }
+    .diff-list .pill {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      background: var(--y); color: #000; padding: 4px 10px;
+      border-radius: 4px; flex-shrink: 0; font-weight: 700; letter-spacing: .08em;
+    }
+    .diff-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 32px;
+      position: relative; overflow: hidden;
+    }
+    .diff-card::before {
+      content: ""; position: absolute; inset: 0;
+      background: radial-gradient(400px 200px at top right, var(--y-glow), transparent 60%);
+      pointer-events: none;
+    }
+    .diff-card-title { font-family: 'Audiowide', sans-serif; font-size: 22px; color: var(--y); margin: 0 0 14px; position: relative }
+    .diff-card-body { color: var(--offW); font-size: 15px; line-height: 1.7; margin: 0; position: relative }
+    .diff-card-quote {
+      margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--line);
+      font-family: 'DM Mono', monospace; font-size: 13px; color: var(--dim);
+      position: relative;
+    }
+    .diff-card-quote::before { content: "// "; color: var(--y) }
+
+    /* ─── How it works (steps) ───────────────────────── */
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; counter-reset: step }
+    @media (max-width: 880px) { .steps { grid-template-columns: 1fr } }
+    .step {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 32px 28px 28px;
+      position: relative; counter-increment: step;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .step:hover { transform: translateY(-3px); border-color: var(--border-hi); background: var(--surface-2) }
+    .step::before {
+      content: counter(step, decimal-leading-zero);
+      position: absolute; top: 28px; right: 28px;
+      font-family: 'Audiowide', sans-serif; font-size: 44px;
+      color: var(--y); opacity: .14; line-height: 1;
+    }
+    .step-tag { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .18em; color: var(--y); text-transform: uppercase }
+    .step-title { font-family: 'Audiowide', sans-serif; font-size: 19px; margin: 14px 0 12px; font-weight: 400 }
+    .step-body { margin: 0; color: var(--offW); font-size: 15px; line-height: 1.65 }
+
+    /* ─── Features grid ──────────────────────────────── */
+    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px }
+    @media (max-width: 1000px) { .features { grid-template-columns: repeat(2, 1fr) } }
+    @media (max-width: 640px) { .features { grid-template-columns: 1fr } }
+    .feature {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 28px;
+      position: relative;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .feature:hover { transform: translateY(-3px); border-color: var(--border-hi); background: var(--surface-2) }
+    .feature-icon {
+      width: 46px; height: 46px; border-radius: 10px;
+      display: grid; place-items: center; margin-bottom: 20px;
+      background: linear-gradient(135deg, rgba(212,255,0,0.18), rgba(212,255,0,0.04));
+      border: 1px solid var(--border-hi);
+    }
+    .feature-icon svg { width: 22px; height: 22px; stroke: var(--y); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round }
+    .feature-name {
+      font-family: 'Audiowide', sans-serif; font-size: 17px;
+      margin: 0 0 8px; font-weight: 400;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .feature-name .tag {
+      font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .18em;
+      color: var(--y); padding: 3px 7px; border: 1px solid var(--border-hi);
+      border-radius: 4px; text-transform: uppercase;
+    }
+    .feature-body { margin: 0; color: var(--offW); font-size: 14.5px; line-height: 1.65 }
+
+    /* ─── Comparison table ───────────────────────────── */
+    .compare-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden }
+    .compare {
+      width: 100%; border-collapse: collapse;
+      font-size: 15px;
+    }
+    .compare th, .compare td { padding: 18px 24px; text-align: left; border-bottom: 1px solid var(--line) }
+    .compare th { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .18em; color: var(--dim); font-weight: 500; text-transform: uppercase; background: rgba(255,255,255,0.02) }
+    .compare th.featured { color: var(--y); background: rgba(212,255,0,0.04) }
+    .compare td { color: var(--offW) }
+    .compare td.featured { background: rgba(212,255,0,0.03); color: var(--ink); font-weight: 500 }
+    .compare tr:last-child td { border-bottom: 0 }
+    .compare td:first-child { font-weight: 600; color: var(--ink) }
+    .compare .check { color: var(--y); font-weight: 900 }
+    .compare .x { color: var(--rose); font-weight: 900 }
+    @media (max-width: 720px) {
+      .compare { font-size: 13.5px }
+      .compare th, .compare td { padding: 12px 14px }
+    }
+
+    /* ─── Pricing ────────────────────────────────────── */
+    .pricing { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 40px }
+    @media (max-width: 880px) { .pricing { grid-template-columns: 1fr } }
+    .tier {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 36px 32px;
+      display: flex; flex-direction: column;
+      transition: transform .15s ease, border-color .15s ease;
+      position: relative;
+    }
+    .tier:hover { transform: translateY(-4px); border-color: var(--border-hi) }
+    .tier.featured {
+      border-color: var(--y);
+      background: linear-gradient(180deg, rgba(212,255,0,0.06) 0%, var(--surface) 70%);
+      box-shadow: 0 0 50px var(--y-glow), 0 0 0 1px var(--border-hi) inset;
+    }
+    .tier-ribbon {
+      position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+      font-family: 'Audiowide', sans-serif; font-size: 11px;
+      background: var(--y); color: #000; padding: 7px 16px; border-radius: 6px;
+      letter-spacing: .14em; box-shadow: 0 0 24px var(--y-glow-hi);
+    }
+    .tier-name { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .28em; color: var(--y); text-transform: uppercase; margin-bottom: 6px }
+    .tier-price { font-family: 'Audiowide', sans-serif; font-size: 50px; line-height: 1; margin: 16px 0 4px; color: var(--ink) }
+    .tier-price small { font-size: 18px; color: var(--dim); font-weight: 400 }
+    .tier-period { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--dim); margin-bottom: 24px }
+    .tier-features { list-style: none; padding: 0; margin: 0 0 28px; flex: 1 }
+    .tier-features li {
+      padding: 10px 0; font-size: 14.5px; color: var(--offW);
+      display: flex; gap: 12px; align-items: flex-start;
+      border-bottom: 1px solid var(--line);
+    }
+    .tier-features li:last-child { border-bottom: 0 }
+    .tier-features li::before {
+      content: ""; width: 16px; height: 16px; border-radius: 4px;
+      background: rgba(212,255,0,0.18); border: 1px solid var(--border-hi);
+      display: grid; place-items: center;
+      flex-shrink: 0; margin-top: 2px;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23D4FF00' stroke-width='2.5' stroke-linecap='round'><path d='M3 8 l3 3 7-7'/></svg>");
+      background-repeat: no-repeat; background-position: center;
+    }
+    .tier .btn { width: 100%; justify-content: center }
+
+    /* ─── FAQ ────────────────────────────────────────── */
+    .faq { display: grid; gap: 12px; margin-top: 40px }
+    details.faq-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 0;
+      transition: border-color .15s ease;
+    }
+    details.faq-item[open] { border-color: var(--border-hi) }
+    .faq-item summary {
+      list-style: none; cursor: pointer;
+      padding: 22px 28px; font-family: 'Audiowide', sans-serif; font-size: 16px;
+      display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    }
+    .faq-item summary::-webkit-details-marker { display: none }
+    .faq-item summary::after {
+      content: "+"; font-family: 'DM Mono', monospace; font-size: 22px; color: var(--y);
+      transition: transform .2s ease;
+    }
+    .faq-item[open] summary::after { content: "−" }
+    .faq-body { padding: 0 28px 24px; color: var(--offW); font-size: 15px; line-height: 1.7 }
+
+    /* ─── Final CTA ──────────────────────────────────── */
+    .final-cta {
+      text-align: center; padding: 96px 32px;
+      background: radial-gradient(800px 400px at center, var(--y-glow), transparent 60%);
+      border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+      position: relative;
+    }
+    .final-cta h2 { font-family: 'Audiowide', sans-serif; font-size: clamp(34px, 4.4vw, 52px); margin: 12px 0 14px; font-weight: 400; line-height: 1.1 }
+    .final-cta p { color: var(--offW); max-width: 540px; margin: 0 auto 30px; font-size: 17px }
+
+    /* ─── Footer ─────────────────────────────────────── */
+    footer { padding: 56px 0 40px }
+    .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 40px }
+    @media (max-width: 720px) { .footer-grid { grid-template-columns: 1fr 1fr; gap: 28px } }
+    .footer-brand { font-family: 'Audiowide', sans-serif; font-size: 22px; margin-bottom: 12px; letter-spacing: .04em }
+    .footer-brand .y { color: var(--y) }
+    .footer-blurb { color: var(--dim); font-size: 14px; max-width: 320px; line-height: 1.6 }
+    .footer-col-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .22em; color: var(--y); text-transform: uppercase; margin-bottom: 14px }
+    .footer-col ul { list-style: none; padding: 0; margin: 0 }
+    .footer-col li { margin: 8px 0; font-size: 14px }
+    .footer-col a { color: var(--dim); transition: color .15s ease }
+    .footer-col a:hover { color: var(--y) }
+    .footer-bottom { padding-top: 28px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; color: var(--dim); font-size: 12px; font-family: 'DM Mono', monospace; letter-spacing: .06em }
+
+    /* ─── Misc helpers ──────────────────────────────── */
+    .grain {
+      pointer-events: none; position: fixed; inset: 0; z-index: 1; opacity: .04; mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    }
+    .glow-divider { height: 1px; background: linear-gradient(90deg, transparent, var(--border-hi), transparent); margin: 0 auto; max-width: 600px }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="hero">
-      <img class="logo" src="assets/images/logo.png" alt="AIOmni logo">
-      <div>
-        <div class="title">AIOmni</div>
-        <div class="tag">Fantasy manager • Live news • AI insights</div>
-        <p style="margin-top:10px;max-width:680px;opacity:0.95">AIOmni is an Expo/React Native app focused on fantasy football management — integrates leagues from Sleeper, ESPN, and Yahoo; fetches live news feeds; and generates AI-driven actionable insights for your roster.</p>
+  <div class="grain"></div>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="wrap nav-inner">
+      <a href="#" class="brand">
+        <div class="brand-mark">A</div>
+        <div class="brand-name"><span class="accent">AI</span>OMNI</div>
+      </a>
+      <div class="nav-links">
+        <a class="nav-link" href="#how">How it works</a>
+        <a class="nav-link" href="#features">Features</a>
+        <a class="nav-link" href="#pricing">Pricing</a>
+        <a class="nav-link" href="#faq">FAQ</a>
+        <a class="nav-cta" href="mailto:aiomni@getaiomni.com?subject=Beta%20Access">Get beta access →</a>
       </div>
     </div>
+  </nav>
 
-    <div class="section glass">
-      <strong>What the app does</strong>
+  <!-- HERO -->
+  <header class="hero">
+    <div class="wrap">
+      <div class="kicker">Deploying Summer 2026</div>
+      <h1 class="hero-title">The only app that <span class="y">reads your league</span> first.</h1>
+      <p class="hero-sub">AIOmni reads your scoring format, roster construction, and waiver rules before giving a single piece of advice. PPR. 6-point passing TDs. TE Premium. SuperFlex. Your actual roster — not a generic answer.</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="mailto:aiomni@getaiomni.com?subject=Beta%20Access">Get beta access <span class="btn-arrow">→</span></a>
+        <a class="btn btn-ghost" href="#pricing">View pricing</a>
+      </div>
+
+      <div class="platforms">
+        <span class="platform">SLEEPER</span>
+        <span class="platform">ESPN</span>
+        <span class="platform">YAHOO</span>
+        <span class="platform">MFL</span>
+        <span class="platform">FLEAFLICKER</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-num">5</div>
+          <div class="stat-label">Platforms</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num">50</div>
+          <div class="stat-label">Prompts / wk · Pro</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num">100%</div>
+          <div class="stat-label">League-specific</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num">$0</div>
+          <div class="stat-label">To start</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- DIFFERENTIATOR -->
+  <section>
+    <div class="wrap">
+      <div class="diff-grid">
+        <div>
+          <div class="eyebrow">Why AIOmni</div>
+          <h2 class="section-title">Every other app gives <span class="y">the same advice</span> to every user.</h2>
+          <p class="section-lede">Most fantasy tools assume half-PPR, 12-team, standard scoring. They publish one ranking and one start/sit answer for everyone. AIOmni reads your league's actual settings — every variable — before forming a single recommendation.</p>
+          <ul class="diff-list">
+            <li><span class="pill">4 vs 6</span><div><strong>Passing TDs</strong> completely change QB values. 6-point leagues push elite passers a full round earlier.</div></li>
+            <li><span class="pill">PPR</span><div><strong>Reception scoring</strong> redefines receiver tiers. Pass-catching backs shift from RB3 to RB1 territory.</div></li>
+            <li><span class="pill">TEP</span><div><strong>TE Premium</strong> turns Kelce, LaPorta, and Bowers into league-winners — and changes how you draft round 2.</div></li>
+            <li><span class="pill">SF</span><div><strong>SuperFlex</strong> makes any starting QB a top-30 asset. Your QB2 becomes gold.</div></li>
+          </ul>
+        </div>
+        <div class="diff-card">
+          <div class="diff-card-title">League-aware by default</div>
+          <p class="diff-card-body">AIOmni inspects scoring rules, roster slots, waiver type, draft order, trade deadlines, and playoff structure on the first sync. Every ranking, trade grade, and start/sit answer is conditioned on those settings — not on an industry-default league nobody actually plays in.</p>
+          <div class="diff-card-quote">Two managers in the same league get different advice. Different rosters, different recommendations.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="how">
+    <div class="wrap">
+      <div class="section-header">
+        <div class="eyebrow">How it works</div>
+        <h2 class="section-title">Reads your league. <span class="y">Then advises.</span></h2>
+        <p class="section-lede">Three steps. No setup overhead. Connect once, get personalized output across every tool.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-tag">Step 01</div>
+          <h3 class="step-title">Connect your league</h3>
+          <p class="step-body">Link Sleeper, ESPN, Yahoo, MyFantasyLeague, or Fleaflicker. AIOmni reads your scoring format, roster construction, waiver type, and trade deadlines — every variable that makes your league unique.</p>
+        </div>
+        <div class="step">
+          <div class="step-tag">Step 02</div>
+          <h3 class="step-title">AI reads your settings</h3>
+          <p class="step-body">4-point vs 6-point passing TDs. Full PPR vs Standard. TE Premium. SuperFlex. Bonus thresholds. These completely change player values — AIOmni internalizes all of it before responding.</p>
+        </div>
+        <div class="step">
+          <div class="step-tag">Step 03</div>
+          <h3 class="step-title">Get personalized advice</h3>
+          <p class="step-body">Start/sit, waivers, trade grades, draft picks — every output is specific to your league's scoring and your actual roster. No generic top-100 list. No copy-pasted advice.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="wrap">
+      <div class="section-header">
+        <div class="eyebrow">Features</div>
+        <h2 class="section-title">Five tools. <span class="y">One coach.</span></h2>
+        <p class="section-lede">Everything you need to draft, trade, and win — built on the same league-aware foundation.</p>
+      </div>
       <div class="features">
-        <div class="feat"><strong>League Aggregation</strong><div>Connect and view leagues from <em>ESPN</em>, <em>Yahoo</em>, and <em>Sleeper</em>.</div></div>
-        <div class="feat"><strong>AI Insights</strong><div>Generates short, actionable recommendations per league using Anthropic APIs (configurable).</div></div>
-        <div class="feat"><strong>Live News Feed</strong><div>Aggregates RSS headlines from Rotowire, PFR, and CBS Sports.</div></div>
-        <div class="feat"><strong>Team & Matchup Details</strong><div>Shows scores, records, and matchup context with platform badges.</div></div>
-        <div class="feat"><strong>Onboarding & Auth</strong><div>Supports OAuth flows (Yahoo), local onboarding, and settings sync.</div></div>
-        <div class="feat"><strong>Monetization</strong><div>Includes paywall/payments and upsell banner components for subscriptions.</div></div>
+
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M5 12H2M22 12h-3M6 6l-2-2M20 20l-2-2M6 18l-2 2M20 4l-2 2"/><circle cx="12" cy="12" r="5"/></svg>
+          </div>
+          <h3 class="feature-name">AI Coach <span class="tag">Pro</span></h3>
+          <p class="feature-body">Conversational AI that already knows your roster, scoring rules, and league context. Ask anything — start/sit, waiver targets, trade strategy — and get an answer specific to your situation. Powered by Claude Opus.</p>
+        </div>
+
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M3 20h18M6 16V8M11 16V4M16 16v-6M21 16v-3"/></svg>
+          </div>
+          <h3 class="feature-name">Rankings</h3>
+          <p class="feature-body">AIOmni Formula — a transparent, 4-stage algorithmic engine (VOR, age curves, opportunity adjustment, tier clustering) — plus Pulse, our blended community consensus across all five platforms.</p>
+        </div>
+
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 3v18M5 8h14M5 16h14"/><circle cx="8" cy="8" r="2"/><circle cx="16" cy="16" r="2"/></svg>
+          </div>
+          <h3 class="feature-name">Trade Analyzer <span class="tag">Pro</span></h3>
+          <p class="feature-body">A–F grades for both sides of every trade, calculated using your league's actual scoring settings and roster construction. Not generic surplus values — true context-aware grades.</p>
+        </div>
+
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M3 12h2M19 12h2"/></svg>
+          </div>
+          <h3 class="feature-name">The O · Draft Copilot <span class="tag">Pro</span></h3>
+          <p class="feature-body">Live draft assistance — real-time pick recommendations as your draft unfolds, factoring your exact scoring format, roster needs, opponent tendencies, and best-available value at every slot.</p>
+        </div>
+
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 3 2 4 2 7v3h10v-3c0-3 2-4 2-7a7 7 0 0 0-7-7z"/><path d="M9 19h6M10 22h4"/></svg>
+          </div>
+          <h3 class="feature-name">Season Memory <span class="tag">Pro</span></h3>
+          <p class="feature-body">AIOmni builds a profile of you as a manager — decisions, tendencies, outcomes — and remembers them across the full 52 weeks of the season. Every conversation gets sharper as the year progresses.</p>
+        </div>
+
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M3 12h3l3-7 4 14 3-10 2 3h3"/></svg>
+          </div>
+          <h3 class="feature-name">Live Data Feed</h3>
+          <p class="feature-body">Injury reports, snap counts, Vegas lines, weather, advanced stats, college prospects, and beat-writer transactions — fed into every AI response with sources cited inline. Never advice without context.</p>
+        </div>
+
       </div>
     </div>
+  </section>
 
-    <div class="section">
-      <strong>Brand palette</strong>
-      <div style="margin-top:10px" class="palette">
-        <div style="text-align:center">
-          <div class="swatch" style="background:linear-gradient(180deg,var(--bg-top),var(--bg-bot));color:var(--ink)"><small>bgTop<br>#5f7878</small></div>
+  <!-- COMPARISON -->
+  <section>
+    <div class="wrap">
+      <div class="section-header">
+        <div class="eyebrow">The difference</div>
+        <h2 class="section-title">AIOmni vs <span class="y">everyone else</span></h2>
+        <p class="section-lede">A side-by-side at what actually matters when your season's on the line.</p>
+      </div>
+
+      <div class="compare-wrap">
+        <table class="compare">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Generic fantasy app</th>
+              <th class="featured">AIOmni</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Reads your scoring format</td>
+              <td><span class="x">✗</span> Assumes Half-PPR</td>
+              <td class="featured"><span class="check">✓</span> PPR / Half / Std / SF / TEP</td>
+            </tr>
+            <tr>
+              <td>Roster-aware advice</td>
+              <td><span class="x">✗</span> Generic top-100</td>
+              <td class="featured"><span class="check">✓</span> Your actual lineup</td>
+            </tr>
+            <tr>
+              <td>Trade grades</td>
+              <td>Static surplus values</td>
+              <td class="featured">League-conditioned A–F grades</td>
+            </tr>
+            <tr>
+              <td>Live data sources</td>
+              <td>News only</td>
+              <td class="featured">Injuries · snaps · Vegas · weather · stats · prospects</td>
+            </tr>
+            <tr>
+              <td>Platforms supported</td>
+              <td>1–2</td>
+              <td class="featured">Sleeper · ESPN · Yahoo · MFL · Fleaflicker</td>
+            </tr>
+            <tr>
+              <td>Season-long memory</td>
+              <td><span class="x">✗</span></td>
+              <td class="featured"><span class="check">✓</span> Full 52-week profile</td>
+            </tr>
+            <tr>
+              <td>Algorithm transparency</td>
+              <td>Black box</td>
+              <td class="featured">Documented 4-stage formula</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section id="pricing">
+    <div class="wrap">
+      <div class="section-header">
+        <div class="eyebrow">Pricing</div>
+        <h2 class="section-title">Start free. <span class="y">Win more.</span></h2>
+        <p class="section-lede">All plans include Sleeper, ESPN, Yahoo, MFL, and Fleaflicker. Cancel or upgrade anytime — no annual lock-in.</p>
+      </div>
+
+      <div class="pricing">
+
+        <div class="tier">
+          <div class="tier-name">Free</div>
+          <div class="tier-price">$0</div>
+          <div class="tier-period">forever</div>
+          <ul class="tier-features">
+            <li>Pulse — multi-source consensus rankings</li>
+            <li>Roster &amp; matchup view</li>
+            <li>All 5 platforms</li>
+            <li>10 AI prompts to try (lifetime)</li>
+            <li>Live injury data</li>
+          </ul>
+          <a class="btn btn-ghost" href="mailto:aiomni@getaiomni.com?subject=Beta%20Access">Get started</a>
         </div>
-        <div style="text-align:center">
-          <div class="swatch" style="background:var(--gold)"><small style="color:#000">gold<br>#FEE229</small></div>
+
+        <div class="tier">
+          <div class="tier-name">Rankings</div>
+          <div class="tier-price">$4.99<small> /mo</small></div>
+          <div class="tier-period">or $39.99 / year</div>
+          <ul class="tier-features">
+            <li>AIOmni Formula (proprietary engine)</li>
+            <li>My Rankings + Custom Rankings Quiz</li>
+            <li>Format filters (PPR / Half / Std / SF · Redraft / Dynasty)</li>
+            <li>25 AI prompts per week</li>
+            <li>Everything in Free</li>
+          </ul>
+          <a class="btn btn-ghost" href="mailto:aiomni@getaiomni.com?subject=Beta%20Access%20%E2%80%94%20Rankings">Get Rankings</a>
         </div>
-        <div style="text-align:center">
-          <div class="swatch" style="background:var(--sage)"><small style="color:#fff">sage<br>#2d7a5e</small></div>
+
+        <div class="tier featured">
+          <div class="tier-ribbon">★ Most popular</div>
+          <div class="tier-name">Pro</div>
+          <div class="tier-price">$12.99<small> /mo</small></div>
+          <div class="tier-period">or $99.99 / year</div>
+          <ul class="tier-features">
+            <li>AI Coach — season memory + roster context</li>
+            <li>Draft Copilot (live draft assistance)</li>
+            <li>Trade Analyzer (A–F grades, league-aware)</li>
+            <li>50 AI prompts per week</li>
+            <li>Everything in Rankings</li>
+          </ul>
+          <a class="btn btn-primary" href="mailto:aiomni@getaiomni.com?subject=Beta%20Access%20%E2%80%94%20Pro">Go Pro <span class="btn-arrow">→</span></a>
         </div>
-        <div style="text-align:center">
-          <div class="swatch" style="background:var(--mint)"><small style="color:#000">mint<br>#7ec8b8</small></div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq">
+    <div class="wrap container-tight">
+      <div class="section-header">
+        <div class="eyebrow">Common questions</div>
+        <h2 class="section-title">Quick answers</h2>
+      </div>
+
+      <div class="faq">
+        <details class="faq-item">
+          <summary>When does AIOmni launch?</summary>
+          <div class="faq-body">Public launch is targeted for Summer 2026, ahead of the NFL season. Beta access is open now via the form — early users get extended free trials, direct line to the team, and grandfathered pricing.</div>
+        </details>
+
+        <details class="faq-item">
+          <summary>Which fantasy platforms are supported?</summary>
+          <div class="faq-body">Sleeper, ESPN, Yahoo, MyFantasyLeague, and Fleaflicker — all five included on every tier, including Free. We use official OAuth or public read endpoints where each platform provides them.</div>
+        </details>
+
+        <details class="faq-item">
+          <summary>What makes AIOmni different from FantasyPros or DraftSharks?</summary>
+          <div class="faq-body">Most tools publish one ranking and apply it to every user. AIOmni reads your league's exact scoring rules, roster construction, and waiver type before responding — so the same trade can be graded A for you and C for your league-mate. The algorithm (AIOmni Formula) is also documented in plain language, not a black box.</div>
+        </details>
+
+        <details class="faq-item">
+          <summary>How are AI responses generated?</summary>
+          <div class="faq-body">Coach-tier responses use Claude Opus, Anthropic's flagship reasoning model. Quick lookups use Claude Haiku for speed. Every prompt is enriched with your roster, league settings, current injury reports, snap counts, Vegas lines, and recent news before the model responds — sources are cited inline.</div>
+        </details>
+
+        <details class="faq-item">
+          <summary>Can I cancel anytime?</summary>
+          <div class="faq-body">Yes. Monthly plans cancel any time with no fee. Annual plans are pro-rated. You keep access through the end of the billing period.</div>
+        </details>
+
+        <details class="faq-item">
+          <summary>What's "Season Memory"?</summary>
+          <div class="faq-body">A Pro feature that builds a profile of you as a manager — your tendencies, decisions, and outcomes — and remembers them across the full 52-week season. Each conversation becomes sharper as the year progresses because AIOmni knows what you've done before.</div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="final-cta">
+    <div class="wrap container-tight">
+      <div class="eyebrow">Beta cohort opening</div>
+      <h2>Deploying Summer 2026.</h2>
+      <p>Get early access before training camp. Beta members get free Pro access through their first season, a direct line to the team, and grandfathered pricing for life.</p>
+      <a class="btn btn-primary" href="mailto:aiomni@getaiomni.com?subject=Beta%20Access">Get beta access <span class="btn-arrow">→</span></a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="wrap">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand"><span class="y">AI</span>OMNI</div>
+          <p class="footer-blurb">Fantasy football that reads your league first. Built for managers who play in real leagues with real rules — not the half-PPR-default world other apps were built for.</p>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Product</div>
+          <ul>
+            <li><a href="#how">How it works</a></li>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+            <li><a href="#faq">FAQ</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Company</div>
+          <ul>
+            <li><a href="mailto:aiomni@getaiomni.com">Contact</a></li>
+            <li><a href="https://twitter.com/AIOmniApp">Twitter / X</a></li>
+            <li><a href="https://getaiomni.com">getaiomni.com</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Legal</div>
+          <ul>
+            <li><a href="#">Terms</a></li>
+            <li><a href="#">Privacy</a></li>
+          </ul>
         </div>
       </div>
-      <div style="margin-top:10px;opacity:0.9">Additional token colors available in <code>app/constants/tokens.ts</code> and <code>constants/Colors.ts</code>.</div>
-    </div>
-
-    <div class="section glass">
-      <strong>Typography</strong>
-      <div style="margin-top:10px">
-        <div style="font-size:22px;font-weight:800">Outfit — Display / Headings</div>
-        <div class="mono" style="margin-top:8px">DM Mono — UI monospaced labels and code</div>
+      <div class="footer-bottom">
+        <div>© 2026 AIOmni · All rights reserved</div>
+        <div>aiomni@getaiomni.com · @AIOmniApp</div>
       </div>
     </div>
+  </footer>
 
-    <div class="section">
-      <strong>Assets</strong>
-      <div class="assets">
-        <img class="asset" src="assets/images/logo.png" alt="logo">
-        <img class="asset" src="assets/images/orb.png" alt="orb">
-        <img class="asset" src="assets/images/favicon.png" alt="favicon">
-        <img class="asset" src="assets/images/react-logo.png" alt="react">
-      </div>
-      <div style="margin-top:10px;opacity:0.9">Source images available in <code>assets/images/</code>.</div>
-    </div>
-
-    <div class="section glass">
-      <strong>Developer notes</strong>
-      <ul style="opacity:0.95">
-        <li>Project is an Expo app (see README). Run with <code>npm install</code> and <code>npx expo start</code>.</li>
-        <li>Fonts are loaded via Expo: <code>Outfit</code> and <code>DMMono</code> (see <code>app/_layout.tsx</code>).</li>
-        <li>AI features call external APIs — keys are configured in services and environment.</li>
-      </ul>
-    </div>
-
-    <footer>
-      Built from repository: <strong>AIOmni</strong>. Open this file from the project root to preview. Images reference <code>assets/images/</code>.
-    </footer>
-  </div>
 </body>
 </html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0a1214">
+  <title>404 — AIOmni</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/aiomni.css">
+  <style>
+    .err-wrap {
+      min-height: 80vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center; padding: 0 24px;
+    }
+    .err-code {
+      font-family: 'Bebas Neue', 'Impact', sans-serif;
+      font-size: clamp(120px, 22vw, 240px);
+      line-height: 1; letter-spacing: 0.04em;
+      background: linear-gradient(135deg, var(--aqua), var(--amber), var(--flame));
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 20px;
+    }
+    .err-title { font-size: clamp(28px, 4vw, 42px); margin: 0 0 14px; }
+    .err-body { color: var(--ink-2); max-width: 480px; margin: 0 auto 32px; font-size: 17px; }
+  
+@keyframes spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+.spec-spin { animation: spin 5s linear infinite; transform-origin: center; }
+@media (prefers-reduced-motion: reduce) { .spec-spin { animation: none; } }
+
+</style>
+</head>
+<body>
+
+<nav class="nav"><div class="wrap nav-inner">
+  <a href="index.html" class="brand">
+    <span class="wm-ai">AI</span>
+    <span class="wm-mark">
+      <svg viewBox="0 0 60 60" width="28" height="28" aria-hidden="true">
+        <defs><linearGradient id="g404" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#ff5714"/>
+          <stop offset="25%" stop-color="#ffb800"/>
+          <stop offset="50%" stop-color="#e4ff1a"/>
+          <stop offset="75%" stop-color="#6eeb83"/>
+          <stop offset="100%" stop-color="#1be7ff"/>
+        </linearGradient></defs>
+        <g class="spec-spin"><circle cx="30" cy="30" r="22.8" fill="none" stroke="url(#g404)" stroke-width="5.4" stroke-linecap="round" stroke-dasharray="121.7 21.5" stroke-dashoffset="89.6"/></g>
+      </svg>
+    </span>
+    <span class="wm-mni">MNI</span>
+  </a>
+  <a class="nav-cta" href="mailto:aiomni@getaiomni.com?subject=Beta%20Access">Get Beta →</a>
+</div></nav>
+
+<div class="err-wrap">
+  <div class="err-code">404</div>
+  <h1 class="err-title">Off the route.</h1>
+  <p class="err-body">That play isn't in the playbook. Get back to the line of scrimmage and run something that exists.</p>
+  <a class="btn btn-primary" href="/">Back to Home →</a>
+</div>
+
+</body>
+</html>
