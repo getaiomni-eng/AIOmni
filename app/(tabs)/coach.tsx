@@ -420,6 +420,7 @@ export default function CoachScreen() {
   const [selectedLeague, setSelectedLeague] = useState<LeagueContext | null>(null);
   const [pickerVisible,  setPickerVisible]  = useState(false);
   const [remaining,      setRemaining]      = useState(10);
+  const [limit,          setLimit]          = useState(10);
   const [tier,           setTier]           = useState('free');
 
   const systemPromptRef = useRef<string>(BASE_SYSTEM);
@@ -460,6 +461,7 @@ export default function CoachScreen() {
       // Older inline ternaries referenced retired tiers (premium /
       // dynasty_elite) — replaced with a single source of truth.
       const limitNum = await getPromptLimit();
+      setLimit(limitNum);
       const promptLabel = currentTier === 'free'
         ? `${rem} of ${limitNum} free prompts remaining`
         : `${rem} of ${limitNum} prompts remaining this week`;
@@ -483,8 +485,14 @@ export default function CoachScreen() {
   useFocusEffect(useCallback(() => {
     (async () => {
       try {
-        const fresh = await getRemainingPrompts();
+        // Refresh limit too — picks up tier upgrades (free→rankings→pro)
+        // without needing an app relaunch.
+        const [fresh, freshLimit] = await Promise.all([
+          getRemainingPrompts(),
+          getPromptLimit(),
+        ]);
         setRemaining(fresh);
+        setLimit(freshLimit);
       } catch {}
     })();
   }, []));
@@ -611,7 +619,7 @@ export default function CoachScreen() {
             <View style={styles.rightHdr}>
               <View style={[styles.promptCounter, { borderColor: promptColor + '55', backgroundColor: promptColor + '12' }]}>
                 <Text style={[styles.promptCountNum, { color: promptColor }]}>{remaining > 900 ? '∞' : remaining}</Text>
-                <Text style={[styles.promptCountLbl, { color: promptColor }]}>{remaining > 900 ? '' : '/40'}</Text>
+                <Text style={[styles.promptCountLbl, { color: promptColor }]}>{remaining > 900 ? '' : `/${limit}`}</Text>
               </View>
               <View style={styles.liveDot}>
                 <View style={[styles.livePulse, !contextReady && { backgroundColor: C.gold }]} />
