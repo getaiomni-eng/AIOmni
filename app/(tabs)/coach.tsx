@@ -402,9 +402,9 @@ const renderAIText = (text: string) =>
       const [, pos, name, team, detail] = line.split('|');
       return <AddCard key={i} pos={pos ?? 'WR'} name={name ?? ''} team={team ?? ''} detail={detail ?? ''} />;
     }
-    if (line.startsWith('__')) return <Text key={i} style={styles.aiBold}>{line.replace(/__[a-z]+__/g, '').replace(/__/g, '')}</Text>;
+    if (line.startsWith('__')) return <Text key={i} selectable style={styles.aiBold}>{line.replace(/__[a-z]+__/g, '').replace(/__/g, '')}</Text>;
     if (line === '') return <View key={i} style={{ height: 6 }} />;
-    return <Text key={i} style={styles.aiTxt}>{line}</Text>;
+    return <Text key={i} selectable style={styles.aiTxt}>{line}</Text>;
   });
 
 export default function CoachScreen() {
@@ -538,8 +538,6 @@ export default function CoachScreen() {
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await incrementPrompt();
-    setRemaining(r => Math.max(0, r - 1));
 
     const userMsg:    Message = { role:'user', text };
     const loadingMsg: Message = { role:'ai',   text:'', isLoading:true };
@@ -572,6 +570,10 @@ export default function CoachScreen() {
       ].filter(Boolean).join('\n');
 
       const reply = await askAI(fullPrompt, 1000);
+      // Only charge a prompt once the model actually responds — connection
+      // errors and timeouts shouldn't burn the user's weekly quota.
+      await incrementPrompt();
+      setRemaining(r => Math.max(0, r - 1));
       setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: reply }]);
 
       if (['pro','premium','dynasty_elite'].includes(tier) && selectedLeague) {
@@ -667,7 +669,7 @@ export default function CoachScreen() {
                 <View key={i} style={styles.userRow}>
                   <View style={styles.userBubble}>
                     <View style={styles.userBubbleShine} />
-                    <Text style={styles.userTxt}>{m.text}</Text>
+                    <Text selectable style={styles.userTxt}>{m.text}</Text>
                   </View>
                 </View>
               ) : (
