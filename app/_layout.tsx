@@ -9,7 +9,6 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
 import { useFonts } from 'expo-font';
-import * as Linking from 'expo-linking';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
@@ -18,7 +17,7 @@ import { syncUserBehavioralData } from '../services/behavioralSync';
 import { Alert, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getUser, getUserRow } from '../services/supabase';
-import { exchangeYahooCode, loadYahooTokens } from '../services/yahoo';
+import { loadYahooTokens } from '../services/yahoo';
 import { updatePassword } from '../services/auth';
 import { attachCustomerInfoListener, initPurchases, refreshTier } from '../services/purchases';
 import { registerPushNotifications } from '../services/notifications';
@@ -137,31 +136,15 @@ export default Sentry.wrap(function RootLayout() {
       }
     })();
 
-    const handleDeepLink = async (event: { url: string }) => {
-      const url = event.url;
-
-      // Password reset is handled by app/auth/reset.tsx via expo-router
-      // auto-resolution. Supabase parses the recovery token from the URL
-      // fragment via detectSessionInUrl: true in services/supabase.ts,
-      // so by the time reset.tsx mounts the user has a valid recovery
-      // session and can call supabase.auth.updateUser({password}) directly.
-
-      // ── Yahoo OAuth callback ──
-      if (!url.includes('oauth/yahoo')) return;
-      const parsed = Linking.parse(url);
-      const code   = parsed.queryParams?.code as string;
-      if (!code) return;
-      try {
-        await exchangeYahooCode(code);
-        router.replace('/(tabs)');
-      } catch (e) {
-        console.error('Yahoo OAuth error:', e);
-      }
-    };
-
-    const subscription = Linking.addEventListener('url', handleDeepLink);
-    Linking.getInitialURL().then(url => { if (url) handleDeepLink({ url }); });
-    return () => subscription.remove();
+    // No app-level deep-link handler for Yahoo OAuth: the Settings tab
+    // handles aiomnifantasy://oauth/yahoo via WebBrowser.openAuthSessionAsync
+    // (ASWebAuthenticationSession on iOS), which captures the redirect
+    // internally. Having a second handler here raced the in-place flow —
+    // exchangeYahooCode() removes the PKCE verifier on success, so whichever
+    // handler ran second always failed with "No PKCE code verifier found"
+    // and the user saw either a stray error or no confirmation at all.
+    // Password reset is also handled at the screen level (app/auth/reset.tsx
+    // via supabase.auth detectSessionInUrl), so nothing belongs here yet.
   }, [fontsLoaded]);
 
   if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: dark.bg }} />;
