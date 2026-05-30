@@ -72,7 +72,108 @@ function getPaywallMessage(resetStr: string): string {
   return `You've used all your prompts. Resets ${resetStr}.\n\n__verdict__Upgrade for more prompts → getaiomni.com`;
 }
 
-async function loadSleeperContext(): Promise<LeagueContext[]> {
+// ── Player enrichment ─────────────────────────────────────────────────
+// Sleeper's /players/nfl is the most complete public NFL player feed
+// available — age, NFL experience, depth chart, injury status, and the
+// canonical "team is null → free agent" signal. We load it once per
+// session (with a 24h cache) and use it both directly for Sleeper
+// rosters and as a name-keyed enrichment source for every other
+// platform. Without this, the AI would price unsigned UFAs (May-2026
+// Keenan Allen on Yahoo/ESPN/FF rosters) like productive starters.
+
+const SLEEPER_PLAYER_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function loadSleeperPlayerMap(): Promise<Record<string, any>> {
+  const cachedRaw   = await AsyncStorage.getItem('sleeper_players_cache');
+  const cachedAtRaw = await AsyncStorage.getItem('sleeper_players_cache_at');
+  const cachedAt    = cachedAtRaw ? parseInt(cachedAtRaw, 10) : 0;
+  const fresh       = cachedRaw && cachedAt && Date.now() - cachedAt < SLEEPER_PLAYER_TTL_MS;
+  if (fresh) {
+    try { return JSON.parse(cachedRaw!); } catch { /* fall through to refetch */ }
+  }
+  try {
+    const res = await fetch('https://api.sleeper.app/v1/players/nfl');
+    const data = await res.json();
+    await AsyncStorage.setItem('sleeper_players_cache', JSON.stringify(data));
+    await AsyncStorage.setItem('sleeper_players_cache_at', String(Date.now()));
+    return data;
+  } catch {
+    if (cachedRaw) { try { return JSON.parse(cachedRaw); } catch { /* */ } }
+    return {};
+  }
+}
+
+function normalizeName(name: string): string {
+  // Strip suffixes (Jr/Sr/II/III/IV/V) and punctuation so "D.J. Moore",
+  // "DJ Moore", and "DJ Moore Jr." all collapse to the same key.
+  return name
+    .toLowerCase()
+    .replace(/[.']/g, '')
+    .replace(/\s+(jr|sr|ii|iii|iv|v)\b\.?$/i, '')
+    .trim();
+}
+
+function buildSleeperNameIndex(map: Record<string, any>): Map<string, any> {
+  const idx = new Map<string, any>();
+  for (const p of Object.values(map)) {
+    if (!p || typeof p !== 'object') continue;
+    const pp = p as any;
+    const full = pp.full_name || `${pp.first_name ?? ''} ${pp.last_name ?? ''}`.trim();
+    if (!full || !pp.position) continue;
+    const key = `${normalizeName(full)}|${pp.position}`;
+    // Prefer active records when the same name+position appears multiple
+    // times (Sleeper keeps retired/duplicate entries around).
+    const existing = idx.get(key);
+    if (!existing || (pp.active !== false && existing.active === false)) {
+      idx.set(key, pp);
+    }
+  }
+  return idx;
+}
+
+function formatPlayerEntry(
+  name: string,
+  position: string,
+  platformTeam: string | undefined,
+  enrichment: any | null,
+): string {
+  const parts: string[] = [position || 'FLEX'];
+  // Trust Sleeper's team field over the platform's: Sleeper updates
+  // continuously, while Yahoo/ESPN/MFL/FF may show a stale roster
+  // assignment from before a player was released.
+  const realTeam = enrichment?.team ?? platformTeam;
+  parts.push(realTeam || 'FA');
+  if (enrichment) {
+    if (typeof enrichment.age === 'number' && enrichment.age > 0) {
+      parts.push(`${enrichment.age}yo`);
+    }
+    if (typeof enrichment.years_exp === 'number') {
+      parts.push(enrichment.years_exp === 0 ? 'R' : `${enrichment.years_exp}yr`);
+    }
+    if (enrichment.depth_chart_position
+        && typeof enrichment.depth_chart_order === 'number'
+        && enrichment.depth_chart_order <= 3) {
+      parts.push(`${enrichment.depth_chart_position}${enrichment.depth_chart_order}`);
+    }
+    if (enrichment.injury_status) parts.push(enrichment.injury_status);
+    if (enrichment.status && enrichment.status !== 'Active'
+        && enrichment.status !== 'Inactive') {
+      parts.push(enrichment.status);
+    }
+  }
+  return `${name} (${parts.join(' · ')})`;
+}
+
+function enrichByName(
+  index: Map<string, any> | null,
+  name: string,
+  position: string,
+): any | null {
+  if (!index || !name || !position) return null;
+  return index.get(`${normalizeName(name)}|${position}`) ?? null;
+}
+
+async function loadSleeperContext(playerMap: Record<string, any>): Promise<LeagueContext[]> {
   try {
     const username = await AsyncStorage.getItem('sleeper_username');
     if (!username) return [];
@@ -83,31 +184,8 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
     if (!Array.isArray(leagues)) return [];
     const state        = await (await fetch('https://api.sleeper.app/v1/state/nfl')).json();
     const week         = state.leg || state.display_week || 17;
-    let playerMap: Record<string, any> = {};
-    // Cache /players/nfl for 24h. Without a TTL the Coach kept reading
-    // months-old roster data — e.g. showing released vets as still on
-    // their old team — and the AI then valued them as productive starters
-    // instead of unsigned UFAs (the May-2026 Keenan Allen case).
-    const PLAYER_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-    const cachedRaw = await AsyncStorage.getItem('sleeper_players_cache');
-    const cachedAtRaw = await AsyncStorage.getItem('sleeper_players_cache_at');
-    const cachedAt = cachedAtRaw ? parseInt(cachedAtRaw, 10) : 0;
-    const fresh = cachedRaw && cachedAt && Date.now() - cachedAt < PLAYER_CACHE_TTL_MS;
-    if (fresh) {
-      playerMap = JSON.parse(cachedRaw!);
-    } else {
-      try {
-        const res = await fetch('https://api.sleeper.app/v1/players/nfl');
-        playerMap = await res.json();
-        await AsyncStorage.setItem('sleeper_players_cache', JSON.stringify(playerMap));
-        await AsyncStorage.setItem('sleeper_players_cache_at', String(Date.now()));
-      } catch {
-        // On network failure, fall back to the stale cache rather than
-        // returning empty — old roster info is still better than none.
-        if (cachedRaw) playerMap = JSON.parse(cachedRaw);
-        console.log('Failed to fetch Sleeper players; falling back to stale cache');
-      }
-    }
+    // playerMap is loaded once at the top of the mount effect and passed
+    // in — same data also drives cross-platform enrichment.
     return Promise.all(leagues.slice(0, 6).map(async (l: any): Promise<LeagueContext> => {
       const isPPR = l.scoring_settings?.rec > 0;
       const isSF  = (l.roster_positions || []).includes('SUPER_FLEX');
@@ -144,40 +222,12 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
         const losses      = myRoster?.settings?.losses ?? 0;
         const sorted      = Array.isArray(rosters) ? [...rosters].sort((a: any, b: any) => (b.settings?.wins ?? 0) - (a.settings?.wins ?? 0)) : [];
         const rankIdx     = sorted.findIndex((r: any) => r.roster_id === myRoster?.roster_id);
-        // Pack every Sleeper-exposed signal that informs dynasty/redraft
-        // reasoning into the roster line. Compact pipe-separated format
-        // keeps the prompt budget tight while giving the Coach upfront
-        // visibility into team, age, NFL experience, depth-chart slot,
-        // and current injury/status flags. Without this the Coach was
-        // pricing unsigned UFAs (May-2026 Keenan Allen) like productive
-        // starters and couldn't distinguish a rookie from a 13-year vet.
+        // Sleeper-resolved entries — direct id lookup gives the highest
+        // fidelity since we have the player object already.
         const rosterNames = (myRoster?.players ?? []).slice(0, 30).map((id: string) => {
           const p = playerMap[id];
           if (!p) return id;
-          const parts: string[] = [p.position];
-          parts.push(p.team || 'FA');
-          if (typeof p.age === 'number' && p.age > 0) parts.push(`${p.age}yo`);
-          // Years of NFL experience: 0 = rookie, 1+ = years played.
-          // "R" beats "0yr" for the AI's pattern-matching on rookies.
-          if (typeof p.years_exp === 'number') {
-            parts.push(p.years_exp === 0 ? 'R' : `${p.years_exp}yr`);
-          }
-          // Depth chart slot — only show starters/early backups (≤3).
-          // Sleeper nulls depth_chart_* for free agents already, so this
-          // doesn't fire on FAs and create a contradictory "FA · WR1".
-          if (p.depth_chart_position && typeof p.depth_chart_order === 'number'
-              && p.depth_chart_order <= 3) {
-            parts.push(`${p.depth_chart_position}${p.depth_chart_order}`);
-          }
-          // Active injury designation. Sleeper sets injury_status to one of:
-          // Questionable, Doubtful, Out, IR, PUP, Sus (or null when healthy).
-          if (p.injury_status) parts.push(p.injury_status);
-          // Non-Active player status (Retired, Suspended, etc.) — Sleeper
-          // sometimes leaves players in the cache after retirement.
-          if (p.status && p.status !== 'Active' && p.status !== 'Inactive') {
-            parts.push(p.status);
-          }
-          return `${p.first_name} ${p.last_name} (${parts.join(' · ')})`;
+          return formatPlayerEntry(`${p.first_name} ${p.last_name}`, p.position, p.team, p);
         });
 
         // Compute owned picks for dynasty/keeper.
@@ -253,7 +303,7 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
   } catch { return []; }
 }
 
-async function loadESPNContext(): Promise<LeagueContext[]> {
+async function loadESPNContext(nameIndex: Map<string, any> | null): Promise<LeagueContext[]> {
   try {
     const creds = await loadESPNCredentials();
     if (!creds?.leagueId) return [];
@@ -285,9 +335,12 @@ async function loadESPNContext(): Promise<LeagueContext[]> {
       const player = entry.playerPoolEntry?.player;
       const posMap: Record<number, string> = { 1:'QB', 2:'RB', 3:'WR', 4:'TE', 5:'K', 16:'DEF' };
       const teamMap = leagueData.proTeams ?? {};
-      const teamAbbr = teamMap[player?.proTeamId]?.abbrev;
-      const team = teamAbbr ? ` · ${teamAbbr}` : '';
-      return `${player?.fullName ?? 'Unknown'} (${posMap[player?.defaultPositionId] ?? 'FLEX'}${team})`;
+      const name   = player?.fullName ?? 'Unknown';
+      const pos    = posMap[player?.defaultPositionId] ?? 'FLEX';
+      const team   = teamMap[player?.proTeamId]?.abbrev;
+      // Look up Sleeper enrichment by name+pos to surface age/exp/depth.
+      const enrich = enrichByName(nameIndex, name, pos);
+      return formatPlayerEntry(name, pos, team, enrich);
     });
 
     return [{
@@ -312,7 +365,7 @@ async function loadESPNContext(): Promise<LeagueContext[]> {
 // surfaces player trades but not pick trades), so ownedPicks is omitted
 // here. Roster + standings + record reach the Coach for the first time —
 // previously Yahoo leagues were silently absent from the prompt entirely.
-async function loadYahooContext(): Promise<LeagueContext[]> {
+async function loadYahooContext(nameIndex: Map<string, any> | null): Promise<LeagueContext[]> {
   try {
     const token = await getValidYahooToken();
     if (!token) return [];
@@ -342,9 +395,12 @@ async function loadYahooContext(): Promise<LeagueContext[]> {
           ...(teamData?.roster?.starters ?? []),
           ...(teamData?.roster?.bench ?? []),
         ];
-        const rosterNames = slots.slice(0, 50).map((p: YahooPlayer) =>
-          `${p.name?.full ?? 'Unknown'} (${p.display_position ?? 'FLEX'}${p.editorial_team_abbr ? ` · ${p.editorial_team_abbr}` : ''})`
-        );
+        const rosterNames = slots.slice(0, 50).map((p: YahooPlayer) => {
+          const name = p.name?.full ?? 'Unknown';
+          const pos  = p.display_position ?? 'FLEX';
+          const enrich = enrichByName(nameIndex, name, pos);
+          return formatPlayerEntry(name, pos, p.editorial_team_abbr, enrich);
+        });
 
         // Yahoo doesn't surface scoring rules in the league-list response.
         // Default to PPR (the modal Yahoo league); a follow-up could fetch
@@ -379,6 +435,7 @@ async function loadYahooContext(): Promise<LeagueContext[]> {
 async function loadAbstractContext(
   platformId: 'fleaflicker' | 'mfl',
   platformLabel: 'Fleaflicker' | 'MFL',
+  nameIndex: Map<string, any> | null,
 ): Promise<LeagueContext[]> {
   try {
     const { getPlatform } = require('../../services/platform');
@@ -411,9 +468,12 @@ async function loadAbstractContext(
         // Include team so Hunter (WR JAX) is unambiguous from any Hunter
         // also rostered, and so the Coach can reason about NFL team
         // contexts (offensive scheme, target share competition).
-        const rosterNames = slots.slice(0, 50).map((s: any) =>
-          `${s.player?.name ?? 'Unknown'} (${s.player?.position ?? 'FLEX'}${s.player?.team ? ` · ${s.player.team}` : ''})`
-        );
+        const rosterNames = slots.slice(0, 50).map((s: any) => {
+          const name = s.player?.name ?? 'Unknown';
+          const pos  = s.player?.position ?? 'FLEX';
+          const enrich = enrichByName(nameIndex, name, pos);
+          return formatPlayerEntry(name, pos, s.player?.team, enrich);
+        });
         const availableNames: string[] = (fas as any[]).slice(0, 20).map((p: any) =>
           `${p.name ?? 'Unknown'} (${p.position ?? 'FLEX'}${p.team ? ` · ${p.team}` : ''})`
         );
@@ -633,12 +693,20 @@ export default function CoachScreen() {
       setTier(currentTier);
       setRemaining(rem);
 
+      // Load Sleeper's player feed once and build a name+position index
+      // used to enrich every platform's roster lines with age, NFL exp,
+      // depth chart slot, injury status, and the canonical "team = null
+      // → FA" signal. Sleeper is the most complete public NFL feed, so
+      // even Yahoo/ESPN/FF/MFL rosters get a uniform format.
+      const playerMap = await loadSleeperPlayerMap();
+      const nameIndex = buildSleeperNameIndex(playerMap);
+
       const [sleeperLeagues, espnLeagues, yahooLeagues, ffLeagues, mflLeagues, liveData] = await Promise.all([
-        loadSleeperContext(),
-        loadESPNContext(),
-        loadYahooContext(),
-        loadAbstractContext('fleaflicker', 'Fleaflicker'),
-        loadAbstractContext('mfl', 'MFL'),
+        loadSleeperContext(playerMap),
+        loadESPNContext(nameIndex),
+        loadYahooContext(nameIndex),
+        loadAbstractContext('fleaflicker', 'Fleaflicker', nameIndex),
+        loadAbstractContext('mfl', 'MFL', nameIndex),
         fetchAllLiveData(),
       ]);
       const all = [...sleeperLeagues, ...espnLeagues, ...yahooLeagues, ...ffLeagues, ...mflLeagues];
