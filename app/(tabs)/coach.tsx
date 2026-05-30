@@ -23,6 +23,7 @@ import { AIOmniLogo } from '../components/AIOmniLogo';
 import { C, F, R, SP, SZ } from '../constants/tokens';
 import { getPromptLimit, getRemainingPrompts, getResetTime, incrementPrompt } from '../utils/promptCounter';
 import { getNFLSeason } from '../../services/season';
+import { getValidYahooToken, getYahooLeagues, getMyYahooTeam, getYahooStandings, YahooLeague, YahooPlayer } from '../../services/yahoo';
 
 // Prompt limits are tier-aware — see getPromptDisplayInfo()
 const BORDER   = '#1a3542';
@@ -229,6 +230,67 @@ async function loadESPNContext(): Promise<LeagueContext[]> {
       return `${player?.fullName ?? 'Unknown'} (${posMap[player?.defaultPositionId] ?? 'FLEX'})`;
     });
     return [{ name: leagueData.settings?.name ?? 'ESPN League', platform: 'ESPN', format: fmt, record: `${wins}–${losses}`, rank: rankIdx >= 0 ? `${rankIdx + 1} of ${teams.length}` : 'unknown', roster: rosterNames, week, season: 2025 }];
+  } catch { return []; }
+}
+
+// Yahoo Fantasy. Yahoo's API does NOT expose future traded-pick ownership
+// the way Sleeper does (/draftresults is historical only, /transactions
+// surfaces player trades but not pick trades), so ownedPicks is omitted
+// here. Roster + standings + record reach the Coach for the first time —
+// previously Yahoo leagues were silently absent from the prompt entirely.
+async function loadYahooContext(): Promise<LeagueContext[]> {
+  try {
+    const token = await getValidYahooToken();
+    if (!token) return [];
+    const currentSeason = await getNFLSeason();
+    const leagues = await getYahooLeagues(token, String(currentSeason)).catch(() => []);
+    if (!leagues?.length) return [];
+    return Promise.all(leagues.slice(0, 6).map(async (l: YahooLeague): Promise<LeagueContext> => {
+      try {
+        const [standings, teamData] = await Promise.all([
+          getYahooStandings(l.league_key, token).catch(() => [] as any[]),
+          getMyYahooTeam(l.league_key, token).catch(() => null),
+        ]);
+
+        // Yahoo's team[0] payload is an array of mixed metadata entries;
+        // find the one carrying team_key to identify ourselves in the
+        // standings response.
+        const teamMeta = (teamData?.team as any) as any[] | undefined;
+        const myKey = Array.isArray(teamMeta)
+          ? teamMeta.find((x: any) => x?.team_key)?.team_key
+          : undefined;
+        const myIdx = myKey ? (standings as any[]).findIndex(s => s.teamKey === myKey) : -1;
+        const me = myIdx >= 0 ? (standings as any[])[myIdx] : null;
+        const record = me ? `${me.wins}–${me.losses}` : '?';
+        const rank = me ? `${myIdx + 1} of ${(standings as any[]).length}` : 'unknown';
+
+        const slots = [
+          ...(teamData?.roster?.starters ?? []),
+          ...(teamData?.roster?.bench ?? []),
+        ];
+        const rosterNames = slots.slice(0, 50).map((p: YahooPlayer) =>
+          `${p.name?.full ?? 'Unknown'} (${p.display_position ?? 'FLEX'}${p.editorial_team_abbr ? ` · ${p.editorial_team_abbr}` : ''})`
+        );
+
+        // Yahoo doesn't surface scoring rules in the league-list response.
+        // Default to PPR (the modal Yahoo league); a follow-up could fetch
+        // /league/{key}/settings to detect Half/Std/no-PPR specifically.
+        return {
+          name: l.name, platform: 'Yahoo', format: 'PPR',
+          record, rank, roster: rosterNames, available: [],
+          week: l.current_week ?? 1,
+          season: parseInt(l.season) || new Date().getFullYear(),
+          leagueType: 'redraft',
+        };
+      } catch {
+        return {
+          name: l.name, platform: 'Yahoo', format: 'PPR',
+          record: '?', rank: '?', roster: [], available: [],
+          week: l.current_week ?? 1,
+          season: parseInt(l.season) || new Date().getFullYear(),
+        };
+      }
+    }));
   } catch { return []; }
 }
 
@@ -469,14 +531,15 @@ export default function CoachScreen() {
       setTier(currentTier);
       setRemaining(rem);
 
-      const [sleeperLeagues, espnLeagues, ffLeagues, mflLeagues, liveData] = await Promise.all([
+      const [sleeperLeagues, espnLeagues, yahooLeagues, ffLeagues, mflLeagues, liveData] = await Promise.all([
         loadSleeperContext(),
         loadESPNContext(),
+        loadYahooContext(),
         loadAbstractContext('fleaflicker', 'Fleaflicker'),
         loadAbstractContext('mfl', 'MFL'),
         fetchAllLiveData(),
       ]);
-      const all = [...sleeperLeagues, ...espnLeagues, ...ffLeagues, ...mflLeagues];
+      const all = [...sleeperLeagues, ...espnLeagues, ...yahooLeagues, ...ffLeagues, ...mflLeagues];
 
       try {
         const leagueId = all[0]?.name ?? 'general';
