@@ -84,15 +84,29 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
     const state        = await (await fetch('https://api.sleeper.app/v1/state/nfl')).json();
     const week         = state.leg || state.display_week || 17;
     let playerMap: Record<string, any> = {};
-    const cached = await AsyncStorage.getItem('sleeper_players_cache');
-    if (cached) {
-      playerMap = JSON.parse(cached);
+    // Cache /players/nfl for 24h. Without a TTL the Coach kept reading
+    // months-old roster data — e.g. showing released vets as still on
+    // their old team — and the AI then valued them as productive starters
+    // instead of unsigned UFAs (the May-2026 Keenan Allen case).
+    const PLAYER_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+    const cachedRaw = await AsyncStorage.getItem('sleeper_players_cache');
+    const cachedAtRaw = await AsyncStorage.getItem('sleeper_players_cache_at');
+    const cachedAt = cachedAtRaw ? parseInt(cachedAtRaw, 10) : 0;
+    const fresh = cachedRaw && cachedAt && Date.now() - cachedAt < PLAYER_CACHE_TTL_MS;
+    if (fresh) {
+      playerMap = JSON.parse(cachedRaw!);
     } else {
       try {
         const res = await fetch('https://api.sleeper.app/v1/players/nfl');
         playerMap = await res.json();
         await AsyncStorage.setItem('sleeper_players_cache', JSON.stringify(playerMap));
-      } catch { console.log('Failed to fetch Sleeper players'); }
+        await AsyncStorage.setItem('sleeper_players_cache_at', String(Date.now()));
+      } catch {
+        // On network failure, fall back to the stale cache rather than
+        // returning empty — old roster info is still better than none.
+        if (cachedRaw) playerMap = JSON.parse(cachedRaw);
+        console.log('Failed to fetch Sleeper players; falling back to stale cache');
+      }
     }
     return Promise.all(leagues.slice(0, 6).map(async (l: any): Promise<LeagueContext> => {
       const isPPR = l.scoring_settings?.rec > 0;
@@ -130,9 +144,19 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
         const losses      = myRoster?.settings?.losses ?? 0;
         const sorted      = Array.isArray(rosters) ? [...rosters].sort((a: any, b: any) => (b.settings?.wins ?? 0) - (a.settings?.wins ?? 0)) : [];
         const rankIdx     = sorted.findIndex((r: any) => r.roster_id === myRoster?.roster_id);
+        // Surface NFL team alongside position. Empty/null team means the
+        // player is currently unsigned — annotated as "FA" so the Coach
+        // doesn't price unsigned UFAs (e.g. May-2026 Keenan Allen) like
+        // productive rostered vets. Also include injury status when it's
+        // a season-affecting designation (IR / PUP / Suspended / OUT).
         const rosterNames = (myRoster?.players ?? []).slice(0, 30).map((id: string) => {
           const p = playerMap[id];
-          return p ? `${p.first_name} ${p.last_name} (${p.position})` : id;
+          if (!p) return id;
+          const team = p.team || 'FA';
+          const inj = p.injury_status;
+          const flag = (inj === 'IR' || inj === 'PUP' || inj === 'Sus' || inj === 'Out')
+            ? ` · ${inj}` : '';
+          return `${p.first_name} ${p.last_name} (${p.position} · ${team}${flag})`;
         });
 
         // Compute owned picks for dynasty/keeper.
