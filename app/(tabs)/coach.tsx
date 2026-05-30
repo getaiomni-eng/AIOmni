@@ -214,22 +214,51 @@ async function loadESPNContext(): Promise<LeagueContext[]> {
     if (!creds?.leagueId) return [];
     const leagueData = await getESPNLeague(creds.leagueId, creds);
     if (!leagueData) return [];
-    const myTeam   = findMyESPNTeam(leagueData, creds.teamName || '');
-    const settings = leagueData.settings?.scoringSettings;
-    const recPts   = settings?.REC ?? 0;
-    const fmt      = recPts >= 1 ? 'PPR' : recPts >= 0.5 ? '0.5 PPR' : 'STD';
-    const wins     = myTeam?.record?.overall?.wins   ?? 0;
-    const losses   = myTeam?.record?.overall?.losses ?? 0;
-    const teams    = leagueData.teams ?? [];
-    const sorted   = [...teams].sort((a: any, b: any) => (b.record?.overall?.wins ?? 0) - (a.record?.overall?.wins ?? 0));
-    const rankIdx  = sorted.findIndex((t: any) => t.id === myTeam?.id);
-    const week     = leagueData.scoringPeriodId ?? 17;
-    const rosterNames: string[] = (myTeam?.roster?.entries ?? []).slice(0, 15).map((entry: any) => {
+    const myTeam     = findMyESPNTeam(leagueData, creds.teamName || '');
+    const allSettings = leagueData.settings;
+    const scoring   = allSettings?.scoringSettings;
+    const recPts    = scoring?.REC ?? 0;
+    const fmt       = recPts >= 1 ? 'PPR' : recPts >= 0.5 ? '0.5 PPR' : 'STD';
+    const wins      = myTeam?.record?.overall?.wins   ?? 0;
+    const losses    = myTeam?.record?.overall?.losses ?? 0;
+    const teams     = leagueData.teams ?? [];
+    const sorted    = [...teams].sort((a: any, b: any) => (b.record?.overall?.wins ?? 0) - (a.record?.overall?.wins ?? 0));
+    const rankIdx   = sorted.findIndex((t: any) => t.id === myTeam?.id);
+    const week      = leagueData.scoringPeriodId ?? 17;
+
+    // League-type detection — ESPN has no explicit flag. Mirror the logic
+    // in services/platform/espn.ts:mapLeagueType: OFFLINE + 15+ keepers
+    // = dynasty, partial keepers = keeper, otherwise redraft.
+    const keeperCount = allSettings?.draftSettings?.keeperCount ?? 0;
+    const draftType   = allSettings?.draftSettings?.type;
+    const leagueType: LeagueContext['leagueType'] =
+      (draftType === 'OFFLINE' && keeperCount >= 15) ? 'dynasty'
+        : (keeperCount > 0 && keeperCount < 15) ? 'keeper'
+        : 'redraft';
+
+    const rosterNames: string[] = (myTeam?.roster?.entries ?? []).slice(0, 30).map((entry: any) => {
       const player = entry.playerPoolEntry?.player;
       const posMap: Record<number, string> = { 1:'QB', 2:'RB', 3:'WR', 4:'TE', 5:'K', 16:'DEF' };
-      return `${player?.fullName ?? 'Unknown'} (${posMap[player?.defaultPositionId] ?? 'FLEX'})`;
+      const teamMap = leagueData.proTeams ?? {};
+      const teamAbbr = teamMap[player?.proTeamId]?.abbrev;
+      const team = teamAbbr ? ` · ${teamAbbr}` : '';
+      return `${player?.fullName ?? 'Unknown'} (${posMap[player?.defaultPositionId] ?? 'FLEX'}${team})`;
     });
-    return [{ name: leagueData.settings?.name ?? 'ESPN League', platform: 'ESPN', format: fmt, record: `${wins}–${losses}`, rank: rankIdx >= 0 ? `${rankIdx + 1} of ${teams.length}` : 'unknown', roster: rosterNames, week, season: 2025 }];
+
+    return [{
+      name: allSettings?.name ?? 'ESPN League',
+      platform: 'ESPN',
+      format: fmt,
+      record: `${wins}–${losses}`,
+      rank: rankIdx >= 0 ? `${rankIdx + 1} of ${teams.length}` : 'unknown',
+      roster: rosterNames,
+      week,
+      season: leagueData.seasonId ?? new Date().getFullYear(),
+      leagueType,
+      rosterSize: (allSettings?.rosterSettings?.lineupSlotCounts
+        ? Object.values(allSettings.rosterSettings.lineupSlotCounts).reduce((a: number, b: any) => a + Number(b || 0), 0)
+        : undefined) as number | undefined,
+    }];
   } catch { return []; }
 }
 
