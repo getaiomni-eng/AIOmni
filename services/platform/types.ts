@@ -178,8 +178,10 @@ export interface DraftInfo {
   // Populated by platforms whose draft-board API surfaces per-cell team
   // ownership (Fleaflicker). Used by Coach context to annotate picks as
   // "1.08, 3.08" instead of "R1, R3". Optional — platforms without
-  // a per-cell ownership view leave it undefined.
-  myOwnedPicks?: Array<{ round: number; slot: number; viaTeamName?: string }>;
+  // a per-cell ownership view leave it undefined. slot is optional
+  // because some platforms (MFL) expose round/owner without a stable
+  // slot-to-roster mapping; round-only entries render as "R1" instead.
+  myOwnedPicks?: Array<{ round: number; slot?: number; viaTeamName?: string }>;
 }
 
 export interface DraftPick {

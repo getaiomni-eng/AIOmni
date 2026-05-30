@@ -617,9 +617,76 @@ export const mflPlatform: FantasyPlatform = {
     return out;
   },
 
-  async getDraft(_leagueId: string): Promise<DraftInfo | null> {
-    // MFL draft API returns format-specific data. Defer to v2.
-    return null;
+  async getDraft(leagueId: string): Promise<DraftInfo | null> {
+    // Round-only pick ownership for dynasty/keeper. MFL's tradedPicks
+    // endpoint lists picks by season/round/originalPickFor/franchise.id;
+    // crossing that with the user's franchise tells us what they own
+    // after trades. Slots are NOT derived — MFL leagues don't enforce
+    // franchise_id → draft_slot symmetry, so we ship round-only entries
+    // and let the Coach format them as "R1, R3" rather than guess "1.08".
+    try {
+      const myFid = await this.getMyUserId();
+      if (!myFid) return null;
+      const [tradedRes, leagueRes] = await Promise.all([
+        mflFetch<any>('tradedPicks', { L: leagueId }).catch(() => null),
+        mflFetch<any>('league',      { L: leagueId }).catch(() => null),
+      ]);
+      if (!leagueRes) return null;
+
+      // MFL JSON-encoded XML: nested .tradedPicks may be missing if no
+      // trades happened, and .tradedPick can be either array or single object.
+      const tradedRaw = tradedRes?.tradedPicks?.tradedPick;
+      const tradedList: any[] = Array.isArray(tradedRaw)
+        ? tradedRaw : tradedRaw ? [tradedRaw] : [];
+
+      // MFL exposes draft round count on rookieDraftPicks or draftRounds
+      // depending on league setup. Default to 5 for unknown configs.
+      const rounds = parseInt(
+        leagueRes?.league?.rookieDraftPicks?.round?.length
+          ?? leagueRes?.league?.draftRounds
+          ?? '5',
+        10
+      ) || 5;
+      const franchises: any[] = leagueRes?.league?.franchises?.franchise ?? [];
+      const franchiseCount = Array.isArray(franchises) ? franchises.length : 12;
+      const currentYear = String(new Date().getFullYear());
+
+      const owned: NonNullable<DraftInfo['myOwnedPicks']> = [];
+      // Default: I own one pick per round in the current season unless
+      // I traded that pick away (originalPickFor === me but franchise.id ≠ me).
+      for (let r = 1; r <= rounds; r++) {
+        const tradedAway = tradedList.find((p: any) =>
+          String(p.season ?? currentYear) === currentYear &&
+          parseInt(p.round, 10) === r &&
+          String(p.originalPickFor ?? '') === String(myFid) &&
+          String(p.franchise?.id ?? '') !== String(myFid) &&
+          String(p.franchise?.id ?? '') !== ''
+        );
+        if (!tradedAway) owned.push({ round: r });
+      }
+      // Incoming: I own picks originally belonging to someone else.
+      for (const p of tradedList) {
+        const owner    = String(p.franchise?.id ?? '');
+        const original = String(p.originalPickFor ?? '');
+        if (
+          String(p.season ?? currentYear) === currentYear &&
+          owner === String(myFid) && original && original !== String(myFid)
+        ) {
+          owned.push({ round: parseInt(p.round, 10), viaTeamName: `franchise ${original}` });
+        }
+      }
+
+      return {
+        id:         leagueId,
+        platformId: 'mfl',
+        leagueId,
+        type:       'snake',
+        status:     'pre_draft',
+        rounds,
+        teamCount:  franchiseCount,
+        myOwnedPicks: owned,
+      };
+    } catch { return null; }
   },
 
   async getDraftPicks(_draftId: string): Promise<DraftPick[]> {

@@ -373,19 +373,24 @@ async function loadAbstractContext(
           `${p.name ?? 'Unknown'} (${p.position ?? 'FLEX'}${p.team ? ` · ${p.team}` : ''})`
         );
 
-        // Format current-season picks as "1.08, 3.08" from the platform's
-        // per-cell ownership view. Future-season inventory isn't exposed
-        // by Fleaflicker's draft-board API, so we list only this year's
-        // picks. The AI can still talk about pick capital generically when
-        // the user asks about 2027/2028 — it just won't have exact slots.
+        // Format current-season picks from the platform's draft-board.
+        // Fleaflicker gives full slot info → "1.08, 3.08". MFL ships
+        // round-only entries → "R1, R3" (slot mapping isn't stable across
+        // MFL leagues). Future-season inventory isn't exposed by either
+        // platform's draft-board API; the AI can still talk about
+        // 2027/2028 capital generically when asked.
         let ownedPicks: string | undefined;
         const slotPad = (n: number) => String(n).padStart(2, '0');
-        const owned = (draft as any)?.myOwnedPicks as Array<{ round: number; slot: number }> | undefined;
+        const owned = (draft as any)?.myOwnedPicks as
+          Array<{ round: number; slot?: number; viaTeamName?: string }> | undefined;
         if (isDynKeep && owned && owned.length > 0) {
           const currentYear = parseInt(l.season) || new Date().getFullYear();
           const formatted = owned
-            .sort((a, b) => a.round - b.round || a.slot - b.slot)
-            .map(p => `${p.round}.${slotPad(p.slot)}`)
+            .sort((a, b) => a.round - b.round || (a.slot ?? 0) - (b.slot ?? 0))
+            .map(p => {
+              const base = p.slot ? `${p.round}.${slotPad(p.slot)}` : `R${p.round}`;
+              return p.viaTeamName ? `${base} (via ${p.viaTeamName})` : base;
+            })
             .join(', ');
           ownedPicks = `${currentYear}: ${formatted}`;
         }
