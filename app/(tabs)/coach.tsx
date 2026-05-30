@@ -109,11 +109,19 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
       const bestBall = l.settings?.best_ball === 1;
 
       try {
-        const [rosters, tradedPicks] = await Promise.all([
+        const isDynKeep = leagueType === 'dynasty' || leagueType === 'keeper';
+        const [rosters, tradedPicks, drafts] = await Promise.all([
           fetch(`https://api.sleeper.app/v1/league/${l.league_id}/rosters`).then(r => r.json()),
           // Only fetch pick inventory for dynasty/keeper leagues
-          (leagueType === 'dynasty' || leagueType === 'keeper')
+          isDynKeep
             ? fetch(`https://api.sleeper.app/v1/league/${l.league_id}/traded_picks`).then(r => r.json()).catch(() => [])
+            : Promise.resolve([]),
+          // Drafts are needed to translate "R1" → "1.08" for the current
+          // season (Sleeper locks the slot once the league rolls over).
+          // Future-season slots aren't decided yet, so we only annotate the
+          // current year.
+          isDynKeep
+            ? fetch(`https://api.sleeper.app/v1/league/${l.league_id}/drafts`).then(r => r.json()).catch(() => [])
             : Promise.resolve([]),
         ]);
         const myRoster    = Array.isArray(rosters) ? rosters.find((r: any) => r.owner_id === user.user_id) : null;
@@ -134,8 +142,35 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
           const rosterId = myRoster.roster_id;
           const totalTeams = rosters.length || 12;
           const rounds = l.settings?.draft_rounds || 5;
-          const seasons = [String(parseInt(l.season) + 1), String(parseInt(l.season) + 2)];
-          const picksBySeason: Record<string, string[]> = { [seasons[0]]: [], [seasons[1]]: [] };
+          // Include current season too — Sleeper rolls dynasty leagues into
+          // the new season before the rookie draft runs, so the 2026 1st
+          // (e.g. 1.08) is still part of pick capital that needs to drive
+          // Coach advice. Old code skipped the current season and left the
+          // AI blind to imminent rookie-draft picks. Trim seasons whose
+          // draft already completed before stringifying for the prompt.
+          const currentYear = parseInt(l.season);
+          const seasons = [String(currentYear), String(currentYear + 1), String(currentYear + 2)];
+          const picksBySeason: Record<string, string[]> = Object.fromEntries(seasons.map(s => [s, []]));
+
+          // Default draft slot from this year's draft order. Sleeper keys
+          // draft_order by user_id; the slot becomes the suffix for any
+          // current-season pick the user kept (e.g. round 1 → "1.08").
+          const activeDraft = Array.isArray(drafts)
+            ? (drafts.find((d: any) => d.status === 'drafting')
+                ?? drafts.find((d: any) => d.status === 'pre_draft')
+                ?? drafts[0])
+            : null;
+          const mySlot: number | undefined = activeDraft?.draft_order?.[user.user_id];
+          const slotPad = (n: number) => String(n).padStart(2, '0');
+          const fmtPick = (season: string, round: number, suffix = '') => {
+            // Slot only known for the current rookie draft. Future seasons
+            // stay as plain Rx — the draft order isn't set yet.
+            if (season === String(currentYear) && mySlot) {
+              return `${round}.${slotPad(mySlot)}${suffix}`;
+            }
+            return `R${round}${suffix}`;
+          };
+
           for (const season of seasons) {
             for (let round = 1; round <= rounds; round++) {
               // Find if there's a traded_pick entry for this slot
@@ -143,7 +178,7 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
                 tp.season === season && tp.round === round &&
                 tp.previous_owner_id === rosterId && tp.owner_id !== rosterId
               );
-              if (!tradedAway) picksBySeason[season].push(`R${round}`);
+              if (!tradedAway) picksBySeason[season].push(fmtPick(season, round));
             }
             // Add picks traded IN
             const incoming = tradedPicks.filter((tp: any) =>
@@ -152,7 +187,7 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
             for (const tp of incoming) {
               const fromRoster = rosters.find((r: any) => r.roster_id === tp.roster_id);
               const fromLabel = fromRoster ? ` (via ${rosters.indexOf(fromRoster) + 1})` : '';
-              picksBySeason[season].push(`R${tp.round}${fromLabel}`);
+              picksBySeason[season].push(fmtPick(season, tp.round, fromLabel));
             }
           }
           ownedPicks = seasons.map(s => `${s}: ${picksBySeason[s].sort().join(', ') || 'none'}`).join(' / ');
