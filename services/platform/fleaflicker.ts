@@ -575,6 +575,25 @@ export const fleaflickerPlatform: FantasyPlatform = {
       if (s) slotToRosterId[s] = String(cell?.team?.id ?? '');
     }
 
+    // Build the full list of picks owned by my team after trades. Each
+    // row is one round, each cell is one slot — a cell with team.id ===
+    // myTeamId means we own that pick. Picks acquired in trades show up
+    // here too (Fleaflicker rewrites the cell's team to the new owner).
+    // Used by the AI Coach so it can say "1.08, 3.08" instead of "R1".
+    let myOwnedPicks: DraftInfo['myOwnedPicks'];
+    if (myTeamId) {
+      myOwnedPicks = [];
+      for (const row of rows) {
+        const round = row?.round ?? 0;
+        for (const cell of (row?.cells ?? [])) {
+          if (String(cell?.team?.id ?? '') === myTeamId) {
+            const slot = cell?.slot?.slot;
+            if (round && slot) myOwnedPicks.push({ round, slot });
+          }
+        }
+      }
+    }
+
     return {
       id:         String(data?.id ?? leagueId),
       platformId: 'fleaflicker',
@@ -585,6 +604,7 @@ export const fleaflickerPlatform: FantasyPlatform = {
       teamCount,
       myDraftSlot,
       slotToRosterId,
+      myOwnedPicks,
     };
   },
 

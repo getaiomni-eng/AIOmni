@@ -174,6 +174,12 @@ export interface DraftInfo {
   slotToRosterId?: Record<number, string>;
   pickTimer?: number;
   startTime?: number;
+  // Slots the current user owns in this draft after trade adjustments.
+  // Populated by platforms whose draft-board API surfaces per-cell team
+  // ownership (Fleaflicker). Used by Coach context to annotate picks as
+  // "1.08, 3.08" instead of "R1, R3". Optional — platforms without
+  // a per-cell ownership view leave it undefined.
+  myOwnedPicks?: Array<{ round: number; slot: number; viaTeamName?: string }>;
 }
 
 export interface DraftPick {

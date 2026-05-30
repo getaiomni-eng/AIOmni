@@ -315,12 +315,20 @@ async function loadAbstractContext(
       const fmt = `${l.scoringFormat === 'ppr' ? 'PPR' : l.scoringFormat === 'half' ? '0.5 PPR' : 'STD'}`;
       const week = l.currentWeek ?? 1;
       try {
-        const [standings, roster, fas] = await Promise.all([
+        const lt: LeagueContext['leagueType'] = l.leagueType === 'dynasty' ? 'dynasty'
+                                              : l.leagueType === 'keeper'  ? 'keeper'
+                                              :                              'redraft';
+        const isDynKeep = lt === 'dynasty' || lt === 'keeper';
+        const [standings, roster, fas, draft] = await Promise.all([
           plat.getStandings(l.id).catch(() => []),
           plat.getMyRoster(l.id).catch(() => null),
           // Top 20 free agents so the Coach knows what's actually
           // available without burning a prompt asking the user.
           plat.getAvailablePlayers(l.id, { limit: 20 }).catch(() => []),
+          // Fleaflicker exposes per-cell pick ownership via getDraft —
+          // MFL's getDraft is still a stub. For platforms that populate
+          // myOwnedPicks we annotate this season's picks as "1.08, 3.08".
+          isDynKeep ? plat.getDraft(l.id).catch(() => null) : Promise.resolve(null),
         ]);
         const me = (standings as any[]).find(s => s.isMe);
         const record = me ? `${me.record.wins}–${me.record.losses}` : '?';
@@ -335,14 +343,29 @@ async function loadAbstractContext(
         const availableNames: string[] = (fas as any[]).slice(0, 20).map((p: any) =>
           `${p.name ?? 'Unknown'} (${p.position ?? 'FLEX'}${p.team ? ` · ${p.team}` : ''})`
         );
-        const lt: LeagueContext['leagueType'] = l.leagueType === 'dynasty' ? 'dynasty'
-                                              : l.leagueType === 'keeper'  ? 'keeper'
-                                              :                              'redraft';
+
+        // Format current-season picks as "1.08, 3.08" from the platform's
+        // per-cell ownership view. Future-season inventory isn't exposed
+        // by Fleaflicker's draft-board API, so we list only this year's
+        // picks. The AI can still talk about pick capital generically when
+        // the user asks about 2027/2028 — it just won't have exact slots.
+        let ownedPicks: string | undefined;
+        const slotPad = (n: number) => String(n).padStart(2, '0');
+        const owned = (draft as any)?.myOwnedPicks as Array<{ round: number; slot: number }> | undefined;
+        if (isDynKeep && owned && owned.length > 0) {
+          const currentYear = parseInt(l.season) || new Date().getFullYear();
+          const formatted = owned
+            .sort((a, b) => a.round - b.round || a.slot - b.slot)
+            .map(p => `${p.round}.${slotPad(p.slot)}`)
+            .join(', ');
+          ownedPicks = `${currentYear}: ${formatted}`;
+        }
+
         return {
           name: l.name, platform: platformLabel, format: fmt,
           record, rank, roster: rosterNames, available: availableNames, week,
           season: parseInt(l.season) || new Date().getFullYear(),
-          leagueType: lt,
+          leagueType: lt, ownedPicks,
         };
       } catch {
         return {
