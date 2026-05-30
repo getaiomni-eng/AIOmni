@@ -144,19 +144,40 @@ async function loadSleeperContext(): Promise<LeagueContext[]> {
         const losses      = myRoster?.settings?.losses ?? 0;
         const sorted      = Array.isArray(rosters) ? [...rosters].sort((a: any, b: any) => (b.settings?.wins ?? 0) - (a.settings?.wins ?? 0)) : [];
         const rankIdx     = sorted.findIndex((r: any) => r.roster_id === myRoster?.roster_id);
-        // Surface NFL team alongside position. Empty/null team means the
-        // player is currently unsigned — annotated as "FA" so the Coach
-        // doesn't price unsigned UFAs (e.g. May-2026 Keenan Allen) like
-        // productive rostered vets. Also include injury status when it's
-        // a season-affecting designation (IR / PUP / Suspended / OUT).
+        // Pack every Sleeper-exposed signal that informs dynasty/redraft
+        // reasoning into the roster line. Compact pipe-separated format
+        // keeps the prompt budget tight while giving the Coach upfront
+        // visibility into team, age, NFL experience, depth-chart slot,
+        // and current injury/status flags. Without this the Coach was
+        // pricing unsigned UFAs (May-2026 Keenan Allen) like productive
+        // starters and couldn't distinguish a rookie from a 13-year vet.
         const rosterNames = (myRoster?.players ?? []).slice(0, 30).map((id: string) => {
           const p = playerMap[id];
           if (!p) return id;
-          const team = p.team || 'FA';
-          const inj = p.injury_status;
-          const flag = (inj === 'IR' || inj === 'PUP' || inj === 'Sus' || inj === 'Out')
-            ? ` · ${inj}` : '';
-          return `${p.first_name} ${p.last_name} (${p.position} · ${team}${flag})`;
+          const parts: string[] = [p.position];
+          parts.push(p.team || 'FA');
+          if (typeof p.age === 'number' && p.age > 0) parts.push(`${p.age}yo`);
+          // Years of NFL experience: 0 = rookie, 1+ = years played.
+          // "R" beats "0yr" for the AI's pattern-matching on rookies.
+          if (typeof p.years_exp === 'number') {
+            parts.push(p.years_exp === 0 ? 'R' : `${p.years_exp}yr`);
+          }
+          // Depth chart slot — only show starters/early backups (≤3).
+          // Sleeper nulls depth_chart_* for free agents already, so this
+          // doesn't fire on FAs and create a contradictory "FA · WR1".
+          if (p.depth_chart_position && typeof p.depth_chart_order === 'number'
+              && p.depth_chart_order <= 3) {
+            parts.push(`${p.depth_chart_position}${p.depth_chart_order}`);
+          }
+          // Active injury designation. Sleeper sets injury_status to one of:
+          // Questionable, Doubtful, Out, IR, PUP, Sus (or null when healthy).
+          if (p.injury_status) parts.push(p.injury_status);
+          // Non-Active player status (Retired, Suspended, etc.) — Sleeper
+          // sometimes leaves players in the cache after retirement.
+          if (p.status && p.status !== 'Active' && p.status !== 'Inactive') {
+            parts.push(p.status);
+          }
+          return `${p.first_name} ${p.last_name} (${parts.join(' · ')})`;
         });
 
         // Compute owned picks for dynasty/keeper.
