@@ -80,7 +80,14 @@ export interface VegasLine {
 }
 
 export interface NewsItem {
-  source: string; headline: string;
+  source: string;
+  headline: string;
+  // Body text from <description>, stripped of HTML and capped. Most
+  // transaction-style news (releases, signings, IR designations) has the
+  // useful detail here — without it the AI only sees the headline.
+  description?: string;
+  pubDate?: string;
+  link?: string;
 }
 
 export interface LiveGameContext {
@@ -235,11 +242,28 @@ export async function fetchNextGenStats(): Promise<string> {
 
 export async function fetchNFLNews(): Promise<NewsItem[]> {
   const parseRSS = (xml: string, source: string): NewsItem[] => {
+    const clean = (s: string) => s
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&apos;/g, "'").replace(/&quot;/g, '"')
+      .replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
     const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
-    return items.slice(0, 8).flatMap(item => {
-      const m   = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) ?? item.match(/<title>(.*?)<\/title>/);
-      const raw = (m?.[1] ?? '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").replace(/&quot;/g, '"').replace(/<[^>]+>/g, '').trim();
-      return raw ? [{ source, headline: raw }] : [];
+    // Bumped from 8 → 30 so transaction-heavy feeds (PFR especially) give
+    // us a deep enough window to find news on rostered players, not just
+    // the day's top headlines. The roster-relevance filter trims this
+    // before it reaches the AI prompt.
+    return items.slice(0, 30).flatMap(item => {
+      const titleM = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) ?? item.match(/<title>(.*?)<\/title>/);
+      const descM  = item.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/) ?? item.match(/<description>([\s\S]*?)<\/description>/);
+      const pubM   = item.match(/<pubDate>(.*?)<\/pubDate>/);
+      const linkM  = item.match(/<link>(.*?)<\/link>/);
+      const headline = clean(titleM?.[1] ?? '');
+      if (!headline) return [];
+      const description = descM ? clean(descM[1]).slice(0, 400) : undefined;
+      return [{
+        source, headline, description,
+        pubDate: pubM?.[1]?.trim(),
+        link:    linkM?.[1]?.trim(),
+      }];
     });
   };
 
@@ -316,7 +340,41 @@ export async function fetchAllLiveData(
   };
 }
 
-export function formatLiveDataForPrompt(data: LiveGameContext): string {
+// Find news items that mention any of the user's rostered players, using
+// last-name word-boundary matching against headline + description. Loose
+// on purpose: an occasional false positive (an unrelated "Williams") is
+// less harmful than missing a real release/signing the user cares about.
+// Requires last names ≥ 3 chars to avoid noise from initials/short names.
+export function findRosterRelevantNews(
+  news: NewsItem[],
+  rosterLastNames: Set<string>,
+): NewsItem[] {
+  if (!rosterLastNames || rosterLastNames.size === 0) return [];
+  const patterns: Array<{ name: string; re: RegExp }> = [];
+  for (const ln of rosterLastNames) {
+    if (!ln || ln.length < 3) continue;
+    // Escape regex metachars in last names like "St. Brown" or "O'Neal".
+    const escaped = ln.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    patterns.push({ name: ln, re: new RegExp(`\\b${escaped}\\b`, 'i') });
+  }
+  const out: NewsItem[] = [];
+  const seen = new Set<string>();
+  for (const item of news) {
+    const text = `${item.headline} ${item.description ?? ''}`;
+    if (patterns.some(p => p.re.test(text))) {
+      if (!seen.has(item.headline)) {
+        out.push(item);
+        seen.add(item.headline);
+      }
+    }
+  }
+  return out;
+}
+
+export function formatLiveDataForPrompt(
+  data: LiveGameContext,
+  rosterLastNames?: Set<string>,
+): string {
   const lines: string[] = [
     `\n=== LIVE DATA (${new Date(data.fetchedAt).toLocaleTimeString()}) ===`,
     `Sources: ${data.sources.join(', ')}\n`,
@@ -351,18 +409,38 @@ export function formatLiveDataForPrompt(data: LiveGameContext): string {
     lines.push('');
   }
 
-  if (data.news.length > 0) {
-    lines.push('--- NFL NEWS HEADLINES ---');
-    // Group by source
-    const bySource: Record<string, string[]> = {};
-    for (const item of data.news) {
-      (bySource[item.source] = bySource[item.source] || []).push(item.headline);
-    }
-    for (const [source, headlines] of Object.entries(bySource)) {
-      lines.push(`${source}:`);
-      headlines.slice(0, 6).forEach(h => lines.push(`  • ${h}`));
+  // Roster-relevant news first, with the description body included so
+  // the AI sees the actual transaction detail ("released by the Bears,
+  // becomes a UFA") not just the headline. This is the section that
+  // most directly fixes Allen-style "AI didn't know he was unsigned"
+  // failures — the data was always in the PFR/Rotowire feeds, just
+  // never cross-referenced against the user's roster.
+  const relevant = rosterLastNames ? findRosterRelevantNews(data.news, rosterLastNames) : [];
+  if (relevant.length > 0) {
+    lines.push('--- NEWS RELEVANT TO YOUR ROSTER ---');
+    for (const item of relevant.slice(0, 25)) {
+      const date = item.pubDate ? ` (${new Date(item.pubDate).toLocaleDateString()})` : '';
+      lines.push(`[${item.source}${date}] ${item.headline}`);
+      if (item.description) lines.push(`   ${item.description}`);
     }
     lines.push('');
+  }
+
+  if (data.news.length > 0) {
+    const skipHeadlines = new Set(relevant.map(r => r.headline));
+    const generic = data.news.filter(n => !skipHeadlines.has(n.headline));
+    if (generic.length > 0) {
+      lines.push('--- OTHER NFL HEADLINES ---');
+      const bySource: Record<string, string[]> = {};
+      for (const item of generic) {
+        (bySource[item.source] = bySource[item.source] || []).push(item.headline);
+      }
+      for (const [source, headlines] of Object.entries(bySource)) {
+        lines.push(`${source}:`);
+        headlines.slice(0, 6).forEach(h => lines.push(`  • ${h}`));
+      }
+      lines.push('');
+    }
   }
 
   if (data.advancedStats) lines.push(data.advancedStats);

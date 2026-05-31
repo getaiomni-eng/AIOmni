@@ -719,7 +719,22 @@ export default function CoachScreen() {
         }
       } catch {}
 
-      liveDataRef.current     = formatLiveDataForPrompt(liveData);
+      // Extract last names from every league's roster lines so the live-
+      // data formatter can hoist news that mentions any of these players
+      // ("Bears release Keenan Allen" → surfaces above generic headlines).
+      // Roster entries are formatted as "First Last (POS · TEAM · …)".
+      const rosterLastNames = new Set<string>();
+      for (const league of all) {
+        for (const entry of league.roster ?? []) {
+          const name = entry.split(/\s*\(/)[0]?.trim();
+          if (!name) continue;
+          const parts = name.split(/\s+/);
+          const last = parts[parts.length - 1]?.replace(/[.,]/g, '');
+          if (last && last.length >= 3) rosterLastNames.add(last);
+        }
+      }
+
+      liveDataRef.current     = formatLiveDataForPrompt(liveData, rosterLastNames);
       systemPromptRef.current = buildSystemPrompt(all, null, memoriesRef.current) + liveDataRef.current;
       setAllLeagues(all);
       setContextReady(true);
