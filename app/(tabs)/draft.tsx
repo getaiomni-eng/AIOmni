@@ -79,6 +79,54 @@ const POS_COLORS: Record<string, string> = {
 
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
 
+// ─── LEAGUE-AWARE POSITION FILTERING ───────────────────────
+// Each starting roster slot maps to the player positions it can hold. We use
+// this to restrict the draftable pool to positions the league actually starts:
+// it drops team D/ST in no-defense leagues AND non-fantasy positions (punters,
+// OL, long snappers, etc.) that leak in from the live Sleeper player feed.
+const SLOT_POSITION_MAP: Record<string, string[]> = {
+  QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'],
+  DEF: ['DEF'], DST: ['DEF'],
+  FLEX: ['RB', 'WR', 'TE'],
+  WRRB_FLEX: ['RB', 'WR'],
+  REC_FLEX: ['WR', 'TE'],
+  SUPER_FLEX: ['QB', 'RB', 'WR', 'TE'],
+  SUPERFLEX: ['QB', 'RB', 'WR', 'TE'],
+  SF: ['QB', 'RB', 'WR', 'TE'],
+  IDP_FLEX: ['DL', 'LB', 'DB'],
+  DL: ['DL'], LB: ['LB'], DB: ['DB'],
+};
+// Bench-type slots hold any startable position, so they don't widen the set.
+const BENCH_SLOTS = new Set(['BN', 'IR', 'TAXI', 'RES']);
+
+function normalizeSlot(s: string): string {
+  return String(s ?? '').toUpperCase().replace(/[\s/]/g, '');
+}
+
+// Canonical fantasy position for a pool player (sources spell these various
+// ways: 'Def'/'DST'/'D/ST', 'PK' for kicker, 'FB' rosters as a RB).
+function normalizePosition(pos?: string): string {
+  const u = normalizeSlot(pos ?? '');
+  if (u === 'DST' || u === 'DEF') return 'DEF';
+  if (u === 'PK') return 'K';
+  if (u === 'FB') return 'RB';
+  return u;
+}
+
+// Positions the league can start, derived from its starting slots. Returns null
+// when indeterminate (empty/unknown slots) so callers fail open rather than
+// emptying the pool.
+function allowedDraftPositions(rosterSlots: string[] = []): Set<string> | null {
+  const allowed = new Set<string>();
+  for (const raw of rosterSlots) {
+    const s = normalizeSlot(raw);
+    if (BENCH_SLOTS.has(s)) continue;
+    const mapped = SLOT_POSITION_MAP[s];
+    if (mapped) mapped.forEach(p => allowed.add(p));
+  }
+  return allowed.size > 0 ? allowed : null;
+}
+
 // ─── FONTS (match V7) ──────────────────────────────────────
 const F = {
   heading: 'BebasNeue-Regular',
@@ -380,6 +428,18 @@ export default function DraftCopilotScreen() {
             liveDB = liveDB.map(p => rosteredNames.has(normalize(p.name)) ? { ...p, isDrafted: true } : p);
           }
         } catch (e) { console.log('FF/MFL pool build error:', e); }
+      }
+      // Restrict the draftable pool to positions the league actually starts:
+      // drops team D/ST in no-defense leagues and non-fantasy positions
+      // (punters, OL, etc.) that leak in from the live Sleeper player feed.
+      // Players with an unknown/blank position are kept (fail open) so we never
+      // silently drop a real FA whose position didn't come through.
+      const allowedPositions = allowedDraftPositions(settings.rosterSlots);
+      if (allowedPositions) {
+        liveDB = liveDB.filter(p => {
+          const pos = normalizePosition(p.position);
+          return !pos || pos === '?' || allowedPositions.has(pos);
+        });
       }
       const state = createInitialDraftState(settings, liveDB);
     state.status = 'drafting';
@@ -851,6 +911,19 @@ function DraftBoard({
   onReset: () => void;
 }) {
   const router = useRouter();
+  // Positions this league can actually start. Drives both the chip row and the
+  // available-player list, so a league with no DEF/K slot shows neither the
+  // chip nor those players — and resumed drafts get cleaned too.
+  const allowedPositions = useMemo(
+    () => allowedDraftPositions(state.settings.rosterSlots),
+    [state.settings.rosterSlots],
+  );
+  const positionChips = useMemo(
+    () => allowedPositions
+      ? POSITIONS.filter(p => p === 'ALL' || allowedPositions.has(p))
+      : POSITIONS,
+    [allowedPositions],
+  );
   const [posFilter, setPosFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [showRoster, setShowRoster] = useState(false);
@@ -911,13 +984,21 @@ function DraftBoard({
   // ── Filter available players ──
   const filtered = useMemo(() => {
     let list = state.availablePlayers.filter(p => !p.isDrafted);
-    if (posFilter !== 'ALL') list = list.filter(p => p.position === posFilter);
+    // Safety net for drafts that started/synced before the pool was filtered:
+    // hide players whose position the league can't start (D/ST, punters, etc.).
+    if (allowedPositions) {
+      list = list.filter(p => {
+        const pos = normalizePosition(p.position);
+        return !pos || pos === '?' || allowedPositions.has(pos);
+      });
+    }
+    if (posFilter !== 'ALL') list = list.filter(p => normalizePosition(p.position) === posFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(p => p.name.toLowerCase().includes(q) || p.team.toLowerCase().includes(q));
     }
     return list.sort((a, b) => a.adp - b.adp);
-  }, [state.availablePlayers, posFilter, search]);
+  }, [state.availablePlayers, posFilter, search, allowedPositions]);
 
   // ── Mark player as drafted (companion mode) ──
   const handleDraftPlayer = useCallback((player: PlayerInfo, isMe: boolean) => {
@@ -1029,7 +1110,7 @@ function DraftBoard({
 
       {/* ── POSITION FILTER ── */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.posScroll} contentContainerStyle={styles.posScrollContent}>
-        {POSITIONS.map(pos => (
+        {positionChips.map(pos => (
           <TouchableOpacity
             key={pos}
             style={[styles.posChip, posFilter === pos && { backgroundColor: POS_COLORS[pos] || C.aqua }]}
