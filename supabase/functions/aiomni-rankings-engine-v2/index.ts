@@ -1220,6 +1220,20 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     depth_chart_position?: string; depth_chart_order?: number;
   }> = [
     { nameLower: 'jauan jennings', team: 'MIN', is_active: true, depth_chart_position: 'RWR', depth_chart_order: 2 },
+    // 2026-06-02: confirmed offseason trade (PFR + ESPN + PFT + RotoWire).
+    // Eagles dealt A.J. Brown to the Patriots; he's Drake Maye's new WR1.
+    // nflverse roster feed still lists him on PHI; remove once it syncs.
+    { nameLower: 'a.j. brown', team: 'NE', is_active: true, depth_chart_position: 'LWR', depth_chart_order: 1 },
+    // DeVonta Smith stays in Philly but is now the unambiguous WR1 with Brown
+    // gone. He already codes as depth_chart_order 1; pinning it here makes the
+    // intent explicit. His projection lift comes from the PHI target vacancy
+    // the engine recomputes once Brown is moved off the roster above.
+    { nameLower: 'devonta smith', team: 'PHI', is_active: true, depth_chart_position: 'LWR', depth_chart_order: 1 },
+    // NOTE: OBJ -> NYG (also confirmed) is intentionally NOT here. He has no
+    // row in nfl_players, so an override can't match him, and injecting a full
+    // fabricated record for a 33-yo depth signing who won't rank inside ~150
+    // isn't worth the data-integrity cost. Add via MANUAL_PLAYER_OVERRIDES
+    // with his real gsis_id if he becomes fantasy-relevant.
   ];
   for (const ov of TEAM_OVERRIDES_2026) {
     const p = players.find((p: any) => (p.full_name || '').toLowerCase() === ov.nameLower);
