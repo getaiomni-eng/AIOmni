@@ -952,14 +952,36 @@ function DraftBoard({
             const newPicks = picks.slice(state.picks.length);
             let s = { ...state };
             for (const p of newPicks) {
+              const playerName = `${p.metadata.first_name} ${p.metadata.last_name}`.trim();
+              const pos = p.metadata.position;
+              // Resolve the Sleeper pick to OUR pool player's id before applying
+              // it. Sleeper's player_id frequently differs from the ranking-pool
+              // id (2026 rookies carry a `prospect-…` id, team D/ST use the team
+              // abbreviation, etc.), so the id-only match in applyPick silently
+              // leaves the drafted player sitting in the pool. Fall back to a
+              // normalized name (+ position) match so the player actually clears.
+              let resolvedId = p.player_id;
+              const pool = s.availablePlayers;
+              let match = pool.find(pl => pl.id === p.player_id && !pl.isDrafted);
+              if (!match) {
+                const key = normalizePlayerName(playerName);
+                match =
+                  pool.find(pl =>
+                    !pl.isDrafted &&
+                    normalizePlayerName(pl.name) === key &&
+                    (!pos || normalizePosition(pl.position) === normalizePosition(pos))
+                  ) ||
+                  pool.find(pl => !pl.isDrafted && normalizePlayerName(pl.name) === key);
+              }
+              if (match) resolvedId = match.id;
               const normalized: DraftPick = {
                 pickNo: p.pick_no,
                 round: p.round,
                 slot: p.draft_slot,
                 rosterId: p.roster_id,
-                playerId: p.player_id,
-                playerName: `${p.metadata.first_name} ${p.metadata.last_name}`,
-                position: p.metadata.position,
+                playerId: resolvedId,
+                playerName,
+                position: pos,
                 team: p.metadata.team || '?',
                 isMyPick: p.roster_id === myRosterId,
               };
