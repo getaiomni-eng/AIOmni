@@ -906,12 +906,17 @@ export async function fetchBlendedConsensus(
 }
 
 // ─── AIOmni Formula (proprietary algorithmic engine) ─────────
-// Reads from nfl_proprietary_rankings table, populated by the
-// supabase/functions/aiomni-rankings-engine edge function (v2.5.2+).
+// Reads from nfl_proprietary_rankings_v2, populated DAILY by the
+// supabase/functions/aiomni-rankings-engine-v2 edge function.
 // This is the pure stats-based projection -- separate from Pulse.
+//
+// NOTE (2026-06-02): repointed from the legacy `nfl_proprietary_rankings`
+// table, which the retired v1 engine stopped writing on 2026-05-16. The v2
+// engine writes `_v2` daily; the app was still reading the frozen v1 table,
+// so users saw 17-day-stale rankings while fresh ones were generated unseen.
 
 const PROPRIETARY_RANKINGS_URL =
-  'https://khoruzvsprxyocisuhet.supabase.co/rest/v1/nfl_proprietary_rankings';
+  'https://khoruzvsprxyocisuhet.supabase.co/rest/v1/nfl_proprietary_rankings_v2';
 
 export async function fetchAIOmniFormula(
   format: ScoringFormat = 'PPR',

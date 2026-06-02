@@ -35,13 +35,18 @@ const COLORS = {
 };
 
 // ─── RSS SOURCES ─────────────────────────────────────────
+// 2026-06-02: PFT moved off the old NBCSports subdomain — the old
+// `profootballtalk.nbcsports.com/feed/` 301-redirects to an empty body, so
+// it's pointed at the live `.rss` endpoint. FantasyPros' news RSS
+// (`/nfl/rss/news.xml`) now 404s and the `.php` variant returns 0 items —
+// the public feed appears discontinued, so it's dropped until a working
+// replacement is verified.
 const RSS_SOURCES = [
   { url: 'https://www.rotowire.com/rss/news.php?sport=NFL',       tag: 'ROTOWIRE',  color: COLORS.green,  label: 'Rotowire' },
   { url: 'https://www.profootballrumors.com/feed',                 tag: 'PFR',       color: COLORS.amber,  label: 'Pro Football Rumors' },
-  { url: 'https://profootballtalk.nbcsports.com/feed/',            tag: 'PFT',       color: COLORS.flame,  label: 'Pro Football Talk' },
+  { url: 'https://www.nbcsports.com/profootballtalk.rss',          tag: 'PFT',       color: COLORS.flame,  label: 'Pro Football Talk' },
   { url: 'https://www.espn.com/espn/rss/nfl/news',                 tag: 'ESPN',      color: '#d20a11',     label: 'ESPN' },
   { url: 'https://www.cbssports.com/rss/headlines/nfl/',           tag: 'CBS',       color: COLORS.aqua,   label: 'CBS Sports' },
-  { url: 'https://www.fantasypros.com/nfl/rss/news.xml',           tag: 'FPROS',     color: COLORS.chartreuse, label: 'FantasyPros' },
 ];
 
 // ─── CLASSIFICATION KEYWORDS ─────────────────────────────
