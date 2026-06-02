@@ -3429,16 +3429,25 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
     const startedAt = Date.now();
 
-    // Optional body params for backtest mode
+    // Optional body params for backtest mode + format subsetting
     let asOfSeason = 2026;
+    let requestedFormats: string[] | null = null;
     try {
       const body = await req.json().catch(() => ({}));
       asOfSeason = Number(body?.asOfSeason ?? 2026);
+      // `formats` lets a caller rebuild a subset of formats per invocation.
+      // All 8 formats in one call can exceed the edge worker's compute/wall
+      // budget (WORKER_RESOURCE_LIMIT) and silently truncate the tail; batching
+      // (e.g. 2-3 formats per call) keeps each run inside the limit.
+      if (Array.isArray(body?.formats) && body.formats.length) requestedFormats = body.formats;
     } catch { /* ignore */ }
     const isBacktest = asOfSeason !== 2026;
     const dbFormatPrefix = isBacktest ? `BT${asOfSeason}_` : '';
 
-    const formats: Format[] = ['PPR', 'HALF', 'STD', 'SF', 'DYN', 'DYN_HALF', 'DYN_STD', 'DYN_SF'];
+    const ALL_FORMATS: Format[] = ['PPR', 'HALF', 'STD', 'SF', 'DYN', 'DYN_HALF', 'DYN_STD', 'DYN_SF'];
+    const formats: Format[] = requestedFormats
+      ? ALL_FORMATS.filter(f => requestedFormats!.includes(f))
+      : ALL_FORMATS;
     const stats: any = { formats: {}, errors: [], asOfSeason, isBacktest };
 
     for (const fmt of formats) {
