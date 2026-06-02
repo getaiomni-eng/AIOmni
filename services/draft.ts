@@ -28,6 +28,8 @@ export interface DraftSettings {
   scoringFormat: 'ppr' | 'half' | 'standard';
   rosterSlots: string[];         // e.g. ['QB','RB','RB','WR','WR','TE','FLEX','K','DEF']
   scoringSettings?: Record<string, number>;
+  isDynasty?: boolean;           // keeper/dynasty league — rosters carry over
+  draftMode?: DraftMode;         // 'rookie' | 'startup' | 'redraft' (resolved at pool build)
 }
 
 export interface DraftPick {
@@ -373,6 +375,11 @@ LEAGUE SETTINGS:
 - Rounds: ${settings.rounds}
 - Roster Slots: ${settings.rosterSlots.join(', ')}
 ${settings.scoringSettings ? `- Scoring: ${JSON.stringify(settings.scoringSettings)}` : ''}
+${settings.draftMode === 'rookie'
+  ? `\nDRAFT TYPE: This is a KEEPER/DYNASTY rookie (supplemental) draft. Established veterans are ALREADY on keeper rosters and are NOT draftable — the "TOP AVAILABLE" list below is the real, complete pool of incoming 2026 rookies + leftover free agents. Do NOT recommend or reference players who aren't in that list (e.g. don't suggest established stars — they're already kept). A short available pool is EXPECTED here; treat the list as authoritative, not as an error.`
+  : settings.isDynasty
+  ? `\nDRAFT TYPE: Keeper/dynasty league — some players are already on keeper rosters and are not draftable. Recommend only from the TOP AVAILABLE list below.`
+  : ''}
 
 DRAFT STATE:
 - Current Overall Pick: #${currentPick} (Round ${currentRound})

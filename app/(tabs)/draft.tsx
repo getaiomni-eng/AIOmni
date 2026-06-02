@@ -316,6 +316,7 @@ export default function DraftCopilotScreen() {
       scoringFormat: setupData.scoringFormat!,
       rosterSlots: setupData.rosterSlots!,
       scoringSettings: setupData.scoringSettings,
+      isDynasty: (setupData as any).isDynasty === true,
     };
     // Load live ADP data (falls back to static DB if offline)
       const isDynasty = (setupData as any).isDynasty === true;
@@ -327,6 +328,7 @@ export default function DraftCopilotScreen() {
         isDynasty && settings.rounds <= 6 ? 'rookie'
         : isDynasty && settings.rounds >= 15 ? 'startup'
         : 'redraft';
+      settings.draftMode = draftMode;   // surfaced to the Coach prompt
       let liveDB = await loadLivePlayerDB(draftMode);
       // Overlay AIOmni engine rankings + user overrides onto the base pool.
       // Skipped for rookie drafts (engine doesn't score 2026 prospects).
@@ -630,7 +632,11 @@ function SetupWizard({
                       scoringFormat: (lg.scoring_settings?.rec === 1 ? 'ppr' : lg.scoring_settings?.rec === 0.5 ? 'half' : 'standard'),
                       rosterSlots: lg.roster_positions || ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN'],
                       scoringSettings: lg.scoring_settings,
-                      isDynasty: lg.settings?.type === 2 || !!lg.previous_league_id,
+                      // Sleeper settings.type: 0=redraft, 1=keeper, 2=dynasty.
+                      // Keeper (1) carries rosters over too, so it must count as
+                      // dynasty-like or a short keeper draft falls into redraft
+                      // mode and the kept players gut the board down to FAs.
+                      isDynasty: lg.settings?.type === 2 || lg.settings?.type === 1 || !!lg.previous_league_id,
                     } as any);
                     // Try to find an active draft
                     try {
