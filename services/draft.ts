@@ -485,10 +485,18 @@ export async function loadLivePlayerDB(mode: DraftMode = 'redraft'): Promise<Pla
 
 async function fetchProspectDB(): Promise<PlayerInfo[]> {
   try {
-    const { fetchDedupedProspects } = await import('./rankingsData');
-    const list = await fetchDedupedProspects();
+    const { fetchDedupedProspects, fetchNFLRookieClass } = await import('./rankingsData');
+    let list = await fetchDedupedProspects();
+    // The curated college seed is emptied once a class enters the NFL (it's
+    // post-draft and those players are now rookies in nfl_players). Without
+    // this fallback a dynasty ROOKIE draft loads zero rookies, drops to the
+    // veteran pool, and gets gutted to a handful of un-rostered FAs. Pull the
+    // real rookie class from nfl_players instead.
+    if (!list || list.length === 0) {
+      list = await fetchNFLRookieClass();
+    }
     if (!list || list.length === 0) return [];
-    return list.slice(0, 80).map((p: any, i: number) => ({
+    return list.slice(0, 150).map((p: any, i: number) => ({
       id: 'prospect-' + (p.id || i),
       name: p.name,
       position: p.position || 'WR',

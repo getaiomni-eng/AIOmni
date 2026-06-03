@@ -1110,3 +1110,37 @@ export async function fetchDedupedProspects(year = 2026): Promise<CollegeProspec
 
   return prospects.filter(p => !nflNames.has(normalizeName(p.name)));
 }
+
+// Once a draft class enters the NFL, PROSPECT_SEED_<year> is emptied (those
+// players are now rookies in nfl_players, not college prospects), so
+// fetchDedupedProspects returns []. For dynasty ROOKIE drafts we still need a
+// board — the incoming class. Pull it straight from nfl_players, ordered by
+// NFL draft capital (round, then pick), which is the best available proxy for
+// rookie value since the proprietary engine doesn't score zero-snap rookies.
+export async function fetchNFLRookieClass(year = 2026): Promise<CollegeProspect[]> {
+  try {
+    const url =
+      `https://khoruzvsprxyocisuhet.supabase.co/rest/v1/nfl_players` +
+      `?select=gsis_id,full_name,position,team,draft_round,draft_pick` +
+      `&draft_year=eq.${year}&position=in.(QB,RB,WR,TE)` +
+      `&order=draft_round.asc,draft_pick.asc`;
+    const res = await fetch(url, {
+      headers: { apikey: PHASE2_ANON, Authorization: `Bearer ${PHASE2_ANON}` },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    // school holds the NFL team here — fetchProspectDB maps it to `team`.
+    return data
+      .filter((p: any) => p?.gsis_id && p?.full_name)
+      .map((p: any) => ({
+        id: p.gsis_id,
+        name: p.full_name,
+        school: p.team || 'FA',
+        position: p.position || 'WR',
+        year: String(year),
+      }));
+  } catch {
+    return [];
+  }
+}
