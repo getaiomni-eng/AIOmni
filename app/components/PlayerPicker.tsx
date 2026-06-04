@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 
 import { getFormulaRankings } from '../../services/rankings/aiomniEngineBridge';
+import { fetchRookieRankedPlayers } from '../../services/rankingsData';
 import type { RankedPlayer, ScoringFormat } from '../../services/rankingsData';
 import { dark, F, palette } from '../constants/tokens';
 
@@ -77,8 +78,13 @@ export default function PlayerPicker({
     setLoading(true);
     setError(null);
     try {
-      const data = await getFormulaRankings(format, 'redraft');
-      setAllPlayers(data ?? []);
+      // Merge the 2026 rookie class in after the established players so dynasty
+      // users can rank rookies the redraft formula can't score (e.g. Carsen Ryan).
+      const [data, rookies] = await Promise.all([
+        getFormulaRankings(format, 'redraft'),
+        fetchRookieRankedPlayers(),
+      ]);
+      setAllPlayers([...(data ?? []), ...rookies]);
     } catch (e: any) {
       setError(e?.message ?? 'Failed to load players');
     } finally {

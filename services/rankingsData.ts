@@ -1144,3 +1144,22 @@ export async function fetchNFLRookieClass(year = 2026): Promise<CollegeProspect[
     return [];
   }
 }
+
+// Rookie class as RankedPlayer[] for the quiz position-ranking picker, so
+// dynasty users can rank incoming rookies (e.g. Carsen Ryan) that the redraft
+// formula can't score. Ordered by NFL draft capital and tagged 'RK'; ranks are
+// offset high so they always sort/append after the established players.
+export async function fetchRookieRankedPlayers(year = 2026): Promise<RankedPlayer[]> {
+  const rookies = await fetchNFLRookieClass(year);
+  return rookies.map((p, i) => ({
+    id: p.id,
+    name: p.name,
+    position: p.position,
+    team: p.school,        // school holds the NFL team for rookie rows
+    rank: 10000 + i,
+    adp: 'RK',
+    trend: 'flat' as const,
+    trendVal: 0,
+    tier: 0,
+  }));
+}
