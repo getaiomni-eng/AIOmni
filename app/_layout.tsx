@@ -161,6 +161,8 @@ export default Sentry.wrap(function RootLayout() {
         <Stack.Screen name="fleaflicker-login" options={{ headerShown: false }} />
         <Stack.Screen name="draft" options={{ headerShown: false }} />
         <Stack.Screen name="league" options={{ headerShown: false }} />
+        <Stack.Screen name="quiz" options={{ headerShown: false }} />
+        <Stack.Screen name="quiz-reveal" options={{ headerShown: false }} />
       </Stack>
     </GestureHandlerRootView>
   );

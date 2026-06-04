@@ -166,6 +166,14 @@ export default function QuizScreen() {
   // ─── Render ──────────────────────────────────────────────────────
   return (
     <View style={[s.container, { paddingTop: insets.top + 12 }]}>
+      {/* Themed top bar (replaces the default white nav header) */}
+      <View style={s.topBar}>
+        <Text style={s.topTitle}>CUSTOM RANKINGS QUIZ</Text>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name="close" size={24} color={dark.textSub} />
+        </TouchableOpacity>
+      </View>
+
       {/* Progress bar */}
       <View style={s.progressTrack}>
         <View style={[s.progressFill, { width: `${((currentStep + 1) / TOTAL_STEPS) * 100}%` }]} />
@@ -486,6 +494,11 @@ function PositionPhase({
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: dark.bg, paddingHorizontal: 20 },
+  topBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  topTitle: { fontFamily: F.bold, fontSize: 13, color: dark.text, letterSpacing: 2 },
   progressTrack: { height: 4, backgroundColor: dark.card, borderRadius: 2, overflow: 'hidden' },
   progressFill:  { height: 4, backgroundColor: palette.aqua },
   progressLabel: { fontFamily: F.bold, fontSize: 10, color: dark.textSub, letterSpacing: 2, marginTop: 8, marginBottom: 16 },

@@ -102,6 +102,13 @@ export default function QuizRevealScreen() {
 
   return (
     <View style={[s.container, { paddingTop: insets.top + 16 }]}>
+      <TouchableOpacity
+        style={s.closeBtn}
+        onPress={() => router.back()}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Ionicons name="close" size={24} color={dark.textSub} />
+      </TouchableOpacity>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <Text style={s.eyebrow}>YOUR RANKINGS</Text>
         <Text style={s.title}>DNA.</Text>
@@ -192,6 +199,7 @@ function DimensionBar({
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: dark.bg, paddingHorizontal: 20 },
+  closeBtn: { alignSelf: 'flex-end', paddingBottom: 4 },
   eyebrow: { fontFamily: F.body, fontSize: 10, letterSpacing: 3, color: dark.textMuted, marginBottom: 2 },
   title:   { fontFamily: F.bold, fontSize: 42, color: dark.text, letterSpacing: 2, marginBottom: 4 },
 
