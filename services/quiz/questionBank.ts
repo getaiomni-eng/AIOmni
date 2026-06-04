@@ -21,8 +21,8 @@ export const QUESTIONS: QuizQuestion[] = [
     phase: 1,
     type: 'binary',
     prompt: 'Same projected fantasy points, Round 4. Who do you draft?',
-    optionA: { label: 'James Cook — 270+ touches, lead back grinding volume on a run-heavy offense', value: 'A' },
-    optionB: { label: 'Bucky Irving — fewer touches but elite efficiency in a top-10 offense',        value: 'B' },
+    optionA: { label: 'David Montgomery — high-volume early-down grinder in Houston, safe touches but TD-dependent', value: 'A' },
+    optionB: { label: 'Omarion Hampton — fewer guaranteed touches but explosive, ascending efficiency and breakaway upside', value: 'B' },
   },
   {
     id: 'q9_rb_vs_wr_priority',
@@ -109,8 +109,9 @@ export const QUESTION_DIMENSION_MAP: Record<
     B: { floor_ceiling: +15, established_ascending: +10 },
   },
   q2_volume_efficiency: {
-    A: { volume_efficiency: -15 },
-    B: { volume_efficiency: +15 },
+    // Two-fold read: Montgomery = volume + floor, Hampton = efficiency + ceiling.
+    A: { volume_efficiency: -15, floor_ceiling: -10 },
+    B: { volume_efficiency: +15, floor_ceiling: +10 },
   },
   q9_rb_vs_wr_priority: {
     A: { rb_vs_wr_priority: +15 },
