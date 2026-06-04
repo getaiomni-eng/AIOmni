@@ -1,6 +1,9 @@
-// The 8 universal preference questions for the AIOmni Custom Rankings Quiz.
-// Question text + dimension delta mappings as specified in the design doc
-// (~/Downloads/quiz_design_spec.md).
+// The 9 universal preference questions for the AIOmni Custom Rankings Quiz.
+// Question text + dimension delta mappings. Player references refreshed for
+// the 2026 season (grounded in the live AIOmni v2 rankings) — keep these
+// current as rankings/teams move; the dimension mappings below are what the
+// engine reads, so prompts/labels can be edited freely as long as each
+// question's A/B keeps the same directional meaning.
 
 import type { Dimension, QuizQuestion } from './types';
 
@@ -9,39 +12,39 @@ export const QUESTIONS: QuizQuestion[] = [
     id: 'q1_floor_ceiling',
     phase: 1,
     type: 'binary',
-    prompt: "You're picking your RB1 with the 5th overall pick. Who do you take?",
-    optionA: { label: 'Saquon Barkley — 95% chance to finish top-12, 15% chance top-3', value: 'A' },
-    optionB: { label: "De'Von Achane — 60% chance to finish top-12, 35% chance top-3",  value: 'B' },
+    prompt: "Pick 5 overall. Two backs left on the board, same projected points. Who do you take?",
+    optionA: { label: 'Jonathan Taylor — workhorse volume, ~90% to finish top-12, limited boom weeks', value: 'A' },
+    optionB: { label: "De'Von Achane — game-breaking ceiling, 35% shot at overall RB1, boom-or-bust", value: 'B' },
   },
   {
     id: 'q2_volume_efficiency',
     phase: 1,
     type: 'binary',
     prompt: 'Same projected fantasy points, Round 4. Who do you draft?',
-    optionA: { label: 'Chuba Hubbard — 265 touches projected, 4.1 YPC, lead back on a rebuilding offense', value: 'A' },
-    optionB: { label: 'Bucky Irving — 200 touches projected, 5.4 YPC, top-10 offense',                    value: 'B' },
+    optionA: { label: 'James Cook — 270+ touches, lead back grinding volume on a run-heavy offense', value: 'A' },
+    optionB: { label: 'Bucky Irving — fewer touches but elite efficiency in a top-10 offense',        value: 'B' },
   },
   {
     id: 'q9_rb_vs_wr_priority',
     phase: 1,
     type: 'binary',
-    prompt: 'Pick 3 overall. Bijan Robinson and Ja’Marr Chase both available. Same projected fantasy points. Pick one.',
-    optionA: { label: 'Bijan Robinson — RB1 in a top-3 offense, 300 touches projected',          value: 'A' },
-    optionB: { label: 'Ja’Marr Chase — WR1 with target monopoly, ~165 targets projected',   value: 'B' },
+    prompt: 'Pick 3 overall. Bijan Robinson and Ja’Marr Chase both available, same projected points. Pick one.',
+    optionA: { label: 'Bijan Robinson — RB1 in a top-3 offense, 300 touches projected',        value: 'A' },
+    optionB: { label: 'Ja’Marr Chase — WR1 with target monopoly, ~165 targets projected',      value: 'B' },
   },
   {
     id: 'q3_established_ascending',
     phase: 1,
     type: 'rank',
-    prompt: 'Drag your top 3 WR2 targets in Round 3.',
+    prompt: 'Rank your top 3 WR2 targets for Round 3.',
     rankTopN: 3,
     rankOptions: [
-      { id: 'diggs',  label: 'Stefon Diggs',         sublabel: 'Age 32, NE, last elite year was 2023' },
-      { id: 'mhj',    label: 'Marvin Harrison Jr.',  sublabel: 'Year 3, ARI, ascending alpha' },
-      { id: 'jeudy',  label: 'Jerry Jeudy',          sublabel: 'Year 7, CLE, finally consistent' },
-      { id: 'olave',  label: 'Chris Olave',          sublabel: 'Year 4, NO, multiple concussion history' },
-      { id: 'worthy', label: 'Xavier Worthy',        sublabel: 'Year 3, KC, breakout candidate' },
-      { id: 'nabers', label: 'Malik Nabers',         sublabel: 'Year 3, NYG, ascending' },
+      { id: 'collins',  label: 'Nico Collins',         sublabel: 'HOU, proven alpha, locked-in target share' },
+      { id: 'higgins',  label: 'Tee Higgins',          sublabel: 'CIN, established, steady WR2 next to Chase' },
+      { id: 'olave',    label: 'Chris Olave',          sublabel: 'NO, talented but multiple concussions' },
+      { id: 'tmac',     label: 'Tetairoa McMillan',    sublabel: 'CAR, Year 2, ascending young alpha' },
+      { id: 'jameson',  label: 'Jameson Williams',     sublabel: 'DET, ascending, elite big-play speed' },
+      { id: 'devonta',  label: 'DeVonta Smith',        sublabel: 'PHI, now the clear WR1 after the A.J. Brown trade' },
     ],
   },
   {
@@ -49,16 +52,16 @@ export const QUESTIONS: QuizQuestion[] = [
     phase: 1,
     type: 'binary',
     prompt: 'Round 5. PPR league. Pick one.',
-    optionA: { label: "Kyren Williams — 275 rushes / 25 catches projected, McVay's volume grinder", value: 'A' },
-    optionB: { label: 'Ashton Jeanty — 230 rushes / 65 catches projected, three-down workhorse',     value: 'B' },
+    optionA: { label: 'Kyren Williams — 280 carries / ~20 catches, TD-dependent ground grinder', value: 'A' },
+    optionB: { label: 'Breece Hall — 230 touches with 60+ targets, true three-down PPR back',     value: 'B' },
   },
   {
     id: 'q5_te_premium',
     phase: 1,
     type: 'binary',
     prompt: "It's Round 2. Pick your strategy.",
-    optionA: { label: 'Take Brock Bowers — TE1 last year, 13 TDs, positional advantage locked in',                       value: 'A' },
-    optionB: { label: 'Skip TE entirely — wait until Round 8 for value (Kelce / Hockenson tier), grab a WR/RB now',      value: 'B' },
+    optionA: { label: 'Take Trey McBride — the clear TE1, elite target share, positional edge locked in',           value: 'A' },
+    optionB: { label: 'Skip TE — grab a WR/RB now, stream the Hockenson / Kraft tier around Round 8',               value: 'B' },
   },
   {
     id: 'q6_qb_urgency',
@@ -79,15 +82,15 @@ export const QUESTIONS: QuizQuestion[] = [
     id: 'q7_injury_discount',
     phase: 1,
     type: 'binary',
-    prompt: 'Christian McCaffrey is on the board at his ADP (Round 3). His last 2 seasons: 17 games, then 4 games.',
-    optionA: { label: "Take him — too much upside to pass, he's healthy now",         value: 'A' },
-    optionB: { label: "Pass — body's breaking down, take a healthier RB",             value: 'B' },
+    prompt: 'Christian McCaffrey is on the board at his ADP (Round 3). Elite when healthy, but he’s now on the wrong side of 29 with a recent injury history.',
+    optionA: { label: "Take him — the ceiling when healthy still wins leagues",      value: 'A' },
+    optionB: { label: "Pass — the body's a risk at his age, take a younger RB",      value: 'B' },
   },
   {
     id: 'q8_rookie_aggression',
     phase: 1,
     type: 'binary',
-    prompt: 'Round 4. A rookie RB just drafted #5 overall has the same projected points as a Year-6 veteran already established as RB2 on his team.',
+    prompt: 'Round 4, same projected fantasy points. A hyped Year-1 rookie RB with a path to lead his backfield, or a proven veteran RB locked into a featured role on another team. Who do you take?',
     optionA: { label: 'Reach for the rookie — Year-1 alpha upside is the league-winning play',  value: 'A' },
     optionB: { label: 'Take the veteran — proven floor matters, rookies bust at high rates',    value: 'B' },
   },
@@ -134,6 +137,9 @@ export const QUESTION_DIMENSION_MAP: Record<
 // ─── Rank-question delta logic ──────────────────────────────────────
 // Q3 — top-3 WR2 targets. The user's choices reveal both
 // established_ascending and injury_discount postures.
+//   established (veteran trust): collins, higgins
+//   ascending  (breakout hunt):  tmac, jameson, devonta
+//   injury flag:                 olave (concussion history)
 
 export function getRankDeltas(
   questionId: string,
@@ -145,17 +151,17 @@ export function getRankDeltas(
     const top2 = rankedIds.slice(0, 2);
     const top3 = rankedIds.slice(0, 3);
 
-    // Established (Diggs, Jeudy) in top 2 → veteran trust signal
-    if (top2.includes('diggs')) {
+    // Established (Collins, Higgins) in top 2 → veteran trust signal
+    if (top2.includes('collins')) {
       deltas.established_ascending = (deltas.established_ascending ?? 0) - 10;
       deltas.injury_discount       = (deltas.injury_discount ?? 0) - 8;
     }
-    if (top2.includes('jeudy')) {
+    if (top2.includes('higgins')) {
       deltas.established_ascending = (deltas.established_ascending ?? 0) - 6;
     }
 
     // Ascending names in top 2 → breakout-hunter signal
-    const ascendingIds = ['mhj', 'worthy', 'nabers', 'olave'];
+    const ascendingIds = ['tmac', 'jameson', 'devonta'];
     const ascendingInTop2 = top2.filter(id => ascendingIds.includes(id)).length;
     if (ascendingInTop2 >= 1) {
       deltas.established_ascending = (deltas.established_ascending ?? 0) + 10;
@@ -169,13 +175,13 @@ export function getRankDeltas(
       deltas.injury_discount = (deltas.injury_discount ?? 0) + 8;
     }
 
-    // Diggs at #1 → strongest veteran-trust signal
-    if (rankedIds[0] === 'diggs') {
+    // Collins at #1 → strongest veteran-trust signal
+    if (rankedIds[0] === 'collins') {
       deltas.established_ascending = (deltas.established_ascending ?? 0) - 5;
     }
 
-    // MHJ or Nabers at #1 → strongest ascending signal
-    if (rankedIds[0] === 'mhj' || rankedIds[0] === 'nabers') {
+    // TMac or DeVonta at #1 → strongest ascending signal
+    if (rankedIds[0] === 'tmac' || rankedIds[0] === 'devonta') {
       deltas.established_ascending = (deltas.established_ascending ?? 0) + 5;
     }
   }
