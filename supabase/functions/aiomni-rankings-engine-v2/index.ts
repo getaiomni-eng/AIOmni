@@ -879,7 +879,7 @@ const COACHING_CHANGES_2026: Record<string, {
   ARI: { desc: 'LaFleur HC + Hackett OC — Hackett mixed track record, scheme uncertainty', m: { QB: 0.96, RB: 0.99, WR: 0.97, TE: 0.98 } },
   NYG: { desc: 'Harbaugh HC + Nagy OC — big change, Nagy pass-spread offense',          m: { QB: 1.03, RB: 0.98, WR: 1.03, TE: 1.00 } },
   NYJ: { desc: 'Reich OC + Geno Smith QB — accuracy-based vet under proven OC',         m: { QB: 1.02, RB: 1.00, WR: 1.03, TE: 1.01 } },
-  LAC: { desc: 'McDaniel as OC under Jim Harbaugh — wide-open passing (Shanahan tree, mild TE boost)', m: { QB: 1.05, RB: 0.95, WR: 1.05, TE: 1.02 } },
+  LAC: { desc: 'McDaniel OC under Harbaugh — Shanahan-tree zone run is RB-FRIENDLY (cf. Achane/Mostert) + Harbaugh run identity; efficient passing lifts WR/QB', m: { QB: 1.05, RB: 1.04, WR: 1.05, TE: 1.02 } },
   PHI: { desc: 'Mannion OC — limited track record, scheme uncertainty',                 m: { QB: 0.98, RB: 1.00, WR: 0.99, TE: 0.99 } },
   // Ben Johnson cascade — left DET (top-3 OC architect) for CHI HC role in
   // the 2025 carousel. By 2026 he\'s incumbent at CHI (handled via personnel
@@ -1073,7 +1073,7 @@ const INJURY_CONTEXT_2026: Record<string, InjuryContext> = {
   kylermurray:      { games: 13, mult: 0.92, note: 'knee — chronic concern, partial year' },
   // Rookies/Sophs returning from injury
   camskattebo:      { games: 14, mult: 0.92, note: 'ankle (rookie) — soft year-2 expectation' },
-  omarionhampton:   { games: 14, mult: 0.92, note: 'collarbone — soft year-2 expectation' },
+  omarionhampton:   { games: 16, mult: 1.00, note: 'ankle (rookie) — recovered; market RB1-2 dynasty value, no lingering 2026 concern' },
   // Veterans with mild 2025 injuries (13-14g) — engine misses these because
   // they're above the <10g hard threshold but their season-shortening hurts
   // 3yr avg games. Apply explicit recovery projection.
@@ -1677,7 +1677,18 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       const bp = (agg2025.get(b.gsis_id)?.recencyPpg ?? 0) + (agg2024.get(b.gsis_id)?.recencyPpg ?? 0);
       return bp - ap;
     });
-    if (vets.length) heirs.set(vets[0].gsis_id, vacancy);
+    if (vets.length) { heirs.set(vets[0].gsis_id, vacancy); continue; }
+    // v6 (2026-06-04): no new joiner or rookie claimed the vacancy, so the
+    // vacated workload goes to the incumbent next-man-up (e.g. Omarion Hampton
+    // absorbing Najee Harris's vacated LAC touches). Previously these went
+    // UNCLAIMED because only joiners/2026-rookies were eligible heirs — the
+    // single most common real-world outcome (incumbent steps up) was ignored.
+    const incumbents = players.filter(p =>
+      p.position === pos && p.team === team && p.is_active !== false &&
+      (agg2025.get(p.gsis_id)?.lastTeam === team || agg2024.get(p.gsis_id)?.lastTeam === team));
+    incumbents.sort((a, b) =>
+      (agg2025.get(b.gsis_id)?.recencyPpg ?? 0) - (agg2025.get(a.gsis_id)?.recencyPpg ?? 0));
+    if (incumbents.length) heirs.set(incumbents[0].gsis_id, vacancy);
   }
   console.log(`[${format}] vacancies=${Object.keys(vacancies).length} heirs=${heirs.size}`);
 
@@ -1987,8 +1998,15 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       ]);
       baselineSource = `2yr v3 blend`;
     } else if (has25) {
-      baseline = r25 * gameCountWeight(a25!.games);
-      baselineSource = `2025 v3 recency (${a25!.games}g)`;
+      // v6 (2026-06-04): gameCountWeight applies up to a 30% per-game haircut for
+      // small samples, which over-penalizes young players who were elite in
+      // limited time (Hampton: ~15.9 ppg over 9g -> 11.7). A short season belongs
+      // in the expected-games / total-points layer, not a per-game-RATE haircut.
+      // Single-year players are almost all sophomores, so use a gentler floor
+      // (~12% max haircut) and don't discard a strong short rookie rate.
+      const softWeight = 0.88 + (Math.min(a25!.games, 16) - 8) * (0.12 / 8);
+      baseline = r25 * Math.max(softWeight, gameCountWeight(a25!.games));
+      baselineSource = `2025 v3 recency (${a25!.games}g, soft sample)`;
     } else if (has24) {
       baseline = r24 * 0.85 * gameCountWeight(a24!.games);
       baselineSource = `2024 v3 recency (no 2025)`;
