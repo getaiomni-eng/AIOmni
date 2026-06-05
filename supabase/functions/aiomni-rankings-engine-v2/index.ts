@@ -306,7 +306,12 @@ function olMultV3(team: string | null | undefined, position: string): { mult: nu
   const rankMap = useRb ? OL_RB_RANK_2026 : OL_PB_RANK_2026;
   const rank = rankMap[team];
   if (!rank) return { mult: 1.0, note: '' };
-  const mult = 1.05 - (rank - 1) * (0.10 / 31);  // 1.05 → 0.95 linear
+  let mult = 1.05 - (rank - 1) * (0.10 / 31);  // 1.05 → 0.95 linear
+  // v6.3: TEs are far less pass-protection-dependent than WRs (quick releases,
+  // short/underneath routes, chip-and-release). Halve the OL-pass deviation for
+  // TEs so a weak pass-blocking line doesn't dock a TE like it does a deep WR —
+  // Gadsden produced TE15 behind LAC's weak line precisely because of this.
+  if (position === 'TE') mult = 1.0 + (mult - 1.0) * 0.5;
   const label = useRb ? 'OL-run' : 'OL-pass';
   let note = '';
   if (rank <= 5) note = `${label} elite rank ${rank} (${mult.toFixed(3)}x)`;
@@ -879,7 +884,7 @@ const COACHING_CHANGES_2026: Record<string, {
   ARI: { desc: 'LaFleur HC + Hackett OC — Hackett mixed track record, scheme uncertainty', m: { QB: 0.96, RB: 0.99, WR: 0.97, TE: 0.98 } },
   NYG: { desc: 'Harbaugh HC + Nagy OC — big change, Nagy pass-spread offense',          m: { QB: 1.03, RB: 0.98, WR: 1.03, TE: 1.00 } },
   NYJ: { desc: 'Reich OC + Geno Smith QB — accuracy-based vet under proven OC',         m: { QB: 1.02, RB: 1.00, WR: 1.03, TE: 1.01 } },
-  LAC: { desc: 'McDaniel OC under Harbaugh — Shanahan-tree zone run is RB-FRIENDLY (cf. Achane/Mostert) + Harbaugh run identity; efficient passing lifts WR/QB', m: { QB: 1.05, RB: 1.04, WR: 1.05, TE: 1.02 } },
+  LAC: { desc: 'McDaniel OC under Harbaugh — Shanahan-tree zone run is RB-FRIENDLY (cf. Achane/Mostert) + Harbaugh run identity; quick-game passing scheme lifts WR/QB and the move-TE (Gadsden)', m: { QB: 1.05, RB: 1.04, WR: 1.05, TE: 1.06 } },
   PHI: { desc: 'Mannion OC — limited track record, scheme uncertainty',                 m: { QB: 0.98, RB: 1.00, WR: 0.99, TE: 0.99 } },
   // Ben Johnson cascade — left DET (top-3 OC architect) for CHI HC role in
   // the 2025 carousel. By 2026 he\'s incumbent at CHI (handled via personnel
@@ -2660,20 +2665,20 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
           // harder than ordinary top-10 vets — pull 55% toward 1.0 instead of 30%.
           // v5.8: 30% pull for top-10-but-not-top-5 (softens cliff without
           // promoting vets over prime-age workhorses with similar profiles).
-          // v6.2: small vet bump — pull 0.45 for recent top-5 (was 0.55, which
-          // launched CMC to RB5 / Henry to RB11). Keeps Saquon-class workhorses
-          // moving up modestly without inflating the whole 29+ vet bucket.
-          const pull = recentTop5 >= 1 ? 0.45 : 0.30;
+          // v6.3: bigger vet bump (user) — pull 0.65 for recent top-5 so proven
+          // workhorses (Saquon) clear the younger Irving/Walker tier. CMC/Henry
+          // rise too; that's the accepted tradeoff for honoring recent elite
+          // production over the population age curve.
+          const pull = recentTop5 >= 1 ? 0.65 : 0.30;
           const softened = ageMult + (1 - ageMult) * pull;
           defyNote = `age-defiance softens ${ageMult.toFixed(2)}→${softened.toFixed(2)} (recent top-${recentTop5 >= 1 ? '5' : '10'} finish)`;
           ageMult = softened;
           if (recentTop5 >= 1) eliteRecentRb = true;
         }
       }
-      // Apply workload mod — for recent top-5 workhorses SOFTEN it (floor at
-      // 0.97) rather than skip entirely: their heavy workload is mostly an elite
-      // signal, but a light age haircut still applies. Others keep the full mod.
-      if (workloadMod !== 1.00) ageMult = ageMult * (eliteRecentRb ? Math.max(workloadMod, 0.97) : workloadMod);
+      // Apply workload mod — skip entirely for recent top-5 workhorses (their
+      // heavy workload is the elite signal, not a breakdown flag). Others keep it.
+      if (workloadMod !== 1.00 && !eliteRecentRb) ageMult = ageMult * workloadMod;
       if (wlNote || defyNote) {
         baselineSource += ` | RB: ${[wlNote, defyNote].filter(Boolean).join(' + ')}`;
       }
