@@ -3502,9 +3502,16 @@ serve(async (req) => {
     const dbFormatPrefix = isBacktest ? `BT${asOfSeason}_` : '';
 
     const ALL_FORMATS: Format[] = ['PPR', 'HALF', 'STD', 'SF', 'DYN', 'DYN_HALF', 'DYN_STD', 'DYN_SF'];
-    const formats: Format[] = requestedFormats
+    // Cap each invocation at BATCH formats: all 8 at once trips the edge worker's
+    // compute limit (WORKER_RESOURCE_LIMIT) and silently truncates the tail. Any
+    // extra requested formats (e.g. the daily cron's bare {} = all 8) self-chain
+    // via a fire-and-forget call below, so the cron needs no change.
+    const BATCH = 3;
+    const requested: Format[] = requestedFormats
       ? ALL_FORMATS.filter(f => requestedFormats!.includes(f))
       : ALL_FORMATS;
+    const formats: Format[] = requested.slice(0, BATCH);
+    const chainRemaining: Format[] = requested.slice(BATCH);
     const stats: any = { formats: {}, errors: [], asOfSeason, isBacktest };
 
     for (const fmt of formats) {
@@ -3536,11 +3543,31 @@ serve(async (req) => {
       }
     }
 
+    // Self-chain any remaining formats as a separate invocation (fresh compute
+    // budget). Fire-and-forget via EdgeRuntime.waitUntil so it survives after
+    // this response is sent. Each link processes ≤BATCH formats, so 8 formats
+    // complete across ~3 invocations.
+    if (chainRemaining.length > 0) {
+      const chainReq = fetch(`${SUPABASE_URL}/functions/v1/aiomni-rankings-engine-v2`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SERVICE_ROLE}`,
+          'apikey': SERVICE_ROLE,
+        },
+        body: JSON.stringify({ formats: chainRemaining, asOfSeason }),
+      }).catch((e) => console.error('self-chain failed:', e));
+      // @ts-ignore — Supabase Edge runtime global
+      if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(chainReq);
+      else await chainReq;
+    }
+
     const duration = Math.round((Date.now() - startedAt) / 1000);
     return new Response(JSON.stringify({
       ok: true,
       duration_seconds: duration,
       stats,
+      chained: chainRemaining,
     }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
 
   } catch (err: any) {
