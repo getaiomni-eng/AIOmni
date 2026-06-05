@@ -2005,8 +2005,13 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       // Single-year players are almost all sophomores, so use a gentler floor
       // (~12% max haircut) and don't discard a strong short rookie rate.
       const softWeight = 0.88 + (Math.min(a25!.games, 16) - 8) * (0.12 / 8);
-      baseline = r25 * Math.max(softWeight, gameCountWeight(a25!.games));
-      baselineSource = `2025 v3 recency (${a25!.games}g, soft sample)`;
+      // v6.1: use the better of recency vs full-season rate. A young player who
+      // faded late (Gadsden: 8.8 season / 5.5 late -> recency 6.2) shouldn't be
+      // buried below his season body of work + ceiling flashes; one who surged
+      // late keeps the recency. Sophomore population skews ascending.
+      const youngRate = Math.max(r25, a25!.ppg);
+      baseline = youngRate * Math.max(softWeight, gameCountWeight(a25!.games));
+      baselineSource = `2025 v3 recency (${a25!.games}g, season-floored)`;
     } else if (has24) {
       baseline = r24 * 0.85 * gameCountWeight(a24!.games);
       baselineSource = `2024 v3 recency (no 2025)`;
@@ -2634,21 +2639,32 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       // pull their age multiplier halfway back toward 1.0. Henry 32 with RB8
       // 2025 (280 fpts) → 0.42 → 0.65. Honors actual production over population avg.
       let defyNote = '';
+      let eliteRecentRb = false;
       if (age >= 29) {
+        const recentTop5 = [
+          (a25 && a25.games >= 12 && a25.ppg * a25.games >= 300),
+          (a24 && a24.games >= 12 && a24.ppg * a24.games >= 300),
+        ].filter(Boolean).length;
         const recentTop10 = [
           (a25 && a25.games >= 12 && a25.ppg * a25.games >= 240),
           (a24 && a24.games >= 12 && a24.ppg * a24.games >= 240),
         ].filter(Boolean).length;
         if (recentTop10 >= 1 && ageMult < 1.0) {
-          // v5.8: 30% pull toward 1.0 (was 40%). Softens cliff without
-          // promoting vets over prime-age workhorses with similar profiles.
-          const softened = ageMult + (1 - ageMult) * 0.30;
-          defyNote = `age-defiance softens ${ageMult.toFixed(2)}→${softened.toFixed(2)} (recent top-10 finish)`;
+          // v6.1: recent TOP-5 workhorses (Saquon 2024 = 355 fpts) defy the cliff
+          // harder than ordinary top-10 vets — pull 55% toward 1.0 instead of 30%.
+          // v5.8: 30% pull for top-10-but-not-top-5 (softens cliff without
+          // promoting vets over prime-age workhorses with similar profiles).
+          const pull = recentTop5 >= 1 ? 0.55 : 0.30;
+          const softened = ageMult + (1 - ageMult) * pull;
+          defyNote = `age-defiance softens ${ageMult.toFixed(2)}→${softened.toFixed(2)} (recent top-${recentTop5 >= 1 ? '5' : '10'} finish)`;
           ageMult = softened;
+          if (recentTop5 >= 1) eliteRecentRb = true;
         }
       }
-      // Apply workload mod to (potentially defiance-softened) ageMult
-      if (workloadMod !== 1.00) ageMult = ageMult * workloadMod;
+      // Apply workload mod to (potentially defiance-softened) ageMult — but skip
+      // it for recent top-5 workhorses, where a heavy workload is the elite
+      // signal, not a breakdown flag (double-counting Saquon's 342 touches).
+      if (workloadMod !== 1.00 && !eliteRecentRb) ageMult = ageMult * workloadMod;
       if (wlNote || defyNote) {
         baselineSource += ` | RB: ${[wlNote, defyNote].filter(Boolean).join(' + ')}`;
       }
