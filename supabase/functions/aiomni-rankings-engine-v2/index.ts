@@ -2177,8 +2177,14 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       if (a24 && a24.games >= 12) careerSeasons.push(a24.ppg * a24.games);
       const careerBest = careerSeasons.length ? Math.max(...careerSeasons) : 0;
       if (careerBest >= threshold) {
-        baseline = baseline * boost;
-        baselineSource += ` + young-elite-floor (${careerBest.toFixed(0)} fpts best, ≥${threshold})`;
+        // v6.2: make this an ACTUAL floor, not just a +10% nudge on a recency-
+        // depressed baseline. A young player who already posted a top-15 season
+        // (Gadsden: 131 TE fpts = TE15) shouldn't project below that season's
+        // per-game rate just because he faded late as a rookie. Floor at the
+        // elite season's ppg (16g basis); keep the talent boost where it wins.
+        const floorPpg = careerBest / 16;
+        baseline = Math.max(baseline * boost, floorPpg);
+        baselineSource += ` + young-elite-floor (${careerBest.toFixed(0)} fpts best, ≥${threshold}, floor ${floorPpg.toFixed(1)})`;
       }
     }
 
@@ -2654,17 +2660,20 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
           // harder than ordinary top-10 vets — pull 55% toward 1.0 instead of 30%.
           // v5.8: 30% pull for top-10-but-not-top-5 (softens cliff without
           // promoting vets over prime-age workhorses with similar profiles).
-          const pull = recentTop5 >= 1 ? 0.55 : 0.30;
+          // v6.2: small vet bump — pull 0.45 for recent top-5 (was 0.55, which
+          // launched CMC to RB5 / Henry to RB11). Keeps Saquon-class workhorses
+          // moving up modestly without inflating the whole 29+ vet bucket.
+          const pull = recentTop5 >= 1 ? 0.45 : 0.30;
           const softened = ageMult + (1 - ageMult) * pull;
           defyNote = `age-defiance softens ${ageMult.toFixed(2)}→${softened.toFixed(2)} (recent top-${recentTop5 >= 1 ? '5' : '10'} finish)`;
           ageMult = softened;
           if (recentTop5 >= 1) eliteRecentRb = true;
         }
       }
-      // Apply workload mod to (potentially defiance-softened) ageMult — but skip
-      // it for recent top-5 workhorses, where a heavy workload is the elite
-      // signal, not a breakdown flag (double-counting Saquon's 342 touches).
-      if (workloadMod !== 1.00 && !eliteRecentRb) ageMult = ageMult * workloadMod;
+      // Apply workload mod — for recent top-5 workhorses SOFTEN it (floor at
+      // 0.97) rather than skip entirely: their heavy workload is mostly an elite
+      // signal, but a light age haircut still applies. Others keep the full mod.
+      if (workloadMod !== 1.00) ageMult = ageMult * (eliteRecentRb ? Math.max(workloadMod, 0.97) : workloadMod);
       if (wlNote || defyNote) {
         baselineSource += ` | RB: ${[wlNote, defyNote].filter(Boolean).join(' + ')}`;
       }
