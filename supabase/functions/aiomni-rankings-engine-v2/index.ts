@@ -2174,6 +2174,7 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     //   RB top-15: ~190 fpts
     //   WR top-15: ~210 fpts
     //   TE top-10: ~110 fpts (TE pool is smaller)
+    let youngEliteFloored = false;  // exempts proven young-elite-floor players from the 1yr sample-size penalty
     const yearsOfDataInline = (has25 ? 1 : 0) + (has24 ? 1 : 0) + (has23 ? 1 : 0);
     if (!isRookie && yearsOfDataInline <= 2 && (p.position === 'WR' || p.position === 'TE' || p.position === 'RB' || p.position === 'QB')) {
       // v5.1 (2026-05-17): QB-specific tighter threshold + smaller boost.
@@ -2195,9 +2196,8 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
         // per-game rate just because he faded late as a rookie. Floor at the
         // elite season's ppg (16g basis); keep the talent boost where it wins.
         const floorPpg = careerBest / 16;
-        if (p.full_name === 'Oronde Gadsden II') console.log('GADSDEN_DBG', JSON.stringify({ a25ppg: a25?.ppg, a25games: a25?.games, r25, baselineIn: baseline, careerBest, floorPpg, boost }));
         baseline = Math.max(baseline * boost, floorPpg);
-        if (p.full_name === 'Oronde Gadsden II') console.log('GADSDEN_DBG2', JSON.stringify({ baselineOut: baseline }));
+        youngEliteFloored = true;
         baselineSource += ` + young-elite-floor (${careerBest.toFixed(0)} fpts best, ≥${threshold}, floor ${floorPpg.toFixed(1)})`;
       }
     }
@@ -2399,7 +2399,7 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     // rookie year was ≥10 ppg already has strong NFL evidence; the 0.80
     // penalty was treating Jeanty (14.3 ppg as R) like an unproven flier.
     const provenSophomore = isSophomore && r25 >= 10.0;
-    if (yearsOfData === 1 && !isRookie && !provenSophomore) {
+    if (yearsOfData === 1 && !isRookie && !provenSophomore && !youngEliteFloored) {
       // v4.2 (2026-05-17): tightened from 0.90 to 0.80. Single-year samples
       // are unreliable; engine was over-projecting 1yr-data players (esp.
       // sophomores whose rookie year became their only baseline anchor).
