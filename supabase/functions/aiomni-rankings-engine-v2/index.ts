@@ -443,8 +443,11 @@ function opportunityAdj(
     Math.sign(oppDelta) === Math.sign(ppgDelta) ||
     Math.abs(oppDelta) < 0.05 ||
     Math.abs(ppgDelta) < 0.05;
-  const factor = signsAgree ? 0.5 : 0.25;
-  return Math.max(-0.15, Math.min(0.15, oppDelta * factor));
+  // v6.5: the recency-weighted baseline already rewards a late-season usage
+  // ramp, so a big opportunity bonus on top DOUBLE-COUNTS it — Chase Brown rode
+  // a late CIN backfield takeover to RB3. Dampen the factor and cap at ±10%.
+  const factor = signsAgree ? 0.35 : 0.18;
+  return Math.max(-0.10, Math.min(0.10, oppDelta * factor));
 }
 
 function pointsCol(format: Format): 'fantasy_pts_ppr' | 'fantasy_pts_half' | 'fantasy_pts_std' {
@@ -2192,7 +2195,9 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
         // per-game rate just because he faded late as a rookie. Floor at the
         // elite season's ppg (16g basis); keep the talent boost where it wins.
         const floorPpg = careerBest / 16;
+        if (p.full_name === 'Oronde Gadsden II') console.log('GADSDEN_DBG', JSON.stringify({ a25ppg: a25?.ppg, a25games: a25?.games, r25, baselineIn: baseline, careerBest, floorPpg, boost }));
         baseline = Math.max(baseline * boost, floorPpg);
+        if (p.full_name === 'Oronde Gadsden II') console.log('GADSDEN_DBG2', JSON.stringify({ baselineOut: baseline }));
         baselineSource += ` + young-elite-floor (${careerBest.toFixed(0)} fpts best, ≥${threshold}, floor ${floorPpg.toFixed(1)})`;
       }
     }
