@@ -262,11 +262,15 @@ function expectedGamesV4(
       // Case A: Recent year was injury-shortened but priors were healthy.
       // Weight priors more heavily (Wilson/Nabers case).
       base = 0.70 * priorAvg + 0.30 * recent;
+    } else if (recent >= 15 && priors[0] >= 15) {
+      // v6.4: the TWO most-recent seasons are both healthy (Saquon: 2025 16g +
+      // 2024 16g). A 3rd-oldest injury year (his 2023 14g) shouldn't drag a back
+      // who has since proven durable — anchor on the two recent healthy years.
+      base = (recent + priors[0]) / 2;
     } else if (recent >= 15 && priorMin < 15) {
       // Case B (v5.9 2026-05-19): Recent year was HEALTHY but priors were
       // partial. Trust the recent healthy year more aggressively (was
-      // 0.65/0.35, now 0.80/0.20). Saquon case: recent 16g + a 14g 2023
-      // year was anchoring him at 15.0g expected; now anchors at 15.8g.
+      // 0.65/0.35, now 0.80/0.20).
       base = 0.80 * recent + 0.20 * priorAvg;
     }
   } else if (perSeasonGames && perSeasonGames.length === 1 && perSeasonGames[0] >= 16) {
@@ -1066,7 +1070,7 @@ const INJURY_CONTEXT_2026: Record<string, InjuryContext> = {
   garrettwilson:    { games: 16, mult: 1.00, note: 'knee — recovered' },
   brockpurdy:       { games: 16, mult: 1.00, note: 'turf toe — recovered' },
   drakelondon:      { games: 16, mult: 1.00, note: 'soft tissue — recovered' },
-  buckyirving:      { games: 16, mult: 1.00, note: 'minor — recovered' },
+  buckyirving:      { games: 14, mult: 1.00, note: 'missed 7g in 2025 — recovered but carries real recent games risk' },
   brockbowers:      { games: 16, mult: 1.00, note: 'minor — recovered' },
   tuckerkraft:      { games: 16, mult: 1.00, note: 'shoulder/knee — recovered' },
   jjmccarthy:       { games: 15, mult: 0.97, note: 'meniscus — slight games risk' },
