@@ -1,0 +1,34 @@
+name: Deploy marketing site
+
+# Auto-deploys the static marketing site (site/) to Netlify whenever a push to
+# main changes anything under site/. Replaces manual `netlify deploy` runs and
+# removes the drag-a-single-file footgun (that replaces the whole site).
+#
+# Deploys from INSIDE site/ so Netlify reads site/netlify.toml (command = no
+# build, publish = .) and never tries to build the Expo app at the repo root.
+#
+# Requires two repo secrets (Settings → Secrets and variables → Actions):
+#   NETLIFY_AUTH_TOKEN  — a Netlify personal access token
+#   NETLIFY_SITE_ID     — 0c75d22b-56a4-4f22-8ad6-92249612e874
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch: {}   # allow manual runs from the Actions tab
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy site/ to Netlify (prod)
+        working-directory: site
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: npx --yes netlify-cli@latest deploy --prod --dir=. --site="$NETLIFY_SITE_ID"
