@@ -891,7 +891,7 @@ const COACHING_CHANGES_2026: Record<string, {
   ARI: { desc: 'LaFleur HC + Hackett OC — Hackett mixed track record, scheme uncertainty', m: { QB: 0.96, RB: 0.99, WR: 0.97, TE: 0.98 } },
   NYG: { desc: 'Harbaugh HC + Nagy OC — big change, Nagy pass-spread offense',          m: { QB: 1.03, RB: 0.98, WR: 1.03, TE: 1.00 } },
   NYJ: { desc: 'Reich OC + Geno Smith QB — accuracy-based vet under proven OC',         m: { QB: 1.02, RB: 1.00, WR: 1.03, TE: 1.01 } },
-  LAC: { desc: 'McDaniel OC under Harbaugh — Shanahan-tree zone run is RB-FRIENDLY (cf. Achane/Mostert) + Harbaugh run identity; quick-game passing scheme lifts WR/QB and the move-TE (Gadsden)', m: { QB: 1.05, RB: 1.04, WR: 1.05, TE: 1.06 } },
+  LAC: { desc: 'McDaniel OC under Harbaugh — Shanahan-tree zone run is RB-FRIENDLY (cf. Achane/Mostert) + Harbaugh run identity; quick-game passing scheme lifts WR/QB and the move-TE (Gadsden)', m: { QB: 1.05, RB: 1.04, WR: 1.05, TE: 1.06 }, personnel_decay: ['TE', 'WR'] },
   PHI: { desc: 'Mannion OC — limited track record, scheme uncertainty',                 m: { QB: 0.98, RB: 1.00, WR: 0.99, TE: 0.99 } },
   // Ben Johnson cascade — left DET (top-3 OC architect) for CHI HC role in
   // the 2025 carousel. By 2026 he\'s incumbent at CHI (handled via personnel
