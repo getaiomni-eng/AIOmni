@@ -589,7 +589,7 @@ footer { padding: 56px 0 40px; }
 </div></nav>
 
 <header class="page-hero"><div class="wrap">
-  <div class="kicker"><span class="dot"></span>Live preview · refreshed 2026-05-21</div>
+  <div class="kicker"><span class="dot"></span>Live preview · refreshed <span id="rk-refreshed">2026-06-05</span></div>
   <h1>Top 25 by position. <span style="color:var(--formula)">Every</span> <span style="color:var(--pulse)">format.</span></h1>
   <p>The real AIOmni Formula and AIOmni Pulse engines. Switch engines, formats, and positions to see how rankings shift.</p>
 </div></header>
@@ -723,6 +723,13 @@ footer { padding: 56px 0 40px; }
       '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--ink-3)">Could not load rankings data. Open this page via the index.html nav or serve via a local web server.</td></tr>';
     return;
   }
+  // Bind the "refreshed" badge to the data's generated date so it never goes
+  // stale independently of the rankings (was previously hardcoded).
+  const setRefreshed = () => {
+    const el = document.getElementById('rk-refreshed');
+    if (el && DATA && DATA.generated) el.textContent = DATA.generated;
+  };
+  setRefreshed();
   // Async refresh from CDN. Hourly cache-bust so users see fresh data.
   (async () => {
     try {
@@ -733,6 +740,7 @@ footer { padding: 56px 0 40px; }
       if (fresh?.formula) {
         DATA.formula = fresh.formula;
         if (fresh.generated) DATA.generated = fresh.generated;
+        setRefreshed();
         if (typeof render === 'function') render();
       }
     } catch (e) { /* silent — inline already rendered */ }
