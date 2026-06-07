@@ -871,46 +871,40 @@ function personnelMult(team: string | null | undefined, position: string): { mul
 //   - New HC defensive-minded: small dampener on offense (uncertainty)
 //   - OC-only change: smaller magnitude than HC change
 //   - Year-1 OC penalty baked into the multipliers below; do not double-apply elsewhere
-const COACHING_CHANGES_2026: Record<string, {
+import { loadSecrets } from './crypto-secrets.ts';
+
+// ═══ HYBRID v8: proprietary constants are decrypted at runtime from
+// crypto-secrets.ts (AES-256-GCM). Plaintext (ML coefficients + 2026 override
+// maps) never lives in this repo. ensureSecrets() runs at buildFormat start,
+// before any of these are read.
+let ML_COEFFS: Record<string, { mu: number[]; sd: number[]; beta: number[] }> = {};
+let SECRETS: any = null;
+let _secretsLoaded = false;
+async function ensureSecrets(): Promise<void> {
+  if (_secretsLoaded) return;
+  SECRETS = await loadSecrets();
+  COACHING_CHANGES_2026 = SECRETS.coaching;
+  INJURY_CONTEXT_2026 = SECRETS.injury;
+  ML_COEFFS = SECRETS.ml;
+  _secretsLoaded = true;
+}
+// ML hybrid projection for rookies / thin-résumé players. Feature order MUST
+// match the trained export: ppg_prev, ppg_prev2, opp_g, games_prev, age,
+// draftcap, exp, rookie.
+function mlProjectPpg(position: string, feats: number[]): number | null {
+  const c = ML_COEFFS[position];
+  if (!c) return null;
+  let s = c.beta[0];
+  for (let i = 0; i < feats.length; i++) s += c.beta[i + 1] * ((feats[i] - c.mu[i]) / c.sd[i]);
+  return Math.max(0, Math.min(32, s));
+}
+
+// 2026 coaching-change multipliers — decrypted at runtime (see ensureSecrets).
+let COACHING_CHANGES_2026: Record<string, {
   desc: string;
   m: { QB: number; RB: number; WR: number; TE: number };
-  // v5.14 (2026-05-21): when the departed coach defined the team's personnel
-  // tendency (e.g., Stefanski's 41% 12-personnel at CLE), the personnel
-  // layer should be neutralized for affected positions in 2026. Without
-  // this, the engine credits a position for personnel rates that won't
-  // persist. Set the array to the positions whose personnel mult should
-  // be zeroed (treated as 1.00x) on this team.
   personnel_decay?: Array<'QB' | 'RB' | 'WR' | 'TE'>;
-}> = {
-  // v2026-05-12i: 2026 carousel from ffmastermind.com (NOT 2025 — 2025 hires
-  // like Ben Johnson, Vrabel, Moore, Glenn are incumbent in 2026 and are
-  // already captured by the 2025 personnel-tendency layer; don't double-count).
-  ATL: { desc: 'Stefanski HC + Rees OC — TE-friendly, run-culture, play-action heavy', m: { QB: 1.00, RB: 1.04, WR: 0.97, TE: 1.06 } },
-  BUF: { desc: 'Joe Brady HC + Carmichael Jr. OC — Saints-style aggressive passing',    m: { QB: 1.02, RB: 0.98, WR: 1.02, TE: 1.00 } },
-  MIA: { desc: 'Hafley HC + Slowik OC — Shanahan tree, defensive HC, Willis QB downgrade', m: { QB: 0.92, RB: 1.02, WR: 0.95, TE: 1.00 } },
-  // Stefanski leaving CLE is the league\'s biggest TE-scheme architect exit.
-  // CLE was 41% 12-personnel under him in 2025 → expected to collapse toward avg.
-  CLE: { desc: 'Monken HC + Switzer OC — aggressive deep-ball passing, Stefanski TE scheme exits with him', m: { QB: 1.02, RB: 0.98, WR: 1.05, TE: 0.88 }, personnel_decay: ['TE'] },
-  BAL: { desc: 'Minter HC + Doyle OC — pass-friendlier than John Harbaugh era; Lamar read-option scheme departs', m: { QB: 1.02, RB: 0.97, WR: 1.03, TE: 1.04 }, personnel_decay: ['QB'] },
-  TEN: { desc: 'Saleh HC — defensive-minded, offensive identity uncertain',             m: { QB: 0.96, RB: 0.98, WR: 0.96, TE: 0.96 } },
-  PIT: { desc: 'McCarthy HC + Angelichio OC — veteran balance, slight pass tilt',       m: { QB: 1.01, RB: 1.01, WR: 1.02, TE: 1.00 } },
-  LV:  { desc: 'Klint Kubiak HC + Janocko OC — zone-blocking, TE-friendly Kubiak family', m: { QB: 0.98, RB: 1.04, WR: 0.97, TE: 1.04 } },
-  ARI: { desc: 'LaFleur HC + Hackett OC — Hackett mixed track record, scheme uncertainty', m: { QB: 0.96, RB: 0.99, WR: 0.97, TE: 0.98 } },
-  NYG: { desc: 'Harbaugh HC + Nagy OC — big change, Nagy pass-spread offense',          m: { QB: 1.03, RB: 0.98, WR: 1.03, TE: 1.00 } },
-  NYJ: { desc: 'Reich OC + Geno Smith QB — accuracy-based vet under proven OC',         m: { QB: 1.02, RB: 1.00, WR: 1.03, TE: 1.01 } },
-  LAC: { desc: 'McDaniel OC under Harbaugh — Shanahan-tree zone run is RB-FRIENDLY (cf. Achane/Mostert) + Harbaugh run identity; quick-game passing scheme lifts WR/QB and the move-TE (Gadsden)', m: { QB: 1.05, RB: 1.04, WR: 1.05, TE: 1.06 }, personnel_decay: ['TE', 'WR'] },
-  PHI: { desc: 'Mannion OC — limited track record, scheme uncertainty',                 m: { QB: 0.98, RB: 1.00, WR: 0.99, TE: 0.99 } },
-  // Ben Johnson cascade — left DET (top-3 OC architect) for CHI HC role in
-  // the 2025 carousel. By 2026 he\'s incumbent at CHI (handled via personnel
-  // layer). DET\'s loss is the 2026 carryover effect that hadn\'t fully
-  // priced in: Petzing as OC isn\'t a 1:1 replacement.
-  // v2026-05-12j: DET's Johnson departure already played out in 2025 (Morton
-  // was OC then). The 2026 change is Morton → Petzing — mid-tier OC swap,
-  // near-neutral. Previous -7% WR penalty was double-counting a transition
-  // already absorbed in 2025 personnel rates.
-  DET: { desc: 'Morton OC → Petzing OC — mid-tier OC swap, near-neutral (Johnson loss already absorbed in 2025)', m: { QB: 1.00, RB: 1.00, WR: 0.99, TE: 1.00 } },
-  TB:  { desc: 'Zac Robinson OC — McVay tree, pass concepts',                           m: { QB: 1.02, RB: 0.98, WR: 1.02, TE: 1.00 } },
-};
+}> = {};
 
 // Manual overrides for injuries the ESPN feed hasn't picked up or has
 // outdated. Keys match ESPN's normalized form: lowercase a-z only.
@@ -1068,75 +1062,8 @@ const INJURY_OVERRIDES_2026: Record<string, InjuryStatus> = {
 //   - "chronic / not back yet" (Kittle Achilles handled above; Penix)
 // Format: { games: expected 2026 games, mult: per-game performance retention }
 type InjuryContext = { games: number; mult: number; note: string };
-const INJURY_CONTEXT_2026: Record<string, InjuryContext> = {
-  // FULLY recovered — expected 16-17g at full strength
-  joeburrow:        { games: 16, mult: 1.00, note: 'wrist surgery — fully recovered' },
-  // v5.5: Daniels mult lifted from 1.00 to 1.05 — his rookie-year 2024
-  // was 428 fpts (QB3-5 territory), and injury-yr inversion blend only
-  // gave that year 60% weight. Bumping mult restores some of that ceiling.
-  jaydendaniels:    { games: 16, mult: 1.05, note: 'knee/hamstring — full recovery + Y3 ascent expected' },
-  drakemaye:        { games: 16, mult: 1.13, note: 'healthy Y3 ascent — top-10 PPG pace on bad-OL team; 2025 was 347 fpts' },
-  rasheerice:       { games: 15, mult: 1.00, note: 'MCL tear — recovered, slight games-risk premium' },
-  garrettwilson:    { games: 16, mult: 1.00, note: 'knee — recovered' },
-  brockpurdy:       { games: 16, mult: 1.00, note: 'turf toe — recovered' },
-  drakelondon:      { games: 16, mult: 1.00, note: 'soft tissue — recovered' },
-  buckyirving:      { games: 14, mult: 1.00, note: 'missed 7g in 2025 — recovered but carries real recent games risk' },
-  brockbowers:      { games: 16, mult: 1.00, note: 'minor — recovered' },
-  tuckerkraft:      { games: 16, mult: 1.00, note: 'shoulder/knee — recovered' },
-  jjmccarthy:       { games: 15, mult: 0.97, note: 'meniscus — slight games risk' },
-  romeodunze:       { games: 16, mult: 1.00, note: 'minor — recovered' },
-  // ACL / Achilles — year-1 back at reduced capacity
-  maliknabers:      { games: 13, mult: 0.88, note: 'ACL — year-1 back, ~85% capacity + games risk' },
-  tyreekhill:       { games: 13, mult: 0.92, note: 'wrist surgery + lingering — partial recovery' },
-  // Chronic / multi-year struggle
-  kylermurray:      { games: 13, mult: 0.92, note: 'knee — chronic concern, partial year' },
-  // Rookies/Sophs returning from injury
-  camskattebo:      { games: 14, mult: 0.92, note: 'ankle (rookie) — soft year-2 expectation' },
-  omarionhampton:   { games: 16, mult: 1.00, note: 'ankle (rookie) — recovered; market RB1-2 dynasty value, no lingering 2026 concern' },
-  // Veterans with mild 2025 injuries (13-14g) — engine misses these because
-  // they're above the <10g hard threshold but their season-shortening hurts
-  // 3yr avg games. Apply explicit recovery projection.
-  lamarjackson:     { games: 16, mult: 1.00, note: 'minor 2025 missed games — back to elite' },
-  // v5.5: ACL recovery softened (was 13g/0.85) — Rodgers 2024 played 17g
-  // post-ACL at ~93% of his pre-injury pace. Mahomes timeline + KC offense
-  // resilience supports 15g/0.92 not 13g/0.85.
-  patrickmahomes:   { games: 15, mult: 0.92, note: 'ACL tear 2025 — Y1-back recovery, KC offense built around him' },
-  // v5.7 REVERTED (2026-05-19): CMC name-specific override removed. The
-  // "career-high workload + age 30 = regression" pattern needs to be a
-  // RB-position rule, not a CMC patch. Pending RB-specific scoring algo.
-  ajbrown:          { games: 16, mult: 1.00, note: 'minor 2025 — recovered' },
-  amonrastbrown:    { games: 16, mult: 1.00, note: 'minor — healthy' },
-  mikeevans:        { games: 14, mult: 0.95, note: 'aging 32yo — modest games risk' },
-  // v5.13 (2026-05-20): Puka therapy/rehab situation — modest games + per-game
-  // discount. User flagged offseason rehab/mental-health stay; uncertain
-  // return timeline. Light cap pending more clarity.
-  pukanacua:        { games: 15, mult: 0.97, note: 'offseason rehab — modest games + per-game risk' },
-  // v5.7 (2026-05-19): Derrick Henry — defies the age-32 RB cliff (0.42x
-  // in the curve is brutal). His 2025 was 280 fpts (RB8) at age 32. The
-  // age curve is a population average; outlier workhorses like Henry
-  // need an override. Mult 1.55 brings him from 9.9 → 15.3 ppg projection.
-  // v5.7 (2026-05-19 final): softer Henry override. 1.55 was too generous
-  // — projected him over healthy younger workhorses (Saquon, Jacobs, Jeanty)
-  // which is indefensible at age 32 + heavy 2025 workload. 1.15 gets him
-  // into RB18-22 territory (below the prime-age workhorses) while
-  // acknowledging his 2025 production proves he's not in full decline.
-  // v5.7 REVERTED: Henry and Etienne RB-specific patches removed. Pending
-  // RB-position scoring algo that handles workload-aging and vet-defies-cliff
-  // as RULES, not name-by-name overrides.
-  // v5.6 (2026-05-18): Herbert McDaniel scheme upgrade lift. LAC env layer
-  // has +5% coaching but it gets canceled by OL rank 32 + heavy travel.
-  // Industry expects McDaniel's scheme to offset those — explicit upside.
-  justinherbert:    { games: 16, mult: 1.05, note: 'McDaniel OC scheme upgrade — wide-open passing offset to OL/travel' },
-  // v5.6 (2026-05-18): Bo Nix ankle surgery + tougher 2026 SOS (DEN QB
-  // per-week z=-0.23). Two-year QB7 pace, but surgery year and harder
-  // slate suggest mild regression. Conservative discount.
-  // v5.6 (2026-05-18) final: removed surgery discount. Offseason ankle
-  // surgery typically has full recovery by Y3 OTA timeline. The harder
-  // 2026 schedule is ALREADY in the per-week SOS layer — double-counting
-  // it via injury-context would penalize him twice. Trust the 2024-2025
-  // QB7 consistency + rushing-profile floor.
-  bonix:            { games: 17, mult: 1.00, note: 'ankle surgery recovered; harder SOS handled in per-week SOS layer' },
-};
+// 2026 injury-context map — decrypted at runtime (see ensureSecrets).
+let INJURY_CONTEXT_2026: Record<string, InjuryContext> = {};
 
 async function fetchInjuryMap(): Promise<Map<string, InjuryStatus>> {
   const map = new Map<string, InjuryStatus>();
@@ -1180,6 +1107,7 @@ async function fetchInjuryMap(): Promise<Map<string, InjuryStatus>> {
 
 async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2026): Promise<RankedRow[]> {
   const ptsCol = pointsCol(format);
+  await ensureSecrets();
 
   // Pull all 3 seasons + injury feed in parallel
   // Year aliases are RELATIVE to asOfSeason. In production (asOfSeason=2026):
@@ -1234,26 +1162,11 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
   // hasn't synced yet. Updates an existing player's team/depth/active flags.
   // Use full_name (lowercased) match. Add entries as news breaks; remove
   // once Sleeper catches up.
+  // 2026 team-override list — decrypted at runtime (see ensureSecrets).
   const TEAM_OVERRIDES_2026: Array<{
     nameLower: string; team: string; is_active?: boolean;
     depth_chart_position?: string; depth_chart_order?: number;
-  }> = [
-    { nameLower: 'jauan jennings', team: 'MIN', is_active: true, depth_chart_position: 'RWR', depth_chart_order: 2 },
-    // 2026-06-02: confirmed offseason trade (PFR + ESPN + PFT + RotoWire).
-    // Eagles dealt A.J. Brown to the Patriots; he's Drake Maye's new WR1.
-    // nflverse roster feed still lists him on PHI; remove once it syncs.
-    { nameLower: 'a.j. brown', team: 'NE', is_active: true, depth_chart_position: 'LWR', depth_chart_order: 1 },
-    // DeVonta Smith stays in Philly but is now the unambiguous WR1 with Brown
-    // gone. He already codes as depth_chart_order 1; pinning it here makes the
-    // intent explicit. His projection lift comes from the PHI target vacancy
-    // the engine recomputes once Brown is moved off the roster above.
-    { nameLower: 'devonta smith', team: 'PHI', is_active: true, depth_chart_position: 'LWR', depth_chart_order: 1 },
-    // NOTE: OBJ -> NYG (also confirmed) is intentionally NOT here. He has no
-    // row in nfl_players, so an override can't match him, and injecting a full
-    // fabricated record for a 33-yo depth signing who won't rank inside ~150
-    // isn't worth the data-integrity cost. Add via MANUAL_PLAYER_OVERRIDES
-    // with his real gsis_id if he becomes fantasy-relevant.
-  ];
+  }> = SECRETS.team;
   for (const ov of TEAM_OVERRIDES_2026) {
     const p = players.find((p: any) => (p.full_name || '').toLowerCase() === ov.nameLower);
     if (p) {
@@ -3289,6 +3202,35 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     // v4 score = projected season total (raw fpts). The legacy VBD pass
     // below will subtract rank-based replacement to get final values.
     // This keeps cross-position scaling working with the existing logic.
+    // ═══ HYBRID v8: ML model drives rookies / ≤1-season players ══════════
+    // Validated edge: the from-scratch Ridge model (encrypted coeffs) beats the
+    // engine on players with little/no NFL track record, where draft-capital
+    // heuristics are weakest. Blend its PPG in, weighted by résumé thinness.
+    // Players with 2+ seasons are untouched — the engine wins there.
+    const priorSeasonCount = [has25, has24, has23, has22, has21].filter(Boolean).length;
+    let hybridNote = '';
+    if (isRookie || priorSeasonCount <= 1) {
+      const oppG = a25 && a25.games > 0
+        ? a25.weeks.reduce((s, w) => s + (w.targets || 0) + (w.carries || 0), 0) / a25.games
+        : 0;
+      const mlPpg = mlProjectPpg(p.position, [
+        a25 ? a25.ppg : 0,
+        a24 ? a24.ppg : 0,
+        oppG,
+        a25 ? a25.games : 0,
+        age - (2026 - asOfSeason),
+        Math.max(0, 261 - (p.draft_pick ?? 260)) / 260,
+        priorSeasonCount,
+        a25 ? 0 : 1,
+      ]);
+      if (mlPpg != null && gamesEst.games > 0) {
+        const wMl = (isRookie || priorSeasonCount === 0) ? 0.70 : 0.50;
+        const mlSeasonTotal = mlPpg * gamesEst.games;
+        const blended = wMl * mlSeasonTotal + (1 - wMl) * finalSeasonTotal;
+        hybridNote = `[hybrid ${(wMl * 100).toFixed(0)}% ML ${mlPpg.toFixed(1)}ppg → ${blended.toFixed(0)} fpts (eng was ${finalSeasonTotal.toFixed(0)})]`;
+        finalSeasonTotal = blended;
+      }
+    }
     const score = finalSeasonTotal;
 
     // ─── v2: method string by LAYER (one summary per layer, not per signal) ───
@@ -3349,6 +3291,7 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     }
     // v4: expected games + season-total framing
     parts.push(`[v4 ${recoveredProjectedPpg.toFixed(1)} ppg × ${gamesEst.games.toFixed(1)}g = ${finalSeasonTotal.toFixed(0)} fpts]`);
+    if (hybridNote) parts.push(hybridNote);
     if (INJURY_CONTEXT_2026[injuryKey]) {
       parts.push(`injury-2026: ${INJURY_CONTEXT_2026[injuryKey].note}`);
     }
