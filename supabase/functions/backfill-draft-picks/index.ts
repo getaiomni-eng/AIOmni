@@ -41,7 +41,7 @@ serve(async () => {
         .from('nfl_players')
         .select('gsis_id')
         .is('draft_round', null)
-        .gte('draft_year', 2018)
+        .gte('draft_year', 2023)
         .range(from, from + 999);
       if (error) throw error;
       if (!data || !data.length) break;
@@ -50,29 +50,31 @@ serve(async () => {
       from += 1000;
     }
 
-    // 3. Build update rows for the matched gaps, upsert in chunks (only these
-    // columns → ON CONFLICT updates draft_round/pick, leaves everything else).
-    const rows = gaps
-      .filter(g => picks[g.gsis_id])
-      .map(g => ({ gsis_id: g.gsis_id, draft_round: picks[g.gsis_id].round, draft_pick: picks[g.gsis_id].pick }));
-
+    // 3. Targeted UPDATEs (upsert can't be used — partial insert violates the
+    // table's NOT NULL columns). Only the matched gaps get touched.
+    const matched = gaps.filter(g => picks[g.gsis_id]);
     let updated = 0;
-    const CHUNK = 200;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const batch = rows.slice(i, i + CHUNK);
-      const { error } = await supabase.from('nfl_players').upsert(batch, { onConflict: 'gsis_id' });
-      if (error) throw error;
-      updated += batch.length;
+    const errors: string[] = [];
+    for (const g of matched) {
+      const dp = picks[g.gsis_id];
+      const { error } = await supabase
+        .from('nfl_players')
+        .update({ draft_round: dp.round, draft_pick: dp.pick })
+        .eq('gsis_id', g.gsis_id);
+      if (error) { if (errors.length < 3) errors.push(error.message); }
+      else updated++;
     }
 
     return new Response(JSON.stringify({
       ok: true,
       draftPicksLoaded: Object.keys(picks).length,
       nullDraftPlayers: gaps.length,
+      matched: matched.length,
       backfilled: updated,
+      errors,
     }), { headers: { 'Content-Type': 'application/json' } });
-  } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
+  } catch (e: any) {
+    return new Response(JSON.stringify({ ok: false, error: e?.message ?? String(e) }), {
       status: 500, headers: { 'Content-Type': 'application/json' },
     });
   }
