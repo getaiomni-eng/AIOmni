@@ -2192,11 +2192,21 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       if (has22) parts5.push({ baseW: 0.15, ppg: r22, games: a22!.games });
       if (has21) parts5.push({ baseW: 0.10, ppg: r21, games: a21!.games });
       const expanded = blend(parts5);
-      if (expanded > baseline) {
+      // v8.1 AGING HEALTHY-DECLINE guard. The expansion exists to look past a
+      // recent down year caused by MISSED games (injury) and restore a proven
+      // ceiling. But when an aging player posted a FULL, healthy season well
+      // below that ceiling, the low is real decline — not a fluke. Resurrecting
+      // 4-5yr-old peaks is exactly wrong there (Mark Andrews: 17g/7.7ppg at 30,
+      // TE16 → the rule was lifting him to TE3). Suppress expansion in that case.
+      const recentHealthyDecline =
+        age >= 29 && has25 && a25!.games >= 14 && r25 < expanded * 0.75;
+      if (expanded > baseline && !recentHealthyDecline) {
         baseline = expanded;
         baselineSource = `5yr v3 blend (top-10 expansion: ${eliteCounts.top10}× career top-10)`;
         eliteVetTag = `top-10 history (${eliteCounts.top10}× top-10, ${eliteCounts.top5}× top-5)`;
         fiveYrExpanded = true;
+      } else if (expanded > baseline && recentHealthyDecline) {
+        baselineSource += ` (5yr expansion SUPPRESSED — age ${age} healthy decline: ${a25!.games}g/${r25.toFixed(1)}ppg vs ${expanded.toFixed(1)} peak)`;
       }
     }
 
