@@ -87,11 +87,18 @@ function ageCurve(position: string, age: number | null): number {
     return 0.55;
   }
   if (position === 'QB') {
-    if (a <= 24) return 1.05;
-    if (a <= 33) return 1.00;
-    if (a <= 36) return 0.95;        // v2026-05-08: softer
-    if (a <= 38) return 0.88;        // softened from 0.78 — Stafford backtest
-    return 0.75;                     // softened from 0.60
+    // v7 (2026-06-07): backtest reverse-engineering — younger QBs systematically
+    // out-produce older ones, and it's the single most-ignored QB signal (prior
+    // curve was flat 1.00 across 25-33, so the engine had NO QB age signal at all,
+    // which is why QB ordering was near-random). Modest youth tilt — the cross-
+    // validated signal is real but weak (r ~-0.1 to -0.2), so keep magnitudes small.
+    if (a <= 23) return 1.10;
+    if (a <= 25) return 1.05;
+    if (a <= 28) return 1.01;
+    if (a <= 32) return 1.00;
+    if (a <= 35) return 0.95;
+    if (a <= 37) return 0.88;
+    return 0.75;
   }
   return 1.0;
 }
@@ -2969,13 +2976,16 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       const ept = a25.epaPerTarget;
       // Calibration: avg EPA/target across NFL is ~0. Top-tier receivers
       // at +0.30, busts at -0.20. Cap at ±4%.
+      // v7 (2026-06-07): EPA/target is confirmed NOISE in the 2024+2025 backtest
+      // (next-year correlation ~0 and sign-flips at every position). Halve its
+      // influence so it nudges ties rather than swinging projections.
       let adj = 0;
-      if (ept >= 0.40)      adj = 0.04;
-      else if (ept >= 0.20) adj = 0.025;
-      else if (ept >= 0.10) adj = 0.01;
-      else if (ept <= -0.30) adj = -0.04;
-      else if (ept <= -0.15) adj = -0.025;
-      else if (ept <= -0.05) adj = -0.01;
+      if (ept >= 0.40)      adj = 0.02;
+      else if (ept >= 0.20) adj = 0.012;
+      else if (ept >= 0.10) adj = 0.005;
+      else if (ept <= -0.30) adj = -0.02;
+      else if (ept <= -0.15) adj = -0.012;
+      else if (ept <= -0.05) adj = -0.005;
       if (Math.abs(adj) > 0) {
         epaMult = 1.0 + adj;
         epaNote = `EPA/T ${adj > 0 ? '+' : ''}${(adj * 100).toFixed(1)}% (${ept.toFixed(2)})`;
@@ -3127,7 +3137,12 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     //
     // Layer 4: EFFICIENCY — EPA × WOPR × QB cast × format (mostly
     //   orthogonal signals about per-target/per-format quality)
-    const layer4_efficiency = epaMult * woprMult * effectiveCastMult * formatAdj;
+    // v7 (2026-06-07): cap the pure-efficiency contribution (EPA × WOPR) to a
+    // tight band — efficiency is weakly/non-predictive in the backtest, and the
+    // uncapped product floated Brian Thomas Jr. to a WR1-overall projection.
+    // QB-cast and format scaling stay separate (those are legit signals).
+    const effClamped = Math.max(0.93, Math.min(1.08, epaMult * woprMult));
+    const layer4_efficiency = effClamped * effectiveCastMult * formatAdj;
     //
     // Layer 5: AVAILABILITY — durability already applied to baseline
     //   above; no additional layer-5 mult needed here. Captured.
