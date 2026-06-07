@@ -1105,6 +1105,69 @@ async function fetchInjuryMap(): Promise<Map<string, InjuryStatus>> {
   return map;
 }
 
+// v8.2: TEAMMATE-ABSENCE INFLATION DISCOUNT. A player whose prior-season line
+// was padded by a key same-position teammate missing time regresses when that
+// teammate is healthy again. Compare each player's prior-season ppg WITH vs
+// WITHOUT their top positional competitor; if the competitor missed real time,
+// is back on the same 2026 team, and the player scored MORE without them,
+// discount toward the with-competitor rate. One-directional (never boosts),
+// clamped to 0.80x, and sample-gated. (Pickens: 24.2 w/o Lamb vs 15.0 with.)
+function buildTeammateInflation(
+  weekly: any[], players: any[], agg: Map<string, SeasonAgg>, ptsCol: string,
+): Map<string, { mult: number; note: string }> {
+  const out = new Map<string, { mult: number; note: string }>();
+  const wk = new Map<string, Map<number, number>>();
+  const teamCount = new Map<string, Map<string, number>>();
+  for (const w of weekly) {
+    const g = w.gsis_id; if (!g) continue;
+    const pts = (w as any)[ptsCol] ?? 0;
+    if (pts === 0 && !(w.targets || w.carries)) continue;
+    if (!wk.has(g)) wk.set(g, new Map());
+    wk.get(g)!.set(w.week, pts);
+    const t = normTeamCode(w.team);
+    if (t) { if (!teamCount.has(g)) teamCount.set(g, new Map()); const tc = teamCount.get(g)!; tc.set(t, (tc.get(t) ?? 0) + 1); }
+  }
+  const modalTeam = (g: string): string | null => {
+    const tc = teamCount.get(g); if (!tc) return null;
+    return [...tc.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  };
+  const meta = new Map<string, any>(players.map((p: any) => [p.gsis_id, p]));
+  const byTeamPos = new Map<string, string[]>();
+  for (const p of players) {
+    const t = modalTeam(p.gsis_id); if (!t) continue;
+    const key = `${t}|${p.position}`;
+    if (!byTeamPos.has(key)) byTeamPos.set(key, []);
+    byTeamPos.get(key)!.push(p.gsis_id);
+  }
+  const seasonTot = (g: string) => { const a = agg.get(g); return a ? a.ppg * a.games : 0; };
+  for (const p of players) {
+    // WR/TE only: target-share inflation is a pass-catcher mechanism. QBs don't
+    // share targets (competitor = backup QB → nonsense) and RB splits are
+    // committee noise, not inflation that regresses.
+    if (p.position !== 'WR' && p.position !== 'TE') continue;
+    const g = p.gsis_id; const a = agg.get(g);
+    if (!a || a.games < 6) continue;
+    const t = modalTeam(g); if (!t) continue;
+    const peers = (byTeamPos.get(`${t}|${p.position}`) ?? []).filter(x => x !== g);
+    if (!peers.length) continue;
+    const comp = peers.sort((x, y) => seasonTot(y) - seasonTot(x))[0];
+    const compMeta = meta.get(comp); if (!compMeta) continue;
+    const compWk = wk.get(comp); if (!compWk) continue;
+    if (compWk.size >= 15) continue;          // competitor barely missed time
+    if (compMeta.team !== p.team) continue;   // not teammates in 2026 → competition gone
+    const mine = wk.get(g)!;
+    let inS = 0, inN = 0, outN = 0;
+    for (const [w, pts] of mine) { if (compWk.has(w)) { inS += pts; inN++; } else { outN++; } }
+    if (inN < 4 || outN < 2) continue;        // min sample on both sides
+    const withRate = inS / inN;
+    if (withRate >= a.ppg) continue;          // ONE-DIRECTIONAL: only discount
+    let mult = withRate / a.ppg;
+    if (mult > 1) mult = 1; if (mult < 0.80) mult = 0.80;
+    out.set(g, { mult, note: `teammate-inflation ${mult.toFixed(2)}x (${a.ppg.toFixed(1)}→${withRate.toFixed(1)} ppg, ${compMeta.full_name} back)` });
+  }
+  return out;
+}
+
 async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2026): Promise<RankedRow[]> {
   const ptsCol = pointsCol(format);
   await ensureSecrets();
@@ -1186,6 +1249,11 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
   const agg2023 = aggregateSeason(w2023, ptsCol);
   const agg2022 = aggregateSeason(w2022, ptsCol);
   const agg2021 = aggregateSeason(w2021, ptsCol);
+
+  // v8.2: prior-season teammate-absence inflation discounts (production-side only).
+  const teammateInflation = isBacktest
+    ? new Map<string, { mult: number; note: string }>()
+    : buildTeammateInflation(w2025, players, agg2025, ptsCol);
 
   // ─── Elite-vet stabilization map (v2026-05-16, season-total finish) ──
   // Count ACTUAL top-10 / top-5 SEASON finishes per player across 2021-2025
@@ -3241,6 +3309,11 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
         finalSeasonTotal = blended;
       }
     }
+    // v8.2: teammate-absence inflation discount (one-directional, clamped, sample-gated).
+    let tmInflNote = '';
+    const _tmInfl = teammateInflation.get(p.gsis_id);
+    if (_tmInfl) { finalSeasonTotal *= _tmInfl.mult; tmInflNote = `[${_tmInfl.note}]`; }
+
     const score = finalSeasonTotal;
 
     // ─── v2: method string by LAYER (one summary per layer, not per signal) ───
@@ -3302,6 +3375,7 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     // v4: expected games + season-total framing
     parts.push(`[v4 ${recoveredProjectedPpg.toFixed(1)} ppg × ${gamesEst.games.toFixed(1)}g = ${finalSeasonTotal.toFixed(0)} fpts]`);
     if (hybridNote) parts.push(hybridNote);
+    if (tmInflNote) parts.push(tmInflNote);
     if (INJURY_CONTEXT_2026[injuryKey]) {
       parts.push(`injury-2026: ${INJURY_CONTEXT_2026[injuryKey].note}`);
     }
