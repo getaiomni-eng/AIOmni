@@ -3336,6 +3336,23 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     const _tmInfl = teammateInflation.get(p.gsis_id);
     if (_tmInfl) { finalSeasonTotal *= _tmInfl.mult; tmInflNote = `[${_tmInfl.note}]`; }
 
+    // v8.6: ROOKIE-RB REDRAFT YEAR-1 BUMP. Early-pick rookie RBs produce
+    // immediately (Bijan/Gibbs/Jeanty all hit as rookies) — unlike rookie
+    // pass-catchers, who are year-1 projects and correctly sit low in redraft.
+    // The engine's rookie conservatism was burying a clear lead-back like Love
+    // (RB20) behind aging committee vets. Lift REDRAFT only (dynasty already
+    // credits their youth), scaled by draft capital so top picks get the most.
+    let rookieRbNote = '';
+    const isDynastyFmt = format === 'DYN' || format === 'DYN_HALF' || format === 'DYN_STD' || format === 'DYN_SF';
+    if (isRookie && p.position === 'RB' && !isDynastyFmt) {
+      const cap = draftPickBoostV3(p.draft_round, p.draft_pick, 'RB'); // 0.45 top-5 … <0 Day-3
+      const rbBoost = 1.0 + Math.max(0, cap) * 0.55;  // top-5 +25%, R1 ~+10%, R3 +2%, Day-3 0%
+      if (rbBoost > 1.0) {
+        finalSeasonTotal *= rbBoost;
+        rookieRbNote = `[rookie-RB redraft year-1 +${((rbBoost - 1) * 100).toFixed(0)}%]`;
+      }
+    }
+
     const score = finalSeasonTotal;
 
     // ─── v2: method string by LAYER (one summary per layer, not per signal) ───
@@ -3398,6 +3415,7 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     parts.push(`[v4 ${recoveredProjectedPpg.toFixed(1)} ppg × ${gamesEst.games.toFixed(1)}g = ${finalSeasonTotal.toFixed(0)} fpts]`);
     if (hybridNote) parts.push(hybridNote);
     if (tmInflNote) parts.push(tmInflNote);
+    if (rookieRbNote) parts.push(rookieRbNote);
     if (INJURY_CONTEXT_2026[injuryKey]) {
       parts.push(`injury-2026: ${INJURY_CONTEXT_2026[injuryKey].note}`);
     }
