@@ -29,30 +29,17 @@ import { getValidYahooToken, getYahooLeagues, getMyYahooTeam, getYahooStandings,
 const BORDER   = '#1a3542';
 const BEVEL_HI = '#12252e';
 
-const FF_KNOWLEDGE = `
-FANTASY FOOTBALL FUNDAMENTALS (apply to every answer):
-SCORING FORMATS — always check league settings before advising:
-- PPR (1pt per reception): elevates pass-catchers, WRs and pass-catching RBs/TEs worth more
-- Half PPR (0.5pt): middle ground, still rewards volume receivers
-- Standard (0pt): pure yardage/TD value, workhorse RBs most valuable
-- 6pt passing TD leagues: QB value skyrockets vs 4pt leagues
-- TE Premium: elevates TE value dramatically
-- SuperFlex: 2nd QB is essential, QBs drafted earlier
-IN-SEASON MANAGEMENT:
-- Waiver wire is where championships are won — check every week
-- Monitor injury reports: Wed/Thu/Fri practice designations
-- Analyze matchups weekly: soft run D = start RBs, soft pass D = start WRs/TEs
-- Target share and snap count are leading indicators
-MULTI-LEAGUE MANAGEMENT:
-- Each league is INDEPENDENT — never compare players across leagues
-- In leagues you're winning: prioritize floor/safe plays
-- In leagues you're losing: target high-upside boom/bust options
-`;
-
 const BASE_SYSTEM = `You are AIOmni's AI Coach — the world's most intelligent fantasy football assistant.
 You ALWAYS read league settings first before giving any advice. Be direct, confident, and specific.
 Format responses concisely — this is a mobile chat interface.
 Never compare players across different leagues — each league is scored independently.`;
+
+// Stable reference block sent as the Anthropic `system` field (prompt-cached).
+// Persona + canonical 2026 rookie board + the full knowledge base never change
+// between turns, so they hit the cache instead of being re-billed every prompt.
+// The per-session dynamic context (leagues, memories, live data, conversation)
+// stays in the user message — see buildSystemPrompt + the send handler.
+const STATIC_SYSTEM = `${BASE_SYSTEM}\n${ROOKIE_BOARD_2026_TEXT}\n${FANTASY_FOOTBALL_KNOWLEDGE}`;
 
 type LeagueContext = {
   name: string; platform: string; format: string;
@@ -519,7 +506,7 @@ async function loadAbstractContext(
 
 function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueContext | null, memories: string): string {
   const targets = selectedLeague ? [selectedLeague] : leagues;
-  if (targets.length === 0) return `${BASE_SYSTEM}\n\nNo leagues loaded yet.`;
+  if (targets.length === 0) return 'No leagues loaded yet.';  // persona is in STATIC_SYSTEM
   // v2026-05-14: emit league type, taxi slots, owned picks (dynasty/keeper) so
   // the Coach answers "how many draft picks do I have" correctly.
   // v2026-05-27: also emit top-20 available FAs so the Coach has the full
@@ -602,12 +589,13 @@ than answering blind.
 ═══════════════════════════════════
 `;
 
-  // Order matters: BASE_SYSTEM → calendar → canonical 2026 rookie
-  // board → leagues → knowledge → memories → season context. The
-  // rookie board is hoisted to the top because end-of-prompt
-  // placement let the model fall back to training-data rookies
-  // (Jeanty/Ward/Hunter) instead.
-  return `${BASE_SYSTEM}\n${calendarFraming}\n${ROOKIE_BOARD_2026_TEXT}\n\nYou have loaded ${targets.length} league${targets.length > 1 ? 's' : ''}:\n${leagueBlocks}\n${FANTASY_FOOTBALL_KNOWLEDGE}${focusNote}${memoryBlock}\n\n${seasonContext}`;
+  // DYNAMIC per-session context only. The persona, 2026 rookie board, and
+  // knowledge base now live in STATIC_SYSTEM (sent as the cached `system`
+  // field), so they're omitted here to avoid duplication and to keep this
+  // block small. The system field precedes the user turn, so the rookie
+  // board still leads — preserving the "don't fall back to training-data
+  // rookies" guarantee that motivated hoisting it.
+  return `${calendarFraming}\n\nYou have loaded ${targets.length} league${targets.length > 1 ? 's' : ''}:\n${leagueBlocks}${focusNote}${memoryBlock}\n\n${seasonContext}`;
 }
 
 // ── Verdict card (blue) ─────────────────────────────────────
@@ -852,7 +840,7 @@ export default function CoachScreen() {
         `\nuser: ${safeText}`,
       ].filter(Boolean).join('\n');
 
-      const reply = await askAI(fullPrompt, 1000);
+      const reply = await askAI(fullPrompt, { maxTokens: 1000, system: STATIC_SYSTEM });
       // Only charge a prompt once the model actually responds — connection
       // errors and timeouts shouldn't burn the user's weekly quota.
       await incrementPrompt();

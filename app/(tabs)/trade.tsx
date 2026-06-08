@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI } from '../../services/ai';
+import { fetchAIOmniFormula, type RankedPlayer, type ScoringFormat } from '../../services/rankingsData';
 import { getCurrentTier } from '../../services/purchases';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
 import { consumePrompt } from '../utils/promptCounter';
@@ -44,6 +45,32 @@ const EXAMPLES = [
   { give: 'Justin Jefferson', get: "Ja'Marr Chase + TE1" },
 ];
 
+// Normalize a player name for matching against the AIOmni engine board.
+const normName = (n: string) =>
+  n.toLowerCase()
+    .replace(/[.']/g, '')
+    .replace(/\s+(jr|sr|ii|iii|iv|v)\b\.?/g, '')
+    .replace(/[^a-z\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+// Split a free-text side ("CeeDee Lamb + 2026 1st") into candidate names and
+// resolve each against the AIOmni board. Matched players carry their
+// proprietary rank/tier so the model grades off OUR engine, not its own memory;
+// unmatched tokens (picks, deep FAs) pass through with a note.
+function groundSide(raw: string, index: Map<string, RankedPlayer>): string {
+  const tokens = raw.split(/[,\n+&/]|\band\b|\bplus\b/gi).map(s => s.trim()).filter(Boolean);
+  if (!tokens.length) return '(nothing listed)';
+  return tokens.map(tok => {
+    const p = index.get(normName(tok));
+    if (p) {
+      const pr = p.posRank ? `${p.position}${p.posRank}` : p.position;
+      return `- ${p.name} — AIOmni ${pr}, overall #${p.rank}, Tier ${p.tier}`;
+    }
+    return `- ${tok} (not on the AIOmni board — likely a pick or deep FA; weigh at your discretion)`;
+  }).join('\n');
+}
+
 export default function TradesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -71,21 +98,31 @@ export default function TradesScreen() {
       // free-text and go straight into the model context).
       const safeGiving  = sanitizePromptInput(giving);
       const safeGetting = sanitizePromptInput(getting);
-      const prompt = `You are AIOmni, expert fantasy football trade analyst.
-Format: ${format.toUpperCase()}
+
+      // Ground the grades in AIOmni's proprietary engine board (format-matched)
+      // instead of the model's own player memory — this is the product's edge.
+      const engineFmt: ScoringFormat = format === 'dynasty' ? 'DYN' : 'PPR';
+      const index = new Map<string, RankedPlayer>();
+      try {
+        const board = await fetchAIOmniFormula(engineFmt);
+        for (const p of board) index.set(normName(p.name), p);
+      } catch { /* fall through: model grades unanchored if the board is down */ }
+      const givingGrounded  = groundSide(safeGiving, index);
+      const gettingGrounded = groundSide(safeGetting, index);
+
+      const system = `You are AIOmni, an expert fantasy football trade analyst. Grade trades using AIOmni's PROPRIETARY player rankings as your primary anchor — they come from a calibrated projection engine, not ADP or market hype. When a player's AIOmni rank conflicts with your own instinct, lead with the AIOmni rank and say so. Weigh positional value, tier gaps, age, injury, depth chart, and schedule.
+Respond with ONLY a valid JSON object — no markdown, no code fences — in this exact shape:
+{"youReceiveGrade": "<letter grade>", "youGiveGrade": "<letter grade>", "verdict": "<accept/decline/consider in one short sentence>", "analysis": "<2-3 sentences citing the AIOmni ranks: who wins and why>"}`;
+
+      const prompt = `Format: ${format === 'dynasty' ? 'DYNASTY — value = age + multi-year production' : 'REDRAFT PPR — value = rest-of-season'}
+AIOmni board used: ${engineFmt}
 
 YOU ARE GIVING UP:
-${safeGiving}
+${givingGrounded}
 
 YOU ARE RECEIVING:
-${safeGetting}
-
-Grade EACH side of the trade on an A+ to F scale based on ${format === 'dynasty' ? 'dynasty value (age, contract, future production)' : 'rest-of-season value for redraft'}.
-Consider: positional value, injury status, depth chart, schedule, ${format === 'dynasty' ? 'age curves and rookie contracts' : 'weekly upside and floor'}.
-
-Respond with ONLY a valid JSON object, no markdown, no code fences. Use this exact shape:
-{"youReceiveGrade": "<letter grade>", "youGiveGrade": "<letter grade>", "verdict": "<accept/decline/consider in one short sentence>", "analysis": "<2-3 sentences explaining the grades, who wins, and why>"}`;
-      const response = await askAI(prompt, 550);
+${gettingGrounded}`;
+      const response = await askAI(prompt, { maxTokens: 600, system });
       console.log('Raw AI response:', response);
       // Strip code fences and any pre/post text before the JSON
       let clean = response.replace(/```json|```/g, '').trim();

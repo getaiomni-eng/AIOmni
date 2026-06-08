@@ -978,6 +978,7 @@ export async function fetchAIOmniFormula(
       trend: 'flat' as const,
       trendVal: 0,
       tier: r.tier ?? assignTier(r.rank ?? (i + 1)),
+      posRank: r.pos_rank ?? undefined,
       method: r.method ?? null,
     }) as any);
   } catch (e) {

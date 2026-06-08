@@ -16,12 +16,12 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Centralized so swaps are one-line. Update prompt cost expectations and
 // the trade-off matrix here, not in callers.
 //   fast  → Haiku 4.5 ($1/$5 per Mtok). Player-card buttons, quick lookups.
-//   smart → Opus 4.7 ($5/$25 per Mtok). AI Coach + Trade Analyzer + draft.
+//   smart → Opus 4.8 ($5/$25 per Mtok). AI Coach + Trade Analyzer + draft.
 //   mid   → Sonnet 4.6 ($3/$15 per Mtok). Reserved for future use.
 export const MODELS = {
   fast:  'claude-haiku-4-5',
   mid:   'claude-sonnet-4-6',
-  smart: 'claude-opus-4-7',
+  smart: 'claude-opus-4-8',
 } as const;
 
 export type ModelTier = keyof typeof MODELS;
@@ -32,6 +32,12 @@ export interface AskAIOptions {
   // If true, skip the NFL data dictionary append. Use for chat-format
   // questions where the dictionary just inflates token count.
   skipDictionary?: boolean;
+  // Stable instructions (persona, rubric, reference knowledge) sent as the
+  // Anthropic `system` field with cache_control. When set, the NFL data
+  // dictionary is folded into the system block (so it's cached too) and
+  // `prompt` becomes the dynamic user turn. Identical static blocks across
+  // calls hit the prompt cache — big cost win for Coach/Trade/draft.
+  system?: string;
 }
 
 export async function askAI(
@@ -59,18 +65,26 @@ export async function askAI(
       'Authorization': `Bearer ${userJwt}`,
     };
 
-    const content = o.skipDictionary
-      ? prompt
-      : prompt + '\n\n' + NFL_DATA_DICTIONARY;
+    // When a `system` block is provided, the dictionary lives there (static →
+    // cacheable) and the prompt is the dynamic user turn. Otherwise (legacy
+    // callers) the dictionary is appended to the user content as before.
+    const payload: Record<string, unknown> = {
+      model,
+      max_tokens: maxTokens,
+      messages: [{
+        role: 'user',
+        content: o.system || o.skipDictionary ? prompt : prompt + '\n\n' + NFL_DATA_DICTIONARY,
+      }],
+    };
+    if (o.system) {
+      const systemText = o.skipDictionary ? o.system : `${o.system}\n\n${NFL_DATA_DICTIONARY}`;
+      payload.system = [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }];
+    }
 
     const res = await fetch(PROXY_URL, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        model,
-        max_tokens: maxTokens,
-        messages: [{ role: 'user', content }],
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
