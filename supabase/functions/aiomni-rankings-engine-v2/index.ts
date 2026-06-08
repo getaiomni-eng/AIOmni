@@ -2937,9 +2937,10 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
         effectiveCastNote = `QB cast +3% (capped, new team)`;
       }
     }
-    // v8.4: a rookie has zero NFL snaps — a QB-cast efficiency boost is
-    // unearned (it was lifting obscure rookie TEs like Endries to TE22).
-    // Neutralize cast for rookies; their youth premium still comes via formatAdj.
+    // v8.4: a rookie has zero NFL snaps — QB-cast efficiency (boost OR penalty)
+    // is unearned and noisy off no data. Neutralize cast for ALL rookies; their
+    // youth premium still comes via formatAdj. (Tried gating to Day-3 only in
+    // v8.5 but that re-applied ARI's cast penalty to Love — net worse.)
     if (isRookie) { effectiveCastMult = 1.0; effectiveCastNote = ''; }
 
     // ── Depth chart multiplier (v2026-05-09, production only) ──
