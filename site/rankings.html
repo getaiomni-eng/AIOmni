@@ -709,7 +709,6 @@ footer { padding: 56px 0 40px; }
 (function(){
   'use strict';
   const GATE='https://khoruzvsprxyocisuhet.supabase.co/functions/v1/rankings-gate';
-  const FALLBACK='https://khoruzvsprxyocisuhet.supabase.co/storage/v1/object/public/public-rankings/rankings.json';
   const td=new TextEncoder();
   const _h=["=URWzUkgKAVMBZS","awZVotlN30lPsJH","QoFZBrlZ0OsjNJ"], _a=["=QvGXG6CwQ3nk/Z","y5lCxgt22MQaxx/","ToppqDyUIQKnNm"];
   const deob=p=>[...p.join('')].reverse().join('');
@@ -802,9 +801,7 @@ footer { padding: 56px 0 40px; }
       const r=await fetch(GATE,{headers:{'x-rk-token':tok}});
       if(!r.ok) throw new Error('gate '+r.status);
       DATA=JSON.parse(await decrypt((await r.json()).d));
-    }catch(e){
-      try{const r=await fetch(FALLBACK+'?t='+Math.floor(Date.now()/3600000));if(r.ok)DATA=await r.json();}catch(_){ }
-    }
+    }catch(e){ /* gate is the only source — no plaintext fallback */ }
     if(!DATA){if(loadEl){loadEl.textContent='Could not load rankings.';}return;}
     if(loadEl) loadEl.style.display='none';
     render();
