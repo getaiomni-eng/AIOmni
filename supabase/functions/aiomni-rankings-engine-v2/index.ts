@@ -519,8 +519,9 @@ function formatPositionAdj(format: Format, position: string, age: number): numbe
         if      (age < 25) ageCurve = 1.15;   // ascending
         else if (age < 27) ageCurve = 1.05;   // peak entering
         else if (age < 29) ageCurve = 0.95;   // peak exiting
-        else if (age < 31) ageCurve = 0.80;   // decline phase
-        else                ageCurve = 0.65;  // cliff
+        else if (age < 30) ageCurve = 0.88;   // v8.3: early decline (29) softened — elite RBs still have 2-3 dynasty years; the 0.95→0.80 one-birthday cliff was burying Saquon
+        else if (age < 31) ageCurve = 0.80;   // decline (30)
+        else                ageCurve = 0.65;  // cliff (31+)
         break;
       case 'WR':
         if      (age < 24) ageCurve = 1.20;   // high ascending
