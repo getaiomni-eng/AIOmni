@@ -29,6 +29,11 @@ const NFLVERSE_ROSTERS = `https://github.com/nflverse/nflverse-data/releases/dow
 const NFLVERSE_ROSTERS_LAST_YEAR = `https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_${CURRENT_SEASON - 1}.csv`;
 // DynastyProcess maintains the cross-platform ID map (sleeper/espn/yahoo → gsis)
 const NFLVERSE_PLAYER_IDS = 'https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv';
+// Canonical draft capital. roster_*.csv carries draft_round/pick only for the
+// CURRENT rookie class, so the daily upsert was nulling it for every prior
+// class (2023-25 = 100% wiped). Pull this and fall back to it so draft data is
+// never lost — keeps the engine's rookie/ML-draftcap signals intact.
+const NFLVERSE_DRAFT_PICKS = 'https://github.com/nflverse/nflverse-data/releases/download/draft_picks/draft_picks.csv';
 
 // ─── CSV PARSER ─────────────────────────────────────────────
 // Minimal RFC-4180 parser (handles quoted fields with embedded commas/newlines)
@@ -131,6 +136,18 @@ serve(async (req) => {
       if (gsis) idMap.set(gsis, row);
     }
 
+    // ── 2b. Draft capital fallback (rosters omit it for non-current classes) ──
+    const draftMap = new Map<string, { round: number | null; pick: number | null; year: number | null }>();
+    try {
+      const draftRows = await fetchCSV(NFLVERSE_DRAFT_PICKS);
+      for (const d of draftRows) {
+        if (d.gsis_id) draftMap.set(d.gsis_id, { round: i(d.round), pick: i(d.pick), year: i(d.season) });
+      }
+      console.log(`Fetched ${draftRows.length} draft-pick records for fallback`);
+    } catch (e) {
+      console.error('draft_picks fetch failed (non-fatal):', e);
+    }
+
     // ── 3. Merge rosters with platform IDs ──
     const players = rosters.map(r => {
       const gsis = r.gsis_id;
@@ -155,9 +172,9 @@ serve(async (req) => {
         years_exp:      i(r.years_exp),
         rookie_year:    i(r.rookie_year),
         college:        s(r.college),
-        draft_year:     i(r.entry_year),
-        draft_round: i(r.draft_round),
-        draft_pick: i(r.draft_pick),
+        draft_year:     i(r.entry_year)  ?? draftMap.get(gsis)?.year  ?? null,
+        draft_round:    i(r.draft_round) ?? draftMap.get(gsis)?.round ?? null,
+        draft_pick:     i(r.draft_pick)  ?? draftMap.get(gsis)?.pick  ?? null,
         draft_team:     s(r.draft_club),
         status:         s(r.status),
         status_desc:    s(r.status_description_abbr),
