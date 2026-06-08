@@ -338,7 +338,10 @@ function draftPickBoostV3(draftRound: number | null, draftPick: number | null, p
   // develop). Bijan, Gibbs, Saquon, McCaffrey all produced as rookies.
   // R1 WRs and QBs often need a year. So RB top-10 picks get a stronger
   // baseline boost. Position-agnostic boost remains for non-RBs.
-  if (!draftRound || draftRound > 7) return 0;
+  // v8.4: undrafted and Day-3 picks now PENALIZE the 7.5 base (was floored at
+  // 0, which let R4-R7/UDFA rookie darts project like real prospects and float
+  // into the thin dynasty TE top 30 — Hibner R4 → TE20, Endries R7 → TE22).
+  if (!draftRound || draftRound > 7) return -0.60;  // UDFA
   const pick = draftPick ?? (draftRound === 1 ? 16 : draftRound * 32 - 16);
   if (position === 'RB') {
     if (pick <= 5)       return 0.45;  // RB top-5 (Bijan/Gibbs-tier impact)
@@ -347,7 +350,9 @@ function draftPickBoostV3(draftRound: number | null, draftPick: number | null, p
     if (pick <= 32)      return 0.18;
     if (draftRound === 2) return 0.08;
     if (draftRound === 3) return 0.04;
-    return 0;
+    if (draftRound === 4) return -0.25;
+    if (draftRound === 5) return -0.40;
+    return -0.50;                       // R6-7
   }
   // Non-RB positions
   if (pick <= 5)       return 0.25;
@@ -356,7 +361,9 @@ function draftPickBoostV3(draftRound: number | null, draftPick: number | null, p
   if (pick <= 32)      return 0.10;
   if (draftRound === 2) return 0.05;
   if (draftRound === 3) return 0.02;
-  return 0;
+  if (draftRound === 4) return -0.30;
+  if (draftRound === 5) return -0.45;
+  return -0.55;                         // R6-7
 }
 
 // Weekly recency PPG per v3 spec: W1-6 1.5x (fast starter), W7-13 1.0x,
@@ -2930,6 +2937,10 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
         effectiveCastNote = `QB cast +3% (capped, new team)`;
       }
     }
+    // v8.4: a rookie has zero NFL snaps — a QB-cast efficiency boost is
+    // unearned (it was lifting obscure rookie TEs like Endries to TE22).
+    // Neutralize cast for rookies; their youth premium still comes via formatAdj.
+    if (isRookie) { effectiveCastMult = 1.0; effectiveCastNote = ''; }
 
     // ── Depth chart multiplier (v2026-05-09, production only) ──
     // Sleeper depth_chart_order indicates current playing role. Softer
