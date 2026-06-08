@@ -3075,7 +3075,12 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     // strongest signal per group instead of compounding overlapping ones.
     //
     // Layer 1: AGE/EXPERIENCE — ageMult × rookieBoost (already separate)
-    let layer1_ageExp = ageMult * (1 + rookieBoost);
+    // v8.3: a rookie's draft capital is ALREADY priced into the baseline
+    // (7.5 × pickBoost). Stacking the age-layer rookieBoost on top double-counted
+    // it and projected Love at 22ppg/RB1. Drop it for rookies (rookieBoost is 0
+    // for everyone else, so this only changes rookies); keep it in the method
+    // string for transparency.
+    let layer1_ageExp = isRookie ? ageMult * (1 + rookieBoost * 0.5) : ageMult * (1 + rookieBoost);
     //
     // Layer 2: ROLE & SHARE — sysCtxMult (depth+share-band) × depthMult
     //   (sysCtxMult already includes the dilution-aware band selection
@@ -3287,7 +3292,11 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     // Players with 2+ seasons are untouched — the engine wins there.
     const priorSeasonCount = [has25, has24, has23, has22, has21].filter(Boolean).length;
     let hybridNote = '';
-    if (isRookie || priorSeasonCount <= 1) {
+    // v8.3: ML hybrid is SOPHOMORE-ONLY (exactly 1 prior season). True rookies
+    // have zero NFL data, so the ML projected them at a flat ~7.5 ppg regardless
+    // of draft capital — tanking every premium rookie (Love RB24, Tate WR53).
+    // Rookies now use the engine's draft-capital-anchored projection instead.
+    if (!isRookie && priorSeasonCount === 1) {
       const oppG = a25 && a25.games > 0
         ? a25.weeks.reduce((s, w) => s + (w.targets || 0) + (w.carries || 0), 0) / a25.games
         : 0;
@@ -3302,7 +3311,7 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
         a25 ? 0 : 1,
       ]);
       if (mlPpg != null && gamesEst.games > 0) {
-        const wMl = (isRookie || priorSeasonCount === 0) ? 0.70 : 0.50;
+        const wMl = 0.50; // sophomores only now — always the balanced blend
         const mlSeasonTotal = mlPpg * gamesEst.games;
         const blended = wMl * mlSeasonTotal + (1 - wMl) * finalSeasonTotal;
         hybridNote = `[hybrid ${(wMl * 100).toFixed(0)}% ML ${mlPpg.toFixed(1)}ppg → ${blended.toFixed(0)} fpts (eng was ${finalSeasonTotal.toFixed(0)})]`;
