@@ -3336,20 +3336,22 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     const _tmInfl = teammateInflation.get(p.gsis_id);
     if (_tmInfl) { finalSeasonTotal *= _tmInfl.mult; tmInflNote = `[${_tmInfl.note}]`; }
 
-    // v8.6: ROOKIE-RB REDRAFT YEAR-1 BUMP. Early-pick rookie RBs produce
-    // immediately (Bijan/Gibbs/Jeanty all hit as rookies) — unlike rookie
-    // pass-catchers, who are year-1 projects and correctly sit low in redraft.
-    // The engine's rookie conservatism was burying a clear lead-back like Love
-    // (RB20) behind aging committee vets. Lift REDRAFT only (dynasty already
-    // credits their youth), scaled by draft capital so top picks get the most.
+    // v8.7: ROOKIE-RB UPSIDE LIFT. Early-pick rookie RBs produce immediately
+    // (Bijan/Gibbs/Jeanty all hit as rookies) — unlike rookie pass-catchers,
+    // year-1 projects that correctly sit low. The lift must be BIGGER in dynasty
+    // (a #3 pick is a long-term asset) than redraft (year-1 uncertainty), so a
+    // rookie RB ranks higher in dynasty than redraft — as he should. v8.6 had
+    // this backwards (redraft-only), landing Love RB8 redraft / RB12 dynasty.
+    // Scaled by draft capital so top picks get the most.
     let rookieRbNote = '';
     const isDynastyFmt = format === 'DYN' || format === 'DYN_HALF' || format === 'DYN_STD' || format === 'DYN_SF';
-    if (isRookie && p.position === 'RB' && !isDynastyFmt) {
+    if (isRookie && p.position === 'RB') {
       const cap = draftPickBoostV3(p.draft_round, p.draft_pick, 'RB'); // 0.45 top-5 … <0 Day-3
-      const rbBoost = 1.0 + Math.max(0, cap) * 0.55;  // top-5 +25%, R1 ~+10%, R3 +2%, Day-3 0%
-      if (rbBoost > 1.0) {
+      if (cap > 0) {
+        const scale = isDynastyFmt ? 0.16 : 0.22; // top-5: dynasty +7%, redraft +10% (dyn base already higher → lands ~RB8 dyn / ~RB14 redraft)
+        const rbBoost = 1.0 + cap * scale;
         finalSeasonTotal *= rbBoost;
-        rookieRbNote = `[rookie-RB redraft year-1 +${((rbBoost - 1) * 100).toFixed(0)}%]`;
+        rookieRbNote = `[rookie-RB ${isDynastyFmt ? 'dynasty' : 'redraft'} +${((rbBoost - 1) * 100).toFixed(0)}%]`;
       }
     }
 
