@@ -16,7 +16,7 @@ import { fetchAllLiveData, formatLiveDataForPrompt } from '../../services/liveDa
 import { getSeasonContext2026, ROOKIE_BOARD_2026_TEXT } from '../../services/seasonContext2026';
 import { FANTASY_FOOTBALL_KNOWLEDGE } from '../../services/fantasyKnowledge';
 import { getCurrentTier } from '../../services/purchases';
-import { getMemories, saveMemory } from '../../services/supabase';
+import { learnFromExchange, getCoachProfile } from '../../services/supabase';
 import { getPlayerContext } from '../../services/playerIntelligence';
 import { PositionPill } from '../components/Atoms';
 import { AIOmniLogo } from '../components/AIOmniLogo';
@@ -53,6 +53,9 @@ type LeagueContext = {
   // v2026-05-27: top-20 available FAs preloaded so the Coach can answer
   // "who should I pick up" without burning a prompt to ask first.
   available?: string[];
+  // v2026-06-09: full-league roster map (every team's players + owner) so the
+  // Coach can answer "who owns X", find trade targets, and judge availability.
+  leagueRosters?: string;
 };
 
 function getPaywallMessage(resetStr: string): string {
@@ -190,7 +193,7 @@ async function loadSleeperContext(playerMap: Record<string, any>): Promise<Leagu
 
       try {
         const isDynKeep = leagueType === 'dynasty' || leagueType === 'keeper';
-        const [rosters, tradedPicks, drafts] = await Promise.all([
+        const [rosters, tradedPicks, drafts, leagueUsers] = await Promise.all([
           fetch(`https://api.sleeper.app/v1/league/${l.league_id}/rosters`).then(r => r.json()),
           // Only fetch pick inventory for dynasty/keeper leagues
           isDynKeep
@@ -203,6 +206,8 @@ async function loadSleeperContext(playerMap: Record<string, any>): Promise<Leagu
           isDynKeep
             ? fetch(`https://api.sleeper.app/v1/league/${l.league_id}/drafts`).then(r => r.json()).catch(() => [])
             : Promise.resolve([]),
+          // All league members → team/manager display names for the full-roster map.
+          fetch(`https://api.sleeper.app/v1/league/${l.league_id}/users`).then(r => r.json()).catch(() => []),
         ]);
         const myRoster    = Array.isArray(rosters) ? rosters.find((r: any) => r.owner_id === user.user_id) : null;
         const wins        = myRoster?.settings?.wins   ?? 0;
@@ -276,12 +281,27 @@ async function loadSleeperContext(playerMap: Record<string, any>): Promise<Leagu
           ownedPicks = seasons.map(s => `${s}: ${picksBySeason[s].sort().join(', ') || 'none'}`).join(' / ');
         }
 
+        // Full-league roster map — every team's players + owner, so the Coach can
+        // answer "who owns X", surface trade targets, and judge availability.
+        const ownerLabel = (ownerId: string) => {
+          const u = Array.isArray(leagueUsers) ? leagueUsers.find((x: any) => x.user_id === ownerId) : null;
+          return u?.metadata?.team_name || u?.display_name || `Team ${ownerId?.slice(-4) ?? ''}`;
+        };
+        const leagueRosters = (Array.isArray(rosters) ? rosters : [])
+          .map((r: any) => {
+            const who = r.owner_id === user.user_id ? 'YOU' : ownerLabel(r.owner_id);
+            const names = (r.players ?? [])
+              .map((id: string) => { const p = playerMap[id]; return p ? `${p.first_name} ${p.last_name}` : null; })
+              .filter(Boolean).join(', ');
+            return `${who}: ${names}`;
+          }).join('\n');
+
         return {
           name: l.name, platform: 'Sleeper', format: fmt,
           record: `${wins}–${losses}`,
           rank: rankIdx >= 0 ? `${rankIdx + 1} of ${rosters.length}` : 'unknown',
           roster: rosterNames, week, season: parseInt(l.season) || 2025,
-          leagueType, rosterSize, taxiSlots, bestBall, ownedPicks,
+          leagueType, rosterSize, taxiSlots, bestBall, ownedPicks, leagueRosters,
         };
       } catch {
         return { name: l.name, platform: 'Sleeper', format: fmt, record: '?', rank: '?', roster: [], week, season: parseInt(l.season) || 2025, leagueType, rosterSize, taxiSlots, bestBall };
@@ -522,14 +542,17 @@ function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueConte
     const avail = l.available && l.available.length > 0
       ? `\nTop available (waiver/FA pool, sample): ${l.available.join(', ')}`
       : '';
+    const allRost = l.leagueRosters
+      ? `\nALL LEAGUE ROSTERS (every team — use this to find who owns a player, spot trade targets, and judge availability; a player NOT listed here is a free agent):\n${l.leagueRosters}`
+      : '';
     return `
 League: ${l.name} (${l.platform} · ${l.format}) ${typeLabel}${bestBall}
 Record: ${l.record} · Rank: ${l.rank} · Season: ${l.season} · Week: ${l.week}${taxi}
-Roster${rosterMeta}: ${rosterStr}${picks}${avail}
+Roster${rosterMeta}: ${rosterStr}${picks}${avail}${allRost}
 `;
   }).join('\n---\n');
   const focusNote  = selectedLeague ? `\n\nThe user has focused on ONE league: ${selectedLeague.name}. All advice should be specific to this league's scoring format and roster.` : '';
-  const memoryBlock = memories ? `\n\nPAST DECISIONS (use for context, don't repeat):\n${memories}` : '';
+  const memoryBlock = memories ? `\n\n═══ MANAGER PROFILE (learned from past conversations — tailor every answer to this) ═══\n${memories}` : '';
   // v2026-05-12k: inject coaching changes, player moves, injury notes, and
   // personnel tendencies. Mirrors what the rankings engine factors in so
   // the Coach's advice stays consistent with the ranked output.
@@ -701,10 +724,11 @@ export default function CoachScreen() {
 
       try {
         const leagueId = all[0]?.name ?? 'general';
-        const mems = await getMemories(leagueId, 10);
-        if (mems.length > 0) {
-          memoriesRef.current = mems.map((m: any) => `[${m.tagged_date}] ${m.content}`).join('\n');
-        }
+        const { profile, state } = await getCoachProfile(leagueId);
+        memoriesRef.current = [
+          profile ? `TENDENCIES (how this manager thinks — tailor every answer to this): ${profile}` : '',
+          state ? `THIS LEAGUE'S SITUATION: ${state}` : '',
+        ].filter(Boolean).join('\n');
       } catch {}
 
       // Extract last names from every league's roster lines so the live-
@@ -848,13 +872,9 @@ export default function CoachScreen() {
       setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: reply }]);
 
       if (['pro','premium','dynasty_elite'].includes(tier) && selectedLeague) {
-        try {
-          await saveMemory({
-            leagueId: selectedLeague.name,
-            platform: selectedLeague.platform,
-            content:  `Q: ${text.slice(0, 100)} | A: ${reply.slice(0, 200)}`,
-          });
-        } catch {}
+        // Fire-and-forget the learning loop — coach-learn extracts + consolidates
+        // a durable profile server-side. Never await; must not block the UI.
+        learnFromExchange(text, reply, selectedLeague.name, selectedLeague.platform).catch(() => {});
       }
     } catch (e: any) {
       const errMsg = e?.message?.includes('prompt_limit_reached')

@@ -132,3 +132,31 @@ export async function getMemories(leagueId: string, limit = 10) {
   if (error) { console.error('getMemories:', error.message); return []; }
   return data ?? [];
 }
+
+// v2026-06-09: Coach learning loop. After each exchange, coach-learn extracts
+// durable signals and MERGES them into a consolidated profile + league state
+// (not raw Q/A). Fire-and-forget — learning is best-effort, never blocks chat.
+export async function learnFromExchange(q: string, a: string, leagueName: string, platform: string): Promise<void> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const jwt = session?.access_token;
+    if (!jwt) return;
+    await fetch(`${SUPABASE_URL}/functions/v1/coach-learn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON, Authorization: `Bearer ${jwt}` },
+      body: JSON.stringify({ q, a, leagueName, platform }),
+    });
+  } catch { /* best-effort */ }
+}
+
+// v2026-06-09: read the consolidated "what the Coach has learned about you"
+// dossier (cross-league tendencies) + this league's situation, for injection.
+export async function getCoachProfile(leagueName: string): Promise<{ profile: string; state: string }> {
+  const userRow = await getUserRow();
+  if (!userRow) return { profile: '', state: '' };
+  const [pRes, sRes] = await Promise.all([
+    supabase.from('memories').select('content').eq('user_id', userRow.id).eq('league_id', '__PROFILE__').order('tagged_date', { ascending: false }).limit(1),
+    supabase.from('memories').select('content').eq('user_id', userRow.id).eq('league_id', `__STATE__:${leagueName}`).order('tagged_date', { ascending: false }).limit(1),
+  ]);
+  return { profile: pRes.data?.[0]?.content ?? '', state: sRes.data?.[0]?.content ?? '' };
+}
