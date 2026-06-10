@@ -6,7 +6,8 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOp
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { askAI, askAIVision } from '../../services/ai';
-import { fetchAIOmniFormula, type RankedPlayer, type ScoringFormat } from '../../services/rankingsData';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchAIOmniFormula, fetchKTCValues, fetchNFLInjuries, fetchSnapCounts, fetchVegasLines, type InjuryInfo, type RankedPlayer, type ScoringFormat } from '../../services/rankingsData';
 import { getCurrentTier } from '../../services/purchases';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
 import { consumePrompt } from '../utils/promptCounter';
@@ -57,19 +58,72 @@ const normName = (n: string) =>
 
 // Split a free-text side ("CeeDee Lamb + 2026 1st") into candidate names and
 // resolve each against the AIOmni board. Matched players carry their
-// proprietary rank/tier so the model grades off OUR engine, not its own memory;
-// unmatched tokens (picks, deep FAs) pass through with a note.
-function groundSide(raw: string, index: Map<string, RankedPlayer>): string {
+// proprietary rank/tier PLUS market value (KTC) and live injury status, so the
+// model grades off OUR engine + real context, not its own memory; unmatched
+// tokens (picks, deep FAs) pass through with a note. Returns the formatted
+// lines and the side's total KTC market value for the fleece-math comparison.
+function groundSide(
+  raw: string,
+  index: Map<string, RankedPlayer>,
+  ktcByName: Map<string, number>,
+  injuryByName: Map<string, string>,
+  vegasByTeam: Map<string, number>,
+  snapByName: Map<string, number>,
+): { lines: string; ktcTotal: number } {
   const tokens = raw.split(/[,\n+&/]|\band\b|\bplus\b/gi).map(s => s.trim()).filter(Boolean);
-  if (!tokens.length) return '(nothing listed)';
-  return tokens.map(tok => {
-    const p = index.get(normName(tok));
+  if (!tokens.length) return { lines: '(nothing listed)', ktcTotal: 0 };
+  let ktcTotal = 0;
+  const lines = tokens.map(tok => {
+    const key = normName(tok);
+    const p = index.get(key);
+    const ktc = ktcByName.get(key);
+    const inj = injuryByName.get(key);
+    if (ktc) ktcTotal += ktc;
+    const bits: string[] = [];
     if (p) {
       const pr = p.posRank ? `${p.position}${p.posRank}` : p.position;
-      return `- ${p.name} — AIOmni ${pr}, overall #${p.rank}, Tier ${p.tier}`;
+      bits.push(`AIOmni ${pr}, overall #${p.rank}, Tier ${p.tier}`);
     }
-    return `- ${tok} (not on the AIOmni board — likely a pick or deep FA; weigh at your discretion)`;
+    if (ktc) bits.push(`market value ${ktc} (KTC)`);
+    const snap = snapByName.get(key);
+    if (snap) bits.push(`${snap}% snap share (latest data — role indicator)`);
+    const implied = p?.team ? vegasByTeam.get(p.team.toUpperCase()) : undefined;
+    if (implied) bits.push(`team implied ~${implied} pts this week (Vegas)`);
+    if (inj) bits.push(`INJURY: ${inj}`);
+    if (!p && !ktc) {
+      return `- ${tok} (not on the AIOmni board — likely a pick or deep FA; weigh at your discretion)`;
+    }
+    return `- ${p?.name ?? tok} — ${bits.join(' · ')}`;
   }).join('\n');
+  return { lines, ktcTotal };
+}
+
+// Lightweight roster-fit context: resolve the user's own Sleeper roster (first
+// league matching the selected format) using the board's sleeperId column —
+// no 5MB players/nfl fetch. Returns ranked-player names only, which is exactly
+// the trade-relevant slice of a roster anyway.
+async function loadMyRosterNames(
+  wantDynasty: boolean,
+  board: RankedPlayer[],
+): Promise<string[]> {
+  try {
+    const username = await AsyncStorage.getItem('sleeper_username');
+    if (!username) return [];
+    const user = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
+    if (!user?.user_id) return [];
+    const state = await (await fetch('https://api.sleeper.app/v1/state/nfl')).json();
+    const season = state?.season ?? String(new Date().getFullYear());
+    const leagues = await (await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/${season}`)).json();
+    if (!Array.isArray(leagues) || !leagues.length) return [];
+    const isDyn = (l: any) => l?.settings?.type === 2 || !!l?.previous_league_id;
+    const league = leagues.find((l: any) => isDyn(l) === wantDynasty) ?? leagues[0];
+    const rosters = await (await fetch(`https://api.sleeper.app/v1/league/${league.league_id}/rosters`)).json();
+    const mine = Array.isArray(rosters) ? rosters.find((r: any) => r.owner_id === user.user_id) : null;
+    if (!mine?.players) return [];
+    const bySleeperId = new Map<string, string>();
+    for (const p of board) if ((p as any).sleeperId) bySleeperId.set((p as any).sleeperId, p.name);
+    return (mine.players as string[]).map(id => bySleeperId.get(id)).filter(Boolean) as string[];
+  } catch { return []; }
 }
 
 export default function TradesScreen() {
@@ -134,32 +188,61 @@ Use on-screen labels like "You give" / "You receive" / "You get" / "They get" to
       const safeGiving  = sanitizePromptInput(giving);
       const safeGetting = sanitizePromptInput(getting);
 
-      // Ground the grades in AIOmni's proprietary engine board (format-matched)
-      // instead of the model's own player memory — this is the product's edge.
+      // Ground the grades in AIOmni's proprietary engine board (format-matched),
+      // KTC market values, and live injury status — not the model's own memory.
       const engineFmt: ScoringFormat = format === 'dynasty' ? 'DYN' : 'PPR';
       const index = new Map<string, RankedPlayer>();
+      const ktcByName = new Map<string, number>();
+      const injuryByName = new Map<string, string>();
+      const vegasByTeam = new Map<string, number>();
+      const snapByName = new Map<string, number>();
+      let myRoster: string[] = [];
       try {
-        const board = await fetchAIOmniFormula(engineFmt);
+        const [board, ktc, injuries, vegas, snaps] = await Promise.all([
+          fetchAIOmniFormula(engineFmt),
+          fetchKTCValues().catch(() => null),
+          fetchNFLInjuries().catch(() => [] as InjuryInfo[]),
+          fetchVegasLines().catch(() => new Map<string, number>()),
+          fetchSnapCounts().catch(() => new Map<string, number>()),
+        ]);
         for (const p of board) index.set(normName(p.name), p);
-      } catch { /* fall through: model grades unanchored if the board is down */ }
-      const givingGrounded  = groundSide(safeGiving, index);
-      const gettingGrounded = groundSide(safeGetting, index);
+        if (ktc) {
+          const table = format === 'dynasty' ? ktc.dynasty : ktc.redraft;
+          for (const [name, v] of Object.entries(table)) {
+            if (v.oneQB > 0) ktcByName.set(normName(name), v.oneQB);
+          }
+        }
+        for (const inj of injuries) {
+          if (inj.name && inj.status) injuryByName.set(normName(inj.name), `${inj.status}${inj.detail ? ` — ${inj.detail}` : ''}`);
+        }
+        for (const [team, implied] of vegas) vegasByTeam.set(team, implied);
+        for (const [name, pct] of snaps) snapByName.set(normName(name), pct);
+        // Roster fit — best effort, Sleeper only for now.
+        myRoster = await loadMyRosterNames(format === 'dynasty', board).catch(() => []);
+      } catch { /* fall through: model grades unanchored if data is down */ }
+      const givingGrounded  = groundSide(safeGiving, index, ktcByName, injuryByName, vegasByTeam, snapByName);
+      const gettingGrounded = groundSide(safeGetting, index, ktcByName, injuryByName, vegasByTeam, snapByName);
+      // Market math: total KTC value on each side → instant fleece detection.
+      const marketMath = (givingGrounded.ktcTotal > 0 && gettingGrounded.ktcTotal > 0)
+        ? `\nMARKET MATH (KTC crowd values): you send ${givingGrounded.ktcTotal} ⇄ you receive ${gettingGrounded.ktcTotal} (${gettingGrounded.ktcTotal >= givingGrounded.ktcTotal ? '+' : ''}${(((gettingGrounded.ktcTotal - givingGrounded.ktcTotal) / givingGrounded.ktcTotal) * 100).toFixed(0)}% for you by market consensus)`
+        : '';
 
       const system = `You are The O — AIOmni's AI fantasy coach grading a trade. You're the sharpest, most confident voice in the room: the user's savvy fantasy buddy who's seen it all, not a corporate robot. You have STRONG opinions and you back them. Be decisive, a little cocky, occasionally funny. Talk like a real fantasy player — "smash accept", "hard pass", "that's a fleece", "buy-low", "ship it", "they're robbing you", "ascending", "RB dead zone". NEVER hedge into mush — pick a side and sell it.
 
-Anchor on AIOmni's PROPRIETARY rankings (a calibrated projection engine — NOT ADP or market hype), and flex that edge when the market's asleep ("our model has him RB8, the crowd hasn't caught up"). Weigh tier gaps, age, injury, role, and schedule. Lead with the AIOmni rank when it disagrees with conventional takes.
+Signals per player (use whichever are present): (1) AIOmni's PROPRIETARY rank — a calibrated projection engine, your primary anchor; (2) KTC market value — what the crowd thinks it's worth; (3) live injury status; (4) snap share — role security; (5) Vegas implied team total — offense environment. The market math tells you who wins by crowd consensus. Your edge is the DISAGREEMENTS: when AIOmni likes a player more than the market, that's a buy-low to pounce on; when the market overprices someone our engine is out on, say so ("the crowd's still paying for last year"). Injuries change everything — flag them. If the user's roster is provided, factor FIT: a trade that wins on value but doubles up where they're stacked (or guts their thinnest spot) deserves a harder look. Lead with the AIOmni rank when signals conflict.
 
 Respond with ONLY a valid JSON object — no markdown, no code fences:
-{"youReceiveGrade":"<letter>","youGiveGrade":"<letter>","verdict":"<your call in ONE punchy line with attitude — e.g. 'Smash accept — this is a straight-up fleece' or 'Hard pass, they're robbing you blind'>","analysis":"<2-3 sentences with conviction and personality: who wins, WHY (cite the AIOmni ranks), and exactly what to do>"}`;
+{"youReceiveGrade":"<letter>","youGiveGrade":"<letter>","verdict":"<your call in ONE punchy line with attitude — e.g. 'Smash accept — this is a straight-up fleece' or 'Hard pass, they're robbing you blind'>","analysis":"<2-3 sentences with conviction and personality: who wins, WHY (cite AIOmni ranks + market values), and exactly what to do>"}`;
 
       const prompt = `Format: ${format === 'dynasty' ? 'DYNASTY — value = age + multi-year production' : 'REDRAFT PPR — value = rest-of-season'}
 AIOmni board used: ${engineFmt}
 
 YOU ARE GIVING UP:
-${givingGrounded}
+${givingGrounded.lines}
 
 YOU ARE RECEIVING:
-${gettingGrounded}`;
+${gettingGrounded.lines}
+${marketMath}${myRoster.length ? `\n\nYOUR CURRENT ROSTER (ranked players — judge positional fit):\n${myRoster.join(', ')}` : ''}`;
       const response = await askAI(prompt, { maxTokens: 600, system });
       console.log('Raw AI response:', response);
       // Strip code fences and any pre/post text before the JSON

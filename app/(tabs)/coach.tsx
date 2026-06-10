@@ -17,6 +17,7 @@ import { getSeasonContext2026, ROOKIE_BOARD_2026_TEXT } from '../../services/sea
 import { FANTASY_FOOTBALL_KNOWLEDGE } from '../../services/fantasyKnowledge';
 import { getCurrentTier } from '../../services/purchases';
 import { learnFromExchange, getCoachProfile } from '../../services/supabase';
+import { fetchSleeperTransactions } from '../../services/newsFeed';
 import { getPlayerContext } from '../../services/playerIntelligence';
 import { PositionPill } from '../components/Atoms';
 import { AIOmniLogo } from '../components/AIOmniLogo';
@@ -746,6 +747,17 @@ export default function CoachScreen() {
       }
 
       liveDataRef.current     = formatLiveDataForPrompt(liveData, rosterLastNames);
+
+      // v2026-06-10: recent league transactions (Sleeper) — who's buying,
+      // selling, and churning waivers. Lets the Coach reference actual league
+      // activity ("the 2-seed just dropped his RB3 — go get him").
+      try {
+        const txns = await fetchSleeperTransactions(12);
+        if (txns.length) {
+          liveDataRef.current += `\n\nRECENT LEAGUE TRANSACTIONS (your leagues — adds/drops/trades; use to spot trends and targets):\n${txns.map(t => `- [${t.age}] ${t.headline}`).join('\n')}`;
+        }
+      } catch { /* best-effort */ }
+
       systemPromptRef.current = buildSystemPrompt(all, null, memoriesRef.current) + liveDataRef.current;
       setAllLeagues(all);
       setContextReady(true);

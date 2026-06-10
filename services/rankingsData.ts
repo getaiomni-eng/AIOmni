@@ -511,9 +511,9 @@ export async function fetchNFLDotComRankings(
 
 // ─── NFL INJURIES ───────────────────────────────────────────
 
-interface InjuryInfo { name: string; status: string; detail: string; }
+export interface InjuryInfo { name: string; status: string; detail: string; }
 
-async function fetchNFLInjuries(): Promise<InjuryInfo[]> {
+export async function fetchNFLInjuries(): Promise<InjuryInfo[]> {
   try {
     const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries');
     if (!res.ok) return [];
@@ -536,7 +536,7 @@ async function fetchNFLInjuries(): Promise<InjuryInfo[]> {
 
 // ─── VEGAS LINES ────────────────────────────────────────────
 
-async function fetchVegasLines(): Promise<Map<string, number>> {
+export async function fetchVegasLines(): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   try {
     const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard');
@@ -563,7 +563,7 @@ async function fetchVegasLines(): Promise<Map<string, number>> {
 
 // ─── SNAP COUNTS (nflverse) ─────────────────────────────────
 
-async function fetchSnapCounts(seasonOverride?: number): Promise<Map<string, number>> {
+export async function fetchSnapCounts(seasonOverride?: number): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   try {
     const season = seasonOverride ?? await getCurrentStatsSeason();
@@ -917,6 +917,29 @@ export async function fetchBlendedConsensus(
 
 const PROPRIETARY_RANKINGS_URL =
   'https://khoruzvsprxyocisuhet.supabase.co/rest/v1/nfl_proprietary_rankings_v2';
+
+// ─── KTC MARKET VALUES ──────────────────────────────────────
+// Crowd-sourced trade values from KeepTradeCut via our server-scraped cache
+// (supabase/functions/ktc-values — 12h TTL). The Trade Analyzer uses these as
+// the MARKET anchor next to the proprietary AIOmni rank, so the model can call
+// out where our engine disagrees with the crowd.
+export interface KTCValues {
+  generated: string;
+  dynasty: Record<string, { oneQB: number; sf: number; pos: string }>;
+  redraft: Record<string, { oneQB: number; sf: number; pos: string }>;
+}
+
+export async function fetchKTCValues(): Promise<KTCValues | null> {
+  try {
+    const res = await fetch('https://khoruzvsprxyocisuhet.supabase.co/functions/v1/ktc-values', {
+      headers: { apikey: PHASE2_ANON, Authorization: `Bearer ${PHASE2_ANON}` },
+    });
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (!d?.dynasty || !d?.redraft) return null;
+    return d as KTCValues;
+  } catch { return null; }
+}
 
 export async function fetchAIOmniFormula(
   format: ScoringFormat = 'PPR',
