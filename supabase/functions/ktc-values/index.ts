@@ -19,17 +19,18 @@ const CORS = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
-function parsePage(html: string): Record<string, { oneQB: number; sf: number; pos: string }> {
+function parsePage(html: string): Record<string, { oneQB: number; sf: number; pos: string; team: string }> {
   const m = html.match(/var playersArray\s*=\s*(\[.*?\]);/s);
   if (!m) throw new Error('playersArray not found');
   const arr = JSON.parse(m[1]);
-  const out: Record<string, { oneQB: number; sf: number; pos: string }> = {};
+  const out: Record<string, { oneQB: number; sf: number; pos: string; team: string }> = {};
   for (const p of arr) {
     if (!p?.playerName) continue;
     out[p.playerName] = {
       oneQB: p.oneQBValues?.value ?? 0,
       sf: p.superflexValues?.value ?? 0,
       pos: p.position ?? '',
+      team: p.team ?? '',
     };
   }
   return out;
@@ -39,9 +40,10 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   try {
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const forceRefresh = new URL(req.url).searchParams.get('refresh') === '1';
 
-    // Serve cache if fresh
-    try {
+    // Serve cache if fresh (unless force-refresh)
+    if (!forceRefresh) try {
       const { data: cached } = await sb.storage.from('public-rankings').download(CACHE_PATH);
       if (cached) {
         const parsed = JSON.parse(await cached.text());

@@ -925,8 +925,8 @@ const PROPRIETARY_RANKINGS_URL =
 // out where our engine disagrees with the crowd.
 export interface KTCValues {
   generated: string;
-  dynasty: Record<string, { oneQB: number; sf: number; pos: string }>;
-  redraft: Record<string, { oneQB: number; sf: number; pos: string }>;
+  dynasty: Record<string, { oneQB: number; sf: number; pos: string; team: string }>;
+  redraft: Record<string, { oneQB: number; sf: number; pos: string; team: string }>;
 }
 
 export async function fetchKTCValues(): Promise<KTCValues | null> {

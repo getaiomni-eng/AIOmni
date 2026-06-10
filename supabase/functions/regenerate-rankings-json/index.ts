@@ -59,19 +59,44 @@ serve(async (req) => {
       }
     }
 
-    // Preserve pulse data by reading current uploaded JSON (if any) and
-    // keeping its pulse block.
+    // PULSE = live market consensus, sourced from KeepTradeCut trade values
+    // (the ktc-values function, self-refreshing 12h cache). KTC has no scoring
+    // variants, so PPR/HALF/STD all map to its redraft 1QB column; SF/dynasty
+    // map accordingly. Builds top-25 per position by value, with positional +
+    // overall ranks. Previously the site's Pulse tab was empty — regen only
+    // ever PRESERVED a pulse block it never created.
     let pulse: any = undefined;
     try {
-      const { data: existing } = await supabase.storage
-        .from('public-rankings')
-        .download('rankings.json');
-      if (existing) {
-        const parsed = JSON.parse(await existing.text());
-        pulse = parsed.pulse;
+      const ktcRes = await fetch(`${SUPABASE_URL}/functions/v1/ktc-values`, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const ktc = await ktcRes.json();
+      if (ktc?.dynasty && ktc?.redraft) {
+        const PULSE_MAP: Record<string, ['dynasty' | 'redraft', 'oneQB' | 'sf']> = {
+          PPR: ['redraft', 'oneQB'], HALF: ['redraft', 'oneQB'], STD: ['redraft', 'oneQB'],
+          SF: ['redraft', 'sf'], DYN_1QB: ['dynasty', 'oneQB'], DYN_SF: ['dynasty', 'sf'],
+        };
+        pulse = {};
+        for (const [fmt, [season, valKey]] of Object.entries(PULSE_MAP)) {
+          const table = ktc[season] as Record<string, { oneQB: number; sf: number; pos: string; team: string }>;
+          const all = Object.entries(table)
+            .map(([n, v]) => ({ n, t: v.team, pos: v.pos, val: v[valKey] }))
+            .filter(p => p.val > 0 && POSITIONS.includes(p.pos as any))
+            .sort((a, b) => b.val - a.val);
+          all.forEach((p, i) => ((p as any).overall = i + 1));
+          const byPos: Record<string, any[]> = { QB: [], RB: [], WR: [], TE: [] };
+          for (const p of all) byPos[p.pos].push(p);
+          pulse[fmt] = {};
+          for (const pos of POSITIONS) {
+            pulse[fmt][pos] = byPos[pos].slice(0, TOP_N).map((p, i) => ({
+              pr: i + 1, or: (p as any).overall, n: p.n, t: p.t || '—',
+              tier: Math.min(5, Math.ceil((i + 1) / 5)), sc: p.val,
+            }));
+          }
+        }
       }
     } catch (e) {
-      // first run — no existing file; that's fine, pulse stays undefined
+      console.error('pulse build (KTC) failed, leaving pulse empty:', e);
     }
 
     const payload: Record<string, any> = {
