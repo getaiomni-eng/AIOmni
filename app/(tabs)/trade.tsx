@@ -4,7 +4,8 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { askAI } from '../../services/ai';
+import * as ImagePicker from 'expo-image-picker';
+import { askAI, askAIVision } from '../../services/ai';
 import { fetchAIOmniFormula, type RankedPlayer, type ScoringFormat } from '../../services/rankingsData';
 import { getCurrentTier } from '../../services/purchases';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
@@ -78,10 +79,44 @@ export default function TradesScreen() {
   const [giving, setGiving] = useState('');
   const [getting, setGetting] = useState('');
   const [loading, setLoading] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [youReceiveGrade, setYouReceiveGrade] = useState<Grade>('B+');
   const [youGiveGrade, setYouGiveGrade] = useState<Grade>('C+');
   const [verdict, setVerdict] = useState('');
   const [analysis, setAnalysis] = useState('');
+
+  // v2026-06-10: read a trade-proposal screenshot → auto-fill both sides; the
+  // normal engine-grounded grader then runs on the extracted players.
+  const extractFromScreenshot = async () => {
+    if (extracting || loading) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { setVerdict('Photo access is needed to read a screenshot.'); return; }
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6, base64: true });
+    if (res.canceled || !res.assets?.[0]?.base64) return;
+    const asset = res.assets[0];
+    setExtracting(true);
+    setVerdict(''); setAnalysis('');
+    try {
+      const out = await askAIVision(
+        asset.base64!,
+        asset.mimeType ?? 'image/jpeg',
+        `This is a screenshot of a fantasy football trade proposal. Read both sides and return ONLY this JSON, nothing else:
+{"giving":["players the app user SENDS AWAY"],"getting":["players the user RECEIVES"]}
+Use on-screen labels like "You give" / "You receive" / "You get" / "They get" to decide which side is which. Include draft picks as strings (e.g. "2026 1st"). Full player names only.`,
+        { tier: 'fast', maxTokens: 400 },
+      );
+      const clean = out.slice(out.indexOf('{'), out.lastIndexOf('}') + 1);
+      const parsed = JSON.parse(clean);
+      const g = Array.isArray(parsed.giving) ? parsed.giving.join(', ') : '';
+      const r = Array.isArray(parsed.getting) ? parsed.getting.join(', ') : '';
+      setGiving(g); setGetting(r);
+      if (!g && !r) setVerdict("Couldn't read players from that image — type them instead.");
+    } catch {
+      setVerdict("Couldn't read that screenshot — type the players instead.");
+    } finally {
+      setExtracting(false);
+    }
+  };
 
   const analyzeTrade = async () => {
     // Charge a prompt up front; if over cap, route to paywall and bail.
@@ -190,6 +225,17 @@ ${gettingGrounded}`;
             </TouchableOpacity>
           ))}
         </View>
+
+        <TouchableOpacity
+          style={styles.uploadBtn}
+          onPress={extractFromScreenshot}
+          disabled={extracting || loading}
+          activeOpacity={0.85}
+        >
+          {extracting
+            ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator color={C.gold} size="small" /><Text style={styles.uploadTxt}>Reading screenshot…</Text></View>
+            : <Text style={styles.uploadTxt}>📷  Upload trade screenshot</Text>}
+        </TouchableOpacity>
 
         <View style={styles.inputCard}>
           <Text style={styles.fieldLbl}>YOU ARE GIVING</Text>
@@ -343,6 +389,23 @@ const styles = StyleSheet.create({
   },
   toggleTxtOn: { fontFamily: 'Audiowide_400Regular',
     color: '#f0f4f5',
+  },
+  uploadBtn: {
+    backgroundColor: '#12252e',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: C.gold,
+    borderStyle: 'dashed',
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  uploadTxt: {
+    color: C.gold,
+    fontFamily: F.mono,
+    fontSize: SZ.sm,
+    letterSpacing: 0.5,
   },
   inputCard: {
     backgroundColor: '#12252e',

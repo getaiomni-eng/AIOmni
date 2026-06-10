@@ -24,6 +24,12 @@
       "expo-router",
       "expo-dev-client",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "AIOmni uses your photos so you can upload trade-proposal screenshots for instant analysis."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",

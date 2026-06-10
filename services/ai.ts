@@ -108,3 +108,55 @@ export async function askAI(
     throw e;
   }
 }
+
+// v2026-06-10: vision call for reading screenshots (trade proposals, etc.).
+// Sends a base64 image + a text instruction as Anthropic content blocks through
+// the same authenticated proxy (it forwards the body verbatim). Defaults to the
+// `fast` (Haiku) tier — cheap and reads on-screen text fine.
+export async function askAIVision(
+  imageBase64: string,
+  mediaType: string,
+  prompt: string,
+  opts: AskAIOptions = {},
+): Promise<string> {
+  const tier = opts.tier ?? 'fast';
+  const maxTokens = opts.maxTokens ?? 512;
+  const model = MODELS[tier];
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userJwt = session?.access_token;
+    if (!userJwt) throw new Error('not_authenticated');
+    const res = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'apikey':        SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${userJwt}`,
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+            { type: 'text', text: prompt },
+          ],
+        }],
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error(`askAIVision HTTP ${res.status} (${tier}/${model}):`, errBody);
+      if (res.status === 429) throw new Error('prompt_limit_reached');
+      throw new Error(`AI vision request failed (${res.status})`);
+    }
+    const data = await res.json();
+    if (data?.content?.[0]?.text) return data.content[0].text;
+    if (data?.error) throw new Error(data.error.message || data.error);
+    return '';
+  } catch (e: any) {
+    console.error('askAIVision error:', e.message);
+    throw e;
+  }
+}
