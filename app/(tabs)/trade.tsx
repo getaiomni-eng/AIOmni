@@ -62,6 +62,16 @@ const normName = (n: string) =>
 // model grades off OUR engine + real context, not its own memory; unmatched
 // tokens (picks, deep FAs) pass through with a note. Returns the formatted
 // lines and the side's total KTC market value for the fleece-math comparison.
+const ROUND_WORD: Record<string, number> = { first: 1, second: 2, third: 3, fourth: 4, '1st': 1, '2nd': 2, '3rd': 3, '4th': 4 };
+// Detect a draft pick token ("2027 1st", "2026 2nd Rd", "2027 first") and
+// return its "<year> <round>" key, or null if it's not a pick.
+function pickKey(tok: string): string | null {
+  const m = tok.match(/(20\d\d)\D*(1st|2nd|3rd|4th|first|second|third|fourth)/i);
+  if (!m) return null;
+  const round = ROUND_WORD[m[2].toLowerCase()];
+  return round ? `${m[1]} ${round}` : null;
+}
+
 function groundSide(
   raw: string,
   index: Map<string, RankedPlayer>,
@@ -69,11 +79,20 @@ function groundSide(
   injuryByName: Map<string, string>,
   vegasByTeam: Map<string, number>,
   snapByName: Map<string, number>,
+  pickValues: Map<string, number>,
 ): { lines: string; ktcTotal: number } {
   const tokens = raw.split(/[,\n+&/]|\band\b|\bplus\b/gi).map(s => s.trim()).filter(Boolean);
   if (!tokens.length) return { lines: '(nothing listed)', ktcTotal: 0 };
   let ktcTotal = 0;
   const lines = tokens.map(tok => {
+    // Draft picks first — they carry their own KTC value, not a player rank.
+    const pk = pickKey(tok);
+    if (pk) {
+      const [yr, rd] = pk.split(' ');
+      const pv = pickValues.get(pk);
+      if (pv) { ktcTotal += pv; return `- ${yr} Round ${rd} pick — market value ${pv} (KTC); a dynasty asset, weigh by your contention window`; }
+      return `- ${yr} Round ${rd} pick (dynasty draft asset — value scales with your timeline)`;
+    }
     const key = normName(tok);
     const p = index.get(key);
     const ktc = ktcByName.get(key);
@@ -154,9 +173,12 @@ export default function TradesScreen() {
       const out = await askAIVision(
         asset.base64!,
         asset.mimeType ?? 'image/jpeg',
-        `This is a screenshot of a fantasy football trade proposal. Read both sides and return ONLY this JSON, nothing else:
-{"giving":["players the app user SENDS AWAY"],"getting":["players the user RECEIVES"]}
-Use on-screen labels like "You give" / "You receive" / "You get" / "They get" to decide which side is which. Include draft picks as strings (e.g. "2026 1st"). Full player names only.`,
+        `This is a screenshot of a fantasy football trade proposal. Read BOTH sides exactly and return ONLY this JSON, nothing else:
+{"giving":[everything the app's user SENDS AWAY],"getting":[everything the user RECEIVES]}
+Each array item is a string. Capture EVERY asset on each side — do NOT skip anything:
+- Players → full name, e.g. "Brian Thomas Jr.", "Nico Collins"
+- Draft picks → keep year + round, e.g. "2027 1st", "2026 2nd Rd". DRAFT PICKS ARE CRITICAL — never omit them, even if shown in small text or with "via [name]".
+Decide which side is the user's by on-screen labels ("You give"/"You receive"/"You get"/"They get"/"Sends"/"Receives"). If a side shows "Receives", those are the items the user GETS.`,
         { tier: 'fast', maxTokens: 400 },
       );
       const clean = out.slice(out.indexOf('{'), out.lastIndexOf('}') + 1);
@@ -196,6 +218,7 @@ Use on-screen labels like "You give" / "You receive" / "You get" / "They get" to
       const injuryByName = new Map<string, string>();
       const vegasByTeam = new Map<string, number>();
       const snapByName = new Map<string, number>();
+      const pickValues = new Map<string, number>();
       let myRoster: string[] = [];
       try {
         const [board, ktc, injuries, vegas, snaps] = await Promise.all([
@@ -208,8 +231,23 @@ Use on-screen labels like "You give" / "You receive" / "You get" / "They get" to
         for (const p of board) index.set(normName(p.name), p);
         if (ktc) {
           const table = format === 'dynasty' ? ktc.dynasty : ktc.redraft;
+          // Pick values average the early/mid/late tiers for each year+round,
+          // since a traded pick rarely specifies its slot.
+          const pickBuckets = new Map<string, number[]>();
           for (const [name, v] of Object.entries(table)) {
+            if (v.pos === 'RDP') {
+              const m = name.match(/(20\d\d)\D*(1st|2nd|3rd|4th)/i);
+              const rd = m ? ROUND_WORD[m[2].toLowerCase()] : 0;
+              if (m && rd && v.oneQB > 0) {
+                const k = `${m[1]} ${rd}`;
+                (pickBuckets.get(k) ?? pickBuckets.set(k, []).get(k)!).push(v.oneQB);
+              }
+              continue;
+            }
             if (v.oneQB > 0) ktcByName.set(normName(name), v.oneQB);
+          }
+          for (const [k, vals] of pickBuckets) {
+            pickValues.set(k, Math.round(vals.reduce((s, x) => s + x, 0) / vals.length));
           }
         }
         for (const inj of injuries) {
@@ -220,8 +258,8 @@ Use on-screen labels like "You give" / "You receive" / "You get" / "They get" to
         // Roster fit — best effort, Sleeper only for now.
         myRoster = await loadMyRosterNames(format === 'dynasty', board).catch(() => []);
       } catch { /* fall through: model grades unanchored if data is down */ }
-      const givingGrounded  = groundSide(safeGiving, index, ktcByName, injuryByName, vegasByTeam, snapByName);
-      const gettingGrounded = groundSide(safeGetting, index, ktcByName, injuryByName, vegasByTeam, snapByName);
+      const givingGrounded  = groundSide(safeGiving, index, ktcByName, injuryByName, vegasByTeam, snapByName, pickValues);
+      const gettingGrounded = groundSide(safeGetting, index, ktcByName, injuryByName, vegasByTeam, snapByName, pickValues);
       // Market math: total KTC value on each side → instant fleece detection.
       const marketMath = (givingGrounded.ktcTotal > 0 && gettingGrounded.ktcTotal > 0)
         ? `\nMARKET MATH (KTC crowd values): you send ${givingGrounded.ktcTotal} ⇄ you receive ${gettingGrounded.ktcTotal} (${gettingGrounded.ktcTotal >= givingGrounded.ktcTotal ? '+' : ''}${(((gettingGrounded.ktcTotal - givingGrounded.ktcTotal) / givingGrounded.ktcTotal) * 100).toFixed(0)}% for you by market consensus)`
