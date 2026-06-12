@@ -40,7 +40,12 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   try {
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
-    const forceRefresh = new URL(req.url).searchParams.get('refresh') === '1';
+    const u = new URL(req.url);
+    // Force-refresh re-scrapes KTC (hammers them) — gate it behind the shared
+    // secret so the public can't trigger it. The 12h auto-refresh still works
+    // for everyone via the normal cache path.
+    const forceRefresh = u.searchParams.get('refresh') === '1'
+      && u.searchParams.get('k') === Deno.env.get('RANKINGS_GATE_HMAC');
 
     // Serve cache if fresh (unless force-refresh)
     if (!forceRefresh) try {

@@ -945,8 +945,12 @@ export async function fetchAIOmniFormula(
   format: ScoringFormat = 'PPR',
 ): Promise<RankedPlayer[]> {
   try {
-    // Step 1: Pull rankings from nfl_proprietary_rankings
-    const url = `${PROPRIETARY_RANKINGS_URL}?format=eq.${format}&select=rank,gsis_id,name,position,team,score,tier,pos_rank,method&order=rank`;
+    // Step 1: Pull rankings from nfl_proprietary_rankings.
+    // SECURITY: `method` (the engine's internal reasoning / secret sauce) is
+    // deliberately NOT requested — it's never displayed in-app and is pure IP.
+    // Removing it here is the prerequisite for revoking the column from anon at
+    // the DB level (see the security migration). Do not re-add it client-side.
+    const url = `${PROPRIETARY_RANKINGS_URL}?format=eq.${format}&select=rank,gsis_id,name,position,team,score,tier,pos_rank&order=rank`;
     const res = await fetch(url, {
       headers: {
         'apikey': PHASE2_ANON,
