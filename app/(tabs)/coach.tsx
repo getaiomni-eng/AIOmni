@@ -699,6 +699,10 @@ export default function CoachScreen() {
   const liveDataRef     = useRef<string>('');
   const memoriesRef     = useRef<string>('');
   const scrollRef       = useRef<ScrollView>(null);
+  // Name-only (position-agnostic) set of every player in Sleeper's NFL feed,
+  // used to validate vision-extracted draft picks — a "drafted" name absent
+  // from the feed is almost certainly a misread we shouldn't act on.
+  const playerNameSetRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
@@ -713,6 +717,16 @@ export default function CoachScreen() {
       // even Yahoo/ESPN/FF/MFL rosters get a uniform format.
       const playerMap = await loadSleeperPlayerMap();
       const nameIndex = buildSleeperNameIndex(playerMap);
+
+      // Build the canonical name set once for draft-board screenshot validation.
+      const nameSet = new Set<string>();
+      for (const p of Object.values(playerMap)) {
+        const pp = p as any;
+        if (!pp || typeof pp !== 'object' || !pp.position) continue;
+        const full = pp.full_name || `${pp.first_name ?? ''} ${pp.last_name ?? ''}`.trim();
+        if (full) nameSet.add(normalizeName(full));
+      }
+      playerNameSetRef.current = nameSet;
 
       const [sleeperLeagues, espnLeagues, yahooLeagues, ffLeagues, mflLeagues, liveData] = await Promise.all([
         loadSleeperContext(playerMap),
@@ -878,10 +892,33 @@ Capture rookies and veterans exactly.`,
         setMessages(prev => [...prev, { role: 'ai', text: "Couldn't read picks off that image — try a clearer shot of the draft board, or just tell me who's gone." }]);
         return;
       }
+      // Validate the vision read against Sleeper's canonical NFL feed. A
+      // fast-tier vision model can confidently misread a blurry board and
+      // invent players; handing those to the recommender makes it "draft
+      // around" people who were never picked. Names absent from the feed are
+      // flagged for the model (not silently dropped — a real player we failed
+      // to match still shouldn't be recommended as available), and a read that
+      // matches NOTHING is rejected outright as garbled/non-draft input.
+      const nameSet = playerNameSetRef.current;
+      const unverified: string[] = [];
+      if (nameSet.size) {
+        let verified = 0;
+        for (const entry of drafted) {
+          const nm = entry.split('(')[0].trim();
+          if (!nm) continue;
+          if (nameSet.has(normalizeName(nm))) verified++;
+          else unverified.push(nm);
+        }
+        if (verified === 0) {
+          setMessages(prev => [...prev, { role: 'ai', text: "I read some text off that image but couldn't match any of it to real NFL players — it may be blurry or not a draft board. Try a clearer screenshot, or just tell me who's already gone." }]);
+          return;
+        }
+      }
       const typed = input.trim();
       const draftMsg = [
         `[Live draft board I just read from a screenshot]`,
         `Already drafted (${drafted.length}): ${drafted.join('; ')}.`,
+        unverified.length ? `⚠ I could NOT verify these names against the player database, so I may have misread them — treat as uncertain and do NOT recommend them: ${unverified.join(', ')}.` : '',
         parsed.onClock ? `On the clock: ${parsed.onClock}.` : '',
         parsed.format ? `Format shown: ${parsed.format}.` : '',
         typed
