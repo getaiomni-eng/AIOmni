@@ -157,6 +157,10 @@ export default function TradesScreen() {
   const [youGiveGrade, setYouGiveGrade] = useState<Grade>('C+');
   const [verdict, setVerdict] = useState('');
   const [analysis, setAnalysis] = useState('');
+  // True when the proprietary engine board failed to load and the grade is
+  // running on market values + model knowledge alone — surfaced to the user
+  // so an ungrounded grade isn't mistaken for an engine-backed one.
+  const [degraded, setDegraded] = useState(false);
 
   // v2026-06-10: read a trade-proposal screenshot → auto-fill both sides; the
   // normal engine-grounded grader then runs on the extracted players.
@@ -258,6 +262,12 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
         // Roster fit — best effort, Sleeper only for now.
         myRoster = await loadMyRosterNames(format === 'dynasty', board).catch(() => []);
       } catch { /* fall through: model grades unanchored if data is down */ }
+      // If the proprietary board never loaded, every player fell through as
+      // "not on the AIOmni board" and the grade is leaning on KTC market value
+      // + model knowledge, not our calibrated projections. Flag it both to the
+      // user (banner) and to the model (so it grades more cautiously).
+      const engineGrounded = index.size > 0;
+      setDegraded(!engineGrounded);
       const givingGrounded  = groundSide(safeGiving, index, ktcByName, injuryByName, vegasByTeam, snapByName, pickValues);
       const gettingGrounded = groundSide(safeGetting, index, ktcByName, injuryByName, vegasByTeam, snapByName, pickValues);
       // Market math: total KTC value on each side → instant fleece detection.
@@ -280,7 +290,7 @@ ${givingGrounded.lines}
 
 YOU ARE RECEIVING:
 ${gettingGrounded.lines}
-${marketMath}${myRoster.length ? `\n\nYOUR CURRENT ROSTER (ranked players — judge positional fit):\n${myRoster.join(', ')}` : ''}`;
+${marketMath}${myRoster.length ? `\n\nYOUR CURRENT ROSTER (ranked players — judge positional fit):\n${myRoster.join(', ')}` : ''}${engineGrounded ? '' : `\n\n⚠ HEADS UP: AIOmni's proprietary ranking engine is temporarily unavailable, so you're grading on KTC market values + general knowledge — NOT our calibrated projections. Stay decisive, but don't cite precise AIOmni ranks you don't have, and lean on market value + clear situational reads.`}`;
       const response = await askAI(prompt, { maxTokens: 600, system });
       console.log('Raw AI response:', response);
       // Strip code fences and any pre/post text before the JSON
@@ -315,6 +325,7 @@ ${marketMath}${myRoster.length ? `\n\nYOUR CURRENT ROSTER (ranked players — ju
     setLoading(true);
     setVerdict('');
     setAnalysis('');
+    setDegraded(false);
     await analyzeTrade();
     setLoading(false);
   };
@@ -427,6 +438,13 @@ ${marketMath}${myRoster.length ? `\n\nYOUR CURRENT ROSTER (ranked players — ju
         {verdict && !loading && (
           <View style={styles.resultCard}>
             <View style={styles.resultCardShine} />
+            {degraded && (
+              <View style={styles.degradedBanner}>
+                <Text style={styles.degradedTxt}>
+                  ⚠  AIOmni engine unavailable — graded on market values + general knowledge, not our proprietary rankings. Treat as a rougher estimate.
+                </Text>
+              </View>
+            )}
             <View style={styles.gradeRow}>
               <View style={[styles.gradeBox, { flex: 1 }]}> 
                 <Text style={styles.gradeLbl}>YOU RECEIVE</Text>
@@ -635,6 +653,20 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: '#12252e',
     borderRadius: 2,
+  },
+  degradedBanner: {
+    backgroundColor: 'rgba(255,184,0,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,184,0,0.35)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  degradedTxt: {
+    color: '#ffb800',
+    fontFamily: F.mono,
+    fontSize: SZ.xs,
+    lineHeight: 18,
   },
   gradeRow: {
     flexDirection: 'row',

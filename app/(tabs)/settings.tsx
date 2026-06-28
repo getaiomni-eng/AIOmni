@@ -228,7 +228,7 @@ export default function SettingsScreen() {
           }}>
             <View style={[s.dot, { backgroundColor: '#00FFF9' }]} />
             <Text style={s.rowLabel}>Sleeper</Text>
-            <Text style={[s.rowValue, { color: username ? palette.green : palette.amber }]}>{username ? '@' + username : 'Connect →'}</Text>
+            <Text style={[s.rowValue, { color: username ? palette.green : palette.amber }]}>{username ? 'Connected' : 'Connect →'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.row} onPress={espnLinked ? handleDisconnectESPN : () => router.push('/espn-login' as any)}>
             <View style={[s.dot, { backgroundColor: '#e52534' }]} />

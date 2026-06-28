@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -9,7 +10,7 @@ import {
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { askAI } from '../../services/ai';
+import { askAI, askAIVision } from '../../services/ai';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../services/espn';
 import { fetchAllLiveData, formatLiveDataForPrompt } from '../../services/liveData';
@@ -685,6 +686,7 @@ export default function CoachScreen() {
   const [messages,       setMessages]       = useState<Message[]>([]);
   const [input,          setInput]          = useState('');
   const [loading,        setLoading]        = useState(false);
+  const [reading,        setReading]        = useState(false);
   const [contextReady,   setContextReady]   = useState(false);
   const [allLeagues,     setAllLeagues]     = useState<LeagueContext[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<LeagueContext | null>(null);
@@ -697,6 +699,10 @@ export default function CoachScreen() {
   const liveDataRef     = useRef<string>('');
   const memoriesRef     = useRef<string>('');
   const scrollRef       = useRef<ScrollView>(null);
+  // Name-only (position-agnostic) set of every player in Sleeper's NFL feed,
+  // used to validate vision-extracted draft picks — a "drafted" name absent
+  // from the feed is almost certainly a misread we shouldn't act on.
+  const playerNameSetRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
@@ -711,6 +717,16 @@ export default function CoachScreen() {
       // even Yahoo/ESPN/FF/MFL rosters get a uniform format.
       const playerMap = await loadSleeperPlayerMap();
       const nameIndex = buildSleeperNameIndex(playerMap);
+
+      // Build the canonical name set once for draft-board screenshot validation.
+      const nameSet = new Set<string>();
+      for (const p of Object.values(playerMap)) {
+        const pp = p as any;
+        if (!pp || typeof pp !== 'object' || !pp.position) continue;
+        const full = pp.full_name || `${pp.first_name ?? ''} ${pp.last_name ?? ''}`.trim();
+        if (full) nameSet.add(normalizeName(full));
+      }
+      playerNameSetRef.current = nameSet;
 
       const [sleeperLeagues, espnLeagues, yahooLeagues, ffLeagues, mflLeagues, liveData] = await Promise.all([
         loadSleeperContext(playerMap),
@@ -820,6 +836,103 @@ export default function CoachScreen() {
     const label = league ? `${league.name} (${league.platform} · ${league.format})` : `all ${allLeagues.length} leagues`;
     setMessages(prev => [...prev, { role: 'ai', text: `Got it — focused on ${label}. What do you need?` }]);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+  };
+
+  // v2026-06-16: read a LIVE draft board from a screenshot (same vision flow
+  // The O uses for trades). Vision (fast tier) extracts who's already gone,
+  // then we hand that to the normal grounded send() so the Coach recommends
+  // the next pick off AIOmni's rankings + the user's roster needs.
+  const readDraftBoard = async () => {
+    if (reading || loading) return;
+    const rem = await getRemainingPrompts();
+    if (rem <= 0) {
+      const currentTier = await getCurrentTier();
+      if (currentTier === 'pro') {
+        const resetTime = await getResetTime();
+        const resetStr = resetTime
+          ? resetTime.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+          : 'Sunday noon';
+        setMessages(prev => [...prev, { role: 'ai', text: `You've hit this week's 50-prompt cap. Resets ${resetStr}.` }]);
+        return;
+      }
+      const ctx = currentTier === 'free' ? 'free_prompts_exhausted' : 'weekly_prompts_exhausted';
+      router.push(`/paywall?context=${ctx}` as any);
+      return;
+    }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      setMessages(prev => [...prev, { role: 'ai', text: 'Photo access is needed to read your draft board.' }]);
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6, base64: true });
+    if (res.canceled || !res.assets?.[0]?.base64) return;
+    const asset = res.assets[0];
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setReading(true);
+    setMessages(prev => [...prev, { role: 'ai', text: '', isLoading: true }]);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    try {
+      const out = await askAIVision(
+        asset.base64!,
+        asset.mimeType ?? 'image/jpeg',
+        `This is a screenshot of a LIVE fantasy football draft — a draft board or pick history. Read it and return ONLY this JSON, nothing else:
+{"drafted":["Bijan Robinson (1.01)","Ja'Marr Chase (1.02)"],"onClock":"","format":""}
+- "drafted": EVERY player already selected. Keep order and pick number (e.g. "1.05", "23rd") if shown, and position/team if shown. Full names exactly — do NOT skip anyone.
+- "onClock": which team/slot is currently picking, if shown, else "".
+- "format": any visible format clue (Superflex, Dynasty, PPR, # teams), else "".
+Capture rookies and veterans exactly.`,
+        { tier: 'fast', maxTokens: 900 },
+      );
+      const clean = out.slice(out.indexOf('{'), out.lastIndexOf('}') + 1);
+      const parsed = JSON.parse(clean);
+      const drafted: string[] = Array.isArray(parsed.drafted) ? parsed.drafted : [];
+      // drop the placeholder loading bubble before handing off to send()
+      setMessages(prev => prev.filter(m => !m.isLoading));
+      if (!drafted.length) {
+        setMessages(prev => [...prev, { role: 'ai', text: "Couldn't read picks off that image — try a clearer shot of the draft board, or just tell me who's gone." }]);
+        return;
+      }
+      // Validate the vision read against Sleeper's canonical NFL feed. A
+      // fast-tier vision model can confidently misread a blurry board and
+      // invent players; handing those to the recommender makes it "draft
+      // around" people who were never picked. Names absent from the feed are
+      // flagged for the model (not silently dropped — a real player we failed
+      // to match still shouldn't be recommended as available), and a read that
+      // matches NOTHING is rejected outright as garbled/non-draft input.
+      const nameSet = playerNameSetRef.current;
+      const unverified: string[] = [];
+      if (nameSet.size) {
+        let verified = 0;
+        for (const entry of drafted) {
+          const nm = entry.split('(')[0].trim();
+          if (!nm) continue;
+          if (nameSet.has(normalizeName(nm))) verified++;
+          else unverified.push(nm);
+        }
+        if (verified === 0) {
+          setMessages(prev => [...prev, { role: 'ai', text: "I read some text off that image but couldn't match any of it to real NFL players — it may be blurry or not a draft board. Try a clearer screenshot, or just tell me who's already gone." }]);
+          return;
+        }
+      }
+      const typed = input.trim();
+      const draftMsg = [
+        `[Live draft board I just read from a screenshot]`,
+        `Already drafted (${drafted.length}): ${drafted.join('; ')}.`,
+        unverified.length ? `⚠ I could NOT verify these names against the player database, so I may have misread them — treat as uncertain and do NOT recommend them: ${unverified.join(', ')}.` : '',
+        parsed.onClock ? `On the clock: ${parsed.onClock}.` : '',
+        parsed.format ? `Format shown: ${parsed.format}.` : '',
+        typed
+          ? typed
+          : `Using your rankings and my roster needs, who are the best available players I should target right now? Give me a short ranked shortlist with one-line why on each, and flag any value falling past ADP.`,
+      ].filter(Boolean).join(' ');
+      setInput('');
+      await send(draftMsg);
+    } catch {
+      setMessages(prev => prev.filter(m => !m.isLoading));
+      setMessages(prev => [...prev, { role: 'ai', text: "Couldn't read that draft board — try a clearer screenshot, or tell me who's already been picked." }]);
+    } finally {
+      setReading(false);
+    }
   };
 
   const send = async (text: string) => {
@@ -997,10 +1110,20 @@ export default function CoachScreen() {
           {/* ── Input ── */}
           <View style={[styles.inputWrap, { paddingBottom: insets.bottom + 4 }]}>
             <View style={styles.inputRow}>
+              <TouchableOpacity
+                style={[styles.attachBtn, (loading || reading || remaining <= 0) && { opacity: 0.4 }]}
+                onPress={readDraftBoard}
+                disabled={loading || reading || remaining <= 0}
+                accessibilityLabel="Read draft board from a screenshot"
+              >
+                {reading
+                  ? <ActivityIndicator color={C.blueDeep} size="small" />
+                  : <Ionicons name="image-outline" size={20} color={C.blueDeep} />}
+              </TouchableOpacity>
               <TextInput
                 value={input}
                 onChangeText={setInput}
-                placeholder={remaining > 0 ? 'Ask about your leagues…' : 'Upgrade to Pro for unlimited prompts'}
+                placeholder={remaining > 0 ? 'Ask, or 📷 a live draft board…' : 'Upgrade to Pro for unlimited prompts'}
                 placeholderTextColor={C.dim2}
                 style={styles.input}
                 onSubmitEditing={() => send(input)}
@@ -1184,8 +1307,9 @@ const styles = StyleSheet.create({
 
   // Input
   inputWrap: { paddingTop:8 },
-  inputRow:  { flexDirection:'row', alignItems:'center', gap:7, backgroundColor:'#12252e', borderWidth:1.5, borderColor:BORDER, borderTopColor:'#12252e', borderRadius:18, paddingLeft:13, paddingRight:4, paddingVertical:4 },
+  inputRow:  { flexDirection:'row', alignItems:'center', gap:7, backgroundColor:'#12252e', borderWidth:1.5, borderColor:BORDER, borderTopColor:'#12252e', borderRadius:18, paddingLeft:5, paddingRight:4, paddingVertical:4 },
   input:     { flex:1, fontSize:SZ.md, color:'#f0f4f5', paddingVertical:8, fontFamily:F.outfit },
+  attachBtn: { width:34, height:34, borderRadius:10, alignItems:'center', justifyContent:'center' },
   sendBtn:   { width:34, height:34, backgroundColor:C.gold, borderRadius:10, alignItems:'center', justifyContent:'center' },
   sendBtnOff:{ backgroundColor:C.goldS },
   sendArrow: { fontSize:14, fontFamily:F.bold, color:'#f0f4f5' },
