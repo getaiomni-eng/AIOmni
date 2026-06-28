@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setSecure, getSecure, deleteSecure, migrateAsyncToSecure } from './util/secureStore';
+import { getNFLSeason } from './season';
 
 export const ESPN_BASE = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl';
 export const ESPN_SEASON = new Date().getFullYear();
@@ -60,24 +61,35 @@ async function espnFetch(path: string, creds: ESPNCredentials): Promise<any> {
   return res.json();
 }
 
-export async function getESPNLeagues(creds: ESPNCredentials, year: number = 2025): Promise<any[]> {
+// Resolve the active NFL season from the app's canonical source (Sleeper
+// state, same as every other platform) instead of a hardcoded year. A
+// hardcoded 2025 silently dropped any league joined for a later season.
+async function espnSeason(): Promise<number> {
+  const s = parseInt(await getNFLSeason(), 10);
+  return Number.isFinite(s) ? s : new Date().getFullYear();
+}
+
+export async function getESPNLeagues(creds: ESPNCredentials, year?: number): Promise<any[]> {
+  const yr = year ?? await espnSeason();
   const data = await espnFetch(
-    `/seasons/${year}/segments/0/leagues?view=mSettings`,
+    `/seasons/${yr}/segments/0/leagues?view=mSettings`,
     creds
   );
   return data || [];
 }
 
-export async function getESPNLeague(leagueId: number, creds: ESPNCredentials, year: number = 2025): Promise<any> {
+export async function getESPNLeague(leagueId: number, creds: ESPNCredentials, year?: number): Promise<any> {
+  const yr = year ?? await espnSeason();
   return espnFetch(
-    `/seasons/${year}/segments/0/leagues/${leagueId}?view=mSettings&view=mStatus&view=mTeam&view=mRoster`,
+    `/seasons/${yr}/segments/0/leagues/${leagueId}?view=mSettings&view=mStatus&view=mTeam&view=mRoster`,
     creds
   );
 }
 
-export async function getESPNRoster(leagueId: number, creds: ESPNCredentials, year: number = 2025): Promise<any> {
+export async function getESPNRoster(leagueId: number, creds: ESPNCredentials, year?: number): Promise<any> {
+  const yr = year ?? await espnSeason();
   return espnFetch(
-    `/seasons/${year}/segments/0/leagues/${leagueId}?view=mTeam&view=mRoster`,
+    `/seasons/${yr}/segments/0/leagues/${leagueId}?view=mTeam&view=mRoster`,
     creds
   );
 }
