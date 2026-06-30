@@ -224,24 +224,29 @@ export default function HomeScreen() {
     try {
       const creds = await loadESPNCredentials();
       if (!creds) return [];
-      if (!creds?.leagueId) {
-        // Try to discover leagues
-        try {
-          const { getESPNLeagues } = require('../../services/espn');
-          const leagues = await getESPNLeagues(creds);
-          if (leagues && leagues.length > 0) {
-            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-            await AsyncStorage.setItem('espn_league_ids', JSON.stringify([leagues[0].id]));
-            creds.leagueId = leagues[0].id;
-          } else {
-            return [];
-          }
-        } catch {
-          return [];
-        }
+
+      // Validate the stored league against the active season. A stale
+      // prior-season ID (left over from an earlier connect) won't resolve
+      // under the current season — when that happens, re-discover instead
+      // of silently showing nothing.
+      let leagueData: any = null;
+      if (creds.leagueId) {
+        try { leagueData = await getESPNLeague(creds.leagueId, creds, parseInt(year)); } catch { leagueData = null; }
       }
-      if (!creds.leagueId) return [];
-      const leagueData = await getESPNLeague(creds.leagueId, creds, parseInt(year));
+      if (!leagueData) {
+        try {
+          const { discoverESPNLeagues } = require('../../services/espn');
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          const leagues = await discoverESPNLeagues(creds);
+          if (leagues && leagues.length > 0) {
+            await AsyncStorage.setItem('espn_league_ids', JSON.stringify(leagues.map((l: any) => l.id)));
+            const lid: number = leagues[0].id;
+            creds.leagueId = lid;
+            leagueData = await getESPNLeague(lid, creds, parseInt(year));
+          }
+        } catch { /* discovery failed — fall through to empty */ }
+      }
+      if (!leagueData) return [];
       if (!leagueData) return [];
       const myTeam  = findMyESPNTeam(leagueData, creds.teamName || '');
       const recPts  = leagueData.settings?.scoringSettings?.REC ?? 0;

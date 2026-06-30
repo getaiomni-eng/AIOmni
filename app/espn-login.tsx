@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
-import { ESPN_SEASON, saveESPNCredentials } from '../services/espn';
+import { discoverESPNLeagues, saveESPNCredentials } from '../services/espn';
 import { C, F, SP, SZ } from './constants/tokens';
 
 const ESPN_LOGIN_URL = 'https://www.espn.com/fantasy/football/';
@@ -47,27 +47,15 @@ export default function ESPNLoginScreen() {
       setStatus('Found your ESPN account — loading leagues...');
 
       const creds = { espnS2: data.espnS2, swid: data.swid };
-      const BASE  = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl';
-      const res   = await fetch(`${BASE}/seasons/${ESPN_SEASON}/segments/0/leagues?view=mSettings`, {
-        headers: { 'Content-Type': 'application/json', Cookie: `espn_s2=${creds.espnS2}; SWID=${creds.swid}` },
-      });
 
-      let leagueIds:   number[]   = [];
-      let leagueNames: string[]   = [];
-
-      if (res.ok) {
-        const leaguesData = await res.json();
-        const leagues = Array.isArray(leaguesData) ? leaguesData : [leaguesData].filter(Boolean);
-        leagueIds   = leagues.map((l: any) => l.id).filter(Boolean);
-        leagueNames = leagues.map((l: any) => l.settings?.name || `ESPN League ${l.id}`);
-      }
-
-      if (leagueIds.length === 0) {
-        const stored = await AsyncStorage.getItem('espn_league_ids');
-        if (stored) leagueIds = JSON.parse(stored);
-      }
-
+      // Save credentials first so discovery (which loads creds) can run.
       await saveESPNCredentials(creds);
+
+      // Discover every league for the active season. Validated against
+      // ESPN per-league, so only real current-season leagues survive.
+      const discovered = await discoverESPNLeagues(creds);
+      const leagueIds   = discovered.map((l) => l.id);
+      const leagueNames = discovered.map((l) => l.name);
 
       if (leagueIds.length > 0) {
         await AsyncStorage.setItem('espn_league_ids', JSON.stringify(leagueIds));
