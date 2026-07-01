@@ -220,48 +220,65 @@ export default function HomeScreen() {
     } catch (e) { return []; }
   };
 
+  // Build a home-screen League row from one ESPN league payload.
+  const buildESPNLeague = (leagueId: number, leagueData: any, swid: string): League => {
+    const myTeam  = findMyESPNTeam(leagueData, swid);
+    const recPts  = leagueData.settings?.scoringSettings?.REC ?? 0;
+    const fmt     = recPts >= 1 ? 'PPR' : recPts >= 0.5 ? '0.5 PPR' : 'STD';
+    const wins    = myTeam?.record?.overall?.wins   ?? 0;
+    const losses  = myTeam?.record?.overall?.losses ?? 0;
+    const teams   = leagueData.teams ?? [];
+    const sorted  = [...teams].sort((a: any, b: any) => (b.record?.overall?.wins ?? 0) - (a.record?.overall?.wins ?? 0));
+    const rankIdx = sorted.findIndex((t: any) => t.id === myTeam?.id);
+    const rankStr = rankIdx >= 0 ? `${rankIdx + 1}${ordinal(rankIdx + 1)} of ${teams.length}` : undefined;
+    const week    = leagueData.scoringPeriodId ?? 17;
+    const matchupData = leagueData.schedule?.find((m: any) => m.matchupPeriodId === week && (m.home?.teamId === myTeam?.id || m.away?.teamId === myTeam?.id));
+    const myScore  = matchupData?.home?.teamId === myTeam?.id ? matchupData?.home?.totalPoints : matchupData?.away?.totalPoints;
+    const oppScore = matchupData?.home?.teamId === myTeam?.id ? matchupData?.away?.totalPoints : matchupData?.home?.totalPoints;
+    return { id: String(leagueId), name: leagueData.settings?.name ?? 'ESPN League', platform: 'espn', format: fmt, rec: `${wins}–${losses}`, rank: rankStr, pts: myScore ?? 0, opp: oppScore ?? 0, week };
+  };
+
   const loadESPNLeagues = async (year: string = String(new Date().getFullYear())): Promise<League[]> => {
     try {
       const creds = await loadESPNCredentials();
       if (!creds) return [];
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const yr = parseInt(year, 10);
 
-      // Validate the stored league against the active season. A stale
-      // prior-season ID (left over from an earlier connect) won't resolve
-      // under the current season — when that happens, re-discover instead
-      // of silently showing nothing.
-      let leagueData: any = null;
-      if (creds.leagueId) {
-        try { leagueData = await getESPNLeague(creds.leagueId, creds, parseInt(year)); } catch { leagueData = null; }
-      }
-      if (!leagueData) {
+      // Gather every stored ESPN league ID (not just the first).
+      let ids: number[] = [];
+      try {
+        const stored = await AsyncStorage.getItem('espn_league_ids');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          ids = (Array.isArray(parsed) ? parsed : [parsed]).map((x: any) => parseInt(x, 10)).filter((n: number) => Number.isFinite(n));
+        }
+      } catch { /* ignore */ }
+
+      const fetchOne = async (id: number): Promise<any> => {
+        try { return await getESPNLeague(id, creds, yr); } catch { return null; }
+      };
+
+      // Fetch all stored leagues under the active season. If none resolve
+      // (stale prior-season IDs, or nothing stored), re-discover.
+      let datas = ids.length ? await Promise.all(ids.map(fetchOne)) : [];
+      if (!datas.some(Boolean)) {
         try {
           const { discoverESPNLeagues } = require('../../services/espn');
-          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-          const leagues = await discoverESPNLeagues(creds);
-          if (leagues && leagues.length > 0) {
-            await AsyncStorage.setItem('espn_league_ids', JSON.stringify(leagues.map((l: any) => l.id)));
-            const lid: number = leagues[0].id;
-            creds.leagueId = lid;
-            leagueData = await getESPNLeague(lid, creds, parseInt(year));
+          const discovered = await discoverESPNLeagues(creds);
+          if (discovered && discovered.length > 0) {
+            ids = discovered.map((l: any) => Number(l.id));
+            await AsyncStorage.setItem('espn_league_ids', JSON.stringify(ids));
+            datas = await Promise.all(ids.map(fetchOne));
           }
-        } catch { /* discovery failed — fall through to empty */ }
+        } catch { /* discovery failed — fall through */ }
       }
-      if (!leagueData) return [];
-      if (!leagueData) return [];
-      const myTeam  = findMyESPNTeam(leagueData, creds.teamName || '');
-      const recPts  = leagueData.settings?.scoringSettings?.REC ?? 0;
-      const fmt     = recPts >= 1 ? 'PPR' : recPts >= 0.5 ? '0.5 PPR' : 'STD';
-      const wins    = myTeam?.record?.overall?.wins   ?? 0;
-      const losses  = myTeam?.record?.overall?.losses ?? 0;
-      const teams   = leagueData.teams ?? [];
-      const sorted  = [...teams].sort((a: any, b: any) => (b.record?.overall?.wins ?? 0) - (a.record?.overall?.wins ?? 0));
-      const rankIdx = sorted.findIndex((t: any) => t.id === myTeam?.id);
-      const rankStr = rankIdx >= 0 ? `${rankIdx + 1}${ordinal(rankIdx + 1)} of ${teams.length}` : undefined;
-      const week    = leagueData.scoringPeriodId ?? 17;
-      const matchupData = leagueData.schedule?.find((m: any) => m.matchupPeriodId === week && (m.home?.teamId === myTeam?.id || m.away?.teamId === myTeam?.id));
-      const myScore  = matchupData?.home?.teamId === myTeam?.id ? matchupData?.home?.totalPoints : matchupData?.away?.totalPoints;
-      const oppScore = matchupData?.home?.teamId === myTeam?.id ? matchupData?.away?.totalPoints : matchupData?.home?.totalPoints;
-      return [{ id: String(creds.leagueId), name: leagueData.settings?.name ?? 'ESPN League', platform: 'espn', format: fmt, rec: `${wins}–${losses}`, rank: rankStr, pts: myScore ?? 0, opp: oppScore ?? 0, week }];
+
+      const out: League[] = [];
+      for (let i = 0; i < ids.length; i++) {
+        if (datas[i]) out.push(buildESPNLeague(ids[i], datas[i], creds.swid));
+      }
+      return out;
     } catch (e) { return []; }
   };
 
