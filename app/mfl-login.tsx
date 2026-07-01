@@ -98,16 +98,19 @@ export default function MflLoginScreen() {
 
     try {
       setStatus('Fetching your MFL leagues...');
-      let opts: LeagueLite[] = [];
       let lastBody = '';
-      let usedSeason = SEASON;
-      // Offseason fallback: walk back a year if the current season returns
-      // nothing. MFL dynasty leagues persist across seasons but the
-      // myleagues export is year-scoped — a redraft player in May 2026
-      // before re-signups would otherwise see "no leagues found" even
-      // though their 2025 setup is still active in our codebase.
+      // Aggregate leagues across BOTH the current and prior season, merged
+      // by league_id. MFL's myleagues export is year-scoped, so a user with
+      // (say) a not-yet-opened 2026 startup AND an active dynasty league
+      // still running under 2025 has leagues split across two exports. The
+      // old logic stopped at the FIRST season that returned anything,
+      // silently dropping every league living under the other year — e.g.
+      // grabbing an unopened 2026 league while missing the 2025 league that
+      // already drafted. Each league keeps its own season so later API
+      // calls hit the right year.
       const seasonCandidates = [SEASON, String(parseInt(SEASON, 10) - 1)];
-      outer: for (const yr of seasonCandidates) {
+      const byId = new Map<string, LeagueLite & { season: string }>();
+      for (const yr of seasonCandidates) {
         for (const h of candidates) {
           const url = `https://${h}/${yr}/export?TYPE=myleagues&JSON=1`;
           try {
@@ -122,7 +125,7 @@ export default function MflLoginScreen() {
             try { data = JSON.parse(body); } catch { trace.push(`  parse fail @ ${h}`); continue; }
             const raw = data?.leagues?.league;
             const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
-            opts = arr.map((l: any) => {
+            const parsed = arr.map((l: any) => {
               const u = String(l.url || '');
               const hm = u.match(/https?:\/\/([^/]+)/);
               return {
@@ -130,15 +133,25 @@ export default function MflLoginScreen() {
                 name: String(l.name || `League ${l.league_id}`),
                 franchiseId: String(l.franchise_id ?? ''),
                 host: hm?.[1] ?? h,
+                season: yr,
               };
-            }).filter((l: LeagueLite) => l.id && l.franchiseId);
-            trace.push(`  parsed ${arr.length} entries, ${opts.length} valid`);
-            if (opts.length > 0) { usedSeason = yr; break outer; }
+            }).filter((l: LeagueLite & { season: string }) => l.id && l.franchiseId);
+            trace.push(`  parsed ${arr.length} entries, ${parsed.length} valid (season ${yr})`);
+            if (parsed.length > 0) {
+              // Same dynasty league can appear in both exports — keep the
+              // most recent season.
+              for (const p of parsed) {
+                const prev = byId.get(p.id);
+                if (!prev || parseInt(p.season, 10) > parseInt(prev.season, 10)) byId.set(p.id, p);
+              }
+              break; // got this year's leagues from a good host; next year
+            }
           } catch (e: any) {
             trace.push(`  fetch err @ ${h}: ${e?.message ?? e}`);
           }
         }
       }
+      const opts = Array.from(byId.values());
       setApiTrace(trace);
       if (opts.length === 0) {
         // Surface a slice of the raw body so we can see what MFL actually
@@ -154,7 +167,7 @@ export default function MflLoginScreen() {
       // save them all and exit. setLeagueOptions(opts) still happens
       // briefly so the diagnostic panel can disappear if needed.
       await setMflLeagues(opts.map(o => ({
-        leagueId: o.id, franchiseId: o.franchiseId, host: o.host, season: usedSeason,
+        leagueId: o.id, franchiseId: o.franchiseId, host: o.host, season: o.season,
       })));
       setConnected(true);
       const label = opts.length === 1 ? opts[0].name : `${opts.length} leagues`;
