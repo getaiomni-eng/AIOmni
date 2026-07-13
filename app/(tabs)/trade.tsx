@@ -279,7 +279,7 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
 
 Signals per player (use whichever are present): (1) AIOmni's PROPRIETARY rank — a calibrated projection engine, your primary anchor; (2) KTC market value — what the crowd thinks it's worth; (3) live injury status; (4) snap share — role security; (5) Vegas implied team total — offense environment. The market math tells you who wins by crowd consensus. Your edge is the DISAGREEMENTS: when AIOmni likes a player more than the market, that's a buy-low to pounce on; when the market overprices someone our engine is out on, say so ("the crowd's still paying for last year"). Injuries change everything — flag them. If the user's roster is provided, factor FIT: a trade that wins on value but doubles up where they're stacked (or guts their thinnest spot) deserves a harder look. Lead with the AIOmni rank when signals conflict.
 
-Respond with ONLY a valid JSON object — no markdown, no code fences:
+Respond with ONLY a single valid JSON object — no markdown, no code fences, no preamble, and do NOT output a second or revised version. Decide once, then emit exactly one object and nothing else:
 {"youReceiveGrade":"<letter>","youGiveGrade":"<letter>","verdict":"<your call in ONE punchy line with attitude — e.g. 'Smash accept — this is a straight-up fleece' or 'Hard pass, they're robbing you blind'>","analysis":"<2-3 sentences with conviction and personality: who wins, WHY (cite AIOmni ranks + market values), and exactly what to do>"}`;
 
       const prompt = `Format: ${format === 'dynasty' ? 'DYNASTY — value = age + multi-year production' : 'REDRAFT PPR — value = rest-of-season'}
@@ -293,21 +293,44 @@ ${gettingGrounded.lines}
 ${marketMath}${myRoster.length ? `\n\nYOUR CURRENT ROSTER (ranked players — judge positional fit):\n${myRoster.join(', ')}` : ''}${engineGrounded ? '' : `\n\n⚠ HEADS UP: AIOmni's proprietary ranking engine is temporarily unavailable, so you're grading on KTC market values + general knowledge — NOT our calibrated projections. Stay decisive, but don't cite precise AIOmni ranks you don't have, and lean on market value + clear situational reads.`}`;
       const response = await askAI(prompt, { maxTokens: 600, system });
       console.log('Raw AI response:', response);
-      // Strip code fences and any pre/post text before the JSON
-      let clean = response.replace(/```json|```/g, '').trim();
-      const jsonStart = clean.indexOf('{');
-      const jsonEnd = clean.lastIndexOf('}');
-      if (jsonStart >= 0 && jsonEnd > jsonStart) {
-        clean = clean.slice(jsonStart, jsonEnd + 1);
+      // The model is told to return one JSON object, but sometimes emits a
+      // preamble, code fences, or even a second "revised" object with prose
+      // in between (e.g. "Wait — let me sell this straight."). The old
+      // first-{ to last-} slice then spanned BOTH objects plus the prose,
+      // producing invalid JSON. Instead, scan out every balanced top-level
+      // {...} block (string-aware, so braces inside values don't confuse
+      // it) and take the LAST one that parses and carries grades — the
+      // model's final answer.
+      const stripped = response.replace(/```json|```/g, '');
+      const blocks: string[] = [];
+      let depth = 0, start = -1, inStr = false, esc = false;
+      for (let i = 0; i < stripped.length; i++) {
+        const ch = stripped[i];
+        if (inStr) {
+          if (esc) esc = false;
+          else if (ch === '\\') esc = true;
+          else if (ch === '"') inStr = false;
+          continue;
+        }
+        if (ch === '"') inStr = true;
+        else if (ch === '{') { if (depth === 0) start = i; depth++; }
+        else if (ch === '}' && depth > 0) { depth--; if (depth === 0 && start >= 0) { blocks.push(stripped.slice(start, i + 1)); start = -1; } }
       }
-      try {
-        const parsed = JSON.parse(clean);
-        setYouReceiveGrade(parsed.youReceiveGrade);
-        setYouGiveGrade(parsed.youGiveGrade);
-        setVerdict(parsed.verdict);
-        setAnalysis(parsed.analysis);
-      } catch(e) {
-        console.log('Parse error:', e);
+      let parsed: any = null;
+      for (let i = blocks.length - 1; i >= 0; i--) {
+        try {
+          const p = JSON.parse(blocks[i]);
+          if (p && (p.youReceiveGrade || p.youGiveGrade)) { parsed = p; break; }
+        } catch { /* not valid JSON — try the next-earlier block */ }
+      }
+      if (parsed) {
+        const isGrade = (g: any): g is Grade => typeof g === 'string' && g in GRADE_COLOR;
+        if (isGrade(parsed.youReceiveGrade)) setYouReceiveGrade(parsed.youReceiveGrade);
+        if (isGrade(parsed.youGiveGrade)) setYouGiveGrade(parsed.youGiveGrade);
+        setVerdict(parsed.verdict ?? '');
+        setAnalysis(parsed.analysis ?? '');
+      } else {
+        console.log('Parse error: no valid grade JSON found in response');
         setVerdict('Could not parse response. Try again.');
         setAnalysis(response.slice(0, 300));
       }
