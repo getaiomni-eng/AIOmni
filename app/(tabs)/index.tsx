@@ -243,42 +243,40 @@ export default function HomeScreen() {
       const creds = await loadESPNCredentials();
       if (!creds) return [];
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const { discoverESPNLeagues } = require('../../services/espn');
       const yr = parseInt(year, 10);
 
-      // Gather every stored ESPN league ID (not just the first).
-      let ids: number[] = [];
+      // Prefer the rich stored summaries (id/name/season/drafted). Fall
+      // back to (re)discovery if they're missing or none match the
+      // selected season — this also self-heals installs that connected
+      // before summaries were stored.
+      let summaries: any[] = [];
       try {
-        const stored = await AsyncStorage.getItem('espn_league_ids');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          ids = (Array.isArray(parsed) ? parsed : [parsed]).map((x: any) => parseInt(x, 10)).filter((n: number) => Number.isFinite(n));
-        }
+        const stored = await AsyncStorage.getItem('espn_leagues_v2');
+        if (stored) summaries = JSON.parse(stored);
       } catch { /* ignore */ }
 
-      const fetchOne = async (id: number): Promise<any> => {
-        try { return await getESPNLeague(id, creds, yr); } catch { return null; }
-      };
-
-      // Fetch all stored leagues under the active season. If none resolve
-      // (stale prior-season IDs, or nothing stored), re-discover.
-      let datas = ids.length ? await Promise.all(ids.map(fetchOne)) : [];
-      if (!datas.some(Boolean)) {
+      let forYear = summaries.filter((s: any) => Number(s.season) === yr);
+      if (forYear.length === 0) {
         try {
-          const { discoverESPNLeagues } = require('../../services/espn');
           const discovered = await discoverESPNLeagues(creds);
           if (discovered && discovered.length > 0) {
-            ids = discovered.map((l: any) => Number(l.id));
-            await AsyncStorage.setItem('espn_league_ids', JSON.stringify(ids));
-            datas = await Promise.all(ids.map(fetchOne));
+            await AsyncStorage.setItem('espn_leagues_v2', JSON.stringify(discovered));
+            await AsyncStorage.setItem('espn_league_ids', JSON.stringify(discovered.map((l: any) => l.id)));
+            forYear = discovered.filter((s: any) => Number(s.season) === yr);
           }
-        } catch { /* discovery failed — fall through */ }
+        } catch { /* discovery failed — fall through to empty */ }
       }
+      if (forYear.length === 0) return [];
 
-      const out: League[] = [];
-      for (let i = 0; i < ids.length; i++) {
-        if (datas[i]) out.push(buildESPNLeague(ids[i], datas[i], creds.swid));
-      }
-      return out;
+      // forYear is already active-first; Promise.all preserves order.
+      const built = await Promise.all(forYear.map(async (s: any): Promise<League | null> => {
+        try {
+          const data = await getESPNLeague(Number(s.id), creds, yr);
+          return data ? buildESPNLeague(Number(s.id), data, creds.swid) : null;
+        } catch { return null; }
+      }));
+      return built.filter((l): l is League => l !== null);
     } catch (e) { return []; }
   };
 

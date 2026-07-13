@@ -95,23 +95,27 @@ export async function getESPNRoster(leagueId: number, creds: ESPNCredentials, ye
 }
 
 // ─── LEAGUE DISCOVERY ───────────────────────────────────────
-// Enumerate every league the authenticated user belongs to for the
-// active season. Strategy:
-//   1. Gather candidate league IDs from ESPN's fan API (the canonical
-//      "all my fantasy teams" source, across sports/seasons) AND the v3
-//      per-season leagues endpoint.
-//   2. Validate each candidate by fetching it under the active season.
-//      A successful fetch confirms the league exists for THIS season and
-//      is a football league (wrong-season / non-football IDs fail on the
-//      ffl/seasons/{season} endpoint and get dropped). This also yields
-//      the real league name.
-// This replaces the old single-endpoint discovery that silently kept
-// stale prior-season league IDs.
+// Enumerate every football league the user belongs to via ESPN's fan API
+// — the canonical "all my fantasy teams" source. Verified response shape
+// (2026-07):
+//   data.preferences[]  — one entry per fantasy team
+//     .metaData.entry.gameId === 1     // 1 = football (abbrev "FFL")
+//     .metaData.entry.seasonId         // the league's REAL season
+//     .metaData.entry.groups[] → { groupId, groupName, draftDate }
+// groupId is the league ID, groupName the league name, and draftDate
+// (when present) means the league has drafted — an active, populated
+// league vs. a pre-draft shell. We surface every league tagged with its
+// real season + a `drafted` flag so the app can group by season and put
+// active (drafted) leagues first. This is why the old approach failed:
+// ESPN's per-league v3 endpoint returns data regardless of the season in
+// the URL, so it couldn't tell an active league from stale history — the
+// fan API's seasonId is the only reliable per-league season signal.
 
 export interface ESPNLeagueSummary {
   id: number;
   name: string;
   season: number;
+  drafted: boolean;
 }
 
 function brace(swid: string): string {
@@ -119,7 +123,7 @@ function brace(swid: string): string {
   return `{${bare}}`;
 }
 
-async function fanApiCandidateIds(creds: ESPNCredentials): Promise<number[]> {
+async function fanApiLeagues(creds: ESPNCredentials): Promise<ESPNLeagueSummary[]> {
   const swid = brace(creds.swid);
   const url = `https://fan.api.espn.com/apis/v2/fans/${encodeURIComponent(swid)}?context=fantasy&displayHiddenPrefs=true&useSiteWebApi=true&featureFlags=challengeEntries`;
   const res = await fetch(url, {
@@ -131,54 +135,65 @@ async function fanApiCandidateIds(creds: ESPNCredentials): Promise<number[]> {
   if (!res.ok) return [];
   const data = await res.json();
   const prefs: any[] = Array.isArray(data?.preferences) ? data.preferences : [];
-  const ids = new Set<number>();
+  const byId = new Map<number, ESPNLeagueSummary>();
   for (const p of prefs) {
     const entry = p?.metaData?.entry;
-    const groups: any[] = Array.isArray(entry?.groups) ? entry.groups : [];
+    if (!entry) continue;
+    if (entry.gameId !== 1 && entry.abbrev !== 'FFL') continue; // football only
+    const season = Number(entry.seasonId);
+    if (!Number.isFinite(season)) continue;
+    const groups: any[] = Array.isArray(entry.groups) ? entry.groups : [];
     for (const g of groups) {
-      const id = Number(g?.groupId ?? g?.id);
-      if (Number.isFinite(id)) ids.add(id);
+      const id = Number(g?.groupId);
+      if (!Number.isFinite(id)) continue;
+      const summary: ESPNLeagueSummary = {
+        id,
+        name: String(g?.groupName || entry.name || `ESPN League ${id}`).trim(),
+        season,
+        drafted: !!g?.draftDate,
+      };
+      // If the same league surfaces under two seasons, keep the newest.
+      const prev = byId.get(id);
+      if (!prev || summary.season > prev.season) byId.set(id, summary);
     }
   }
-  return Array.from(ids);
+  return Array.from(byId.values());
+}
+
+// Active (drafted) first, newest season first, then alphabetical.
+function sortLeagues(a: ESPNLeagueSummary, b: ESPNLeagueSummary): number {
+  if (a.season !== b.season) return b.season - a.season;
+  if (a.drafted !== b.drafted) return a.drafted ? -1 : 1;
+  return a.name.localeCompare(b.name);
 }
 
 export async function discoverESPNLeagues(creds: ESPNCredentials): Promise<ESPNLeagueSummary[]> {
-  const season = await espnSeason();
-  const candidates = new Set<number>();
-
-  // Source 1: fan API (best-effort; never fatal)
+  // Primary: fan API (gives season + drafted per league).
   try {
-    for (const id of await fanApiCandidateIds(creds)) candidates.add(id);
+    const leagues = await fanApiLeagues(creds);
+    if (leagues.length > 0) return leagues.sort(sortLeagues);
   } catch (e) {
     console.log('discoverESPNLeagues: fan API failed', e);
   }
 
-  // Source 2: v3 per-season leagues endpoint (best-effort)
+  // Fallback: v3 per-season leagues endpoint (current season only, no
+  // draft info) if the fan API is unavailable.
+  const season = await espnSeason();
   try {
     const raw = await getESPNLeagues(creds, season);
-    for (const l of raw) {
-      const id = Number(l?.id);
-      if (Number.isFinite(id)) candidates.add(id);
-    }
+    return (raw || [])
+      .map((l: any): ESPNLeagueSummary => ({
+        id: Number(l?.id),
+        name: String(l?.settings?.name || `ESPN League ${l?.id}`),
+        season,
+        drafted: false,
+      }))
+      .filter((l: ESPNLeagueSummary) => Number.isFinite(l.id))
+      .sort(sortLeagues);
   } catch (e) {
-    console.log('discoverESPNLeagues: v3 leagues endpoint failed', e);
+    console.log('discoverESPNLeagues: v3 fallback failed', e);
+    return [];
   }
-
-  // Validate each candidate against the active season (confirms it's a
-  // real football league for THIS season and gives us its name).
-  const found: ESPNLeagueSummary[] = [];
-  for (const id of Array.from(candidates).slice(0, 25)) {
-    try {
-      const data = await getESPNLeague(id, creds, season);
-      if (data && (data.settings?.name || Array.isArray(data.teams))) {
-        found.push({ id, name: data.settings?.name || `ESPN League ${id}`, season });
-      }
-    } catch {
-      // Not valid for this season (e.g. a prior-season-only ID) — skip.
-    }
-  }
-  return found;
 }
 
 export function findMyESPNTeam(data: any, swid: string): any {

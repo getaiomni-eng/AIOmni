@@ -51,21 +51,28 @@ export default function ESPNLoginScreen() {
       // Save credentials first so discovery (which loads creds) can run.
       await saveESPNCredentials(creds);
 
-      // Discover every league for the active season. Validated against
-      // ESPN per-league, so only real current-season leagues survive.
+      // Discover every football league via the fan API — each tagged with
+      // its real season and whether it has drafted. Sorted active-first.
       const discovered = await discoverESPNLeagues(creds);
       const leagueIds   = discovered.map((l) => l.id);
       const leagueNames = discovered.map((l) => l.name);
+      const draftedCount = discovered.filter((l) => l.drafted).length;
 
       if (leagueIds.length > 0) {
+        // Full summaries (id/name/season/drafted) drive the Home tab;
+        // espn_league_ids stays for legacy consumers, active league first.
+        await AsyncStorage.setItem('espn_leagues_v2', JSON.stringify(discovered));
         await AsyncStorage.setItem('espn_league_ids', JSON.stringify(leagueIds));
         if (leagueNames.length > 0) await AsyncStorage.setItem('espn_league_name', leagueNames[0]);
         setConnected(true);
         setStatus(`Connected! Found ${leagueIds.length} league${leagueIds.length !== 1 ? 's' : ''}.`);
+        const draftedNote = draftedCount > 0 && draftedCount < leagueIds.length
+          ? `\n\n${draftedCount} ${draftedCount === 1 ? 'has' : 'have'} drafted; the rest are pre-draft and will fill in once they draft.`
+          : '';
         setTimeout(() => {
           Alert.alert(
             '✓ ESPN Connected',
-            `Found ${leagueIds.length} league${leagueIds.length !== 1 ? 's' : ''}. Your ESPN leagues will now appear on the Home tab.`,
+            `Found ${leagueIds.length} league${leagueIds.length !== 1 ? 's' : ''}.${draftedNote}\n\nThey'll appear on the Home tab, active leagues first.`,
             [{ text: 'Done', onPress: () => router.back() }]
           );
         }, 500);
