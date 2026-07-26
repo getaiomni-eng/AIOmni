@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchAIOmniFormula, fetchKTCValues, fetchNFLInjuries, fetchSnapCounts, fetchVegasLines, type InjuryInfo, type RankedPlayer, type ScoringFormat } from '../../services/rankingsData';
 import { getCurrentTier } from '../../services/purchases';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
-import { consumePrompt } from '../utils/promptCounter';
+import { consumePrompt } from '../../services/promptQuota';
 import { C, F, R, SP, SZ } from '../constants/tokens';
 import { Icon } from '../components/AIOmniIcons';
 
@@ -481,28 +481,25 @@ ${marketMath}${myRoster.length ? `\n\nYOUR CURRENT ROSTER (ranked players — ju
             </View>
             <Text style={styles.analysis}>{analysis}</Text>
             <Text style={styles.verdict}>{verdict}</Text>
-            <View style={styles.ctaRow}>
-              {(['A', 'B'].includes(youReceiveGrade[0]) || ['A', 'B'].includes(youGiveGrade[0])) && (
-                <TouchableOpacity style={[styles.ctaBtn, styles.acceptBtn]}>
-                  <Text style={styles.ctaTxt}>ACCEPT</Text>
-                </TouchableOpacity>
-              )}
-              {(['D', 'F'].includes(youReceiveGrade[0]) || ['D', 'F'].includes(youGiveGrade[0])) && (
-                <TouchableOpacity style={[styles.ctaBtn, styles.declineBtn]}>
-                  <Text style={styles.ctaTxt}>DECLINE</Text>
-                </TouchableOpacity>
-              )}
-              {(['C'].includes(youReceiveGrade[0]) || ['C'].includes(youGiveGrade[0])) && (
-                <>
-                  <TouchableOpacity style={[styles.ctaBtn, styles.acceptBtn]}>
+            {/* One ACCEPT + one DECLINE, always. The old per-letter
+                conditions overlapped (e.g. receive C / give A matched both
+                the A/B rule and the C rule → ACCEPT · ACCEPT · DECLINE).
+                Recommend by comparing sides: receiving the better grade →
+                accept; otherwise decline. The non-recommended action dims. */}
+            {(() => {
+              const GRADE_ORDER: Grade[] = ['F', 'D', 'D+', 'C-', 'C', 'C+', 'B-', 'B', 'B+', 'A-', 'A', 'A+'];
+              const recommendAccept = GRADE_ORDER.indexOf(youReceiveGrade) >= GRADE_ORDER.indexOf(youGiveGrade);
+              return (
+                <View style={styles.ctaRow}>
+                  <TouchableOpacity style={[styles.ctaBtn, styles.acceptBtn, !recommendAccept && { opacity: 0.4 }]}>
                     <Text style={styles.ctaTxt}>ACCEPT</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.ctaBtn, styles.declineBtn]}>
+                  <TouchableOpacity style={[styles.ctaBtn, styles.declineBtn, recommendAccept && { opacity: 0.4 }]}>
                     <Text style={styles.ctaTxt}>DECLINE</Text>
                   </TouchableOpacity>
-                </>
-              )}
-            </View>
+                </View>
+              );
+            })()}
           </View>
         )}
       </ScrollView>

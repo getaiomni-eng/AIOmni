@@ -16,7 +16,7 @@ import { getValidYahooToken } from '../../services/yahoo';
 import { Icon } from '../components/AIOmniIcons';
 import { AIOmniLogo, AIOmniWordmark } from '../components/AIOmniLogo';
 import { dark, F, palette, SP, SZ } from '../constants/tokens';
-import { incrementPrompt } from '../utils/promptCounter';
+import { incrementPrompt } from '../../services/promptQuota';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W    = SCREEN_W - SP[3] * 2;
@@ -572,7 +572,10 @@ export default function HomeScreen() {
                     </View>
                   </View>
                   <Text style={styles.leagueMetaGrid}>{lg.format} · Wk {lg.week}</Text>
-                  {lg.rank && <Text style={styles.leagueRankGrid}>{lg.rank}</Text>}
+                  {/* Always render the rank line so every card is the same
+                      height — pre-draft leagues (no standings yet) show a
+                      placeholder instead of collapsing the row. */}
+                  <Text style={styles.leagueRankGrid}>{lg.rank ?? '—'}</Text>
                   <View style={styles.scoreRowGrid}>
                     <View style={styles.scoreBoxGrid}>
                       <Text style={styles.scoreLabelGrid}>YOU</Text>
