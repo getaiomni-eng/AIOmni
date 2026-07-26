@@ -23,7 +23,7 @@ import { getPlayerContext } from '../../services/playerIntelligence';
 import { PositionPill } from '../components/Atoms';
 import { AIOmniLogo } from '../components/AIOmniLogo';
 import { C, F, R, SP, SZ } from '../constants/tokens';
-import { getPromptLimit, getRemainingPrompts, getResetTime, incrementPrompt } from '../utils/promptCounter';
+import { getPromptLimit, getRemainingPrompts, getResetTime, incrementPrompt } from '../../services/promptQuota';
 import { getNFLSeason } from '../../services/season';
 import { getValidYahooToken, getYahooLeagues, getMyYahooTeam, getYahooStandings, YahooLeague, YahooPlayer } from '../../services/yahoo';
 
@@ -73,6 +73,25 @@ function getPaywallMessage(resetStr: string): string {
 // Keenan Allen on Yahoo/ESPN/FF rosters) like productive starters.
 
 const SLEEPER_PLAYER_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Cap a platform context loader so one slow platform (MFL's shared hosts
+// can take 10s+ per call) can't hold the whole coach hostage — the UI
+// waits on the SLOWEST of five platforms. Losers resolve to their
+// fallback and simply miss this session's context.
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+const PLATFORM_LOAD_TIMEOUT_MS = 12_000;
+
+// Session cache of the assembled league contexts + live data. League
+// rosters/standings don't change minute-to-minute; re-fetching five
+// platforms on every coach visit made the tab feel broken. 10-minute TTL,
+// module-level so it survives remounts but not app restarts.
+let coachCtxCache: { at: number; all: LeagueContext[]; liveData: any } | null = null;
+const COACH_CTX_TTL_MS = 10 * 60 * 1000;
 
 async function loadSleeperPlayerMap(): Promise<Record<string, any>> {
   const cachedRaw   = await AsyncStorage.getItem('sleeper_players_cache');
@@ -728,15 +747,24 @@ export default function CoachScreen() {
       }
       playerNameSetRef.current = nameSet;
 
-      const [sleeperLeagues, espnLeagues, yahooLeagues, ffLeagues, mflLeagues, liveData] = await Promise.all([
-        loadSleeperContext(playerMap),
-        loadESPNContext(nameIndex),
-        loadYahooContext(nameIndex),
-        loadAbstractContext('fleaflicker', 'Fleaflicker', nameIndex),
-        loadAbstractContext('mfl', 'MFL', nameIndex),
-        fetchAllLiveData(),
-      ]);
-      const all = [...sleeperLeagues, ...espnLeagues, ...yahooLeagues, ...ffLeagues, ...mflLeagues];
+      let all: LeagueContext[];
+      let liveData: any;
+      const cachedCtx = coachCtxCache && Date.now() - coachCtxCache.at < COACH_CTX_TTL_MS ? coachCtxCache : null;
+      if (cachedCtx) {
+        ({ all, liveData } = cachedCtx);
+      } else {
+        const [sleeperLeagues, espnLeagues, yahooLeagues, ffLeagues, mflLeagues, liveDataFresh] = await Promise.all([
+          withTimeout(loadSleeperContext(playerMap), PLATFORM_LOAD_TIMEOUT_MS, []),
+          withTimeout(loadESPNContext(nameIndex), PLATFORM_LOAD_TIMEOUT_MS, []),
+          withTimeout(loadYahooContext(nameIndex), PLATFORM_LOAD_TIMEOUT_MS, []),
+          withTimeout(loadAbstractContext('fleaflicker', 'Fleaflicker', nameIndex), PLATFORM_LOAD_TIMEOUT_MS, []),
+          withTimeout(loadAbstractContext('mfl', 'MFL', nameIndex), PLATFORM_LOAD_TIMEOUT_MS, []),
+          fetchAllLiveData(),
+        ]);
+        all = [...sleeperLeagues, ...espnLeagues, ...yahooLeagues, ...ffLeagues, ...mflLeagues];
+        liveData = liveDataFresh;
+        coachCtxCache = { at: Date.now(), all, liveData };
+      }
 
       try {
         const leagueId = all[0]?.name ?? 'general';
