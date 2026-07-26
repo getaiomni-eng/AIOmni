@@ -13,7 +13,7 @@ import { normalizePlayerName } from './util/normalizeName';
 
 // ─── TYPES ──────────────────────────────────────────────────
 
-export type RankingsSource = 'sleeper' | 'espn' | 'yahoo' | 'mfl' | 'fleaflicker' | 'fantasypros' | 'nfl' | 'aiomni' | 'aiomni_formula';
+export type RankingsSource = 'sleeper' | 'espn' | 'yahoo' | 'mfl' | 'fleaflicker' | 'fantasypros' | 'nfl' | 'ktc' | 'aiomni' | 'aiomni_formula';
 
 export interface RankedPlayer {
   id: string;
@@ -71,17 +71,24 @@ export const SOURCE_WEIGHTS: Record<LeagueType, Record<RankingsSource, number>> 
     nfl: 12,
     mfl: 8,
     fleaflicker: 8,
+    ktc: 0,            // KTC is a dynasty market; unused for redraft
     fantasypros: 0,    // not implemented; reserved
     aiomni: 0,         // Pulse blend output, not a source input
     aiomni_formula: 0, // proprietary algorithmic engine, never blended
   },
+  // Dynasty rebalance (2026-07-26): platform dynasty ADP (MFL/FF/Sleeper)
+  // is dominated by SUPERFLEX drafts and none of those exports distinguish
+  // 1QB from SF — which floated QBs (Maye, rookie Mendoza) into the top 12
+  // of 1QB dynasty Pulse. KTC publishes separate oneQB and SF value sets,
+  // so it anchors the blend with the format-correct market signal.
   dynasty: {
-    sleeper: 20,
-    espn: 12.5,
-    yahoo: 12.5,
+    sleeper: 15,
+    espn: 7.5,
+    yahoo: 7.5,
     nfl: 0,            // NFL.com doesn't publish dynasty rankings
-    mfl: 30,
-    fleaflicker: 25,
+    mfl: 20,
+    fleaflicker: 20,
+    ktc: 30,           // format-aware (oneQB vs SF column per scoringRules)
     fantasypros: 0,
     aiomni: 0,
     aiomni_formula: 0,
@@ -725,6 +732,7 @@ export async function fetchBlendedConsensus(
   const [
     sleeperResult, espnResult, yahooResult,
     mflResult, fleaflickerResult, nflcomResult,
+    ktcResult,
     trendingResult, leadersResult,
     injuriesResult, vegasResult, snapsResult, newsResult,
   ] = await Promise.allSettled([
@@ -734,6 +742,7 @@ export async function fetchBlendedConsensus(
     fetchMFLADP(leagueType, scoringRules),
     fetchFleaflickerADP(leagueType, scoringRules),
     fetchNFLDotComRankings(scoringRules),
+    leagueType === 'dynasty' ? fetchKTCValues() : Promise.resolve(null),
     fetchSleeperTrending(),
     fetchESPNLeaders(),
     fetchNFLInjuries(),
@@ -749,6 +758,24 @@ export async function fetchBlendedConsensus(
   const mflData         = mflResult.status === 'fulfilled' ? mflResult.value : [];
   const fleaflickerData = fleaflickerResult.status === 'fulfilled' ? fleaflickerResult.value : [];
   const nflcomData      = nflcomResult.status === 'fulfilled' ? nflcomResult.value : [];
+
+  // KTC → ranked list using the format-correct value column. KTC's dynasty
+  // page carries BOTH oneQB and superflex values per player; picking by
+  // scoringRules is what keeps SF QB premiums out of 1QB dynasty boards.
+  const ktcVals = ktcResult.status === 'fulfilled' ? ktcResult.value : null;
+  let ktcData: RankedPlayer[] = [];
+  if (ktcVals?.dynasty) {
+    const col: 'oneQB' | 'sf' = scoringRules === 'superflex' ? 'sf' : 'oneQB';
+    ktcData = Object.entries(ktcVals.dynasty)
+      .map(([name, v]) => ({ name, value: v[col] ?? 0, pos: v.pos, team: v.team }))
+      .filter(e => e.value > 0)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 300)
+      .map((e, i): RankedPlayer => ({
+        id: `ktc-${i}`, name: e.name, position: e.pos, team: e.team,
+        rank: i + 1, adp: '', trend: 'flat', trendVal: 0, tier: 0,
+      }));
+  }
   const trending    = trendingResult.status === 'fulfilled' ? trendingResult.value : { adds: [], drops: [] };
   const leaders     = leadersResult.status === 'fulfilled' ? leadersResult.value : [];
   const injuries    = injuriesResult.status === 'fulfilled' ? injuriesResult.value : [];
@@ -785,6 +812,10 @@ export async function fetchBlendedConsensus(
   if (mflData.length > 0         && weights.mfl > 0)         sources.push({ name: 'mfl',         data: mflData,         weight: weights.mfl });
   if (fleaflickerData.length > 0 && weights.fleaflicker > 0) sources.push({ name: 'fleaflicker', data: fleaflickerData, weight: weights.fleaflicker });
   if (nflcomData.length > 0      && weights.nfl > 0)         sources.push({ name: 'nfl',         data: nflcomData,      weight: weights.nfl });
+  // KTC goes LAST: playerMap identity (id/team/pos) is seeded by whichever
+  // source sees a player first, and KTC rows carry synthetic ids that would
+  // break Sleeper trending lookups if they seeded the map.
+  if (ktcData.length > 0         && weights.ktc > 0)         sources.push({ name: 'ktc',         data: ktcData,         weight: weights.ktc });
 
   if (sources.length === 0) return fetchSleeperADP(); // absolute fallback
 
@@ -1079,8 +1110,13 @@ export async function getCustomRankings(format: string = 'PPR', leagueId?: strin
   const localKey = leagueId ? 'my_custom_rankings_' + format + '_' + leagueId : 'my_custom_rankings_' + format;
   const val = await AsyncStorage.getItem(localKey);
   if (!val) {
-    const legacy = await AsyncStorage.getItem('my_custom_rankings_v7');
-    if (legacy) return JSON.parse(legacy);
+    // The legacy pre-format blob (v7) was a single redraft-PPR board.
+    // Serving it as the fallback for EVERY format made dynasty custom
+    // rankings identical to redraft. Only redraft PPR inherits it.
+    if (format === 'PPR' && !leagueId) {
+      const legacy = await AsyncStorage.getItem('my_custom_rankings_v7');
+      if (legacy) { try { return JSON.parse(legacy); } catch { /* fall through */ } }
+    }
     return null;
   }
   try { return JSON.parse(val); } catch { return null; }
