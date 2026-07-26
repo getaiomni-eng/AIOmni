@@ -1,69 +1,34 @@
-// app/mfl-login.tsx — WebView login flow (v2 2026-05-21)
-// Mirrors ESPN/Fleaflicker. Loads MFL login → user signs in → JS sniffs
-// session cookie (MFL_USER_ID) → calls /export?TYPE=myleagues with cookie
-// → presents picker.
+// app/mfl-login.tsx — native API login (v3 2026-07-26)
+// v1/v2 loaded MFL's login page in a WebView and sniffed the MFL_USER_ID
+// cookie. That broke in the field: MFL's server answered the WebView's
+// page loads with Apache 403s on some devices (every network, while
+// Safari on the same phone worked), and the failure wasn't reproducible
+// from outside. Meanwhile the app's NATIVE fetches to
+// api.myfantasyleague.com kept working from the same devices.
+//
+// So v3 drops the WebView entirely and uses MFL's official login API:
+//   POST https://api.myfantasyleague.com/{year}/login  (USERNAME/PASSWORD/XML=1)
+//   → <status MFL_USER_ID="...">  on success
+//   → <error>...</error>          on bad credentials
+// The password goes directly to MFL over HTTPS and is never stored —
+// we keep only the MFL_USER_ID session value, same as the old flow.
 //
 // MFL has host-routing: each league lives on a numbered subdomain
 // (www43.myfantasyleague.com, www49, etc). The myleagues response includes
 // each league's url, which we parse for host. Stored alongside.
-//
-// DIAGNOSTIC PANEL surfaces captured signals so we can iterate without
-// rebuilding. URL-paste fallback for edge cases.
+// URL-paste fallback for edge cases remains.
 
 import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator, Alert, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
 import { setMflCredentials, setMflLeagues } from '../services/platform/mfl';
 import { C, F, SP, SZ } from './constants/tokens';
 
-const MFL_LOGIN_URL = 'https://www.myfantasyleague.com/2026/login';
 const SEASON = '2026';
-
-const INJECT_SCRIPT = `
-  (function() {
-    function getCookies() {
-      var out = {};
-      (document.cookie || '').split(';').forEach(function(c) {
-        var idx = c.indexOf('=');
-        if (idx > 0) out[c.substring(0,idx).trim()] = c.substring(idx+1).trim();
-      });
-      return out;
-    }
-    function findUsername() {
-      var spans = document.querySelectorAll('.username, .user-link, .navbar-text, .userMenuLink');
-      for (var i = 0; i < spans.length; i++) {
-        var t = (spans[i].textContent || '').trim();
-        if (t && t.length > 0 && t.length < 40) return t;
-      }
-      // Some MFL skins put username in a header label
-      var bold = document.querySelectorAll('b, strong');
-      for (var i = 0; i < bold.length; i++) {
-        var t = (bold[i].textContent || '').trim();
-        if (/^[A-Za-z0-9_.-]{3,30}$/.test(t)) return t;
-      }
-      return null;
-    }
-    function probe() {
-      try {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'probe',
-          url: window.location.href,
-          cookies: getCookies(),
-          username: findUsername(),
-          title: document.title || '',
-        }));
-      } catch (e) {}
-    }
-    probe();
-    setInterval(probe, 1500);
-  })();
-  true;
-`;
 
 type LeagueLite = {
   id: string; name: string; franchiseId: string; host: string;
@@ -72,15 +37,53 @@ type LeagueLite = {
 export default function MflLoginScreen() {
   const router       = useRouter();
   const insets       = useSafeAreaInsets();
-  const webViewRef   = useRef<any>(null);
-  const [status,        setStatus]      = useState('Log in to MyFantasyLeague — we’ll find your leagues automatically');
+  const [status,        setStatus]      = useState('Sign in with your MyFantasyLeague account — we’ll find your leagues automatically');
   const [connecting,    setConnecting]  = useState(false);
   const [connected,     setConnected]   = useState(false);
-  const [diagnostic,    setDiagnostic]  = useState<any>(null);
+  const [username,      setUsername]    = useState('');
+  const [password,      setPassword]    = useState('');
   const [leagueOptions, setLeagueOptions] = useState<LeagueLite[] | null>(null);
   const [fallbackURL,   setFallbackURL] = useState('');
   const [showFallback,  setShowFallback] = useState(false);
   const [apiTrace,      setApiTrace]    = useState<string[]>([]);
+
+  // Official MFL login API. Success returns XML carrying MFL_USER_ID;
+  // failure returns <error>reason</error>. POST keeps credentials out of
+  // URLs/logs. The password is sent only to MFL and never persisted.
+  async function handleLogin() {
+    const u = username.trim();
+    if (!u || !password) {
+      Alert.alert('Missing info', 'Enter your MFL username (or email) and password.');
+      return;
+    }
+    setConnecting(true);
+    setStatus('Signing in to MyFantasyLeague...');
+    try {
+      const res = await fetch(`https://api.myfantasyleague.com/${SEASON}/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'AIOmni 1.0',
+        },
+        body: `USERNAME=${encodeURIComponent(u)}&PASSWORD=${encodeURIComponent(password)}&XML=1`,
+      });
+      const body = await res.text();
+      const ok = body.match(/MFL_USER_ID="([^"]+)"/);
+      if (!ok) {
+        const err = body.match(/<error>([^<]*)<\/error>/);
+        console.log('MFL login failed:', err?.[1] ?? body.slice(0, 200));
+        setConnecting(false);
+        setStatus(err?.[1] ? `Login failed: ${err[1]}` : 'Login failed — check your username and password.');
+        return;
+      }
+      setPassword('');
+      await loadLeagues('api.myfantasyleague.com', { MFL_USER_ID: ok[1] });
+    } catch (e: any) {
+      console.log('MFL login network error:', e?.message ?? e);
+      setConnecting(false);
+      setStatus('Could not reach MFL. Check your connection and try again.');
+    }
+  }
 
   async function loadLeagues(host: string, cookies: Record<string, string>) {
     const trace: string[] = [];
@@ -242,27 +245,6 @@ export default function MflLoginScreen() {
     });
   }
 
-  const handleMessage = async (event: any) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.type !== 'probe') return;
-      setDiagnostic(data);
-      if (connecting || connected || leagueOptions) return;
-      // v2.2 (2026-05-21): trust the cookie, not the URL. MFL's /login URL
-      // renders the login form even when you're already logged in (the page
-      // shows "Logout" link + username at top). MFL_USER_ID cookie is the
-      // truth signal.
-      const cookies = data.cookies || {};
-      const hasMflUser = !!cookies['MFL_USER_ID'];
-      if (hasMflUser) {
-        setConnecting(true);
-        const hostMatch = (data.url || '').match(/https?:\/\/([^/]+)/);
-        const host = hostMatch?.[1] || 'www.myfantasyleague.com';
-        await loadLeagues(host, cookies);
-      }
-    } catch {}
-  };
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -305,51 +287,38 @@ export default function MflLoginScreen() {
         </View>
       )}
 
-      {!leagueOptions && !showFallback && (
-        <WebView
-          ref={webViewRef}
-          source={{ uri: MFL_LOGIN_URL }}
-          injectedJavaScript={INJECT_SCRIPT}
-          onMessage={handleMessage}
-          style={styles.webview}
-          // v2.3 (2026-07-26): incognito — fresh, non-persistent cookie
-          // store per connect. The previous sharedCookiesEnabled setup
-          // reused the app-wide cookie jar, so a stale/flagged MFL session
-          // from an earlier connect rode along on every request and MFL
-          // answered 403 ("You don't have permission…") on any network,
-          // while Safari (separate cookies) worked fine. The flow never
-          // needed persistent cookies: the probe reads document.cookie
-          // in-session and hands MFL_USER_ID to loadLeagues directly.
-          incognito
-          javaScriptEnabled
-          domStorageEnabled
-          // Lock navigation to MFL only — prevents the injected probe
-          // from running on any third-party page if a redirect ever
-          // landed off-domain.
-          originWhitelist={['https://*.myfantasyleague.com', 'https://myfantasyleague.com']}
-          userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
-          // v2.1 (2026-05-21): MFL 301-redirects HTTPS → HTTP, which WKWebView
-          // blocks (renders blank). Intercept and force the HTTPS variant.
-          onShouldStartLoadWithRequest={(req) => {
-            if (req.url.startsWith('http://')) {
-              const httpsUrl = req.url.replace(/^http:\/\//, 'https://');
-              setTimeout(() => webViewRef.current?.injectJavaScript(
-                `window.location.replace(${JSON.stringify(httpsUrl)}); true;`
-              ), 0);
-              return false;
-            }
-            try {
-              const host = new URL(req.url).hostname;
-              if (!/(^|\.)myfantasyleague\.com$/i.test(host)) return false;
-            } catch { return false; }
-            return true;
-          }}
-          onNavigationStateChange={() => { webViewRef.current?.injectJavaScript(INJECT_SCRIPT); }}
-        />
+      {!leagueOptions && !showFallback && !connected && (
+        <View style={styles.loginBox}>
+          <Text style={styles.fallbackLabel}>MFL USERNAME OR EMAIL</Text>
+          <TextInput
+            value={username} onChangeText={setUsername}
+            placeholder="username or email" placeholderTextColor={C.dim2}
+            autoCapitalize="none" autoCorrect={false} autoComplete="username"
+            style={styles.fallbackInput}
+          />
+          <Text style={styles.fallbackLabel}>PASSWORD</Text>
+          <TextInput
+            value={password} onChangeText={setPassword}
+            placeholder="password" placeholderTextColor={C.dim2}
+            secureTextEntry autoCapitalize="none" autoComplete="current-password"
+            style={styles.fallbackInput}
+            onSubmitEditing={handleLogin}
+          />
+          <TouchableOpacity
+            style={[styles.fallbackBtn, connecting && { opacity: 0.5 }]}
+            onPress={handleLogin} disabled={connecting}
+          >
+            <Text style={styles.fallbackBtnText}>{connecting ? 'SIGNING IN…' : 'SIGN IN'}</Text>
+          </TouchableOpacity>
+          <Text style={styles.loginNote}>
+            Your credentials go directly to MyFantasyLeague over HTTPS. AIOmni
+            never stores your password — only the login session, like the
+            website does.
+          </Text>
+        </View>
       )}
 
-      {/* Diagnostic "Captured (for debug)" + API trace panel removed.
-          The "paste your league URL instead" escape hatch lives in the
+      {/* The "paste your league URL instead" escape hatch lives in the
           fallback form above. apiTrace state is still recorded for
           console logs in dev; render guarded behind __DEV__ if needed. */}
     </View>
@@ -385,7 +354,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: BORDER,
   },
   statusText: { fontFamily: F.mono, color: TEXT, fontSize: SZ.base - 1, flex: 1, lineHeight: 18 },
-  webview: { flex: 1, backgroundColor: '#ffffff' }, // WebView itself stays light (it's MFL's own login page)
+  loginBox: {
+    padding: SP[3], gap: 12,
+  },
+  loginNote: {
+    fontFamily: F.mono, fontSize: SZ.sm, color: SUB,
+    lineHeight: 17, marginTop: 4,
+  },
 
   leagueList: { flex: 1, backgroundColor: BG },
   leagueRow: {
