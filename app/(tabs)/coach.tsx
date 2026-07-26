@@ -336,7 +336,10 @@ async function loadESPNContext(nameIndex: Map<string, any> | null): Promise<Leag
     if (!creds?.leagueId) return [];
     const leagueData = await getESPNLeague(creds.leagueId, creds);
     if (!leagueData) return [];
-    const myTeam     = findMyESPNTeam(leagueData, creds.teamName || '');
+    // findMyESPNTeam matches teams by owner SWID, not display name —
+    // passing teamName (usually unset) matched nothing, so the coach saw
+    // the league with an empty roster and told the user it wasn't loaded.
+    const myTeam     = findMyESPNTeam(leagueData, creds.swid);
     const allSettings = leagueData.settings;
     const scoring   = allSettings?.scoringSettings;
     const recPts    = scoring?.REC ?? 0;
