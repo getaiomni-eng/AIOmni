@@ -312,8 +312,15 @@ export default function MflLoginScreen() {
           injectedJavaScript={INJECT_SCRIPT}
           onMessage={handleMessage}
           style={styles.webview}
-          sharedCookiesEnabled
-          thirdPartyCookiesEnabled
+          // v2.3 (2026-07-26): incognito — fresh, non-persistent cookie
+          // store per connect. The previous sharedCookiesEnabled setup
+          // reused the app-wide cookie jar, so a stale/flagged MFL session
+          // from an earlier connect rode along on every request and MFL
+          // answered 403 ("You don't have permission…") on any network,
+          // while Safari (separate cookies) worked fine. The flow never
+          // needed persistent cookies: the probe reads document.cookie
+          // in-session and hands MFL_USER_ID to loadLeagues directly.
+          incognito
           javaScriptEnabled
           domStorageEnabled
           // Lock navigation to MFL only — prevents the injected probe
