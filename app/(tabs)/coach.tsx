@@ -1262,37 +1262,43 @@ Capture rookies and veterans exactly.`,
       {/* ── League Picker Modal ── */}
       <Modal visible={pickerVisible} transparent animationType="slide" onRequestClose={() => setPickerVisible(false)}>
         <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setPickerVisible(false)}>
-          <View style={styles.pickerSheet}>
+          {/* maxHeight + scrollable list: with every league now loading
+              (20+ across platforms) the sheet outgrew the screen and the
+              top rows were unreachable — the row list scrolls, while the
+              title and CANCEL stay pinned. */}
+          <View style={[styles.pickerSheet, { maxHeight: '82%' }]}>
             <View style={styles.pickerShineBar} />
             <View style={styles.pickerHandle} />
             <Text style={styles.pickerTitle}>FOCUS ON A LEAGUE</Text>
             <Text style={styles.pickerSub}>AI advice will be tailored to the selected league's roster and scoring format.</Text>
 
-            <TouchableOpacity style={[styles.pickerRow, !selectedLeague && styles.pickerRowActive]} onPress={() => selectLeague(null)}>
-              <View style={[styles.pickerDot, { backgroundColor: C.gold }]} />
-              <View style={{ flex:1 }}>
-                <Text style={[styles.pickerRowLabel, !selectedLeague && { color: C.gold }]}>All Leagues</Text>
-                <Text style={styles.pickerRowSub}>{allLeagues.length} leagues · Cross-league insights</Text>
-              </View>
-              {!selectedLeague && <Ionicons name="checkmark" size={18} color={C.gold} />}
-            </TouchableOpacity>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flexGrow: 0 }}>
+              <TouchableOpacity style={[styles.pickerRow, !selectedLeague && styles.pickerRowActive]} onPress={() => selectLeague(null)}>
+                <View style={[styles.pickerDot, { backgroundColor: C.gold }]} />
+                <View style={{ flex:1 }}>
+                  <Text style={[styles.pickerRowLabel, !selectedLeague && { color: C.gold }]}>All Leagues</Text>
+                  <Text style={styles.pickerRowSub}>{allLeagues.length} leagues · Cross-league insights</Text>
+                </View>
+                {!selectedLeague && <Ionicons name="checkmark" size={18} color={C.gold} />}
+              </TouchableOpacity>
 
-            <View style={styles.pickerDivider} />
+              <View style={styles.pickerDivider} />
 
-            {allLeagues.map((lg, i) => {
-              const isActive = selectedLeague?.name === lg.name && selectedLeague?.platform === lg.platform;
-              const color    = PLATFORM_COLOR[lg.platform] ?? C.gold;
-              return (
-                <TouchableOpacity key={i} style={[styles.pickerRow, isActive && styles.pickerRowActive]} onPress={() => selectLeague(lg)}>
-                  <View style={[styles.pickerDot, { backgroundColor: color }]} />
-                  <View style={{ flex:1 }}>
-                    <Text style={[styles.pickerRowLabel, isActive && { color }]} numberOfLines={1}>{lg.name}</Text>
-                    <Text style={styles.pickerRowSub}>{lg.platform} · {lg.format} · {lg.record} · Rank {lg.rank}</Text>
-                  </View>
-                  {isActive && <Ionicons name="checkmark" size={18} color={color} />}
-                </TouchableOpacity>
-              );
-            })}
+              {allLeagues.map((lg, i) => {
+                const isActive = selectedLeague?.name === lg.name && selectedLeague?.platform === lg.platform;
+                const color    = PLATFORM_COLOR[lg.platform] ?? C.gold;
+                return (
+                  <TouchableOpacity key={i} style={[styles.pickerRow, isActive && styles.pickerRowActive]} onPress={() => selectLeague(lg)}>
+                    <View style={[styles.pickerDot, { backgroundColor: color }]} />
+                    <View style={{ flex:1 }}>
+                      <Text style={[styles.pickerRowLabel, isActive && { color }]} numberOfLines={1}>{lg.name}</Text>
+                      <Text style={styles.pickerRowSub}>{lg.platform} · {lg.format} · {lg.record} · Rank {lg.rank}</Text>
+                    </View>
+                    {isActive && <Ionicons name="checkmark" size={18} color={color} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
 
             <TouchableOpacity style={styles.pickerClose} onPress={() => setPickerVisible(false)}>
               <Text style={styles.pickerCloseTxt}>CANCEL</Text>
