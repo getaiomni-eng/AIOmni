@@ -502,6 +502,19 @@ export default function LeagueScreen() {
     finally { setActivityLoading(false); }
   };
 
+  // Keep the top N available players PER POSITION (input order preserved,
+  // so each platform's own ranking decides who makes the cut). A single
+  // overall top-100 starves thin positions — K/TE/DEF barely chart on
+  // ownership-sorted lists, leaving their filter chips nearly empty.
+  const topPerPosition = (list: any[], n = 25): any[] => {
+    const counts: Record<string, number> = {};
+    return list.filter(p => {
+      const k = p.position || '?';
+      counts[k] = (counts[k] ?? 0) + 1;
+      return counts[k] <= n;
+    });
+  };
+
   const fetchWaivers = async () => {
     setWaiverLoading(true);
     setWaiverError(null);
@@ -513,7 +526,7 @@ export default function LeagueScreen() {
           getActiveSleeperIds().catch(() => new Set<string>()),
         ]);
         const taken = new Set(rosters.flatMap((r: any) => r.players || []));
-        setWaiverPlayers(
+        setWaiverPlayers(topPerPosition(
           Object.values(pDb)
             .filter((p: any) =>
               (() => {
@@ -549,9 +562,8 @@ export default function LeagueScreen() {
               )
             )
             .sort((a: any, b: any) => (a.search_rank ?? 100) - (b.search_rank ?? 100))
-            .slice(0, 150)
             .map((p: any) => ({ id: p.player_id, name: `${p.first_name} ${p.last_name}`, position: p.position, team: p.team, injuryStatus: p.injury_status, isStarter: false }))
-        );
+        , 25));
         // Attach Sleeper trending velocity → Heat score.
         try {
           const heatMap = await getHeatSignalsMap();
@@ -565,39 +577,50 @@ export default function LeagueScreen() {
         // proTeamId → team abbrev. The old inline fetch hardcoded
         // /seasons/2025/, which returned an empty list for 2026 leagues.
         const { getESPNFreeAgents } = require('../../services/espn');
-        const fas = await getESPNFreeAgents(parseInt(leagueId as string), creds, 100);
-        setWaiverPlayers(fas.map((p: any) => ({ id: p.id, name: p.name, position: p.position, team: p.team, injuryStatus: p.injuryStatus, isStarter: false })));
+        // 250-deep pool (ownership-sorted) so thin positions still field a
+        // full top-25 after the per-position cut.
+        const fas = await getESPNFreeAgents(parseInt(leagueId as string), creds, 250);
+        setWaiverPlayers(topPerPosition(fas.map((p: any) => ({ id: p.id, name: p.name, position: p.position, team: p.team, injuryStatus: p.injuryStatus, isStarter: false })), 25));
       } else if (platformStr === 'yahoo') {
         const token = await getValidYahooToken(); if (!token) return;
-        const data  = await (await fetch(`https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueId}/players;status=FA;sort=OR;count=50?format=json`, { headers: { Authorization: `Bearer ${token}` } })).json();
-        // Yahoo's player[0] is an ARRAY of single-key attribute objects
-        // ({player_key}, {name:{full}}, {display_position}, …), not one
-        // object — reading p.name?.full off the array rendered every row
-        // as "Unknown". Resolve attributes with find(), like yahoo.ts does.
-        setWaiverPlayers(Object.values(data?.fantasy_content?.league?.[1]?.players || {}).filter((v: any) => typeof v === 'object' && v.player).map((v: any) => {
-          const attrs: any[] = Array.isArray(v.player[0]) ? v.player[0] : [];
-          const attr = (k: string) => attrs.find((x: any) => x && typeof x === 'object' && k in x)?.[k];
-          return {
-            id: attr('player_key') || '',
-            name: attr('name')?.full || 'Unknown',
-            position: attr('display_position') || '?',
-            team: attr('editorial_team_abbr') || 'FA',
-            injuryStatus: attr('status'),
-            isStarter: false,
-          };
+        // Yahoo caps count at 25 per request, so one overall-sorted call
+        // can't cover every position — fetch the top 25 PER POSITION in
+        // parallel instead. Yahoo's player[0] is an ARRAY of single-key
+        // attribute objects ({player_key}, {name:{full}}, …), not one
+        // object — resolve attributes with find(), like yahoo.ts does.
+        const YAHOO_POS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+        const perPos = await Promise.all(YAHOO_POS.map(async (pos) => {
+          try {
+            const data = await (await fetch(`https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueId}/players;status=FA;position=${pos};sort=OR;count=25?format=json`, { headers: { Authorization: `Bearer ${token}` } })).json();
+            return Object.values(data?.fantasy_content?.league?.[1]?.players || {}).filter((v: any) => typeof v === 'object' && v.player).map((v: any) => {
+              const attrs: any[] = Array.isArray(v.player[0]) ? v.player[0] : [];
+              const attr = (k: string) => attrs.find((x: any) => x && typeof x === 'object' && k in x)?.[k];
+              return {
+                id: attr('player_key') || '',
+                name: attr('name')?.full || 'Unknown',
+                position: attr('display_position') || pos,
+                team: attr('editorial_team_abbr') || 'FA',
+                injuryStatus: attr('status'),
+                isStarter: false,
+              };
+            });
+          } catch { return []; }
         }));
+        setWaiverPlayers(perPos.flat());
       } else if (platformStr === 'fleaflicker' || platformStr === 'mfl') {
         const { getPlatform } = require('../../services/platform');
         const plat = getPlatform(platformStr);
-        const players = await plat.getAvailablePlayers(leagueId as string, { limit: 100 }).catch(() => []);
-        setWaiverPlayers((players as any[]).map(p => ({
+        // 250-deep pool so the per-position cut can field a full top 25
+        // even for K/TE/DEF, which barely chart on overall-sorted lists.
+        const players = await plat.getAvailablePlayers(leagueId as string, { limit: 250 }).catch(() => []);
+        setWaiverPlayers(topPerPosition((players as any[]).map(p => ({
           id:           String(p.id ?? ''),
           name:         p.name || 'Unknown',
           position:     p.position || '?',
           team:         p.team || 'FA',
           injuryStatus: p.injuryStatus ?? undefined,
           isStarter:    false,
-        })));
+        })), 25));
       }
     } catch (err) {
       console.error(err);
