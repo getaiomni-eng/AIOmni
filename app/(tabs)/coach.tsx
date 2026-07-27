@@ -968,7 +968,7 @@ Capture rookies and veterans exactly.`,
           else unverified.push(nm);
         }
         if (verified === 0) {
-          setMessages(prev => [...prev, { role: 'ai', text: "I read some text off that image but couldn't match any of it to real NFL players — it may be blurry or not a draft board. Try a clearer screenshot, or just tell me who's already gone." }]);
+          setMessages(prev => [...prev, { role: 'ai', text: "I read some text off that image but couldn't match any of it to real NFL players — it may be blurry or not a draft board. Try a clearer screenshot, or just tell me who's already gone.\n\n(If that was a trade offer, use the 📸 on the Trade tab instead — it's built to read trade screenshots.)" }]);
           return;
         }
       }
@@ -1028,17 +1028,25 @@ Capture rookies and veterans exactly.`,
       // it's interpolated into the prompt. Assistant turns are trusted
       // because they came from us. System prompt + player context are
       // also trusted (we built them from DB data).
+      // Draft-board messages are composed by US from the vision extractor
+      // (marker prefix below) and legitimately run thousands of chars — a
+      // 45-pick board at the default 500-char cap truncated to ~20 picks
+      // and the model told the user their message "cut off." Raise the
+      // cap for those; injection patterns still apply either way.
+      const sanitizeCoachMsg = (t: string) =>
+        sanitizePromptInput(t, t.startsWith('[Live draft board') ? 8000 : undefined);
+
       const history = [...messages, userMsg]
         .filter(m => !m.isLoading)
         .map(m => ({
           role:    m.role === 'ai' ? 'assistant' : 'user',
-          content: m.role === 'ai' ? m.text : sanitizePromptInput(m.text),
+          content: m.role === 'ai' ? m.text : sanitizeCoachMsg(m.text),
         }));
 
       let playerContext = '';
       try { playerContext = await getPlayerContext(text); } catch {}
 
-      const safeText = sanitizePromptInput(text);
+      const safeText = sanitizeCoachMsg(text);
       const fullPrompt = [
         systemPromptRef.current,
         playerContext ? `\nPLAYER INTELLIGENCE FROM DATABASE:\n${playerContext}` : '',
