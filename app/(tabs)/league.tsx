@@ -7,7 +7,7 @@ import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 're
 import { askAI } from "../../services/ai";
 import { getCurrentTier } from '../../services/purchases';
 import { syncRosteredPlayers, type RosteredPlayer } from '../../services/rosterSync';
-import { consumePrompt } from '../utils/promptCounter';
+import { consumePrompt } from '../../services/promptQuota';
 import { findMyESPNTeam, formatESPNPosition, getESPNAllRosters, getESPNLeague, getESPNMatchups, getESPNStandings, getESPNTransactions, isESPNStarter, loadESPNCredentials } from '../../services/espn';
 import { Icon } from '../components/AIOmniIcons';
 import PlayerCardModal from '../components/PlayerCardModal';
@@ -561,14 +561,31 @@ export default function LeagueScreen() {
         } catch (e) { console.log('waiver heat merge:', e); }
       } else if (platformStr === 'espn') {
         const creds = await loadESPNCredentials(); if (!creds) return;
-        const data  = await getESPNLeague(parseInt(leagueId as string), creds);
-        const filter = JSON.stringify({ players: { filterStatus: { value: ['FREEAGENT','WAIVERS'] }, filterSlotIds: { value: [0,2,4,6,16,17,23] }, limit: 100 } });
-        const res = await fetch(`https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2025/segments/0/leagues/${leagueId}?view=kona_player_info&scoringPeriodId=${data.scoringPeriodId||1}`, { headers: { 'Content-Type': 'application/json', 'X-Fantasy-Filter': filter, Cookie: `espn_s2=${creds.espnS2}; SWID=${creds.swid}` } });
-        setWaiverPlayers(((await res.json()).players || []).map((p: any) => { const pl = p.playerPoolEntry?.player; return { id: String(pl?.id || ''), name: pl?.fullName || 'Unknown', position: formatESPNPosition(pl?.defaultPositionId), team: String(pl?.proTeamId || 'FA'), injuryStatus: pl?.injuryStatus, isStarter: false }; }));
+        // getESPNFreeAgents resolves the active season dynamically and maps
+        // proTeamId → team abbrev. The old inline fetch hardcoded
+        // /seasons/2025/, which returned an empty list for 2026 leagues.
+        const { getESPNFreeAgents } = require('../../services/espn');
+        const fas = await getESPNFreeAgents(parseInt(leagueId as string), creds, 100);
+        setWaiverPlayers(fas.map((p: any) => ({ id: p.id, name: p.name, position: p.position, team: p.team, injuryStatus: p.injuryStatus, isStarter: false })));
       } else if (platformStr === 'yahoo') {
         const token = await getValidYahooToken(); if (!token) return;
         const data  = await (await fetch(`https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueId}/players;status=FA;sort=OR;count=50?format=json`, { headers: { Authorization: `Bearer ${token}` } })).json();
-        setWaiverPlayers(Object.values(data?.fantasy_content?.league?.[1]?.players || {}).filter((v: any) => typeof v === 'object' && v.player).map((v: any) => { const p = v.player[0]; return { id: p.player_key, name: p.name?.full || 'Unknown', position: p.display_position || '?', team: p.editorial_team_abbr || 'FA', injuryStatus: p.status, isStarter: false }; }));
+        // Yahoo's player[0] is an ARRAY of single-key attribute objects
+        // ({player_key}, {name:{full}}, {display_position}, …), not one
+        // object — reading p.name?.full off the array rendered every row
+        // as "Unknown". Resolve attributes with find(), like yahoo.ts does.
+        setWaiverPlayers(Object.values(data?.fantasy_content?.league?.[1]?.players || {}).filter((v: any) => typeof v === 'object' && v.player).map((v: any) => {
+          const attrs: any[] = Array.isArray(v.player[0]) ? v.player[0] : [];
+          const attr = (k: string) => attrs.find((x: any) => x && typeof x === 'object' && k in x)?.[k];
+          return {
+            id: attr('player_key') || '',
+            name: attr('name')?.full || 'Unknown',
+            position: attr('display_position') || '?',
+            team: attr('editorial_team_abbr') || 'FA',
+            injuryStatus: attr('status'),
+            isStarter: false,
+          };
+        }));
       } else if (platformStr === 'fleaflicker' || platformStr === 'mfl') {
         const { getPlatform } = require('../../services/platform');
         const plat = getPlatform(platformStr);

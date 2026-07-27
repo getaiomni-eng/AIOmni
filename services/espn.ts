@@ -255,8 +255,73 @@ export async function getESPNMatchups(leagueId: number, creds: any): Promise<any
   const data = await getESPNLeague(leagueId, creds);
   return data?.schedule ?? null;
 }
-export async function getESPNTransactions(leagueId: number, creds: any): Promise<any[]> { return []; }
-export async function getESPNAllRosters(leagueId: number, creds: any): Promise<any[]> { return []; }
+// Recent league activity via the mTransactions2 view. ESPN only returns
+// player IDs here, so names resolve through the rosters payload (adds are
+// rostered post-transaction); unresolvable IDs (e.g. dropped-to-FA) fall
+// back to a generic label rather than failing the row.
+export async function getESPNTransactions(leagueId: number, creds: ESPNCredentials, year?: number): Promise<any[]> {
+  try {
+    const yr = year ?? await espnSeason();
+    const [txData, leagueData] = await Promise.all([
+      espnFetch(`/seasons/${yr}/segments/0/leagues/${leagueId}?view=mTransactions2`, creds),
+      getESPNLeague(leagueId, creds, yr),
+    ]);
+    const nameById = new Map<number, string>();
+    for (const t of leagueData?.teams ?? []) {
+      for (const e of t.roster?.entries ?? []) {
+        const p = e.playerPoolEntry?.player;
+        if (p?.id) nameById.set(p.id, p.fullName);
+      }
+    }
+    const teamName = (id: number) => {
+      const t = (leagueData?.teams ?? []).find((x: any) => x.id === id);
+      return t?.name || [t?.location, t?.nickname].filter(Boolean).join(' ') || `Team ${id}`;
+    };
+    return (txData?.transactions ?? [])
+      .filter((tx: any) => tx.status === 'EXECUTED')
+      .map((tx: any) => {
+        const adds: string[] = [];
+        const drops: string[] = [];
+        for (const item of tx.items ?? []) {
+          const nm = nameById.get(item.playerId) ?? `Player ${item.playerId}`;
+          if (item.type === 'ADD') adds.push(nm);
+          else if (item.type === 'DROP') drops.push(nm);
+        }
+        return {
+          type: String(tx.type ?? 'unknown').toLowerCase(),
+          adds,
+          drops,
+          trader: teamName(tx.teamId),
+          time: tx.processDate ?? tx.proposedDate ?? 0,
+        };
+      })
+      .sort((a: any, b: any) => b.time - a.time)
+      .slice(0, 50);
+  } catch { return []; }
+}
+
+// Every team's roster from the same mTeam+mRoster payload the league
+// detail already uses. Replaces the old stub that returned [] and left
+// the spy view + coach league-map empty for ESPN.
+export async function getESPNAllRosters(leagueId: number, creds: ESPNCredentials): Promise<any[]> {
+  try {
+    const data = await getESPNLeague(leagueId, creds);
+    return (data?.teams ?? []).map((t: any) => ({
+      rosterId: t.id,
+      username: t.name || [t.location, t.nickname].filter(Boolean).join(' ') || `Team ${t.id}`,
+      players: (t.roster?.entries ?? []).map((e: any) => {
+        const p = e.playerPoolEntry?.player;
+        return {
+          id: String(p?.id ?? ''),
+          name: p?.fullName ?? 'Unknown',
+          position: formatESPNPosition(p?.defaultPositionId),
+          team: ESPN_PRO_TEAMS[p?.proTeamId] ?? 'FA',
+          isStarter: isESPNStarter(e.lineupSlotId),
+        };
+      }),
+    }));
+  } catch { return []; }
+}
 
 // ─── FREE AGENTS ────────────────────────────────────────────
 // Pulls unrostered players from an ESPN league using the kona_player_info view.

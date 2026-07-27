@@ -373,6 +373,31 @@ async function loadESPNContext(nameIndex: Map<string, any> | null): Promise<Leag
       return formatPlayerEntry(name, pos, team, enrich);
     });
 
+    // Full-league roster map (every team's players + owner) — same shape
+    // Sleeper provides, so the coach can find who owns a player, spot
+    // trade partners, and run whole-league analysis instead of telling
+    // the user the other rosters "aren't loaded."
+    const posMapAll: Record<number, string> = { 1:'QB', 2:'RB', 3:'WR', 4:'TE', 5:'K', 16:'DEF' };
+    const leagueRosters = teams.map((t: any) => {
+      const who = t.id === myTeam?.id ? 'YOU' : (t.name || [t.location, t.nickname].filter(Boolean).join(' ') || `Team ${t.id}`);
+      const names = (t.roster?.entries ?? [])
+        .map((e: any) => {
+          const p = e.playerPoolEntry?.player;
+          return p ? `${p.fullName} (${posMapAll[p.defaultPositionId] ?? 'FLEX'})` : null;
+        })
+        .filter(Boolean).join(', ');
+      return `${who}: ${names || '(empty — pre-draft)'}`;
+    }).join('\n');
+
+    // Top available FAs so "who should I pick up" answers don't burn a
+    // prompt asking for the list first (mirrors the Sleeper loader).
+    let available: string[] | undefined;
+    try {
+      const { getESPNFreeAgents } = require('../../services/espn');
+      const fas = await getESPNFreeAgents(Number(creds.leagueId), creds, 20);
+      if (fas.length) available = fas.map((f: any) => `${f.name} (${f.position} · ${f.team})`);
+    } catch { /* non-fatal */ }
+
     return [{
       name: allSettings?.name ?? 'ESPN League',
       platform: 'ESPN',
@@ -386,6 +411,8 @@ async function loadESPNContext(nameIndex: Map<string, any> | null): Promise<Leag
       rosterSize: (allSettings?.rosterSettings?.lineupSlotCounts
         ? Object.values(allSettings.rosterSettings.lineupSlotCounts).reduce((a: number, b: any) => a + Number(b || 0), 0)
         : undefined) as number | undefined,
+      leagueRosters,
+      available,
     }];
   } catch { return []; }
 }
