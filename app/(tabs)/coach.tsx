@@ -348,7 +348,13 @@ async function loadESPNContext(nameIndex: Map<string, any> | null): Promise<Leag
     if (!summaries.length && creds.leagueId) {
       summaries = [{ id: Number(creds.leagueId), name: 'ESPN League', season: new Date().getFullYear(), drafted: true }];
     }
-    const picked = summaries.slice(0, 6);
+    // ALL leagues load — no arbitrary count cap. Token weight is governed
+    // by draft status instead: drafted leagues carry full context (roster,
+    // league map, FAs) while pre-draft leagues are near-free (empty
+    // rosters, FA preload skipped), so a 13-league account costs barely
+    // more than its drafted leagues. The 16 bound is a fan-API sanity
+    // ceiling, not a curation choice.
+    const picked = summaries.slice(0, 16);
     const built = await Promise.all(picked.map((s) => loadOneESPNLeague(s, creds, nameIndex)));
     return built.filter((c): c is LeagueContext => c !== null);
   } catch { return []; }
@@ -404,7 +410,8 @@ async function loadOneESPNLeague(
     // trade partners, and run whole-league analysis instead of telling
     // the user the other rosters "aren't loaded."
     const posMapAll: Record<number, string> = { 1:'QB', 2:'RB', 3:'WR', 4:'TE', 5:'K', 16:'DEF' };
-    const leagueRosters = teams.map((t: any) => {
+    // Pre-draft league maps are 12 lines of "(empty)" — pure token waste.
+    const leagueRosters = !summary.drafted ? undefined : teams.map((t: any) => {
       const who = t.id === myTeam?.id ? 'YOU' : (t.name || [t.location, t.nickname].filter(Boolean).join(' ') || `Team ${t.id}`);
       const names = (t.roster?.entries ?? [])
         .map((e: any) => {
