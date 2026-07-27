@@ -74,18 +74,6 @@ function getPaywallMessage(resetStr: string): string {
 
 const SLEEPER_PLAYER_TTL_MS = 24 * 60 * 60 * 1000;
 
-// Cap a platform context loader so one slow platform (MFL's shared hosts
-// can take 10s+ per call) can't hold the whole coach hostage — the UI
-// waits on the SLOWEST of five platforms. Losers resolve to their
-// fallback and simply miss this session's context.
-function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms)),
-  ]);
-}
-const PLATFORM_LOAD_TIMEOUT_MS = 12_000;
-
 // Session cache of the assembled league contexts + live data. League
 // rosters/standings don't change minute-to-minute; re-fetching five
 // platforms on every coach visit made the tab feel broken. 10-minute TTL,
@@ -330,12 +318,50 @@ async function loadSleeperContext(playerMap: Record<string, any>): Promise<Leagu
   } catch { return []; }
 }
 
+// Load ALL connected ESPN leagues (drafted/active first), not one league
+// picked by a stale stored ID. Source of truth is the season-tagged
+// espn_leagues_v2 summaries written at connect time (re-discovered here
+// if absent), which are already sorted active-first — the old
+// creds.leagueId path grabbed whatever happened to be first in the
+// legacy id list (e.g. a pre-draft league) and starved the coach of the
+// league the user actually plays in.
 async function loadESPNContext(nameIndex: Map<string, any> | null): Promise<LeagueContext[]> {
   try {
     const creds = await loadESPNCredentials();
-    if (!creds?.leagueId) return [];
-    const leagueData = await getESPNLeague(creds.leagueId, creds);
-    if (!leagueData) return [];
+    if (!creds) return [];
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    let summaries: Array<{ id: number; name: string; season: number; drafted: boolean }> = [];
+    try {
+      const raw = await AsyncStorage.getItem('espn_leagues_v2');
+      if (raw) summaries = JSON.parse(raw);
+    } catch { /* fall through to discovery */ }
+    if (!summaries.length) {
+      try {
+        const { discoverESPNLeagues } = require('../../services/espn');
+        summaries = await discoverESPNLeagues(creds);
+        if (summaries.length) {
+          await AsyncStorage.setItem('espn_leagues_v2', JSON.stringify(summaries));
+          await AsyncStorage.setItem('espn_league_ids', JSON.stringify(summaries.map((s) => s.id)));
+        }
+      } catch { /* discovery failed */ }
+    }
+    if (!summaries.length && creds.leagueId) {
+      summaries = [{ id: Number(creds.leagueId), name: 'ESPN League', season: new Date().getFullYear(), drafted: true }];
+    }
+    const picked = summaries.slice(0, 6);
+    const built = await Promise.all(picked.map((s) => loadOneESPNLeague(s, creds, nameIndex)));
+    return built.filter((c): c is LeagueContext => c !== null);
+  } catch { return []; }
+}
+
+async function loadOneESPNLeague(
+  summary: { id: number; name: string; season: number; drafted: boolean },
+  creds: NonNullable<Awaited<ReturnType<typeof loadESPNCredentials>>>,
+  nameIndex: Map<string, any> | null,
+): Promise<LeagueContext | null> {
+  try {
+    const leagueData = await getESPNLeague(summary.id, creds);
+    if (!leagueData) return null;
     // findMyESPNTeam matches teams by owner SWID, not display name —
     // passing teamName (usually unset) matched nothing, so the coach saw
     // the league with an empty roster and told the user it wasn't loaded.
@@ -391,15 +417,19 @@ async function loadESPNContext(nameIndex: Map<string, any> | null): Promise<Leag
 
     // Top available FAs so "who should I pick up" answers don't burn a
     // prompt asking for the list first (mirrors the Sleeper loader).
+    // Skipped for pre-draft leagues — "available" is the entire player
+    // pool there, which is noise.
     let available: string[] | undefined;
-    try {
-      const { getESPNFreeAgents } = require('../../services/espn');
-      const fas = await getESPNFreeAgents(Number(creds.leagueId), creds, 20);
-      if (fas.length) available = fas.map((f: any) => `${f.name} (${f.position} · ${f.team})`);
-    } catch { /* non-fatal */ }
+    if (summary.drafted) {
+      try {
+        const { getESPNFreeAgents } = require('../../services/espn');
+        const fas = await getESPNFreeAgents(summary.id, creds, 20);
+        if (fas.length) available = fas.map((f: any) => `${f.name} (${f.position} · ${f.team})`);
+      } catch { /* non-fatal */ }
+    }
 
-    return [{
-      name: allSettings?.name ?? 'ESPN League',
+    return {
+      name: allSettings?.name ?? summary.name ?? 'ESPN League',
       platform: 'ESPN',
       format: fmt,
       record: `${wins}–${losses}`,
@@ -413,8 +443,8 @@ async function loadESPNContext(nameIndex: Map<string, any> | null): Promise<Leag
         : undefined) as number | undefined,
       leagueRosters,
       available,
-    }];
-  } catch { return []; }
+    };
+  } catch { return null; }
 }
 
 // Yahoo Fantasy. Yahoo's API does NOT expose future traded-pick ownership
@@ -783,15 +813,29 @@ export default function CoachScreen() {
       if (cachedCtx) {
         ({ all, liveData } = cachedCtx);
       } else {
-        const [sleeperLeagues, espnLeagues, yahooLeagues, ffLeagues, mflLeagues, liveDataFresh] = await Promise.all([
-          withTimeout(loadSleeperContext(playerMap), PLATFORM_LOAD_TIMEOUT_MS, []),
-          withTimeout(loadESPNContext(nameIndex), PLATFORM_LOAD_TIMEOUT_MS, []),
-          withTimeout(loadYahooContext(nameIndex), PLATFORM_LOAD_TIMEOUT_MS, []),
-          withTimeout(loadAbstractContext('fleaflicker', 'Fleaflicker', nameIndex), PLATFORM_LOAD_TIMEOUT_MS, []),
-          withTimeout(loadAbstractContext('mfl', 'MFL', nameIndex), PLATFORM_LOAD_TIMEOUT_MS, []),
-          fetchAllLiveData(),
+        // Progressive load: merge each platform's leagues into the UI the
+        // moment that platform resolves. No per-platform timeout — a slow
+        // platform (MFL's shared hosts) arrives late instead of being
+        // dropped, and the chat becomes usable as soon as the FIRST
+        // platform lands rather than waiting on the slowest.
+        const acc: LeagueContext[] = [];
+        const merge = (leagues: LeagueContext[] | null | undefined) => {
+          if (!leagues || leagues.length === 0) return;
+          acc.push(...leagues);
+          setAllLeagues([...acc]);
+          setContextReady(true);
+          systemPromptRef.current = buildSystemPrompt([...acc], null, memoriesRef.current) + liveDataRef.current;
+        };
+        let liveDataFresh: any = null;
+        await Promise.allSettled([
+          loadSleeperContext(playerMap).then(merge),
+          loadESPNContext(nameIndex).then(merge),
+          loadYahooContext(nameIndex).then(merge),
+          loadAbstractContext('fleaflicker', 'Fleaflicker', nameIndex).then(merge),
+          loadAbstractContext('mfl', 'MFL', nameIndex).then(merge),
+          fetchAllLiveData().then((ld) => { liveDataFresh = ld; }),
         ]);
-        all = [...sleeperLeagues, ...espnLeagues, ...yahooLeagues, ...ffLeagues, ...mflLeagues];
+        all = [...acc];
         liveData = liveDataFresh;
         coachCtxCache = { at: Date.now(), all, liveData };
       }
