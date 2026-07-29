@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
 import React, { useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { askAI, askAIVision } from '../../services/ai';
@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchAIOmniFormula, fetchKTCValues, fetchNFLInjuries, fetchSnapCounts, fetchVegasLines, type InjuryInfo, type RankedPlayer, type ScoringFormat } from '../../services/rankingsData';
 import { getCurrentTier } from '../../services/purchases';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
-import { consumePrompt } from '../../services/promptQuota';
+import { consumePrompt, hasLinkedPlatform } from '../../services/promptQuota';
 import { C, F, R, SP, SZ } from '../constants/tokens';
 import { Icon } from '../components/AIOmniIcons';
 
@@ -199,6 +199,17 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
   };
 
   const analyzeTrade = async () => {
+    // Free prompts unlock only after a platform is linked (activation gate,
+    // mirrors the coach) — otherwise a fresh install could burn all 10 free
+    // prompts on manual trade text without ever connecting a league.
+    const tierNow = await getCurrentTier();
+    if (tierNow === 'free' && !(await hasLinkedPlatform())) {
+      Alert.alert(
+        'Connect a league first',
+        'Your 10 free AI prompts unlock once you link a fantasy platform (Sleeper, ESPN, Yahoo, MFL, or Fleaflicker) in Settings.',
+      );
+      return;
+    }
     // Charge a prompt up front; if over cap, route to paywall and bail.
     const ok = await consumePrompt();
     if (!ok) {

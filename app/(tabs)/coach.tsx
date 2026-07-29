@@ -23,7 +23,7 @@ import { getPlayerContext } from '../../services/playerIntelligence';
 import { PositionPill } from '../components/Atoms';
 import { AIOmniLogo } from '../components/AIOmniLogo';
 import { C, F, R, SP, SZ } from '../constants/tokens';
-import { getPromptLimit, getRemainingPrompts, getResetTime, incrementPrompt } from '../../services/promptQuota';
+import { getPromptLimit, getRemainingPrompts, getResetTime, hasLinkedPlatform, incrementPrompt, LIMITS } from '../../services/promptQuota';
 import { getNFLSeason } from '../../services/season';
 import { getValidYahooToken, getYahooLeagues, getMyYahooTeam, getYahooStandings, YahooLeague, YahooPlayer } from '../../services/yahoo';
 
@@ -774,6 +774,10 @@ export default function CoachScreen() {
   const [loading,        setLoading]        = useState(false);
   const [reading,        setReading]        = useState(false);
   const [contextReady,   setContextReady]   = useState(false);
+  // Free prompts unlock only once a fantasy platform is linked (activation
+  // gate — see hasLinkedPlatform). Optimistic true so paid/linked users
+  // never see a flash of the locked state while the check runs.
+  const [linkedPlatform, setLinkedPlatform] = useState(true);
   const [allLeagues,     setAllLeagues]     = useState<LeagueContext[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<LeagueContext | null>(null);
   const [pickerVisible,  setPickerVisible]  = useState(false);
@@ -792,7 +796,8 @@ export default function CoachScreen() {
 
   useEffect(() => {
     (async () => {
-      const [currentTier, rem] = await Promise.all([getCurrentTier(), getRemainingPrompts()]);
+      const [currentTier, rem, linked] = await Promise.all([getCurrentTier(), getRemainingPrompts(), hasLinkedPlatform()]);
+      setLinkedPlatform(linked);
       setTier(currentTier);
       setRemaining(rem);
 
@@ -898,7 +903,7 @@ export default function CoachScreen() {
         : `${rem} of ${limitNum} prompts remaining this week`;
       const greeting = all.length > 0
         ? `Hey — ${all.length} league${all.length > 1 ? 's' : ''} loaded. ${promptLabel}. What do you need?`
-        : `Hey — connect your Sleeper username or ESPN account in Settings to get started.`;
+        : `Hey — connect a league (Sleeper, ESPN, Yahoo, MFL, or Fleaflicker) in Settings to unlock your ${LIMITS.free} free prompts and get started.`;
       setMessages([{ role: 'ai', text: greeting }]);
     })();
   }, []);
@@ -1119,7 +1124,9 @@ Capture rookies and veterans exactly.`,
       }
     } catch (e: any) {
       const errMsg = e?.message?.includes('prompt_limit_reached')
-        ? "You've hit your weekly prompt limit. Upgrade to Pro for 50 prompts/week."
+        ? (tier === 'free'
+            ? "This device has used its 10 free prompts. Upgrade for 25–50 prompts every week."
+            : "You've hit your weekly prompt limit. Upgrade to Pro for 50 prompts/week.")
         : 'Connection error. Try again.';
       setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: errMsg }]);
     } finally {
@@ -1129,6 +1136,9 @@ Capture rookies and veterans exactly.`,
   };
 
   const promptColor   = remaining <= 5 ? '#a83040' : remaining <= 10 ? C.amber : C.mint;
+  // Free tier + nothing linked (and no leagues loaded, which implies linked)
+  // → prompts stay locked behind connecting a platform.
+  const freeNeedsLink = tier === 'free' && !linkedPlatform && allLeagues.length === 0;
   const selectorLabel = selectedLeague ? selectedLeague.name : 'All Leagues';
   const selectorSub   = selectedLeague
     ? `${selectedLeague.platform} · ${selectedLeague.format}`
@@ -1240,17 +1250,25 @@ Capture rookies and veterans exactly.`,
               <TextInput
                 value={input}
                 onChangeText={setInput}
-                placeholder={remaining > 0 ? 'Ask, or 📷 a live draft board…' : 'Out of prompts — upgrade for more'}
+                placeholder={
+                  freeNeedsLink
+                    ? 'Connect a league to unlock your free prompts'
+                    : remaining > 0
+                      ? 'Ask, or 📷 a live draft board…'
+                      : tier === 'free'
+                        ? 'This device has used its free prompts — upgrade to keep going'
+                        : 'Out of prompts — upgrade for more'
+                }
                 placeholderTextColor={C.dim2}
                 style={styles.input}
                 onSubmitEditing={() => send(input)}
                 returnKeyType="send"
-                editable={remaining > 0}
+                editable={remaining > 0 && !freeNeedsLink}
               />
               <TouchableOpacity
-                style={[styles.sendBtn, (!input.trim() || loading || remaining <= 0) && styles.sendBtnOff]}
+                style={[styles.sendBtn, (!input.trim() || loading || remaining <= 0 || freeNeedsLink) && styles.sendBtnOff]}
                 onPress={() => send(input)}
-                disabled={!input.trim() || loading || remaining <= 0}
+                disabled={!input.trim() || loading || remaining <= 0 || freeNeedsLink}
               >
                 <Text style={styles.sendArrow}>↑</Text>
               </TouchableOpacity>
