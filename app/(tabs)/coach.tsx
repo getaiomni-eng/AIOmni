@@ -258,32 +258,53 @@ async function loadSleeperContext(playerMap: Record<string, any>): Promise<Leagu
             : null;
           const mySlot: number | undefined = activeDraft?.draft_order?.[user.user_id];
           const slotPad = (n: number) => String(n).padStart(2, '0');
-          const fmtPick = (season: string, round: number, suffix = '') => {
-            // Slot only known for the current rookie draft. Future seasons
-            // stay as plain Rx — the draft order isn't set yet.
-            if (season === String(currentYear) && mySlot) {
-              return `${round}.${slotPad(mySlot)}${suffix}`;
+          // Sleeper traded_picks semantics: roster_id = the pick's ORIGINAL
+          // owner (the team whose draft slot it is), owner_id = current
+          // holder, previous_owner_id = only the LAST hop in a trade chain.
+          // The old logic keyed "traded away" on previous_owner_id, so any
+          // pick that moved twice (you→A, A→B) was missed and the coach
+          // hallucinated picks the user no longer owned (ghost 2026 1sts).
+          // It also stamped acquired picks with MY draft slot and labeled
+          // origin by array index. Slot + attribution now come from the
+          // pick's ORIGIN roster.
+          const rosterById = new Map((rosters as any[]).map((r: any) => [r.roster_id, r]));
+          const slotOfRoster = (rid: number): number | undefined => {
+            const r = rosterById.get(rid);
+            return r ? activeDraft?.draft_order?.[r.owner_id] : undefined;
+          };
+          const nameOfRoster = (rid: number): string => {
+            const r = rosterById.get(rid);
+            const u = r && Array.isArray(leagueUsers) ? leagueUsers.find((x: any) => x.user_id === r.owner_id) : null;
+            return u?.display_name || u?.metadata?.team_name || `roster ${rid}`;
+          };
+          const fmtPick = (season: string, round: number, originRid: number) => {
+            const via = originRid === rosterId ? '' : ` (via ${nameOfRoster(originRid)})`;
+            // Slot only known for the current rookie draft — and it's the
+            // ORIGIN team's slot, not mine (a pick acquired from the 1.03
+            // team is 1.03, wherever I draft).
+            const slot = originRid === rosterId ? mySlot : slotOfRoster(originRid);
+            if (season === String(currentYear) && slot) {
+              return `${round}.${slotPad(slot)}${via}`;
             }
-            return `R${round}${suffix}`;
+            return `R${round}${via}`;
           };
 
           for (const season of seasons) {
             for (let round = 1; round <= rounds; round++) {
-              // Find if there's a traded_pick entry for this slot
-              const tradedAway = tradedPicks.find((tp: any) =>
-                tp.season === season && tp.round === round &&
-                tp.previous_owner_id === rosterId && tp.owner_id !== rosterId
+              // My original pick is gone if ANY row shows my roster as its
+              // origin with someone else currently holding it.
+              const tradedAway = tradedPicks.some((tp: any) =>
+                String(tp.season) === season && tp.round === round &&
+                tp.roster_id === rosterId && tp.owner_id !== rosterId
               );
-              if (!tradedAway) picksBySeason[season].push(fmtPick(season, round));
+              if (!tradedAway) picksBySeason[season].push(fmtPick(season, round, rosterId));
             }
-            // Add picks traded IN
+            // Picks I currently hold whose origin is another roster.
             const incoming = tradedPicks.filter((tp: any) =>
-              tp.season === season && tp.owner_id === rosterId && tp.previous_owner_id !== rosterId
+              String(tp.season) === season && tp.owner_id === rosterId && tp.roster_id !== rosterId
             );
             for (const tp of incoming) {
-              const fromRoster = rosters.find((r: any) => r.roster_id === tp.roster_id);
-              const fromLabel = fromRoster ? ` (via ${rosters.indexOf(fromRoster) + 1})` : '';
-              picksBySeason[season].push(fmtPick(season, tp.round, fromLabel));
+              picksBySeason[season].push(fmtPick(season, tp.round, tp.roster_id));
             }
           }
           ownedPicks = seasons.map(s => `${s}: ${picksBySeason[s].sort().join(', ') || 'none'}`).join(' / ');
