@@ -1119,7 +1119,7 @@ Capture rookies and veterans exactly.`,
       }
     } catch (e: any) {
       const errMsg = e?.message?.includes('prompt_limit_reached')
-        ? "You've hit your weekly prompt limit. Upgrade to Pro for unlimited prompts."
+        ? "You've hit your weekly prompt limit. Upgrade to Pro for 50 prompts/week."
         : 'Connection error. Try again.';
       setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: errMsg }]);
     } finally {
@@ -1240,7 +1240,7 @@ Capture rookies and veterans exactly.`,
               <TextInput
                 value={input}
                 onChangeText={setInput}
-                placeholder={remaining > 0 ? 'Ask, or 📷 a live draft board…' : 'Upgrade to Pro for unlimited prompts'}
+                placeholder={remaining > 0 ? 'Ask, or 📷 a live draft board…' : 'Out of prompts — upgrade for more'}
                 placeholderTextColor={C.dim2}
                 style={styles.input}
                 onSubmitEditing={() => send(input)}
