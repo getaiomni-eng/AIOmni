@@ -376,6 +376,16 @@ export default function SettingsScreen() {
             <Text style={s.rowLabel}>Website</Text>
             <Ionicons name="chevron-forward" size={16} color={dark.textMuted} />
           </TouchableOpacity>
+          <TouchableOpacity style={s.row} onPress={() => Linking.openURL('https://getaiomni.com/terms')}>
+            <Ionicons name="document-text-outline" size={20} color={palette.aqua} />
+            <Text style={s.rowLabel}>Terms of Service</Text>
+            <Ionicons name="chevron-forward" size={16} color={dark.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity style={s.row} onPress={() => Linking.openURL('https://getaiomni.com/privacy')}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={palette.aqua} />
+            <Text style={s.rowLabel}>Privacy Policy</Text>
+            <Ionicons name="chevron-forward" size={16} color={dark.textMuted} />
+          </TouchableOpacity>
           <View style={[s.row, { borderBottomWidth: 0 }]}>
             <Ionicons name="information-circle-outline" size={20} color={palette.aqua} />
             <Text style={s.rowLabel}>Version</Text>

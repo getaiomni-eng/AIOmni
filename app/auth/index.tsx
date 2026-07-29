@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { signInWithEmail, signUpWithEmail, resetPassword } from '../../services/auth';
 
 import { C, F, SZ, R, SP } from '../constants/tokens';
-import { KeyboardAvoidingView, Platform, View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 
 const SURFACE  = '#12252e';
 const BORDER   = '#1a3542';
@@ -144,7 +144,21 @@ export default function AuthScreen() {
           </TouchableOpacity>
 
           <Text style={styles.finePrint}>
-            By continuing you agree to our Terms of Service and Privacy Policy.
+            By continuing you agree to our{' '}
+            <Text
+              style={styles.finePrintLink}
+              onPress={() => Linking.openURL('https://getaiomni.com/terms')}
+            >
+              Terms of Service
+            </Text>
+            {' '}and{' '}
+            <Text
+              style={styles.finePrintLink}
+              onPress={() => Linking.openURL('https://getaiomni.com/privacy')}
+            >
+              Privacy Policy
+            </Text>
+            .
           </Text>
         </View>
       </KeyboardAvoidingView>
@@ -212,4 +226,5 @@ const styles = StyleSheet.create({
   skipBtn:   { alignItems: 'center', paddingVertical: 14 },
   skipTxt:   { fontFamily: F.mono, color: '#4a6a76', fontSize: SZ.sm },
   finePrint: { fontFamily: F.mono, color: '#4a6a76', fontSize: SZ.xs - 1, textAlign: 'center', lineHeight: 16, opacity: 0.6, marginTop: 8 },
+  finePrintLink: { textDecorationLine: 'underline', color: '#6a94a6' },
 });

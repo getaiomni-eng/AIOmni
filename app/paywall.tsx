@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -276,6 +277,22 @@ export default function PaywallScreen() {
             <Text style={styles.restoreText}>Restore Purchases</Text>
           </TouchableOpacity>
 
+          {/* Legal — Apple guideline 3.1.2 requires Terms of Use + Privacy
+              Policy links wherever auto-renewable subscriptions are sold.
+              Missing links here is a top App Review rejection reason. */}
+          <View style={styles.legalRow}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://getaiomni.com/terms')}>
+              <Text style={styles.legalLink}>Terms of Use</Text>
+            </TouchableOpacity>
+            <Text style={styles.legalDot}>·</Text>
+            <TouchableOpacity onPress={() => Linking.openURL('https://getaiomni.com/privacy')}>
+              <Text style={styles.legalLink}>Privacy Policy</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.legalNote}>
+            Subscriptions auto-renew until cancelled in your App Store settings.
+          </Text>
+
           {/* Diagnostic panel — visible when any tier is missing its package,
               so a tester without Mac/Xcode access can see what RC returned. */}
           {(() => {
@@ -523,6 +540,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: AQUA,
     textDecorationLine: 'underline',
+  },
+  legalRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  legalLink: {
+    fontFamily: 'Barlow',
+    fontSize: 13,
+    color: AQUA,
+    textDecorationLine: 'underline',
+  },
+  legalDot: {
+    color: TEXT,
+    opacity: 0.4,
+  },
+  legalNote: {
+    fontFamily: 'Barlow',
+    fontSize: 11,
+    color: TEXT,
+    opacity: 0.45,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 4,
   },
   diagBox: {
     backgroundColor: 'rgba(255,184,0,0.06)',
