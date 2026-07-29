@@ -9,6 +9,9 @@ dist/
 web-build/
 expo-env.d.ts
 
+# Sentry — never commit auth tokens
+sentry.properties
+
 # Native
 .kotlin/
 *.orig.*

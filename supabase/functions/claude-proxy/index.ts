@@ -17,7 +17,7 @@
 //  3. Tier table out of sync with client
 //     Was {free:25, rankings:0, pro:75, premium:125, dynasty_elite:999}.
 //     Rankings users would have been instant-429ed once IAP unlocked.
-//     Now matches the client-side LIMITS in app/utils/promptCounter.ts:
+//     Now matches the client-side LIMITS in services/promptQuota.ts:
 //     {free:10, rankings:25, pro:50} (legacy tier names still recognized
 //     so existing rows don't break).
 
@@ -29,7 +29,7 @@ const SUPABASE_URL         = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const SUPABASE_ANON_KEY    = Deno.env.get("SUPABASE_ANON_KEY");
 
-// Aligned with client-side LIMITS in app/utils/promptCounter.ts. Legacy
+// Aligned with client-side LIMITS in services/promptQuota.ts. Legacy
 // tier names ('premium', 'dynasty_elite') retained for any pre-Option-D
 // rows in public.users so those users aren't suddenly blocked.
 const TIER_LIMITS: Record<string, number> = {

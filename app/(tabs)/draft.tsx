@@ -24,7 +24,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI } from '../../services/ai';
 import { getCurrentTier } from '../../services/purchases';
-import { consumePrompt } from '../utils/promptCounter';
+import { consumePrompt } from '../../services/promptQuota';
 import { useRouter } from 'expo-router';
 import { applyEngineToDraftPool, draftSettingsToUIFormat } from '../../services/rankings/draftPool';
 import { TheOLogo, ApertureO } from '../components/TheOLogo';
