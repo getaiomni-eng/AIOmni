@@ -35,15 +35,25 @@ export async function upsertUser(params: {
   sleeperUsername?: string;
   tier?:           string;
 }) {
+  // NEVER default tier here. The old `tier: params.tier ?? 'free'` made
+  // every tier-less profile write (sign-in/sign-up call this with just
+  // authId+email) overwrite the row's tier back to 'free' — silently
+  // wiping manual grants AND any purchased tier whenever RevenueCat
+  // hadn't re-synced yet. The column's DB default ('free', NOT NULL)
+  // covers brand-new rows; an upsert that omits tier leaves the existing
+  // value untouched on conflict. Only include it when a caller has an
+  // authoritative tier to write (purchase/restore paths).
+  const row: Record<string, unknown> = {
+    auth_id:          params.authId,
+    email:            params.email,
+    sleeper_username: params.sleeperUsername,
+    updated_at:       new Date().toISOString(),
+  };
+  if (params.tier) row.tier = params.tier;
+
   const { error } = await supabase
     .from('users')
-    .upsert({
-      auth_id:          params.authId,
-      email:            params.email,
-      sleeper_username: params.sleeperUsername,
-      tier:             params.tier ?? 'free',
-      updated_at:       new Date().toISOString(),
-    }, { onConflict: 'auth_id' });
+    .upsert(row, { onConflict: 'auth_id' });
 
   if (error) console.error('upsertUser:', error.message);
 }
