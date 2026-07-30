@@ -214,15 +214,42 @@ export async function getMyYahooTeam(leagueKey: string, accessToken: string): Pr
     if (!allTeams) return null;
     const myTeamEntry = Object.values(allTeams).find((v: any) => {
       if (typeof v !== 'object' || !v.team) return false;
-      return v.team[0]?.managers?.some((m: any) => m.manager?.guid === myGuid);
+      // team[0] is an attribute ARRAY — `.managers` read directly off it was
+      // always undefined, so no team ever matched and this returned null for
+      // every league. Find the managers attribute object first.
+      const managers = (Array.isArray(v.team[0]) ? v.team[0] : [])
+        .find((x: any) => x && typeof x === 'object' && 'managers' in x)?.managers;
+      return Array.isArray(managers) && managers.some((m: any) => m.manager?.guid === myGuid);
     }) as any;
     if (!myTeamEntry) return null;
-    const team = myTeamEntry.team[0] as YahooTeam;
+    // Yahoo's team[0] and player[0] are ARRAYS of single-key attribute
+    // objects. The old code cast team[0] straight to YahooTeam and spread
+    // player[0] ({...array} → numeric keys only), so every downstream read
+    // of .name/.display_position was undefined — Yahoo rosters rendered
+    // empty app-wide ("Rosters: Not loaded"). Resolve attributes explicitly.
+    const tAttr = (k: string) => (Array.isArray(myTeamEntry.team[0]) ? myTeamEntry.team[0] : [])
+      .find((x: any) => x && typeof x === 'object' && k in x)?.[k];
+    const team = {
+      team_key: tAttr('team_key'),
+      team_id: tAttr('team_id'),
+      name: tAttr('name'),
+      managers: tAttr('managers'),
+      team_standings: myTeamEntry.team[2]?.team_standings,
+    } as YahooTeam;
     const rosterEntries = myTeamEntry.team[1]?.roster?.['0']?.players || {};
     const players: YahooPlayer[] = Object.values(rosterEntries).filter((v: any) => typeof v === 'object' && v.player).map((v: any) => {
-      const pArr = v.player[0];
+      const pArr: any[] = Array.isArray(v.player[0]) ? v.player[0] : [];
+      const attr = (k: string) => pArr.find((x: any) => x && typeof x === 'object' && k in x)?.[k];
       const selectedPos = v.player[1]?.selected_position?.[1]?.position;
-      return { ...pArr, selected_position: { position: selectedPos } } as YahooPlayer;
+      return {
+        player_key: attr('player_key'),
+        player_id: attr('player_id'),
+        name: attr('name'),
+        display_position: attr('display_position'),
+        editorial_team_abbr: attr('editorial_team_abbr'),
+        status: attr('status'),
+        selected_position: { position: selectedPos },
+      } as YahooPlayer;
     });
     const starters = players.filter(p => p.selected_position?.position !== 'BN' && p.selected_position?.position !== 'IR');
     const bench    = players.filter(p => p.selected_position?.position === 'BN' || p.selected_position?.position === 'IR');

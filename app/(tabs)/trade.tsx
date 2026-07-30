@@ -169,12 +169,21 @@ export default function TradesScreen() {
   const [degraded, setDegraded] = useState(false);
 
   // League context for roster-fit grading. 'general' = no roster bias.
-  // Options come from connected platforms; the last choice persists.
-  const [ctxOptions, setCtxOptions] = useState<{ key: string; label: string; platform: 'sleeper' | 'espn'; id: string }[]>([]);
+  // Options come from ALL connected platforms and carry the league's
+  // scoring/type metadata so a roster-less league (pre-draft) can still
+  // be graded against its RULES. The last choice persists.
+  type TradeCtxOpt = {
+    key: string; label: string;
+    platform: 'sleeper' | 'espn' | 'yahoo' | 'mfl' | 'fleaflicker';
+    id: string;
+    fmt?: string;                       // 'PPR' | '0.5 PPR' | 'STD' (+' · SF')
+    ltype?: 'dynasty' | 'redraft';
+  };
+  const [ctxOptions, setCtxOptions] = useState<TradeCtxOpt[]>([]);
   const [ctxChoice, setCtxChoice]   = useState<string>('general');
   useEffect(() => {
     (async () => {
-      const opts: typeof ctxOptions = [];
+      const opts: TradeCtxOpt[] = [];
       try {
         const username = await AsyncStorage.getItem('sleeper_username');
         if (username) {
@@ -184,7 +193,11 @@ export default function TradesScreen() {
             const season = state?.season ?? String(new Date().getFullYear());
             const leagues = await (await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/${season}`)).json();
             for (const l of Array.isArray(leagues) ? leagues : []) {
-              opts.push({ key: `sleeper:${l.league_id}`, label: l.name, platform: 'sleeper', id: String(l.league_id) });
+              const rec = l?.scoring_settings?.rec;
+              const sf  = (l?.roster_positions ?? []).includes('SUPER_FLEX');
+              const fmt = (rec >= 1 ? 'PPR' : rec >= 0.5 ? '0.5 PPR' : 'STD') + (sf ? ' · SF' : '');
+              const ltype = (l?.settings?.type === 2 || !!l?.previous_league_id) ? 'dynasty' as const : 'redraft' as const;
+              opts.push({ key: `sleeper:${l.league_id}`, label: l.name, platform: 'sleeper', id: String(l.league_id), fmt, ltype });
             }
           }
         }
@@ -192,10 +205,33 @@ export default function TradesScreen() {
       try {
         const raw = await AsyncStorage.getItem('espn_leagues_v2');
         for (const s of raw ? JSON.parse(raw) : []) {
-          // Pre-draft ESPN leagues have empty rosters — nothing to fit against.
-          if (s?.drafted) opts.push({ key: `espn:${s.id}`, label: s.name, platform: 'espn', id: String(s.id) });
+          // Drafted ESPN leagues have rosters; pre-draft ones still get a
+          // chip so their RULES can drive a roster-less grade.
+          if (s?.id) opts.push({ key: `espn:${s.id}`, label: s.name, platform: 'espn', id: String(s.id) });
         }
       } catch { /* espn unavailable */ }
+      try {
+        const { getValidYahooToken, getYahooLeagues } = require('../../services/yahoo');
+        const token = await getValidYahooToken();
+        if (token) {
+          const yls = await getYahooLeagues(token, String(new Date().getFullYear()));
+          for (const l of Array.isArray(yls) ? yls : []) {
+            const key = l?.league_key ?? l?.league_id;
+            if (key) opts.push({ key: `yahoo:${key}`, label: l?.name ?? `Yahoo ${key}`, platform: 'yahoo', id: String(key) });
+          }
+        }
+      } catch { /* yahoo unavailable */ }
+      for (const pid of ['mfl', 'fleaflicker'] as const) {
+        try {
+          const { getPlatform } = require('../../services/platform');
+          const plat = getPlatform(pid);
+          const ls = await plat.getLeagues(String(new Date().getFullYear())).catch(() => []);
+          for (const l of ls as any[]) {
+            const fmt = l.scoringFormat === 'ppr' ? 'PPR' : l.scoringFormat === 'half' ? '0.5 PPR' : l.scoringFormat === 'std' ? 'STD' : undefined;
+            opts.push({ key: `${pid}:${l.id}`, label: l.name, platform: pid, id: String(l.id), fmt, ltype: l.leagueType === 'dynasty' ? 'dynasty' : 'redraft' });
+          }
+        } catch { /* platform unavailable */ }
+      }
       setCtxOptions(opts);
       try {
         const saved = await AsyncStorage.getItem('trade_ctx_choice');
@@ -208,6 +244,10 @@ export default function TradesScreen() {
     // Stale grades were computed against a different roster context.
     setVerdict('');
     setAnalysis('');
+    // A league's type is a fact — picking a dynasty league flips the
+    // format toggle so the grade uses the right value framework.
+    const sel = ctxOptions.find(o => o.key === key);
+    if (sel?.ltype) setFormat(sel.ltype);
     AsyncStorage.setItem('trade_ctx_choice', key).catch(() => {});
   };
 
@@ -324,9 +364,32 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
         if (ctxChoice !== 'general') {
           const sel = ctxOptions.find(o => o.key === ctxChoice);
           if (sel) {
-            myRoster = sel.platform === 'sleeper'
-              ? await loadSleeperRoster(sel.id, board).catch(() => [])
-              : await loadEspnRoster(sel.id).catch(() => []);
+            switch (sel.platform) {
+              case 'sleeper':
+                myRoster = await loadSleeperRoster(sel.id, board).catch(() => []);
+                break;
+              case 'espn':
+                myRoster = await loadEspnRoster(sel.id).catch(() => []);
+                break;
+              case 'yahoo': {
+                const { getValidYahooToken, getMyYahooTeam } = require('../../services/yahoo');
+                const token = await getValidYahooToken();
+                const mine = token ? await getMyYahooTeam(sel.id, token).catch(() => null) : null;
+                myRoster = (mine?.roster?.players ?? [])
+                  .map((p: any) => p?.name?.full)
+                  .filter(Boolean);
+                break;
+              }
+              case 'mfl':
+              case 'fleaflicker': {
+                const { getPlatform } = require('../../services/platform');
+                const roster = await getPlatform(sel.platform).getMyRoster(sel.id).catch(() => null);
+                myRoster = [...(roster?.starters ?? []), ...(roster?.bench ?? [])]
+                  .map((s: any) => s?.player?.name)
+                  .filter(Boolean);
+                break;
+              }
+            }
           }
         }
       } catch { /* fall through: model grades unanchored if data is down */ }
@@ -358,7 +421,19 @@ ${givingGrounded.lines}
 
 YOU ARE RECEIVING:
 ${gettingGrounded.lines}
-${marketMath}${myRoster.length ? `\n\nYOUR CURRENT ROSTER (${ctxOptions.find(o => o.key === ctxChoice)?.label ?? 'selected league'} — ranked players; judge positional fit):\n${myRoster.join(', ')}` : `\n\nNO ROSTER CONTEXT (user chose General) — grade pure asset value. Do NOT invent roster-fit arguments or claim to know what the user needs.`}${engineGrounded ? '' : `\n\n⚠ HEADS UP: AIOmni's proprietary ranking engine is temporarily unavailable, so you're grading on KTC market values + general knowledge — NOT our calibrated projections. Stay decisive, but don't cite precise AIOmni ranks you don't have, and lean on market value + clear situational reads.`}`;
+${marketMath}${(() => {
+        const sel = ctxChoice !== 'general' ? ctxOptions.find(o => o.key === ctxChoice) : undefined;
+        if (myRoster.length) {
+          return `\n\nYOUR CURRENT ROSTER (${sel?.label ?? 'selected league'} — ranked players; judge positional fit):\n${myRoster.join(', ')}`;
+        }
+        if (sel) {
+          // League chosen but no roster came back (pre-draft, or fetch
+          // failed): grade against the league's RULES instead of guessing.
+          const rules = [sel.fmt, sel.ltype].filter(Boolean).join(' · ') || `${format} (per user toggle)`;
+          return `\n\nROSTER DATA UNAVAILABLE for "${sel.label}" (likely pre-draft). League rules: ${rules}. Anchor the grade in how THESE RULES shift asset value — full PPR lifts target-earning RBs/WRs a tier; STD favors TD-and-volume runners; superflex/2QB makes QBs premium; dynasty weights age and picks, redraft weights this season only. Do NOT invent roster needs or claim to know the user's team.`;
+        }
+        return `\n\nNO ROSTER CONTEXT (user chose General) — grade pure asset value. Do NOT invent roster-fit arguments or claim to know what the user needs.`;
+      })()}${engineGrounded ? '' : `\n\n⚠ HEADS UP: AIOmni's proprietary ranking engine is temporarily unavailable, so you're grading on KTC market values + general knowledge — NOT our calibrated projections. Stay decisive, but don't cite precise AIOmni ranks you don't have, and lean on market value + clear situational reads.`}`;
       const response = await askAI(prompt, { maxTokens: 600, system });
       console.log('Raw AI response:', response);
       // The model is told to return one JSON object, but sometimes emits a
