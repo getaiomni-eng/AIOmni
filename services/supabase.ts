@@ -70,15 +70,9 @@ export async function getUserRow() {
   return data;
 }
 
-export async function updateTier(tier: string) {
-  const user = await getUser();
-  if (!user) return;
-  const { error } = await supabase
-    .from('users')
-    .update({ tier, updated_at: new Date().toISOString() })
-    .eq('auth_id', user.id);
-  if (error) console.error('updateTier:', error.message);
-}
+// updateTier removed 2026-07-30: users.tier is trigger-protected against
+// client writes (see migration lock_tier_column). The RevenueCat webhook
+// (service role) and manual postgres grants are the only writers.
 
 // ── Promo codes ──────────────────────────────────────────────
 

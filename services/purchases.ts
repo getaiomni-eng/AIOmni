@@ -107,7 +107,10 @@ export async function purchasePackage(pkg: PurchasesPackage): Promise<{
     const { customerInfo } = await Purchases.purchasePackage(pkg);
     const tier = getTierFromEntitlements(customerInfo.entitlements.active);
     if (tier) {
-      await syncTierToSupabase(tier);
+      // Tier no longer syncs from the client — the RevenueCat webhook is
+      // the sole writer (users.tier is trigger-protected against client
+      // writes). Local cache updates immediately for snappy UI; the DB
+      // row follows within seconds via the webhook.
       cachedTier = tier;
     }
     return { success: true, tier: tier ?? undefined };
@@ -124,8 +127,7 @@ export async function restorePurchases(): Promise<{ success: boolean; tier?: Tie
     const customerInfo = await Purchases.restorePurchases();
     const tier = getTierFromEntitlements(customerInfo.entitlements.active);
     if (tier) {
-      await syncTierToSupabase(tier);
-      cachedTier = tier;
+      cachedTier = tier;  // DB sync arrives via RevenueCat webhook
     } else {
       // No active entitlements — make sure the cache reflects that too
       cachedTier = 'free';
@@ -228,19 +230,6 @@ export function attachCustomerInfoListener(): void {
     void refreshTier();
   });
   listenerAttached = true;
-}
-
-async function syncTierToSupabase(tier: Tier): Promise<void> {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase
-      .from('users')
-      .update({ tier, updated_at: new Date().toISOString() })
-      .eq('auth_id', user.id);
-  } catch (e) {
-    console.log('syncTierToSupabase error:', e);
-  }
 }
 
 // ── Tier display info ─────────────────────────────────────────────────────────
