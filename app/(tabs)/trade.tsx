@@ -421,6 +421,24 @@ ${marketMath}${myRoster.length ? `\n\nYOUR CURRENT ROSTER (ranked players — ju
         <View style={styles.forRow}>
           <View style={styles.divLine} />
           <Text style={styles.forTxt}>FOR</Text>
+          {/* One-tap side swap — screenshot extraction can't always tell
+              which side of an offer is the user's, so flipping beats
+              retyping both fields. Clears any stale verdict so old grades
+              don't mislabel the swapped sides. */}
+          <TouchableOpacity
+            style={styles.swapBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              const g = giving;
+              setGiving(getting);
+              setGetting(g);
+              setVerdict('');
+              setAnalysis('');
+            }}
+          >
+            <Text style={styles.swapTxt}>⇅ SWAP</Text>
+          </TouchableOpacity>
           <View style={styles.divLine} />
         </View>
 
@@ -612,6 +630,21 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 1,
     backgroundColor: '#12252e',
+  },
+  swapBtn: {
+    borderWidth: 1,
+    borderColor: C.blueDeep + '55',
+    backgroundColor: C.blueDeep + '12',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginHorizontal: 8,
+  },
+  swapTxt: {
+    color: C.blueDeep,
+    fontFamily: F.mono,
+    fontSize: SZ.xs,
+    letterSpacing: 1,
   },
   forTxt: {
     color: C.dim2,
