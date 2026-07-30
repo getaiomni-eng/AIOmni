@@ -406,12 +406,45 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
         ? `\nMARKET MATH (KTC crowd values): you send ${givingGrounded.ktcTotal} ⇄ you receive ${gettingGrounded.ktcTotal} (${gettingGrounded.ktcTotal >= givingGrounded.ktcTotal ? '+' : ''}${(((gettingGrounded.ktcTotal - givingGrounded.ktcTotal) / givingGrounded.ktcTotal) * 100).toFixed(0)}% for you by market consensus)`
         : '';
 
+      // ── Deterministic grading ─────────────────────────────────────
+      // The LETTERS come from market math in code, not from the model.
+      // Model-authored grades were non-deterministic (same trade, different
+      // letters run to run) and sycophantic — "should I accept?" leans
+      // accept, which produced smash-accept verdicts in BOTH directions on
+      // the same trade. Now: same trade → same grades, and analyzing the
+      // flip side produces the exact mirror. The model writes ONLY the
+      // prose around the locked call.
+      const hasMarketData = givingGrounded.ktcTotal > 0 && gettingGrounded.ktcTotal > 0;
+      const netPct = hasMarketData
+        ? ((gettingGrounded.ktcTotal - givingGrounded.ktcTotal) / givingGrounded.ktcTotal) * 100
+        : 0;
+      const gradeFromNet = (pct: number): Grade =>
+        pct >= 30 ? 'A+' : pct >= 20 ? 'A' : pct >= 12 ? 'A-' :
+        pct >= 7  ? 'B+' : pct >= 3  ? 'B' : pct > -3  ? 'B-' :
+        pct > -7  ? 'C+' : pct > -12 ? 'C' : pct > -20 ? 'C-' :
+        pct > -30 ? 'D+' : pct > -45 ? 'D' : 'F';
+      // Mirror-symmetric: what you receive is graded by your net; what you
+      // give up is graded by the OTHER side's net (their gain is your loss).
+      const givePct = hasMarketData
+        ? ((givingGrounded.ktcTotal - gettingGrounded.ktcTotal) / gettingGrounded.ktcTotal) * 100
+        : 0;
+      const lockedReceive: Grade = hasMarketData ? gradeFromNet(netPct) : 'B';
+      const lockedGive: Grade    = hasMarketData ? gradeFromNet(givePct) : 'B';
+      const lockedCall = !hasMarketData ? 'TOO CLOSE TO CALL — insufficient market data'
+        : netPct >= 3 ? 'ACCEPT' : netPct <= -3 ? 'DECLINE' : 'TOSS-UP — value is even; let roster fit decide';
+
       const system = `You are The O — AIOmni's AI fantasy coach grading a trade. You're the sharpest, most confident voice in the room: the user's savvy fantasy buddy who's seen it all, not a corporate robot. You have STRONG opinions and you back them. Be decisive, a little cocky, occasionally funny. Talk like a real fantasy player — "smash accept", "hard pass", "that's a fleece", "buy-low", "ship it", "they're robbing you", "ascending", "RB dead zone". NEVER hedge into mush — pick a side and sell it.
 
-Signals per player (use whichever are present): (1) AIOmni's PROPRIETARY rank — a calibrated projection engine, your primary anchor; (2) KTC market value — what the crowd thinks it's worth; (3) live injury status; (4) snap share — role security; (5) Vegas implied team total — offense environment. The market math tells you who wins by crowd consensus. Your edge is the DISAGREEMENTS: when AIOmni likes a player more than the market, that's a buy-low to pounce on; when the market overprices someone our engine is out on, say so ("the crowd's still paying for last year"). Injuries change everything — flag them. If the user's roster is provided, factor FIT: a trade that wins on value but doubles up where they're stacked (or guts their thinnest spot) deserves a harder look. Lead with the AIOmni rank when signals conflict.
+Signals per player (use whichever are present): (1) AIOmni's PROPRIETARY rank — a calibrated projection engine, your primary anchor; (2) KTC market value — what the crowd thinks it's worth; (3) live injury status; (4) snap share — role security; (5) Vegas implied team total — offense environment. Your edge is the DISAGREEMENTS: when AIOmni likes a player more than the market, that's a buy-low to pounce on; when the market overprices someone our engine is out on, say so ("the crowd's still paying for last year"). Injuries change everything — flag them. If the user's roster is provided, factor FIT.
 
-Respond with ONLY a single valid JSON object — no markdown, no code fences, no preamble, and do NOT output a second or revised version. Decide once, then emit exactly one object and nothing else:
-{"youReceiveGrade":"<letter>","youGiveGrade":"<letter>","verdict":"<your call in ONE punchy line with attitude — e.g. 'Smash accept — this is a straight-up fleece' or 'Hard pass, they're robbing you blind'>","analysis":"<2-3 sentences with conviction and personality: who wins, WHY (cite AIOmni ranks + market values), and exactly what to do>"}`;
+THE CALL IS ALREADY MADE. AIOmni's grading engine has computed the grades and the verdict direction from market math — they are FINAL and you MUST NOT contradict them. Your job is the WHY: write the verdict line and analysis that explain the locked call with your voice and the signals above. If roster fit cuts against the locked call, say so as a caveat ("value says accept, but…") — the letters don't move.
+
+LOCKED BY THE ENGINE:
+- You receive: ${lockedReceive}  |  You give up: ${lockedGive}
+- Verdict direction: ${lockedCall}
+
+Respond with ONLY a single valid JSON object — no markdown, no code fences, no preamble, and do NOT output a second or revised version:
+{"youReceiveGrade":"${lockedReceive}","youGiveGrade":"${lockedGive}","verdict":"<ONE punchy line matching the locked verdict direction — e.g. 'Smash accept — this is a straight-up fleece' or 'Hard pass, they're robbing you blind'>","analysis":"<2-3 sentences with conviction: WHY the locked call is right (cite AIOmni ranks + market values), plus any roster-fit caveat>"}`;
 
       const prompt = `Format: ${format === 'dynasty' ? 'DYNASTY — value = age + multi-year production' : 'REDRAFT PPR — value = rest-of-season'}
 AIOmni board used: ${engineFmt}
@@ -467,9 +500,11 @@ ${marketMath}${(() => {
         } catch { /* not valid JSON — try the next-earlier block */ }
       }
       if (parsed) {
-        const isGrade = (g: any): g is Grade => typeof g === 'string' && g in GRADE_COLOR;
-        if (isGrade(parsed.youReceiveGrade)) setYouReceiveGrade(parsed.youReceiveGrade);
-        if (isGrade(parsed.youGiveGrade)) setYouGiveGrade(parsed.youGiveGrade);
+        // Grades come from the deterministic engine, NOT the model — set
+        // them from the locked values regardless of what the model echoed.
+        // Only the prose (verdict line + analysis) is model-authored.
+        setYouReceiveGrade(lockedReceive);
+        setYouGiveGrade(lockedGive);
         setVerdict(parsed.verdict ?? '');
         setAnalysis(parsed.analysis ?? '');
       } else {
