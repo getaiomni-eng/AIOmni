@@ -24,6 +24,7 @@ import { PositionPill } from '../components/Atoms';
 import { AIOmniLogo } from '../components/AIOmniLogo';
 import { C, F, R, SP, SZ } from '../constants/tokens';
 import { getPromptLimit, getRemainingPrompts, getResetTime, hasLinkedPlatform, incrementPrompt, LIMITS } from '../../services/promptQuota';
+import { logCaught } from '../../services/util/logCaught';
 import { getNFLSeason } from '../../services/season';
 import { getValidYahooToken, getYahooLeagues, getMyYahooTeam, getYahooStandings, YahooLeague, YahooPlayer } from '../../services/yahoo';
 
@@ -246,7 +247,6 @@ async function loadSleeperContext(playerMap: Record<string, any>): Promise<Leagu
           // draft already completed before stringifying for the prompt.
           const currentYear = parseInt(l.season);
           const seasons = [String(currentYear), String(currentYear + 1), String(currentYear + 2)];
-          const picksBySeason: Record<string, string[]> = Object.fromEntries(seasons.map(s => [s, []]));
 
           // Default draft slot from this year's draft order. Sleeper keys
           // draft_order by user_id; the slot becomes the suffix for any
@@ -257,57 +257,22 @@ async function loadSleeperContext(playerMap: Record<string, any>): Promise<Leagu
                 ?? drafts[0])
             : null;
           const mySlot: number | undefined = activeDraft?.draft_order?.[user.user_id];
-          const slotPad = (n: number) => String(n).padStart(2, '0');
-          // Sleeper traded_picks semantics: roster_id = the pick's ORIGINAL
-          // owner (the team whose draft slot it is), owner_id = current
-          // holder, previous_owner_id = only the LAST hop in a trade chain.
-          // The old logic keyed "traded away" on previous_owner_id, so any
-          // pick that moved twice (you→A, A→B) was missed and the coach
-          // hallucinated picks the user no longer owned (ghost 2026 1sts).
-          // It also stamped acquired picks with MY draft slot and labeled
-          // origin by array index. Slot + attribution now come from the
-          // pick's ORIGIN roster.
-          const rosterById = new Map((rosters as any[]).map((r: any) => [r.roster_id, r]));
-          const slotOfRoster = (rid: number): number | undefined => {
-            const r = rosterById.get(rid);
-            return r ? activeDraft?.draft_order?.[r.owner_id] : undefined;
-          };
-          const nameOfRoster = (rid: number): string => {
-            const r = rosterById.get(rid);
-            const u = r && Array.isArray(leagueUsers) ? leagueUsers.find((x: any) => x.user_id === r.owner_id) : null;
-            return u?.display_name || u?.metadata?.team_name || `roster ${rid}`;
-          };
-          const fmtPick = (season: string, round: number, originRid: number) => {
-            const via = originRid === rosterId ? '' : ` (via ${nameOfRoster(originRid)})`;
-            // Slot only known for the current rookie draft — and it's the
-            // ORIGIN team's slot, not mine (a pick acquired from the 1.03
-            // team is 1.03, wherever I draft).
-            const slot = originRid === rosterId ? mySlot : slotOfRoster(originRid);
-            if (season === String(currentYear) && slot) {
-              return `${round}.${slotPad(slot)}${via}`;
-            }
-            return `R${round}${via}`;
-          };
-
-          for (const season of seasons) {
-            for (let round = 1; round <= rounds; round++) {
-              // My original pick is gone if ANY row shows my roster as its
-              // origin with someone else currently holding it.
-              const tradedAway = tradedPicks.some((tp: any) =>
-                String(tp.season) === season && tp.round === round &&
-                tp.roster_id === rosterId && tp.owner_id !== rosterId
-              );
-              if (!tradedAway) picksBySeason[season].push(fmtPick(season, round, rosterId));
-            }
-            // Picks I currently hold whose origin is another roster.
-            const incoming = tradedPicks.filter((tp: any) =>
-              String(tp.season) === season && tp.owner_id === rosterId && tp.roster_id !== rosterId
-            );
-            for (const tp of incoming) {
-              picksBySeason[season].push(fmtPick(season, tp.round, tp.roster_id));
-            }
+          // Ownership math lives in services/util/draftPicks.ts (pure +
+          // fixture-tested — this logic shipped broken twice; see the
+          // regression tests for the multi-hop ghost-pick scenario).
+          const slotByRosterId: Record<number, number | undefined> = {};
+          const nameByRosterId: Record<number, string> = {};
+          for (const r of (rosters as any[])) {
+            slotByRosterId[r.roster_id] = activeDraft?.draft_order?.[r.owner_id];
+            const u = Array.isArray(leagueUsers) ? leagueUsers.find((x: any) => x.user_id === r.owner_id) : null;
+            nameByRosterId[r.roster_id] = u?.display_name || u?.metadata?.team_name || `roster ${r.roster_id}`;
           }
-          ownedPicks = seasons.map(s => `${s}: ${picksBySeason[s].sort().join(', ') || 'none'}`).join(' / ');
+          const { computeOwnedPicks } = require('../../services/util/draftPicks');
+          ownedPicks = computeOwnedPicks({
+            rosterId, rounds, currentYear, seasons,
+            tradedPicks: Array.isArray(tradedPicks) ? tradedPicks : [],
+            mySlot, slotByRosterId, nameByRosterId,
+          });
         }
 
         // Full-league roster map — every team's players + owner, so the Coach can
@@ -336,7 +301,7 @@ async function loadSleeperContext(playerMap: Record<string, any>): Promise<Leagu
         return { name: l.name, platform: 'Sleeper', format: fmt, record: '?', rank: '?', roster: [], week, season: parseInt(l.season) || 2025, leagueType, rosterSize, taxiSlots, bestBall };
       }
     }));
-  } catch { return []; }
+  } catch (e) { logCaught('coach.loadSleeperContext', e); return []; }
 }
 
 // Load ALL connected ESPN leagues (drafted/active first), not one league
@@ -378,7 +343,7 @@ async function loadESPNContext(nameIndex: Map<string, any> | null): Promise<Leag
     const picked = summaries.slice(0, 16);
     const built = await Promise.all(picked.map((s) => loadOneESPNLeague(s, creds, nameIndex)));
     return built.filter((c): c is LeagueContext => c !== null);
-  } catch { return []; }
+  } catch (e) { logCaught('coach.loadESPNContext', e); return []; }
 }
 
 async function loadOneESPNLeague(
@@ -536,7 +501,7 @@ async function loadYahooContext(nameIndex: Map<string, any> | null): Promise<Lea
         };
       }
     }));
-  } catch { return []; }
+  } catch (e) { logCaught('coach.loadYahooContext', e); return []; }
 }
 
 // Shared loader for any platform exposing the FantasyPlatform abstraction
@@ -629,7 +594,7 @@ async function loadAbstractContext(
         };
       }
     }));
-  } catch { return []; }
+  } catch (e) { logCaught('coach.loadAbstractContext', e); return []; }
 }
 
 function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueContext | null, memories: string): string {
