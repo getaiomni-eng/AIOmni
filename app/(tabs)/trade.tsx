@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -117,31 +117,37 @@ function groundSide(
   return { lines, ktcTotal };
 }
 
-// Lightweight roster-fit context: resolve the user's own Sleeper roster (first
-// league matching the selected format) using the board's sleeperId column —
-// no 5MB players/nfl fetch. Returns ranked-player names only, which is exactly
-// the trade-relevant slice of a roster anyway.
-async function loadMyRosterNames(
-  wantDynasty: boolean,
-  board: RankedPlayer[],
-): Promise<string[]> {
+// Roster-fit context for a USER-SELECTED league. The old loader silently
+// auto-picked "the first Sleeper league matching the format", so the same
+// trade analyzed twice could be graded against different rosters — the
+// user saw contradictory fit takes with no way to know which league was
+// speaking. The league is now an explicit choice (or GENERAL = no roster
+// bias, pure asset value).
+async function loadSleeperRoster(leagueId: string, board: RankedPlayer[]): Promise<string[]> {
   try {
     const username = await AsyncStorage.getItem('sleeper_username');
     if (!username) return [];
     const user = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
     if (!user?.user_id) return [];
-    const state = await (await fetch('https://api.sleeper.app/v1/state/nfl')).json();
-    const season = state?.season ?? String(new Date().getFullYear());
-    const leagues = await (await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/${season}`)).json();
-    if (!Array.isArray(leagues) || !leagues.length) return [];
-    const isDyn = (l: any) => l?.settings?.type === 2 || !!l?.previous_league_id;
-    const league = leagues.find((l: any) => isDyn(l) === wantDynasty) ?? leagues[0];
-    const rosters = await (await fetch(`https://api.sleeper.app/v1/league/${league.league_id}/rosters`)).json();
+    const rosters = await (await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`)).json();
     const mine = Array.isArray(rosters) ? rosters.find((r: any) => r.owner_id === user.user_id) : null;
     if (!mine?.players) return [];
     const bySleeperId = new Map<string, string>();
     for (const p of board) if ((p as any).sleeperId) bySleeperId.set((p as any).sleeperId, p.name);
     return (mine.players as string[]).map(id => bySleeperId.get(id)).filter(Boolean) as string[];
+  } catch { return []; }
+}
+
+async function loadEspnRoster(leagueId: string): Promise<string[]> {
+  try {
+    const { loadESPNCredentials, getESPNLeague, findMyESPNTeam } = require('../../services/espn');
+    const creds = await loadESPNCredentials();
+    if (!creds) return [];
+    const data = await getESPNLeague(parseInt(leagueId, 10), creds);
+    const me = data ? findMyESPNTeam(data, creds.swid) : null;
+    return (me?.roster?.entries ?? [])
+      .map((e: any) => e.playerPoolEntry?.player?.fullName)
+      .filter(Boolean);
   } catch { return []; }
 }
 
@@ -161,6 +167,49 @@ export default function TradesScreen() {
   // running on market values + model knowledge alone — surfaced to the user
   // so an ungrounded grade isn't mistaken for an engine-backed one.
   const [degraded, setDegraded] = useState(false);
+
+  // League context for roster-fit grading. 'general' = no roster bias.
+  // Options come from connected platforms; the last choice persists.
+  const [ctxOptions, setCtxOptions] = useState<{ key: string; label: string; platform: 'sleeper' | 'espn'; id: string }[]>([]);
+  const [ctxChoice, setCtxChoice]   = useState<string>('general');
+  useEffect(() => {
+    (async () => {
+      const opts: typeof ctxOptions = [];
+      try {
+        const username = await AsyncStorage.getItem('sleeper_username');
+        if (username) {
+          const user = await (await fetch(`https://api.sleeper.app/v1/user/${username}`)).json();
+          if (user?.user_id) {
+            const state = await (await fetch('https://api.sleeper.app/v1/state/nfl')).json();
+            const season = state?.season ?? String(new Date().getFullYear());
+            const leagues = await (await fetch(`https://api.sleeper.app/v1/user/${user.user_id}/leagues/nfl/${season}`)).json();
+            for (const l of Array.isArray(leagues) ? leagues : []) {
+              opts.push({ key: `sleeper:${l.league_id}`, label: l.name, platform: 'sleeper', id: String(l.league_id) });
+            }
+          }
+        }
+      } catch { /* sleeper unavailable — chips just won't show it */ }
+      try {
+        const raw = await AsyncStorage.getItem('espn_leagues_v2');
+        for (const s of raw ? JSON.parse(raw) : []) {
+          // Pre-draft ESPN leagues have empty rosters — nothing to fit against.
+          if (s?.drafted) opts.push({ key: `espn:${s.id}`, label: s.name, platform: 'espn', id: String(s.id) });
+        }
+      } catch { /* espn unavailable */ }
+      setCtxOptions(opts);
+      try {
+        const saved = await AsyncStorage.getItem('trade_ctx_choice');
+        if (saved && (saved === 'general' || opts.some(o => o.key === saved))) setCtxChoice(saved);
+      } catch { /* keep default */ }
+    })();
+  }, []);
+  const pickCtx = (key: string) => {
+    setCtxChoice(key);
+    // Stale grades were computed against a different roster context.
+    setVerdict('');
+    setAnalysis('');
+    AsyncStorage.setItem('trade_ctx_choice', key).catch(() => {});
+  };
 
   // v2026-06-10: read a trade-proposal screenshot → auto-fill both sides; the
   // normal engine-grounded grader then runs on the extracted players.
@@ -270,8 +319,16 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
         }
         for (const [team, implied] of vegas) vegasByTeam.set(team, implied);
         for (const [name, pct] of snaps) snapByName.set(normName(name), pct);
-        // Roster fit — best effort, Sleeper only for now.
-        myRoster = await loadMyRosterNames(format === 'dynasty', board).catch(() => []);
+        // Roster fit — only for the league the USER selected; GENERAL skips
+        // roster context entirely so grades are pure asset value.
+        if (ctxChoice !== 'general') {
+          const sel = ctxOptions.find(o => o.key === ctxChoice);
+          if (sel) {
+            myRoster = sel.platform === 'sleeper'
+              ? await loadSleeperRoster(sel.id, board).catch(() => [])
+              : await loadEspnRoster(sel.id).catch(() => []);
+          }
+        }
       } catch { /* fall through: model grades unanchored if data is down */ }
       // If the proprietary board never loaded, every player fell through as
       // "not on the AIOmni board" and the grade is leaning on KTC market value
@@ -301,7 +358,7 @@ ${givingGrounded.lines}
 
 YOU ARE RECEIVING:
 ${gettingGrounded.lines}
-${marketMath}${myRoster.length ? `\n\nYOUR CURRENT ROSTER (ranked players — judge positional fit):\n${myRoster.join(', ')}` : ''}${engineGrounded ? '' : `\n\n⚠ HEADS UP: AIOmni's proprietary ranking engine is temporarily unavailable, so you're grading on KTC market values + general knowledge — NOT our calibrated projections. Stay decisive, but don't cite precise AIOmni ranks you don't have, and lean on market value + clear situational reads.`}`;
+${marketMath}${myRoster.length ? `\n\nYOUR CURRENT ROSTER (${ctxOptions.find(o => o.key === ctxChoice)?.label ?? 'selected league'} — ranked players; judge positional fit):\n${myRoster.join(', ')}` : `\n\nNO ROSTER CONTEXT (user chose General) — grade pure asset value. Do NOT invent roster-fit arguments or claim to know what the user needs.`}${engineGrounded ? '' : `\n\n⚠ HEADS UP: AIOmni's proprietary ranking engine is temporarily unavailable, so you're grading on KTC market values + general knowledge — NOT our calibrated projections. Stay decisive, but don't cite precise AIOmni ranks you don't have, and lean on market value + clear situational reads.`}`;
       const response = await askAI(prompt, { maxTokens: 600, system });
       console.log('Raw AI response:', response);
       // The model is told to return one JSON object, but sometimes emits a
@@ -394,6 +451,30 @@ ${marketMath}${myRoster.length ? `\n\nYOUR CURRENT ROSTER (ranked players — ju
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* League context picker — the roster the grade judges fit against.
+            GENERAL grades pure value with no roster bias. */}
+        {ctxOptions.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }} contentContainerStyle={{ gap: 8 }}>
+            <TouchableOpacity
+              style={[styles.ctxChip, ctxChoice === 'general' && styles.ctxChipOn]}
+              onPress={() => pickCtx('general')}
+            >
+              <Text style={[styles.ctxChipTxt, ctxChoice === 'general' && styles.ctxChipTxtOn]}>GENERAL · NO LEAGUE</Text>
+            </TouchableOpacity>
+            {ctxOptions.map(o => (
+              <TouchableOpacity
+                key={o.key}
+                style={[styles.ctxChip, ctxChoice === o.key && styles.ctxChipOn]}
+                onPress={() => pickCtx(o.key)}
+              >
+                <Text style={[styles.ctxChipTxt, ctxChoice === o.key && styles.ctxChipTxtOn]} numberOfLines={1}>
+                  {o.label.length > 22 ? o.label.slice(0, 21) + '…' : o.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         <TouchableOpacity
           style={styles.uploadBtn}
@@ -630,6 +711,27 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 1,
     backgroundColor: '#12252e',
+  },
+  ctxChip: {
+    borderWidth: 1,
+    borderColor: C.glassBorder,
+    backgroundColor: C.glass,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  ctxChipOn: {
+    borderColor: C.gold + '88',
+    backgroundColor: C.gold + '16',
+  },
+  ctxChipTxt: {
+    color: C.dim2,
+    fontFamily: F.mono,
+    fontSize: SZ.xs,
+    letterSpacing: 0.5,
+  },
+  ctxChipTxtOn: {
+    color: C.gold,
   },
   swapBtn: {
     borderWidth: 1,
