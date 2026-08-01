@@ -163,7 +163,7 @@ class ESPNPlatform implements FantasyPlatform {
 
     // Validate by hitting an endpoint that requires auth
     try {
-      await espnFetch(`/seasons/2025/segments/0/leagues?view=mSettings`, creds);
+      await espnFetch(`/seasons/${new Date().getFullYear()}/segments/0/leagues?view=mSettings`, creds);
       return 'connected';
     } catch (e) {
       if (e instanceof PlatformAuthError) return 'expired';
@@ -178,7 +178,7 @@ class ESPNPlatform implements FantasyPlatform {
     return creds ? normalizeSwid(creds.swid) : null;
   }
 
-  async getLeagues(season = '2025'): Promise<League[]> {
+  async getLeagues(season = String(new Date().getFullYear())): Promise<League[]> {
     const creds = await loadESPNCredentials();
     if (!creds) throw new PlatformAuthError('espn');
 
@@ -243,7 +243,7 @@ class ESPNPlatform implements FantasyPlatform {
       id: String(raw.id),
       platformId: 'espn',
       name: settings.name ?? `League ${raw.id}`,
-      season: String(raw.seasonId ?? 2025),
+      season: String(raw.seasonId ?? new Date().getFullYear()),
       teamCount: raw.size ?? 12,
       scoringFormat: mapScoringFormat(settings),
       leagueType: mapLeagueType(settings),

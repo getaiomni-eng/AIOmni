@@ -8,8 +8,6 @@ const RETENTION_WEEKS: Record<string, number> = {
   free:          0,
   rankings:      0,
   pro:           52,
-  premium:       104,
-  dynasty_elite: 104,
 };
 
 export interface MemoryEntry {

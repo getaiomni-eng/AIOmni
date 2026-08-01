@@ -785,7 +785,7 @@ function SetupWizard({
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.nextBtn, styles.nextBtnFlex, !data.leagueName && !data.leagueId && styles.nextBtnDisabled]}
-              onPress={onNext}
+              onPress={() => onNext()}
               disabled={!data.leagueName && !data.leagueId}
             >
               <Text style={styles.nextBtnText}>CONTINUE</Text>
@@ -859,7 +859,7 @@ function SetupWizard({
             <TouchableOpacity style={styles.backBtn} onPress={onBack}>
               <Text style={styles.backBtnText}>BACK</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.nextBtn, styles.nextBtnFlex]} onPress={onNext}>
+            <TouchableOpacity style={[styles.nextBtn, styles.nextBtnFlex]} onPress={() => onNext()}>
               <Text style={styles.nextBtnText}>CONTINUE</Text>
             </TouchableOpacity>
           </View>
@@ -1342,7 +1342,7 @@ function PlayerRow({
       activeOpacity={0.7}
     >
       <View style={styles.playerMain}>
-        <Text style={[styles.playerRank, { color: player.tier <= 2 ? C.amber : C.textDim }]}>
+        <Text style={[styles.playerRank, { color: (player.tier ?? 99) <= 2 ? C.amber : C.textDim }]}>
           {player.rank}
         </Text>
         <View style={[styles.playerPosBadge, { backgroundColor: POS_COLORS[player.position] || C.textDim }]}>

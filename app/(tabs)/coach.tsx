@@ -294,11 +294,11 @@ async function loadSleeperContext(playerMap: Record<string, any>): Promise<Leagu
           name: l.name, platform: 'Sleeper', format: fmt,
           record: `${wins}–${losses}`,
           rank: rankIdx >= 0 ? `${rankIdx + 1} of ${rosters.length}` : 'unknown',
-          roster: rosterNames, week, season: parseInt(l.season) || 2025,
+          roster: rosterNames, week, season: parseInt(l.season) || new Date().getFullYear(),
           leagueType, rosterSize, taxiSlots, bestBall, ownedPicks, leagueRosters,
         };
       } catch {
-        return { name: l.name, platform: 'Sleeper', format: fmt, record: '?', rank: '?', roster: [], week, season: parseInt(l.season) || 2025, leagueType, rosterSize, taxiSlots, bestBall };
+        return { name: l.name, platform: 'Sleeper', format: fmt, record: '?', rank: '?', roster: [], week, season: parseInt(l.season) || new Date().getFullYear(), leagueType, rosterSize, taxiSlots, bestBall };
       }
     }));
   } catch (e) { logCaught('coach.loadSleeperContext', e); return []; }
@@ -1103,7 +1103,7 @@ Capture rookies and veterans exactly.`,
       setRemaining(r => Math.max(0, r - 1));
       setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: reply }]);
 
-      if (['pro','premium','dynasty_elite'].includes(tier) && selectedLeague) {
+      if (tier === 'pro' && selectedLeague) {
         // Fire-and-forget the learning loop — coach-learn extracts + consolidates
         // a durable profile server-side. Never await; must not block the UI.
         learnFromExchange(text, reply, selectedLeague.name, selectedLeague.platform).catch(() => {});

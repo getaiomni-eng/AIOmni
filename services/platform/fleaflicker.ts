@@ -546,7 +546,7 @@ export const fleaflickerPlatform: FantasyPlatform = {
     const r1FirstTeam = rows[0]?.cells?.[0]?.team?.id;
     const r2FirstTeam = rows[1]?.cells?.[0]?.team?.id;
     const r1LastTeam  = rows[0]?.cells?.[teamCount - 1]?.team?.id;
-    const type: DraftType =
+    const type: 'snake' | 'linear' =
       rows.length > 1 && r2FirstTeam === r1LastTeam ? 'snake'
         : 'linear';
 

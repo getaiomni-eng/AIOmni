@@ -34,7 +34,7 @@ import { useEffect, useState } from 'react';
 import { getCurrentTier } from '../../services/purchases';
 
 export interface HeatAccess {
-  tier: 'free' | 'rankings' | 'pro' | 'dynasty_elite';
+  tier: 'free' | 'rankings' | 'pro';
   /** Show any flame icon at all */
   showIcon: boolean;
   /** Show numeric score inside/next to the flame */
@@ -62,8 +62,8 @@ export function useHeatAccess(): HeatAccess {
   }, []);
 
   // Paid tiers (anything above free)
-  const isPaid = tier === 'rankings' || tier === 'pro' || tier === 'dynasty_elite';
-  const isPro  = tier === 'pro' || tier === 'dynasty_elite';
+  const isPaid = tier === 'rankings' || tier === 'pro';
+  const isPro  = tier === 'pro';
 
   return {
     tier,

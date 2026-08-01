@@ -100,7 +100,7 @@ export interface PlayerInfo {
   team: string;
   adp: number;
   byeWeek: number;
-  tier: number;
+  tier?: number;
   rank: number;
   isDrafted: boolean;
   draftedBy?: number;       // pick slot

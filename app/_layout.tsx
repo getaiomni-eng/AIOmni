@@ -27,7 +27,8 @@ import { dark } from './constants/tokens';
 Sentry.init({
   dsn: 'https://bff368e4055a1f51bda1b9464e0d2a39@o4511046397394944.ingest.us.sentry.io/4511046438158336',
   debug: false,
-  tracesSampleRate: 1.0,
+  // 15% span sampling in prod — 1.0 sent every interaction (cost + overhead).
+  tracesSampleRate: 0.15,
 });
 
 export default Sentry.wrap(function RootLayout() {
