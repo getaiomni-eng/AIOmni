@@ -8,9 +8,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// You can override via env var if you store the key in supabase secrets;
-// fallback is your existing client-side key.
-const ODDS_API_KEY = Deno.env.get('ODDS_API_KEY') ?? '1dc3181b24294523fb9a75fda64bd6b6';
+// Env-only. The old hardcoded fallback put a real API key in the repo —
+// rotate it at the-odds-api.com and set: supabase secrets set ODDS_API_KEY=…
+const ODDS_API_KEY = Deno.env.get('ODDS_API_KEY');
+if (!ODDS_API_KEY) throw new Error('ODDS_API_KEY secret not set');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',

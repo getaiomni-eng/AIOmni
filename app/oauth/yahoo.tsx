@@ -8,9 +8,10 @@ export default function YahooCallback() {
   const router = useRouter();
   useEffect(() => {
     if (code) {
-      AsyncStorage.setItem('yahoo_auth_code', code as string).then(() => {
-        router.replace('/(tabs)');
-      });
+      // The auth code is exchanged via the WebBrowser return path in
+      // Settings — persisting it here was a dead write of a credential
+      // to unencrypted storage. Just route home.
+      router.replace('/(tabs)');
     }
   }, [code]);
   return <View style={{flex:1,backgroundColor:'#0a1214',alignItems:'center',justifyContent:'center'}}><ActivityIndicator color="#1be7ff" size="large"/></View>;
