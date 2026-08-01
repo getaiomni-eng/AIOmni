@@ -6,8 +6,12 @@
 // the last 48h is "scorching." For each user with pulse_alerts=true who
 // has a scorching player on their roster, fire a push.
 //
-// Dedupe key bucket: per-player per-DAY, so a player who stays hot for
-// a week generates one notification per day per user, not one per hour.
+// Dedupe key bucket: per-player per-WEEK (7-day epoch bucket). The old
+// per-DAY bucket re-sent the IDENTICAL alert every day a player stayed
+// trending — offseason trending barely churns, so users got the same
+// pushes daily ("same notifications every time"). The initial spike IS
+// the news; one alert per player per week is the signal without the
+// spam.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -34,9 +38,9 @@ function normalize(name: string): string {
     .replace(/[^a-z]/g, '');
 }
 
-// YYYY-MM-DD UTC — day bucket for dedupe key.
-function dayBucket(d = new Date()): string {
-  return d.toISOString().slice(0, 10);
+// 7-day epoch bucket for the dedupe key — one alert per player per week.
+function weekBucket(d = new Date()): string {
+  return `w${Math.floor(d.getTime() / 86400000 / 7)}`;
 }
 
 type ExpoMessage = {
@@ -124,8 +128,8 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: CORS });
   }
 
-  // 5. Pre-fetch existing dedupe keys per (user, sleeper_id, day).
-  const day = dayBucket();
+  // 5. Pre-fetch existing dedupe keys per (user, sleeper_id, week).
+  const day = weekBucket();
   const userIds = Array.from(new Set((matches ?? []).map(m => m.user_id)));
   const dedupeKeys = hotPlayers.map(h => `heat:${h.sleeperId}:${day}`);
   const dedupeSet = new Set<string>();
