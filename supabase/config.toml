@@ -20,3 +20,16 @@ entrypoint = "./functions/validate-promo/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/validate-promo/*.html" ]
+
+# Custom SMTP via Resend (2026-08-03) — the built-in Supabase mailer is
+# rate-limited (~4/hr) and Gmail-filters its sender; confirmation emails
+# effectively never arrived. Applied to the linked project with:
+#   RESEND_API_KEY=re_xxx npx supabase config push
+[auth.email.smtp]
+enabled = true
+host = "smtp.resend.com"
+port = 465
+user = "resend"
+pass = "env(RESEND_API_KEY)"
+admin_email = "no-reply@getaiomni.com"
+sender_name = "AIOmni"
