@@ -21,11 +21,14 @@ const ENTITLEMENTS = {
   pro: 'pro',
 } as const;
 
+// Documentation only — nothing consumes these; the app resolves products
+// via RevenueCat offerings. Kept in sync with App Store Connect (verified
+// against ASC 2026-08-04: the live products are the .v3 generation).
 const PRODUCT_IDS = {
-  rankings_monthly: 'com.getaiomni.rankings.v2.monthly',
-  rankings_yearly: 'com.getaiomni.rankings.v2.yearly',
-  pro_monthly: 'com.getaiomni.pro.monthly',
-  pro_yearly: 'com.getaiomni.pro.yearly',
+  rankings_monthly: 'com.getaiomni.rankings.monthly.v3',
+  rankings_yearly: 'com.getaiomni.rankings.yearly.v3',
+  pro_monthly: 'com.getaiomni.pro.monthly.v3',
+  pro_yearly: 'com.getaiomni.pro.yearly.v3',
 } as const;
 
 // ── Init ───────────────────────────────────────────────────────────────────────
