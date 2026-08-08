@@ -223,7 +223,13 @@ export default function HomeScreen() {
   // Build a home-screen League row from one ESPN league payload.
   const buildESPNLeague = (leagueId: number, leagueData: any, swid: string): League => {
     const myTeam  = findMyESPNTeam(leagueData, swid);
-    const recPts  = leagueData.settings?.scoringSettings?.REC ?? 0;
+    // ESPN keys scoring by statId in scoringSettings.scoringItems[] — there
+    // is no `.REC` field, so this read was always undefined and every ESPN
+    // league rendered as 'STD'. statId 53 = receptions.
+    const recPts  = Number(
+      (leagueData.settings?.scoringSettings?.scoringItems ?? [])
+        .find((i: any) => Number(i?.statId) === 53)?.points ?? 0
+    );
     const fmt     = recPts >= 1 ? 'PPR' : recPts >= 0.5 ? '0.5 PPR' : 'STD';
     const wins    = myTeam?.record?.overall?.wins   ?? 0;
     const losses  = myTeam?.record?.overall?.losses ?? 0;

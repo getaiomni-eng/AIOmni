@@ -12,7 +12,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, askAIVision } from '../../services/ai';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
-import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../services/espn';
+import { findMyESPNTeam, getESPNLeague, loadESPNCredentials, ESPN_SLOTS } from '../../services/espn';
+import {
+  summarizeSleeperScoring, summarizeESPNScoring, summarizeYahooScoring,
+  formatStartingSlots, formatESPNStartingSlots,
+} from '../../services/util/scoringSummary';
 import { fetchAllLiveData, formatLiveDataForPrompt } from '../../services/liveData';
 import { getSeasonContext2026, ROOKIE_BOARD_2026_TEXT } from '../../services/seasonContext2026';
 import { FANTASY_FOOTBALL_KNOWLEDGE } from '../../services/fantasyKnowledge';
@@ -26,7 +30,7 @@ import { C, F, R, SP, SZ } from '../constants/tokens';
 import { getPromptLimit, getRemainingPrompts, getResetTime, hasLinkedPlatform, incrementPrompt, LIMITS } from '../../services/promptQuota';
 import { logCaught } from '../../services/util/logCaught';
 import { getNFLSeason } from '../../services/season';
-import { getValidYahooToken, getYahooLeagues, getMyYahooTeam, getYahooStandings, YahooLeague, YahooPlayer } from '../../services/yahoo';
+import { getValidYahooToken, getYahooLeagues, getMyYahooTeam, getYahooStandings, getYahooLeagueSettings, YahooLeague, YahooPlayer } from '../../services/yahoo';
 
 // Prompt limits are tier-aware — see getPromptDisplayInfo()
 const BORDER   = '#1a3542';
@@ -58,6 +62,13 @@ type LeagueContext = {
   // v2026-06-09: full-league roster map (every team's players + owner) so the
   // Coach can answer "who owns X", find trade targets, and judge availability.
   leagueRosters?: string;
+  // v2026-08-07: the actual scoring rules and starting lineup. `format`
+  // above is a three-value label derived from the reception value alone —
+  // it cannot express TE premium, 6-pt passing TDs, per-first-down points
+  // or yardage bonuses, so two leagues that play nothing alike produced
+  // identical prompts. These two carry the real settings through.
+  scoringDetail?: string;   // "rec 1 · bonus_rec_te 0.5 · pass_td 6"
+  startingSlots?: string;   // "QB · 2RB · 3WR · TE · 2FLEX"
 };
 
 function getPaywallMessage(resetStr: string): string {
@@ -189,6 +200,10 @@ async function loadSleeperContext(playerMap: Record<string, any>): Promise<Leagu
       const isPPR = l.scoring_settings?.rec > 0;
       const isSF  = (l.roster_positions || []).includes('SUPER_FLEX');
       const fmt   = `${isPPR ? (l.scoring_settings.rec >= 1 ? 'PPR' : '0.5 PPR') : 'STD'}${isSF ? ' · SuperFlex' : ''}`;
+      // The label above only knows about receptions. Carry the real
+      // dictionary and the starting lineup through to the prompt.
+      const scoringDetail = summarizeSleeperScoring(l.scoring_settings);
+      const startingSlots = formatStartingSlots(l.roster_positions);
 
       // v2026-05-14: dynasty/keeper detection from Sleeper settings.type
       // 0 = redraft, 1 = keeper, 2 = dynasty. best_ball is its own flag.
@@ -296,9 +311,10 @@ async function loadSleeperContext(playerMap: Record<string, any>): Promise<Leagu
           rank: rankIdx >= 0 ? `${rankIdx + 1} of ${rosters.length}` : 'unknown',
           roster: rosterNames, week, season: parseInt(l.season) || new Date().getFullYear(),
           leagueType, rosterSize, taxiSlots, bestBall, ownedPicks, leagueRosters,
+          scoringDetail, startingSlots,
         };
       } catch {
-        return { name: l.name, platform: 'Sleeper', format: fmt, record: '?', rank: '?', roster: [], week, season: parseInt(l.season) || new Date().getFullYear(), leagueType, rosterSize, taxiSlots, bestBall };
+        return { name: l.name, platform: 'Sleeper', format: fmt, record: '?', rank: '?', roster: [], week, season: parseInt(l.season) || new Date().getFullYear(), leagueType, rosterSize, taxiSlots, bestBall, scoringDetail, startingSlots };
       }
     }));
   } catch (e) { logCaught('coach.loadSleeperContext', e); return []; }
@@ -359,9 +375,20 @@ async function loadOneESPNLeague(
     // the league with an empty roster and told the user it wasn't loaded.
     const myTeam     = findMyESPNTeam(leagueData, creds.swid);
     const allSettings = leagueData.settings;
-    const scoring   = allSettings?.scoringSettings;
-    const recPts    = scoring?.REC ?? 0;
+    // ESPN keys scoring by numeric statId inside scoringSettings.scoringItems[]
+    // — there is no `scoringSettings.REC` field. The old read of `.REC`
+    // was always undefined, so EVERY ESPN league was labelled 'STD'
+    // regardless of its actual format. statId 53 = receptions, matching
+    // services/platform/espn.ts:mapScoringFormat and services/waivers.ts.
+    const recPts    = Number(
+      (allSettings?.scoringSettings?.scoringItems ?? [])
+        .find((i: any) => Number(i?.statId) === 53)?.points ?? 0
+    );
     const fmt       = recPts >= 1 ? 'PPR' : recPts >= 0.5 ? '0.5 PPR' : 'STD';
+    const scoringDetail = summarizeESPNScoring(allSettings);
+    const startingSlots = formatESPNStartingSlots(
+      allSettings?.rosterSettings?.lineupSlotCounts, ESPN_SLOTS,
+    );
     const wins      = myTeam?.record?.overall?.wins   ?? 0;
     const losses    = myTeam?.record?.overall?.losses ?? 0;
     const teams     = leagueData.teams ?? [];
@@ -436,6 +463,8 @@ async function loadOneESPNLeague(
         : undefined) as number | undefined,
       leagueRosters,
       available,
+      scoringDetail,
+      startingSlots,
     };
   } catch { return null; }
 }
@@ -454,9 +483,10 @@ async function loadYahooContext(nameIndex: Map<string, any> | null): Promise<Lea
     if (!leagues?.length) return [];
     return Promise.all(leagues.slice(0, 6).map(async (l: YahooLeague): Promise<LeagueContext> => {
       try {
-        const [standings, teamData] = await Promise.all([
+        const [standings, teamData, leagueSettings] = await Promise.all([
           getYahooStandings(l.league_key, token).catch(() => [] as any[]),
           getMyYahooTeam(l.league_key, token).catch(() => null),
+          getYahooLeagueSettings(l.league_key, token).catch(() => null),
         ]);
 
         // Yahoo's team[0] payload is an array of mixed metadata entries;
@@ -482,19 +512,27 @@ async function loadYahooContext(nameIndex: Map<string, any> | null): Promise<Lea
           return formatPlayerEntry(name, pos, p.editorial_team_abbr, enrich);
         });
 
-        // Yahoo doesn't surface scoring rules in the league-list response.
-        // Default to PPR (the modal Yahoo league); a follow-up could fetch
-        // /league/{key}/settings to detect Half/Std/no-PPR specifically.
+        // Real scoring, read from /league/{key}/settings rather than
+        // assumed. Yahoo stat_id 11 = receptions. If the settings call
+        // fails we fall back to the old PPR assumption, but say so in
+        // the detail line so the model doesn't treat it as confirmed.
+        const recMod = leagueSettings?.statModifiers.find(m => m.statId === 11)?.value;
+        const fmt = recMod === undefined ? 'PPR (assumed — settings unavailable)'
+                  : recMod >= 1 ? 'PPR'
+                  : recMod >= 0.5 ? '0.5 PPR'
+                  : 'STD';
         return {
-          name: l.name, platform: 'Yahoo', format: 'PPR',
+          name: l.name, platform: 'Yahoo', format: fmt,
           record, rank, roster: rosterNames, available: [],
           week: l.current_week ?? 1,
           season: parseInt(l.season) || new Date().getFullYear(),
           leagueType: 'redraft',
+          scoringDetail: summarizeYahooScoring(leagueSettings?.statModifiers),
+          startingSlots: formatStartingSlots(leagueSettings?.rosterSlots),
         };
       } catch {
         return {
-          name: l.name, platform: 'Yahoo', format: 'PPR',
+          name: l.name, platform: 'Yahoo', format: 'PPR (assumed — settings unavailable)',
           record: '?', rank: '?', roster: [], available: [],
           week: l.current_week ?? 1,
           season: parseInt(l.season) || new Date().getFullYear(),
@@ -530,7 +568,7 @@ async function loadAbstractContext(
                                               : l.leagueType === 'keeper'  ? 'keeper'
                                               :                              'redraft';
         const isDynKeep = lt === 'dynasty' || lt === 'keeper';
-        const [standings, roster, fas, draft] = await Promise.all([
+        const [standings, roster, fas, draft, detail] = await Promise.all([
           plat.getStandings(l.id).catch(() => []),
           plat.getMyRoster(l.id).catch(() => null),
           // Top 20 free agents so the Coach knows what's actually
@@ -540,6 +578,9 @@ async function loadAbstractContext(
           // MFL's getDraft is still a stub. For platforms that populate
           // myOwnedPicks we annotate this season's picks as "1.08, 3.08".
           isDynKeep ? plat.getDraft(l.id).catch(() => null) : Promise.resolve(null),
+          // LeagueDetail carries the starting lineup (rosterSlots) and,
+          // once the adapters populate it, per-stat scoringSettings.
+          plat.getLeague(l.id).catch(() => null),
         ]);
         const me = (standings as any[]).find(s => s.isMe);
         const record = me ? `${me.record.wins}–${me.record.losses}` : '?';
@@ -580,11 +621,24 @@ async function loadAbstractContext(
           ownedPicks = `${currentYear}: ${formatted}`;
         }
 
+        // MFL and Fleaflicker adapters do not yet populate per-stat
+        // scoringSettings (both return {}). Say so explicitly rather
+        // than emitting nothing, which the model would read as
+        // "standard scoring" — the exact failure this change exists to
+        // fix. The keys flow through automatically once the adapters
+        // fill them in.
+        const detailScoring = (detail as any)?.scoringSettings;
+        const scoringDetail = detailScoring && Object.keys(detailScoring).length > 0
+          ? summarizeSleeperScoring(detailScoring)
+          : `per-stat scoring not exposed by the ${platformLabel} API integration — treat the ${fmt} label as approximate and ask the user before relying on scoring specifics`;
+
         return {
           name: l.name, platform: platformLabel, format: fmt,
           record, rank, roster: rosterNames, available: availableNames, week,
           season: parseInt(l.season) || new Date().getFullYear(),
           leagueType: lt, ownedPicks,
+          scoringDetail,
+          startingSlots: formatStartingSlots((detail as any)?.rosterSlots),
         };
       } catch {
         return {
@@ -595,6 +649,73 @@ async function loadAbstractContext(
       }
     }));
   } catch (e) { logCaught('coach.loadAbstractContext', e); return []; }
+}
+
+/**
+ * Which part of the fantasy calendar we're in, and what a bare "who
+ * should I draft" question most likely means in that window.
+ *
+ * v2026-08-07: replaces a hardcoded "2026-05-27 (NFL OFFSEASON window)"
+ * string. That string also drove the draft framing, so from August
+ * onward the Coach was answering redraft-draft questions — the single
+ * highest-volume question of the year — as if they were dynasty rookie
+ * drafts.
+ */
+function getCalendarWindow(now: Date): { label: string; draftGuidance: string } {
+  const month = now.getMonth() + 1;   // 1-12
+  const day   = now.getDate();
+
+  // Redraft draft season runs roughly Aug 1 → NFL Week 1 (~Sep 10).
+  const isRedraftDraftSeason = month === 8 || (month === 9 && day < 10);
+  const isInSeason = (month === 9 && day >= 10) || month === 10 || month === 11 || month === 12
+                   || (month === 1 && day <= 10);
+  const isRookieDraftSeason = month >= 4 && month <= 7;
+
+  if (isRedraftDraftSeason) {
+    return {
+      label: 'REDRAFT DRAFT SEASON — preseason, drafts happening now',
+      draftGuidance: `User asks about "the draft," "who should I take," "1.01," or "who
+should I pick" in THIS window → assume a REDRAFT (seasonal) DRAFT
+unless the league block says dynasty/keeper. August is peak redraft
+draft season; most users asking now are drafting a fresh team for
+2026. Rank on 2026 season projection, not long-term dynasty value —
+age matters far less here, and a productive 29-year-old outranks an
+unproven rookie. Only treat it as a DYNASTY ROOKIE DRAFT if the
+league block is marked [DYNASTY] or [KEEPER], or the user says so.`,
+    };
+  }
+
+  if (isInSeason) {
+    return {
+      label: 'NFL REGULAR SEASON — in-season management window',
+      draftGuidance: `The season is underway. A "draft" question now is almost always
+about waivers, a devy/taxi add, or next year's outlook — clarify
+briefly rather than assuming a draft is imminent. Prioritise
+start/sit, waiver, and trade advice keyed to the current week.`,
+    };
+  }
+
+  if (isRookieDraftSeason) {
+    return {
+      label: 'NFL OFFSEASON — dynasty rookie draft window',
+      draftGuidance: `User asks about "the draft," "rookies," "1.01," or "who should I
+pick" in this offseason window → assume DYNASTY ROOKIE DRAFT for the
+2026 class. Source picks ONLY from the canonical 2026 rookie list
+below. If the user's question is ambiguous between rookie draft vs
+startup dynasty, ANSWER the rookie-draft case primarily and mention
+startup as a side note — most users asking in May/June with "1.01"
+are in a rookie draft.`,
+    };
+  }
+
+  // Jan (post-Week-18) through March: playoffs, free agency, pre-draft.
+  return {
+    label: 'NFL OFFSEASON — post-season / free-agency window',
+    draftGuidance: `The next NFL draft has not happened yet and rookie drafts are
+months away. A "draft" question here is most likely about dynasty
+startup drafts or next season's outlook — ask which they mean rather
+than assuming, and never invent unreleased rookie-class names.`,
+  };
 }
 
 function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueContext | null, memories: string): string {
@@ -618,13 +739,43 @@ function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueConte
     const allRost = l.leagueRosters
       ? `\nALL LEAGUE ROSTERS (every team — use this to find who owns a player, spot trade targets, and judge availability; a player NOT listed here is a free agent):\n${l.leagueRosters}`
       : '';
+    // v2026-08-07: the real scoring rules and starting lineup. Without
+    // these the model saw only "PPR"/"STD" and could not distinguish a
+    // TE-premium 6-pt-passing league from a vanilla one.
+    const scoring = l.scoringDetail ? `\nSCORING RULES: ${l.scoringDetail}` : '';
+    const starts  = l.startingSlots ? `\nSTARTING LINEUP: ${l.startingSlots}` : '';
     return `
 League: ${l.name} (${l.platform} · ${l.format}) ${typeLabel}${bestBall}
-Record: ${l.record} · Rank: ${l.rank} · Season: ${l.season} · Week: ${l.week}${taxi}
+Record: ${l.record} · Rank: ${l.rank} · Season: ${l.season} · Week: ${l.week}${taxi}${scoring}${starts}
 Roster${rosterMeta}: ${rosterStr}${picks}${avail}${allRost}
 `;
   }).join('\n---\n');
   const focusNote  = selectedLeague ? `\n\nThe user has focused on ONE league: ${selectedLeague.name}. All advice should be specific to this league's scoring format and roster.` : '';
+  // v2026-08-07: the SCORING RULES / STARTING LINEUP blocks above are new.
+  // Stating them is not enough — without this directive the model kept
+  // answering from generic PPR priors and ignored the league's actual
+  // settings, which is the single thing the product promises to do.
+  const scoringDirective = `
+
+═══ USE THE LEAGUE'S ACTUAL SCORING — THIS IS THE PRODUCT ═══
+Every league block above carries SCORING RULES and STARTING LINEUP. These
+are the user's REAL settings, read from their platform. They override any
+default assumption you hold about "normal" fantasy scoring.
+
+- NEVER answer from generic PPR priors when a SCORING RULES line is present.
+- Weigh the rules that actually move value: points per reception, TE premium
+  (bonus_rec_te / rec(TE)), passing TD value (6-pt passing lifts QBs sharply
+  vs 4-pt), per-first-down points (rewards high-volume possession receivers
+  and RBs), yardage bonuses (reward boom players over steady ones), and
+  turnover penalties (downgrade volatile QBs).
+- STARTING LINEUP drives positional scarcity as hard as scoring does. A
+  league starting 3WR+2FLEX values WR depth far above one starting 2WR.
+  SUPER_FLEX / OP means a second QB can start — QBs jump massively.
+- When a recommendation actually turns on a scoring rule, SAY SO in one
+  short clause: "in your 6-pt passing TE-premium league, ...". Do not
+  recite settings the answer does not depend on.
+- If a scoring line says the settings are unavailable or approximate, do
+  NOT invent them — ask the user, or answer with the assumption stated.`;
   const memoryBlock = memories ? `\n\n═══ MANAGER PROFILE (learned from past conversations — tailor every answer to this) ═══\n${memories}` : '';
   // v2026-05-12k: inject coaching changes, player moves, injury notes, and
   // personnel tendencies. Mirrors what the rankings engine factors in so
@@ -641,9 +792,17 @@ Roster${rosterMeta}: ${rosterStr}${picks}${avail}${allRost}
   // names from the "Rookies of note" section below — never from
   // training data. The previous build hallucinated Ashton Jeanty as a
   // 2026 rookie 1.01 (he's a 2025 rookie, drafted in April 2025).
+  //
+  // v2026-08-07: the date here was HARDCODED to 2026-05-27, so by August
+  // the model was told it was still May and still in the offseason. The
+  // draft guidance below keys off that window and was therefore steering
+  // every August draft question to "dynasty rookie draft" during peak
+  // REDRAFT draft season. Both now derive from the real clock.
+  const { label: calendarWindow, draftGuidance } = getCalendarWindow(new Date());
+  const todayISO = new Date().toISOString().slice(0, 10);
   const calendarFraming = `
 ═══ CURRENT CALENDAR — READ FIRST ═══
-Today's date: 2026-05-27 (NFL OFFSEASON window).
+Today's date: ${todayISO} (${calendarWindow}).
 Last completed NFL season: 2025 (Super Bowl LX, Feb 2026).
 Next NFL season: 2026 (Week 1 ~Sep 10, 2026).
 
@@ -660,13 +819,7 @@ Training cutoff: Jan 2026. This means:
   names from training. The 2026 rookie class is provided BELOW in the
   season-context block — use ONLY those names.
 
-User asks about "the draft," "rookies," "1.01," or "who should I
-pick" in this offseason window → assume DYNASTY ROOKIE DRAFT for the
-2026 class. Source picks ONLY from the canonical 2026 rookie list
-below. If the user's question is ambiguous between rookie draft vs
-startup dynasty, ANSWER the rookie-draft case primarily and mention
-startup as a side note — most users asking in May/June with "1.01"
-are in a rookie draft.
+${draftGuidance}
 
 When recommending 2026 rookie draft picks, use ONLY names from the
 "Rookies of note" list in the season-context block at the END of
@@ -691,7 +844,7 @@ than answering blind.
   // block small. The system field precedes the user turn, so the rookie
   // board still leads — preserving the "don't fall back to training-data
   // rookies" guarantee that motivated hoisting it.
-  return `${calendarFraming}\n\nYou have loaded ${targets.length} league${targets.length > 1 ? 's' : ''}:\n${leagueBlocks}${focusNote}${memoryBlock}\n\n${seasonContext}`;
+  return `${calendarFraming}\n\nYou have loaded ${targets.length} league${targets.length > 1 ? 's' : ''}:\n${leagueBlocks}${focusNote}${scoringDirective}${memoryBlock}\n\n${seasonContext}`;
 }
 
 // ── Verdict card (blue) ─────────────────────────────────────

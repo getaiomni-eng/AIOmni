@@ -266,6 +266,60 @@ export async function getYahooFreeAgents(leagueKey: string, position: string, ac
   } catch { return []; }
 }
 
+/**
+ * League settings — scoring modifiers + starting lineup.
+ *
+ * v2026-08-07: the Coach previously hardcoded every Yahoo league to
+ * 'PPR' with the comment "Yahoo doesn't surface scoring rules in the
+ * league-list response". That is true of the league LIST, but
+ * /league/{key}/settings carries both stat_modifiers and
+ * roster_positions — so a Yahoo half-PPR or TE-premium league was
+ * being described to the model as vanilla PPR.
+ *
+ * Yahoo wraps collections as objects keyed "0","1",…,"count", and
+ * nests each entry one level deeper under its own singular key, so
+ * every access here is defensive: a shape change degrades to empty
+ * rather than throwing (which would drop the whole league context).
+ */
+export async function getYahooLeagueSettings(
+  leagueKey: string,
+  accessToken: string,
+): Promise<{ statModifiers: Array<{ statId: number; value: number }>; rosterSlots: string[] } | null> {
+  try {
+    const data = await yahooFetch(`/league/${leagueKey}/settings`, accessToken);
+    const settings = data?.fantasy_content?.league?.[1]?.settings?.[0];
+    if (!settings) return null;
+
+    const statModifiers: Array<{ statId: number; value: number }> = [];
+    const rawStats = settings?.stat_modifiers?.stats;
+    if (rawStats) {
+      for (const entry of Object.values(rawStats as Record<string, any>)) {
+        const stat = (entry as any)?.stat;
+        if (!stat) continue;
+        const statId = Number(stat.stat_id);
+        const value = Number(stat.value);
+        if (Number.isFinite(statId) && Number.isFinite(value)) statModifiers.push({ statId, value });
+      }
+    }
+
+    // roster_positions is a plain array here (unlike most Yahoo
+    // collections), but tolerate the keyed-object form too.
+    const rosterSlots: string[] = [];
+    const rawSlots = settings?.roster_positions;
+    if (rawSlots) {
+      for (const entry of Object.values(rawSlots as Record<string, any>)) {
+        const rp = (entry as any)?.roster_position ?? entry;
+        const position = rp?.position;
+        const count = Number(rp?.count ?? 0);
+        if (!position || !Number.isFinite(count) || count <= 0) continue;
+        for (let i = 0; i < count; i++) rosterSlots.push(String(position));
+      }
+    }
+
+    return { statModifiers, rosterSlots };
+  } catch { return null; }
+}
+
 export async function getYahooStandings(leagueKey: string, accessToken: string): Promise<any[]> {
   try {
     const data = await yahooFetch(`/league/${leagueKey}/standings`, accessToken);
