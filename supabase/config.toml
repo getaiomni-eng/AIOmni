@@ -21,6 +21,18 @@ entrypoint = "./functions/validate-promo/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/validate-promo/*.html" ]
 
+# Auth URLs (2026-08-09) — without these the project ran on defaults:
+# site_url http://127.0.0.1:3000 and an EMPTY redirect allow-list, so
+# the app's redirectTo: 'aiomnifantasy://auth/reset' was rejected and
+# every password-reset email dumped users on 127.0.0.1. The allow-list
+# must contain the deep link for the reset flow to reach the app.
+[auth]
+site_url = "https://getaiomni.com"
+additional_redirect_urls = [
+  "aiomnifantasy://auth/reset",
+  "https://getaiomni.com",
+]
+
 # Custom SMTP via Resend (2026-08-03) — the built-in Supabase mailer is
 # rate-limited (~4/hr) and Gmail-filters its sender; confirmation emails
 # effectively never arrived. Applied to the linked project with:
