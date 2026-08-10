@@ -551,6 +551,7 @@ export default function DraftCopilotScreen() {
             if (
               updates.myDraftSlot !== undefined ||
               updates.draftType !== undefined ||
+              updates.teamCount !== undefined ||
               updates.platform !== undefined ||
               updates.leagueId !== undefined
             ) setSleeperPicks(null);
@@ -863,6 +864,27 @@ function SetupWizard({
       {/* ── POSITION / SETTINGS ── */}
       {step === 'position' && (
         <View style={styles.setupSection}>
+          {/* v2026-08-09: team count was silently fixed at 12 — it drives
+              the position chips AND every pick number in the preview, so
+              10/14-team drafters got wrong math with no way to fix it.
+              Platform-linked leagues prefill this from the league. */}
+          <Text style={styles.inputLabel}>Teams</Text>
+          <View style={styles.chipRow}>
+            {[8, 10, 12, 14, 16].map(n => (
+              <TouchableOpacity
+                key={n}
+                style={[styles.chip, (data.teamCount || 12) === n && styles.chipActive]}
+                onPress={() => onUpdate({
+                  teamCount: n,
+                  // Keep the selected slot inside the new league size.
+                  ...(data.myDraftSlot && data.myDraftSlot > n ? { myDraftSlot: n } : {}),
+                })}
+              >
+                <Text style={[styles.chipText, (data.teamCount || 12) === n && styles.chipTextActive]}>{n}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <Text style={styles.inputLabel}>My Draft Position</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.slotScroll}>
             <View style={styles.chipRow}>
