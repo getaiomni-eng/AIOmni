@@ -237,18 +237,34 @@ export default function DraftCopilotScreen() {
 
   const fetchSleeperPicks = async (leagueId: string, userId: string) => {
     try {
-      const [rostersRes, tradedRes] = await Promise.all([
+      const [rostersRes, tradedRes, draftsRes] = await Promise.all([
         fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`),
         fetch(`https://api.sleeper.app/v1/league/${leagueId}/traded_picks`),
+        fetch(`https://api.sleeper.app/v1/league/${leagueId}/drafts`),
       ]);
       const rosters = await rostersRes.json();
       const tradedPicks = await tradedRes.json();
+      const drafts = await draftsRes.json();
       const myRoster = rosters.find((r: any) => r.owner_id === userId);
       if (!myRoster) return;
 
       const myRosterId = myRoster.roster_id;
       const season = await getNFLSeason();
       const totalRounds = setupData.rounds || 4;
+
+      // v2026-08-09: prefer the league's REAL draft for slot + order.
+      // draft_order maps user_id → slot and draft.type says snake/linear.
+      // The standings-derived order below is only a fallback for rookie
+      // drafts whose order isn't set yet — using it for a startup draft
+      // put EVERY user at slot 1 (fresh leagues are all 0–0, so the
+      // sort is arbitrary), and the preview showed "1.01 · 2.01 · …"
+      // regardless of the user's actual slot.
+      const liveDraft = Array.isArray(drafts)
+        ? drafts.find((d: any) => d?.draft_order?.[userId] != null)
+        : null;
+      const mySlotFromDraft: number | null = liveDraft?.draft_order?.[userId] ?? null;
+      const isSnake = (liveDraft?.type ?? 'snake') === 'snake';
+      const draftTeams = liveDraft?.settings?.teams ?? rosters.length ?? 12;
 
       // Build draft order from standings (worst record = pick 1)
       const draftOrder = [...rosters].sort((a: any, b: any) => {
@@ -258,6 +274,13 @@ export default function DraftCopilotScreen() {
       });
       const positionMap = new Map<number, number>();
       draftOrder.forEach((r: any, i: number) => positionMap.set(r.roster_id, i + 1));
+      // The draft's slot_to_roster_id is authoritative when present —
+      // overwrite the standings guess with real slots.
+      if (liveDraft?.slot_to_roster_id) {
+        for (const [slot, rid] of Object.entries(liveDraft.slot_to_roster_id)) {
+          if (rid != null) positionMap.set(Number(rid), Number(slot));
+        }
+      }
 
       // Track traded picks for this season
       const lostRounds = new Set<number>();
@@ -273,23 +296,39 @@ export default function DraftCopilotScreen() {
         }
       }
 
-      // Build final pick list with pick numbers (e.g. "4.10")
-      const myPosition = positionMap.get(myRosterId) || 1;
+      // Build final pick list with pick numbers (e.g. "4.10").
+      // No `|| 1` fallback: if we can't determine the slot, showing no
+      // preview beats confidently showing slot 1's picks.
+      const myPosition = mySlotFromDraft ?? positionMap.get(myRosterId);
+      if (!myPosition) { setSleeperPicks(null); return; }
       const picks: { round: number; pick: number; label: string }[] = [];
 
-      // Own picks that weren't traded away
+      // Own picks that weren't traded away. Snake drafts reverse even
+      // rounds (slot 3 of 12 → 1.03, 2.10, 3.03 …); rookie drafts are
+      // typically linear and keep the same slot every round.
       for (let rd = 1; rd <= totalRounds; rd++) {
         if (!lostRounds.has(rd)) {
-          const pickNum = String(myPosition).padStart(2, '0');
-          picks.push({ round: rd, pick: myPosition, label: `${rd}.${pickNum}` });
+          const slotThisRound = isSnake && rd % 2 === 0
+            ? draftTeams - myPosition + 1
+            : myPosition;
+          const pickNum = String(slotThisRound).padStart(2, '0');
+          picks.push({ round: rd, pick: slotThisRound, label: `${rd}.${pickNum}` });
         }
       }
 
-      // Acquired picks with the original team's draft position
+      // Acquired picks with the original team's draft position. Unknown
+      // origin slot → round-only label ("R3"), never a fabricated slot.
       for (const ap of acquiredPicks) {
-        const fromPos = positionMap.get(ap.fromRosterId) || 1;
-        const pickNum = String(fromPos).padStart(2, '0');
-        picks.push({ round: ap.round, pick: fromPos, label: `${ap.round}.${pickNum}` });
+        const fromPos = positionMap.get(ap.fromRosterId);
+        if (!fromPos) {
+          picks.push({ round: ap.round, pick: 99, label: `R${ap.round}` });
+          continue;
+        }
+        const slotThisRound = isSnake && ap.round % 2 === 0
+          ? draftTeams - fromPos + 1
+          : fromPos;
+        const pickNum = String(slotThisRound).padStart(2, '0');
+        picks.push({ round: ap.round, pick: slotThisRound, label: `${ap.round}.${pickNum}` });
       }
 
       // Sort by round then pick
