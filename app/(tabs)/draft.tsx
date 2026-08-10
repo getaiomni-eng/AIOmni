@@ -335,6 +335,16 @@ export default function DraftCopilotScreen() {
       picks.sort((a, b) => a.round !== b.round ? a.round - b.round : a.pick - b.pick);
 
       setSleeperPicks(picks.length > 0 ? picks.map(p => p.label) : null);
+      // Reflect the real Sleeper slot (and draft type) in the manual
+      // controls so the chips agree with the preview instead of sitting
+      // on a stale selection the preview ignores.
+      setSetupData(prev => ({
+        ...prev,
+        myDraftSlot: myPosition,
+        ...(liveDraft?.type === 'linear' || liveDraft?.type === 'auction'
+          ? { draftType: liveDraft.type as 'linear' | 'auction' }
+          : {}),
+      }));
     } catch (e) {
       console.log('fetchSleeperPicks error:', e);
       setSleeperPicks(null);
@@ -528,7 +538,14 @@ export default function DraftCopilotScreen() {
               }
             })();
           }}
-          onUpdate={(updates) => setSetupData(prev => ({ ...prev, ...updates }))}
+          onUpdate={(updates) => {
+            // v2026-08-09: manually picking a draft position overrides the
+            // Sleeper-derived pick list. Before this, the preview kept
+            // showing the Sleeper draft's slot no matter which position
+            // chip was tapped — chips that visibly did nothing.
+            if (updates.myDraftSlot !== undefined) setSleeperPicks(null);
+            setSetupData(prev => ({ ...prev, ...updates }));
+          }}
           onNext={(platformOverride?: Platform) => {
             const steps: SetupStep[] = ['platform', 'league', 'position', 'confirm'];
             const idx = steps.indexOf(setupStep);
