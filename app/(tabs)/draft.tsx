@@ -507,6 +507,7 @@ export default function DraftCopilotScreen() {
         onPress: () => {
           clearDraftState();
           setDraftState(null);
+          setSleeperPicks(null);
           setPhase('setup');
           setSetupStep('platform');
           setSetupData({
@@ -539,11 +540,20 @@ export default function DraftCopilotScreen() {
             })();
           }}
           onUpdate={(updates) => {
-            // v2026-08-09: manually picking a draft position overrides the
-            // Sleeper-derived pick list. Before this, the preview kept
-            // showing the Sleeper draft's slot no matter which position
-            // chip was tapped — chips that visibly did nothing.
-            if (updates.myDraftSlot !== undefined) setSleeperPicks(null);
+            // v2026-08-09: the Sleeper-derived pick list only stays valid
+            // while the user is on the exact Sleeper league it came from.
+            // Any manual change that contradicts it — different position,
+            // different draft type, different platform/league (incl. the
+            // offline flow) — clears it so the preview recomputes from
+            // the controls. Before this, the stale list leaked across
+            // flows: the offline draft showed the previous Sleeper
+            // league's picks no matter what was selected.
+            if (
+              updates.myDraftSlot !== undefined ||
+              updates.draftType !== undefined ||
+              updates.platform !== undefined ||
+              updates.leagueId !== undefined
+            ) setSleeperPicks(null);
             setSetupData(prev => ({ ...prev, ...updates }));
           }}
           onNext={(platformOverride?: Platform) => {
