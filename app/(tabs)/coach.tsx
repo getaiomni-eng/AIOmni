@@ -17,6 +17,8 @@ import {
   summarizeSleeperScoring, summarizeESPNScoring, summarizeYahooScoring,
   formatStartingSlots, formatESPNStartingSlots,
 } from '../../services/util/scoringSummary';
+import { fetchAnalystBuzz, BuzzLine } from '../../services/analystTakes';
+import { normalizePlayerName } from '../../services/util/normalizeName';
 import { fetchAllLiveData, formatLiveDataForPrompt } from '../../services/liveData';
 import { getSeasonContext2026, ROOKIE_BOARD_2026_TEXT } from '../../services/seasonContext2026';
 import { FANTASY_FOOTBALL_KNOWLEDGE } from '../../services/fantasyKnowledge';
@@ -91,7 +93,7 @@ const SLEEPER_PLAYER_TTL_MS = 24 * 60 * 60 * 1000;
 // rosters/standings don't change minute-to-minute; re-fetching five
 // platforms on every coach visit made the tab feel broken. 10-minute TTL,
 // module-level so it survives remounts but not app restarts.
-let coachCtxCache: { at: number; all: LeagueContext[]; liveData: any } | null = null;
+let coachCtxCache: { at: number; all: LeagueContext[]; liveData: any; buzz: Map<string, BuzzLine[]> | null } | null = null;
 const COACH_CTX_TTL_MS = 10 * 60 * 1000;
 
 async function loadSleeperPlayerMap(): Promise<Record<string, any>> {
@@ -719,7 +721,7 @@ than assuming, and never invent unreleased rookie-class names.`,
   };
 }
 
-function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueContext | null, memories: string): string {
+function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueContext | null, memories: string, buzz?: Map<string, BuzzLine[]> | null): string {
   const targets = selectedLeague ? [selectedLeague] : leagues;
   if (targets.length === 0) return 'No leagues loaded yet.';  // persona is in STATIC_SYSTEM
   // v2026-05-14: emit league type, taxi slots, owned picks (dynasty/keeper) so
@@ -745,9 +747,25 @@ function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueConte
     // TE-premium 6-pt-passing league from a vanilla one.
     const scoring = l.scoringDetail ? `\nSCORING RULES: ${l.scoringDetail}` : '';
     const starts  = l.startingSlots ? `\nSTARTING LINEUP: ${l.startingSlots}` : '';
+    // v2026-08-14 (v1.1): ANALYST BUZZ — takes from the article/podcast
+    // pipeline for THIS league's rostered players. Roster entries are
+    // "Name (POS · TEAM · …)" strings; the name is everything before the
+    // first " (". Capped at 6 lines per league / ~90 words to stay cheap.
+    let buzzBlock = '';
+    if (buzz && buzz.size > 0 && l.roster.length > 0) {
+      const lines: { line: string; score: number }[] = [];
+      for (const entry of l.roster) {
+        const name = entry.split(' (')[0];
+        for (const b of buzz.get(normalizePlayerName(name)) ?? []) lines.push(b);
+      }
+      if (lines.length > 0) {
+        const top = lines.sort((a, b) => b.score - a.score).slice(0, 6);
+        buzzBlock = `\nANALYST BUZZ (from podcasts/columns, last 14 days — opinions, not facts; cite the source in one clause when a take influences your answer, and weigh against this league's scoring):\n${top.map(t => `- ${t.line}`).join('\n')}`;
+      }
+    }
     return `
 League: ${l.name} (${l.platform} · ${l.format}) ${typeLabel}${bestBall}
-Record: ${l.record} · Rank: ${l.rank} · Season: ${l.season} · Week: ${l.week}${taxi}${scoring}${starts}
+Record: ${l.record} · Rank: ${l.rank} · Season: ${l.season} · Week: ${l.week}${taxi}${scoring}${starts}${buzzBlock}
 Roster${rosterMeta}: ${rosterStr}${picks}${avail}${allRost}
 `;
   }).join('\n---\n');
@@ -928,6 +946,7 @@ export default function CoachScreen() {
   const systemPromptRef = useRef<string>(BASE_SYSTEM);
   const liveDataRef     = useRef<string>('');
   const memoriesRef     = useRef<string>('');
+  const buzzRef         = useRef<Map<string, BuzzLine[]> | null>(null);
   const scrollRef       = useRef<ScrollView>(null);
   // Name-only (position-agnostic) set of every player in Sleeper's NFL feed,
   // used to validate vision-extracted draft picks — a "drafted" name absent
@@ -961,9 +980,11 @@ export default function CoachScreen() {
 
       let all: LeagueContext[];
       let liveData: any;
+      let buzz: Map<string, BuzzLine[]> | null = null;
       const cachedCtx = coachCtxCache && Date.now() - coachCtxCache.at < COACH_CTX_TTL_MS ? coachCtxCache : null;
       if (cachedCtx) {
-        ({ all, liveData } = cachedCtx);
+        ({ all, liveData, buzz } = cachedCtx);
+        buzzRef.current = buzz;
       } else {
         // Progressive load: merge each platform's leagues into the UI the
         // moment that platform resolves. No per-platform timeout — a slow
@@ -976,9 +997,10 @@ export default function CoachScreen() {
           acc.push(...leagues);
           setAllLeagues([...acc]);
           setContextReady(true);
-          systemPromptRef.current = buildSystemPrompt([...acc], null, memoriesRef.current) + liveDataRef.current;
+          systemPromptRef.current = buildSystemPrompt([...acc], null, memoriesRef.current, buzzRef.current) + liveDataRef.current;
         };
         let liveDataFresh: any = null;
+        let buzzFresh: Map<string, BuzzLine[]> | null = null;
         await Promise.allSettled([
           loadSleeperContext(playerMap).then(merge),
           loadESPNContext(nameIndex).then(merge),
@@ -986,10 +1008,17 @@ export default function CoachScreen() {
           loadAbstractContext('fleaflicker', 'Fleaflicker', nameIndex).then(merge),
           loadAbstractContext('mfl', 'MFL', nameIndex).then(merge),
           fetchAllLiveData().then((ld) => { liveDataFresh = ld; }),
+          // ANALYST BUZZ (v1.1) — Pro-tier enrichment ("gate expensive AI,
+          // never visibility"). Failure degrades to no-buzz, never blocks.
+          getCurrentTier()
+            .then(t => (t === 'pro' ? fetchAnalystBuzz() : null))
+            .then(b => { buzzFresh = b; buzzRef.current = b; })
+            .catch(() => { /* buzz is optional */ }),
         ]);
         all = [...acc];
         liveData = liveDataFresh;
-        coachCtxCache = { at: Date.now(), all, liveData };
+        buzz = buzzFresh;
+        coachCtxCache = { at: Date.now(), all, liveData, buzz };
       }
 
       try {
@@ -1028,7 +1057,7 @@ export default function CoachScreen() {
         }
       } catch { /* best-effort */ }
 
-      systemPromptRef.current = buildSystemPrompt(all, null, memoriesRef.current) + liveDataRef.current;
+      systemPromptRef.current = buildSystemPrompt(all, null, memoriesRef.current, buzzRef.current) + liveDataRef.current;
       setAllLeagues(all);
       setContextReady(true);
 
@@ -1050,7 +1079,7 @@ export default function CoachScreen() {
 
   useEffect(() => {
     if (allLeagues.length > 0) {
-      systemPromptRef.current = buildSystemPrompt(allLeagues, selectedLeague, memoriesRef.current) + liveDataRef.current;
+      systemPromptRef.current = buildSystemPrompt(allLeagues, selectedLeague, memoriesRef.current, buzzRef.current) + liveDataRef.current;
     }
   }, [selectedLeague, allLeagues]);
 
