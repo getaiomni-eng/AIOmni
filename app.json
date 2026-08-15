@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.getaiomni.AIOmni",
-      "buildNumber": "1",
+      "buildNumber": "178",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -77,6 +77,17 @@
       "assets/fonts/*",
       "assets/images/*"
     ],
-    "jsEngine": "hermes"
+    "jsEngine": "hermes",
+    "android": {
+      "package": "com.getaiomni.aiomni",
+      "adaptiveIcon": {
+        "foregroundImage": "./app-icon.png",
+        "backgroundColor": "#0a0a0a"
+      },
+      "permissions": [],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    }
   }
 }

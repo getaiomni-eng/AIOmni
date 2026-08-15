@@ -9,12 +9,18 @@
 // the higher tier). DB-first lets manual grants for founders / comps /
 // beta testers work alongside RC purchases.
 
+import { Platform } from 'react-native';
 import Purchases, { LOG_LEVEL, PurchasesPackage } from 'react-native-purchases';
 import { supabase } from './supabase';
 
 export type Tier = 'free' | 'rankings' | 'pro';
 
 const REVENUECAT_APPLE_KEY = 'appl_rfnwmgVZgjZWBrbGjYehDCMmJvG';
+// Set once the Play Console app exists and is linked in the RevenueCat
+// dashboard (Project settings → Apps → Add Play Store app). Until then
+// Android runs purchase-less: initPurchases no-ops, tier resolution
+// falls through to the DB path, free features all work.
+const REVENUECAT_GOOGLE_KEY = '';
 
 const ENTITLEMENTS = {
   rankings: 'rankings',
@@ -34,8 +40,10 @@ const PRODUCT_IDS = {
 // ── Init ───────────────────────────────────────────────────────────────────────
 export async function initPurchases(userId?: string): Promise<void> {
   try {
+    const apiKey = Platform.OS === 'android' ? REVENUECAT_GOOGLE_KEY : REVENUECAT_APPLE_KEY;
+    if (!apiKey) return;   // Android pre-Play-launch: run purchase-less
     Purchases.setLogLevel(LOG_LEVEL.ERROR);
-    await Purchases.configure({ apiKey: REVENUECAT_APPLE_KEY, appUserID: userId });
+    await Purchases.configure({ apiKey, appUserID: userId });
   } catch (e) {
     console.log('initPurchases error:', e);
   }
