@@ -54,7 +54,7 @@ Rules:
 - "analyst": the byline if identifiable from context, else null.
 - "format_note": only when the take is format-specific (dynasty, superflex, TE-premium, best ball, PPR-specific), else null.
 - "confidence": how firmly the author commits. Throwaway line 0.3, reasoned argument 0.6, table-pounding conviction 0.9.
-- No team defenses, no kickers, no retired players, no college players unless explicitly a dynasty stash take.
+- ONLY offensive skill players: QB, RB, WR, TE. No defensive players (no edge rushers, linebackers, cornerbacks, safeties), no team defenses, no kickers, no offensive linemen, no coaches, no retired players, no college players unless explicitly a dynasty stash take.
 - Empty array if nothing qualifies. That is a fine answer.
 
 Respond with ONLY a JSON object, no markdown fences:
