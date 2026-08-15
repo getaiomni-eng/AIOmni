@@ -24,6 +24,12 @@ drop policy if exists "Users can read own usage" on public.prompt_usage;
 drop policy if exists "Users can update own usage" on public.prompt_usage;
 
 -- 2. Correctly-keyed owner policies.
+-- (drop-first makes this idempotent: the migration was applied to prod
+-- manually on 2026-08-01 before it entered the history table, so db push
+-- re-runs it — re-creating identical policies must not error.)
+drop policy if exists "prompt_usage_owner_select" on public.prompt_usage;
+drop policy if exists "prompt_usage_owner_insert" on public.prompt_usage;
+drop policy if exists "prompt_usage_owner_update" on public.prompt_usage;
 create policy "prompt_usage_owner_select" on public.prompt_usage
   for select using (user_id = auth.uid());
 create policy "prompt_usage_owner_insert" on public.prompt_usage
