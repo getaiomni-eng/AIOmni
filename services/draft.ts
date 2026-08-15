@@ -6,6 +6,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchBlendedConsensus, fetchSleeperADP } from './rankingsData';
 import { sanitizePromptInput } from './util/promptSafe';
+import { normalizePlayerName } from './util/normalizeName';
 
 const SLEEPER_BASE = 'https://api.sleeper.app/v1';
 
@@ -317,14 +318,35 @@ export function undoLastPick(state: DraftState): DraftState {
 
 export function buildDraftPrompt(state: DraftState, question?: string): string {
   const { settings, myRoster, availablePlayers, currentPick, currentRound } = state;
-  const available = availablePlayers.filter(p => !p.isDrafted);
+  // v2026-08-14: availability defense-in-depth. `isDrafted` depends on
+  // applyPick having resolved the Sleeper pick to OUR pool player — an
+  // id-or-name match that can miss (rookie `prospect-…` ids, first-name
+  // variants like Cam/Cameron). When it missed, the drafted player stayed
+  // "available" and The O recommended someone already off the board — the
+  // single most trust-destroying answer a draft copilot can give. The pick
+  // LOG names come straight from the platform, so also excluding anyone
+  // whose normalized name appears there closes the gap regardless of how
+  // resolution went.
+  const draftedKeys = new Set(state.picks.map(p => normalizePlayerName(p.playerName)));
+  const available = availablePlayers.filter(
+    p => !p.isDrafted && !draftedKeys.has(normalizePlayerName(p.name))
+  );
+  // "Top" must mean top: sort by ADP before slicing — the pool's array
+  // order isn't guaranteed, and unsorted slicing made the per-position
+  // lists arbitrary instead of best-available.
   const topAvailableByPos: Record<string, PlayerInfo[]> = {};
-  for (const p of available) {
+  for (const p of [...available].sort((a, b) => (a.adp || 999) - (b.adp || 999))) {
     if (!topAvailableByPos[p.position]) topAvailableByPos[p.position] = [];
     if (topAvailableByPos[p.position].length < 5) {
       topAvailableByPos[p.position].push(p);
     }
   }
+  // Recent picks, newest first — lets the model see the run that's
+  // happening ("4 RBs just went") and gives it a second chance to avoid
+  // anyone the availability filter somehow missed.
+  const recentPicks = state.picks.slice(-15).reverse()
+    .map(p => `#${p.pickNo} ${p.playerName} (${p.position})${p.isMyPick ? ' — YOU' : ''}`)
+    .join('\n');
 
   const myRosterByPos: Record<string, string[]> = {};
   for (const pick of myRoster) {
@@ -393,8 +415,13 @@ ${rosterStr || '  (empty)'}
 POSITIONS STILL NEEDED:
 ${neededSlots.length > 0 ? neededSlots.join(', ') : 'Roster complete'}
 
-TOP AVAILABLE BY POSITION:
+RECENT PICKS (newest first — these players are GONE):
+${recentPicks || '  (none yet)'}
+
+TOP AVAILABLE BY POSITION (the ONLY players you may recommend):
 ${availStr}
+
+HARD RULE: Recommend ONLY players from the TOP AVAILABLE list above. Every player in RECENT PICKS — and anyone NOT in the TOP AVAILABLE list — is off the board or unverifiable; recommending them destroys the user's draft. If your instinct says a bigger name should be available but he isn't listed, he is GONE — do not mention him as a pick.
 
 ${question ? `USER QUESTION: ${sanitizePromptInput(question)}` : 'Who should I draft with my next pick? Consider roster needs, positional scarcity, ADP value, and format-specific player values. Give me your top 3 recommendations with brief reasoning for each. Be direct and decisive.'}`;
 }

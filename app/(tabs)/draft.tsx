@@ -1099,7 +1099,13 @@ function DraftBoard({
 
   // ── Filter available players ──
   const filtered = useMemo(() => {
-    let list = state.availablePlayers.filter(p => !p.isDrafted);
+    // Same normalized-name defense as buildDraftPrompt: if pick resolution
+    // ever misses (rookie ids, name variants), the drafted player must not
+    // appear tappable in the pool either.
+    const draftedKeys = new Set(state.picks.map(p => normalizePlayerName(p.playerName)));
+    let list = state.availablePlayers.filter(
+      p => !p.isDrafted && !draftedKeys.has(normalizePlayerName(p.name))
+    );
     // Safety net for drafts that started/synced before the pool was filtered:
     // hide players whose position the league can't start (D/ST, punters, etc.).
     if (allowedPositions) {
@@ -1114,7 +1120,7 @@ function DraftBoard({
       list = list.filter(p => p.name.toLowerCase().includes(q) || p.team.toLowerCase().includes(q));
     }
     return list.sort((a, b) => a.adp - b.adp);
-  }, [state.availablePlayers, posFilter, search, allowedPositions]);
+  }, [state.availablePlayers, state.picks, posFilter, search, allowedPositions]);
 
   // ── Mark player as drafted (companion mode) ──
   const handleDraftPlayer = useCallback((player: PlayerInfo, isMe: boolean) => {
