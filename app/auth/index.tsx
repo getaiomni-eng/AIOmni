@@ -2,7 +2,9 @@ import { AIOmniLogo } from '../components/AIOmniLogo';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState } from 'react';
-import { signInWithEmail, signUpWithEmail, resetPassword } from '../../services/auth';
+import { signInWithEmail, signUpWithEmail, resetPassword, getUser } from '../../services/auth';
+import { attachCustomerInfoListener, identifyPurchaseUser, refreshTier } from '../../services/purchases';
+import { getAIConsent } from '../../services/aiConsent';
 
 import { C, F, SZ, R, SP } from '../constants/tokens';
 import { KeyboardAvoidingView, Linking, Platform, View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
@@ -33,7 +35,36 @@ export default function AuthScreen() {
     try {
       if (mode === 'signin') {
         const res = await signInWithEmail(email.trim(), password);
-        if (res.success) router.replace('/(tabs)');
+        if (res.success) {
+          // Attach entitlements to the real account. _layout's bootstrap
+          // already ran (and returned early on the signed-out path), so
+          // without this the session stays on the anonymous RC customer.
+          try {
+            const u = await getUser();
+            if (u) await identifyPurchaseUser(u.id);
+            // _layout's bootstrap returned early on the signed-out branch, so
+            // this session never ran refreshTier/attachCustomerInfoListener.
+            // Without them a sandbox purchase wouldn't visibly unlock the tier
+            // until relaunch — 2.1(b) bait for a reviewer. Deadline-capped so
+            // a stalled network can't hold the sign-in spinner hostage.
+            await Promise.race([
+              refreshTier(),
+              new Promise(res => setTimeout(res, 8000)),
+            ]);
+            attachCustomerInfoListener();
+          } catch (e) {
+            // Never strand the user on RC trouble — but leave a trace so a
+            // review-session failure is diagnosable.
+            console.log('post-signin purchases wiring failed', e);
+          }
+          // 5.1.1(i): App Review signs in on a fresh install, so THIS — not
+          // _layout's bootstrap (which returned early while signed out) — is
+          // the path that must present the AI disclosure. Build 197 routed
+          // straight to tabs here, so the reviewer never saw the consent
+          // screen → third rejection. Do not bypass this gate.
+          const consent = await getAIConsent();
+          router.replace(consent === null ? ('/ai-consent' as any) : '/(tabs)');
+        }
         else setError(res.error ?? 'Sign in failed.');
       } else if (mode === 'signup') {
         const res = await signUpWithEmail(email.trim(), password);
@@ -138,8 +169,17 @@ export default function AuthScreen() {
             </View>
           </View>
 
-          {/* Skip — for users who just want Sleeper without an account */}
-          <TouchableOpacity onPress={() => router.replace('/(tabs)')} style={styles.skipBtn}>
+          {/* Skip — for users who just want Sleeper without an account.
+              5.1.1(i): this path MUST also pass the AI-consent gate — the App
+              Review notes point the reviewer straight at it, and in build 197
+              it routed to tabs with no disclosure ever shown. */}
+          <TouchableOpacity
+            onPress={async () => {
+              const consent = await getAIConsent();
+              router.replace(consent === null ? ('/ai-consent' as any) : '/(tabs)');
+            }}
+            style={styles.skipBtn}
+          >
             <Text style={styles.skipTxt}>Continue without account</Text>
           </TouchableOpacity>
 

@@ -22,7 +22,8 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { askAI } from '../../services/ai';
+import { askAI, hasAISession } from '../../services/ai';
+import { hasAIConsent } from '../../services/aiConsent';
 import { getCurrentTier } from '../../services/purchases';
 import { consumePrompt } from '../../services/promptQuota';
 import { useRouter } from 'expo-router';
@@ -1151,6 +1152,18 @@ function DraftBoard({
     setShowAI(true);
     setAiLoading(true);
     setAiResponse('');
+    // 5.1.1(i): never charge a prompt for a call the consent gate will refuse.
+    if (!(await hasAIConsent())) {
+      setAiResponse('AI features are turned off. To use the Draft Copilot, enable “Share data with AI service” in Settings.');
+      setAiLoading(false);
+      return;
+    }
+    // Guests can't reach the AI proxy — don't burn a lifetime prompt trying.
+    if (!(await hasAISession())) {
+      setAiResponse('Sign in to use AI features — create a free account from Settings.');
+      setAiLoading(false);
+      return;
+    }
     // Atomic charge — if over cap, close the AI sheet and send the user
     // to the paywall instead of silently hitting Claude.
     const ok = await consumePrompt();
@@ -1167,7 +1180,15 @@ function DraftBoard({
       const res = await askAI(prompt);
       setAiResponse(res);
     } catch (e: any) {
-      setAiResponse(`Error: ${e.message}`);
+      // Never surface raw internal errors to the sheet — build 197 lesson.
+      const msg = e?.message?.includes('ai_consent_required')
+        ? 'AI features are turned off. To use the Draft Copilot, enable “Share data with AI service” in Settings.'
+        : e?.message?.includes('not_authenticated')
+        ? 'Sign in to use AI features — create a free account from Settings.'
+        : e?.message?.includes('prompt_limit_reached')
+        ? 'You’ve hit your weekly prompt limit.'
+        : 'Couldn’t get advice right now. Try again in a moment.';
+      setAiResponse(msg);
     } finally {
       setAiLoading(false);
     }

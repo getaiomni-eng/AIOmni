@@ -38,15 +38,47 @@ const PRODUCT_IDS = {
 } as const;
 
 // ── Init ───────────────────────────────────────────────────────────────────────
+// Configure exactly once per launch, and CRUCIALLY without requiring a signed-in
+// user. App Review rejected 1.0 twice under 2.1(b) ("the Subscriptions are
+// unavailable") because _layout returned early on the signed-out path, so
+// Purchases.configure() never ran for anyone who signed in — or tapped Skip —
+// during that session. getOfferings() then threw and every plan card fell
+// through to "Unavailable".
+let configured = false;
+
 export async function initPurchases(userId?: string): Promise<void> {
   try {
     const apiKey = Platform.OS === 'android' ? REVENUECAT_GOOGLE_KEY : REVENUECAT_APPLE_KEY;
     if (!apiKey) return;   // Android pre-Play-launch: run purchase-less
+    if (configured) {
+      if (userId) await identifyPurchaseUser(userId);
+      return;
+    }
     Purchases.setLogLevel(LOG_LEVEL.ERROR);
+    // appUserID undefined => anonymous customer. logIn() later aliases it to
+    // the real id, so a purchase made before sign-in still carries over.
     await Purchases.configure({ apiKey, appUserID: userId });
+    configured = true;
   } catch (e) {
     console.log('initPurchases error:', e);
   }
+}
+
+// Called once the user authenticates, so entitlements attach to their real id.
+export async function identifyPurchaseUser(userId: string): Promise<void> {
+  try {
+    if (!configured) { await initPurchases(userId); return; }
+    await Purchases.logIn(userId);
+  } catch (e) {
+    console.log('identifyPurchaseUser error:', e);
+  }
+}
+
+// Last line of defence for the 2.1(b) rejection: if any call site reaches the
+// paywall without having configured, do it here rather than letting
+// getOfferings() throw and blank out every plan.
+async function ensureConfigured(): Promise<void> {
+  if (!configured) await initPurchases();
 }
 
 // ── Packages ──────────────────────────────────────────────────────────────────
@@ -72,6 +104,7 @@ export type PackagesDiagnostic = {
 // what RC actually returned without a Mac/Xcode console.
 export async function getPackagesWithDiagnostic(): Promise<PackagesDiagnostic> {
   try {
+    await ensureConfigured();
     const offerings = await Purchases.getOfferings();
     const seen = new Set<string>();
     const out: PurchasesPackage[] = [];

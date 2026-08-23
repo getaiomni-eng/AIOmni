@@ -19,7 +19,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getUser, getUserRow } from '../services/supabase';
 import { loadYahooTokens } from '../services/yahoo';
 import { updatePassword } from '../services/auth';
-import { attachCustomerInfoListener, initPurchases, refreshTier } from '../services/purchases';
+import { attachCustomerInfoListener, identifyPurchaseUser, initPurchases, refreshTier } from '../services/purchases';
+import { getAIConsent } from '../services/aiConsent';
 import { registerPushNotifications } from '../services/notifications';
 import { pullCloudDataOnLogin } from '../services/userSync';
 import { dark } from './constants/tokens';
@@ -98,6 +99,12 @@ export default Sentry.wrap(function RootLayout() {
 
     (async () => {
       try {
+        // Configure RevenueCat BEFORE the auth gate. Returning early here
+        // without configuring is exactly what made every plan render
+        // "Unavailable" for App Review (2.1(b), twice) — reviewers sign in
+        // during the session, so they never hit the configured path.
+        await initPurchases();
+
         let user = null;
         try { user = await getUser(); } catch {}
         if (!user) {
@@ -105,7 +112,7 @@ export default Sentry.wrap(function RootLayout() {
           return;
         }
         Sentry.setUser({ id: user.id, email: user.email });
-        await initPurchases(user.id);
+        await identifyPurchaseUser(user.id);
         // Populate the cached tier and listen for entitlement changes so
         // tier-gated UI (lock icons, paywall triggers) sees updates from
         // restored purchases / cancellations / cross-device upgrades
@@ -126,6 +133,14 @@ export default Sentry.wrap(function RootLayout() {
         // null now.
         const yahooTokens = await loadYahooTokens();
         const hasLeagues = hasSleeper || Boolean(espnIds) || Boolean(yahooTokens);
+
+        // 5.1.1(i)/5.1.2(i): no AI-backed screen may load until the user has
+        // seen the third-party disclosure and made an explicit choice. Apple
+        // rejected build 195 for sharing data with an AI service without it.
+        if ((await getAIConsent()) === null) {
+          router.replace('/ai-consent' as any);
+          return;
+        }
 
         if (false && !hasLeagues) {
         } else {
@@ -157,6 +172,7 @@ export default Sentry.wrap(function RootLayout() {
         <Stack.Screen name="(tabs)"     options={{ headerShown: false }} />
         <Stack.Screen name="auth"       options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="paywall"    options={{ headerShown: false, presentation: 'modal' }} />
+        <Stack.Screen name="ai-consent" options={{ headerShown: false }} />
         <Stack.Screen name="espn-login" options={{ headerShown: false }} />
         <Stack.Screen name="mfl-login" options={{ headerShown: false }} />
         <Stack.Screen name="fleaflicker-login" options={{ headerShown: false }} />

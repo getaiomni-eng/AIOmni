@@ -12,6 +12,7 @@ import { loadYahooTokens } from '../../services/yahoo';
 import { getNotificationPrefs, setNotificationPrefs } from '../../services/notifications';
 import { clearQuizResult } from '../../services/quiz/engine';
 import { dark, F, palette, SP } from '../constants/tokens';
+import { AI_DISCLOSURE, getAIConsent, setAIConsent } from '../../services/aiConsent';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -23,6 +24,11 @@ export default function SettingsScreen() {
   const [mflLinked, setMflLinked] = useState(false);
   const [fleaflickerLinked, setFleaflickerLinked] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
+  const [aiConsent, setAiConsent] = useState(false);
+
+  useEffect(() => {
+    getAIConsent().then(v => setAiConsent(v === 'granted'));
+  }, []);
   const [prefPlayerNews, setPrefPlayerNews]       = useState(true);
   const [prefLineupWarning, setPrefLineupWarning] = useState(true);
   const [prefPulseAlerts, setPrefPulseAlerts]     = useState(true);
@@ -381,6 +387,27 @@ export default function SettingsScreen() {
             <Text style={s.rowLabel}>Terms of Service</Text>
             <Ionicons name="chevron-forward" size={16} color={dark.textMuted} />
           </TouchableOpacity>
+          {/* 5.1.1(i): the consent screen tells the user they can change this
+              here, so it has to be revocable — not a one-way switch. */}
+          <View style={s.row}>
+            <Ionicons name="sparkles-outline" size={20} color={palette.aqua} />
+            <Text style={s.rowLabel}>Share data with AI service</Text>
+            <Switch
+              value={aiConsent}
+              onValueChange={async (v) => {
+                setAiConsent(v);
+                await setAIConsent(v ? 'granted' : 'declined');
+              }}
+              trackColor={{ false: dark.border, true: palette.aqua }}
+              thumbColor={aiConsent ? dark.text : dark.textMuted}
+            />
+          </View>
+          {/* 5.1.1(i): the grant surface itself must say what + to whom. */}
+          <Text style={s.rowCaption}>
+            Sends your questions, league settings, rosters, and screenshots you share
+            to {AI_DISCLOSURE.recipient} to power the AI features. Never used to train
+            AI models.
+          </Text>
           <TouchableOpacity style={s.row} onPress={() => Linking.openURL('https://getaiomni.com/privacy')}>
             <Ionicons name="shield-checkmark-outline" size={20} color={palette.aqua} />
             <Text style={s.rowLabel}>Privacy Policy</Text>
@@ -415,6 +442,7 @@ const s = StyleSheet.create({
   card:         { backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, borderColor: dark.border, marginBottom: 8, overflow: 'hidden' },
   row:          { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: dark.border },
   rowLabel:     { flex: 1, fontFamily: F.body, fontSize: 14, color: dark.text },
+  rowCaption:   { fontFamily: F.body, fontSize: 12, lineHeight: 17, color: dark.textMuted, paddingHorizontal: SP[4], paddingBottom: SP[2], marginTop: -4 },
   rowValue:     { fontFamily: F.body, fontSize: 13, color: dark.textMuted },
   dot:          { width: 8, height: 8, borderRadius: 4 },
   signOutBtn:   { backgroundColor: palette.flame + '15', borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 24, borderWidth: 1, borderColor: palette.flame + '30' },

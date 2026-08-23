@@ -5,7 +5,8 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { askAI, askAIVision } from '../../services/ai';
+import { askAI, askAIVision, hasAISession } from '../../services/ai';
+import { hasAIConsent } from '../../services/aiConsent';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchAIOmniFormula, fetchKTCValues, fetchNFLInjuries, fetchSnapCounts, fetchVegasLines, type InjuryInfo, type RankedPlayer, type ScoringFormat } from '../../services/rankingsData';
 import { getCurrentTier } from '../../services/purchases';
@@ -280,8 +281,16 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
       const r = Array.isArray(parsed.getting) ? parsed.getting.join(', ') : '';
       setGiving(g); setGetting(r);
       if (!g && !r) setVerdict("Couldn't read players from that image — type them instead.");
-    } catch {
-      setVerdict("Couldn't read that screenshot — type the players instead.");
+    } catch (e: any) {
+      if (e?.message?.includes('ai_consent_required')) {
+        setVerdict('AI features are turned off.');
+        setAnalysis('To read screenshots, enable “Share data with AI service” in Settings.');
+      } else if (e?.message?.includes('not_authenticated')) {
+        setVerdict('Sign in to use AI features.');
+        setAnalysis('Create a free account (Settings → Sign in) to use the screenshot reader.');
+      } else {
+        setVerdict("Couldn't read that screenshot — type the players instead.");
+      }
     } finally {
       setExtracting(false);
     }
@@ -297,6 +306,18 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
         'Connect a league first',
         'Your 10 free AI prompts unlock once you link a fantasy platform (Sleeper, ESPN, Yahoo, MFL, or Fleaflicker) in Settings.',
       );
+      return;
+    }
+    // 5.1.1(i): never charge a prompt for a call the consent gate will refuse.
+    if (!(await hasAIConsent())) {
+      setVerdict('AI features are turned off.');
+      setAnalysis('To analyze trades, enable “Share data with AI service” in Settings.');
+      return;
+    }
+    // Guests can't reach the AI proxy — don't burn a lifetime prompt trying.
+    if (!(await hasAISession())) {
+      setVerdict('Sign in to use AI features.');
+      setAnalysis('Create a free account (Settings → Sign in) to analyze trades.');
       return;
     }
     // Charge a prompt up front; if over cap, route to paywall and bail.
@@ -512,9 +533,18 @@ ${marketMath}${(() => {
         setVerdict('Could not parse response. Try again.');
         setAnalysis(response.slice(0, 300));
       }
-    } catch (error) {
-      setVerdict('Analysis timed out. Try again.');
-      setAnalysis('Unable to complete analysis. Tap Analyze Again to retry.');
+    } catch (error: any) {
+      if (error?.message?.includes('ai_consent_required')) {
+        // 5.1.1(i): consent declined — name the real cause, not a timeout.
+        setVerdict('AI features are turned off.');
+        setAnalysis('To analyze trades, enable “Share data with AI service” in Settings.');
+      } else if (error?.message?.includes('not_authenticated')) {
+        setVerdict('Sign in to use AI features.');
+        setAnalysis('Create a free account (Settings → Sign in) to analyze trades.');
+      } else {
+        setVerdict('Analysis timed out. Try again.');
+        setAnalysis('Unable to complete analysis. Tap Analyze Again to retry.');
+      }
     }
   };
 

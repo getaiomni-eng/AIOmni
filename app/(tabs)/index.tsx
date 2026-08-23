@@ -10,13 +10,14 @@ import {
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { askAI } from "../../services/ai";
+import { askAI, hasAISession } from "../../services/ai";
+import { hasAIConsent } from "../../services/aiConsent";
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../services/espn';
 import { getValidYahooToken } from '../../services/yahoo';
 import { Icon } from '../components/AIOmniIcons';
 import { AIOmniLogo, AIOmniWordmark } from '../components/AIOmniLogo';
 import { dark, F, palette, SP, SZ } from '../constants/tokens';
-import { incrementPrompt } from '../../services/promptQuota';
+import { consumePrompt } from '../../services/promptQuota';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W    = SCREEN_W - SP[3] * 2;
@@ -72,11 +73,41 @@ const FALLBACK_NEWS: NewsItem[] = [
   { source: 'SLEEPER', headline: 'Saquon Barkley approaches single-season rushing record', color: palette.chartreuse },
 ];
 
+// Shown only until the model responds (or if it fails). Deliberately generic —
+// never fabricated player calls, which read as real analysis and are stale the
+// moment they're written.
 const FALLBACK_INSIGHTS = [
-  { icon: 'target', title: 'Start Barkley',  body: 'Dream matchup vs NYG — 32nd ranked run D. Ceiling 35+.',  tag: 'START',   color: palette.green },
-  { icon: 'alert', title: 'Watch Achane',   body: 'Listed Q — check 11:30am reports. Pollard on standby.',  tag: 'MONITOR', color: palette.amber },
-  { icon: 'fire',   title: 'Add Shaheed',    body: '3 TDs in last 4 games. 78% target share with Drake.',    tag: 'HOT',     color: palette.flame },
+  { icon: 'target',   title: 'Check your lineup', body: 'Confirm no starters are on bye or ruled out before kickoff.',        tag: 'LINEUP',  color: palette.aqua },
+  { icon: 'alert',    title: 'Watch inactives',   body: 'Official actives post 90 minutes before each game starts.',          tag: 'MONITOR', color: palette.amber },
+  { icon: 'trending', title: 'Scan the wire',     body: 'Snap-share risers usually hit waivers before the market reacts.',    tag: 'WAIVERS', color: palette.green },
 ];
+
+// The model picks from these by name — never free-form. Colors get an alpha
+// suffix appended at render time, so a raw value like "red" would produce the
+// invalid "red25" and silently break the card.
+const INSIGHT_ICONS = ['target', 'trending', 'fire', 'alert', 'lightning', 'star', 'crown', 'barchart'];
+const INSIGHT_COLORS: Record<string, string> = {
+  aqua:  palette.aqua,
+  green: palette.green,
+  amber: palette.amber,
+  flame: palette.flame,
+};
+
+type Insight = { icon: string; title: string; body: string; tag: string; color: string };
+
+// The model is not trusted to return well-formed rows: clamp every field and
+// fall back per-field rather than dropping the whole payload.
+const sanitizeInsights = (raw: any): Insight[] =>
+  (Array.isArray(raw) ? raw : [])
+    .filter(o => o && typeof o.title === 'string' && typeof o.body === 'string')
+    .slice(0, 3)
+    .map(o => ({
+      icon:  INSIGHT_ICONS.includes(o.icon) ? o.icon : 'target',
+      title: String(o.title).trim().slice(0, 40),
+      body:  String(o.body).trim().slice(0, 120),
+      tag:   String(o.tag ?? 'INSIGHT').toUpperCase().trim().slice(0, 10),
+      color: INSIGHT_COLORS[String(o.color).toLowerCase()] ?? palette.aqua,
+    }));
 
 const FlatCard: React.FC<{ style?: any; children: React.ReactNode }> = ({ style, children }) => (
   <View style={[styles.flatCard, style]}>{children}</View>
@@ -91,7 +122,7 @@ export default function HomeScreen() {
   const [loading,        setLoading]        = useState(true);
   const [refreshing,     setRefreshing]     = useState(false);
   const [insightIdx,     setInsightIdx]     = useState(0);
-  const [aiInsights,     setAiInsights]     = useState<{title:string;body:string;tag:string;color:string;icon:string}[]>([]);
+  const [aiInsights,     setAiInsights]     = useState<Insight[]>([]);
   const [insightLoading, setInsightLoading] = useState(false);
   const [scoreIdx,       setScoreIdx]       = useState(0);
   const [feed, setFeed] = useState<FeedByTab>({ SLEEPER: [], NEWS: [], INJURIES: [], TRADES: [], all: [] });
@@ -396,14 +427,38 @@ export default function HomeScreen() {
     setLoading(false);
   }, [selectedSeason]);
 
+  // Cached per league per day. This fires on home-screen load rather than on a
+  // user action, so it deliberately does NOT call incrementPrompt() — it isn't
+  // a question the user asked. The daily cache is what bounds the cost.
   const fetchAIInsights = async (league: League) => {
     if (insightLoading) return;
+    const cacheKey = `insights:${league.id}:${new Date().toISOString().slice(0, 10)}`;
+    try {
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = sanitizeInsights(JSON.parse(cached));
+        if (parsed.length > 0) { setAiInsights(parsed); return; }
+      }
+    } catch { /* cache miss or corrupt entry — fall through to a live fetch */ }
+
     setInsightLoading(true);
     try {
-      const prompt = `You are AIOmni, an elite fantasy football analyst. For this ${league.platform.toUpperCase()} league (${league.format}), provide 3 concise, actionable insights for Week ${league.week}. Focus on starting/sitting decisions, waiver wire adds, and matchup analysis. Format as JSON array with objects having: emoji, title, body, tag, color. Keep each insight under 120 characters.`;
+      const prompt = `You are AIOmni, an elite fantasy football analyst. For this ${league.platform.toUpperCase()} league (${league.format}), provide 3 concise, actionable insights for Week ${league.week}. Focus on starting/sitting decisions, waiver wire adds, and matchup analysis.
+
+Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each object must have exactly these keys:
+  "icon"  — one of: ${INSIGHT_ICONS.join(', ')}
+  "title" — under 40 characters
+  "body"  — under 120 characters
+  "tag"   — a single uppercase word, e.g. START, MONITOR, WAIVERS
+  "color" — one of: ${Object.keys(INSIGHT_COLORS).join(', ')}`;
       const response = await askAI(prompt, { tier: 'fast', maxTokens: 400 });
-      const insights = JSON.parse(response?.replace(/```json|```/g, '').trim() || '[]');
-      if (Array.isArray(insights) && insights.length > 0) setAiInsights(insights);
+      const insights = sanitizeInsights(
+        JSON.parse(response?.replace(/```json|```/g, '').trim() || '[]')
+      );
+      if (insights.length > 0) {
+        setAiInsights(insights);
+        AsyncStorage.setItem(cacheKey, JSON.stringify(insights)).catch(() => {});
+      }
     } catch (e) { console.error('AI insights error:', e); }
     setInsightLoading(false);
   };
@@ -423,16 +478,49 @@ export default function HomeScreen() {
     setSelectedLeague(league);
     setAiCoachLoading(true);
     setAiCoachInsight('');
+    // 5.1.1(i): never charge a prompt for a call the consent gate will refuse.
+    if (!(await hasAIConsent())) {
+      setAiCoachInsight('AI features are turned off. To get matchup insights, enable “Share data with AI service” in Settings.');
+      setAiCoachLoading(false);
+      return;
+    }
+    // Guests can't reach the AI proxy — don't burn a lifetime prompt trying.
+    if (!(await hasAISession())) {
+      setAiCoachInsight('Sign in to use AI features — create a free account from Settings.');
+      setAiCoachLoading(false);
+      return;
+    }
+    // Honor the quota result like every other charged surface — over-cap
+    // users go to the paywall instead of a doomed proxy call.
+    const ok = await consumePrompt();
+    if (!ok) {
+      setAiCoachLoading(false);
+      setSelectedLeague(null);
+      router.push('/paywall?context=weekly_prompts_exhausted' as any);
+      return;
+    }
     try {
-      await incrementPrompt();
       const prompt = `You are AIOmni AI Coach. Analyze this matchup and give 1 actionable insight in 2 sentences max:\n\nLeague: ${league.name} (${league.platform}, ${league.format})\nWeek: ${league.week}\nYour Score: ${league.pts}\nOpponent Score: ${league.opp}\n\nWhat should I focus on this week?`;
       const insight = await askAI(prompt, { tier: 'fast', maxTokens: 150 });
       setAiCoachInsight(insight);
-    } catch (e) {
-      setAiCoachInsight('Could not generate insight at this time.');
+    } catch (e: any) {
+      setAiCoachInsight(
+        e?.message?.includes('ai_consent_required')
+          ? 'AI features are turned off. Enable “Share data with AI service” in Settings.'
+          : e?.message?.includes('not_authenticated')
+          ? 'Sign in to use AI features — create a free account from Settings.'
+          : 'Could not generate insight at this time.',
+      );
     }
     setAiCoachLoading(false);
   };
+
+  // fetchAIInsights had no caller at all — aiInsights stayed [] forever and the
+  // card list always fell through to FALLBACK_INSIGHTS. Anchor on the first
+  // league so the insights match whatever the user sees at the top of the page.
+  useEffect(() => {
+    if (leagues.length > 0 && aiInsights.length === 0) fetchAIInsights(leagues[0]);
+  }, [leagues]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

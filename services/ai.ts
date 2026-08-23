@@ -8,6 +8,7 @@
 
 import { NFL_DATA_DICTIONARY } from './nflDataDictionary';
 import { supabase } from './supabase';
+import { hasAIConsent } from './aiConsent';
 
 const PROXY_URL = 'https://khoruzvsprxyocisuhet.supabase.co/functions/v1/claude-proxy';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtob3J1enZzcHJ4eW9jaXN1aGV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDc5MTEsImV4cCI6MjA5MDU4MzkxMX0.YUIDZOJJhUc0ubkQxB_pSyXeE_xjcrqY7jGmbttlfRw';
@@ -52,6 +53,10 @@ export async function askAI(
   const model = MODELS[tier];
 
   try {
+    // Defence in depth for guideline 5.1.1(i): even if a new call site forgets
+    // the consent gate, nothing leaves the device without permission.
+    if (!(await hasAIConsent())) throw new Error('ai_consent_required');
+
     // Pull the current user's session JWT — required by the hardened
     // proxy (rejects requests whose Bearer is just the anon key).
     // apikey header stays as the anon key per Supabase convention.
@@ -110,6 +115,19 @@ export async function askAI(
 }
 
 // v2026-06-10: vision call for reading screenshots (trade proposals, etc.).
+// True when a signed-in Supabase session exists. AI surfaces pre-check this
+// before charging a prompt — a guest's call can never succeed (the proxy
+// requires a user JWT), so charging first would burn quota on guaranteed
+// failures.
+export async function hasAISession(): Promise<boolean> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return Boolean(session?.access_token);
+  } catch {
+    return false;
+  }
+}
+
 // Sends a base64 image + a text instruction as Anthropic content blocks through
 // the same authenticated proxy (it forwards the body verbatim). Defaults to the
 // `fast` (Haiku) tier — cheap and reads on-screen text fine.
@@ -123,6 +141,10 @@ export async function askAIVision(
   const maxTokens = opts.maxTokens ?? 512;
   const model = MODELS[tier];
   try {
+    // 5.1.1(i): images are the most sensitive thing we transmit — the same
+    // consent gate as askAI, no exceptions. (Build 197 shipped without this.)
+    if (!(await hasAIConsent())) throw new Error('ai_consent_required');
+
     const { data: { session } } = await supabase.auth.getSession();
     const userJwt = session?.access_token;
     if (!userJwt) throw new Error('not_authenticated');

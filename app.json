@@ -26,7 +26,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "AIOmni uses your photos so you can upload trade-proposal screenshots for instant analysis."
+          "photosPermission": "AIOmni uses your photos so you can upload trade-proposal screenshots for instant analysis.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ],
       [

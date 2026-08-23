@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, askAIVision } from '../../services/ai';
+import { hasAIConsent } from '../../services/aiConsent';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials, ESPN_SLOTS } from '../../services/espn';
 import {
@@ -1210,9 +1211,14 @@ Capture rookies and veterans exactly.`,
       ].filter(Boolean).join(' ');
       setInput('');
       await send(draftMsg);
-    } catch {
+    } catch (e: any) {
       setMessages(prev => prev.filter(m => !m.isLoading));
-      setMessages(prev => [...prev, { role: 'ai', text: "Couldn't read that draft board — try a clearer screenshot, or tell me who's already been picked." }]);
+      const text = e?.message?.includes('ai_consent_required')
+        ? 'AI features are turned off. To use the draft-board reader, enable “Share data with AI service” in Settings.'
+        : e?.message?.includes('not_authenticated')
+        ? 'Sign in to use AI features — create a free account from Settings.'
+        : "Couldn't read that draft board — try a clearer screenshot, or tell me who's already been picked.";
+      setMessages(prev => [...prev, { role: 'ai', text }]);
     } finally {
       setReading(false);
     }
@@ -1220,6 +1226,19 @@ Capture rookies and veterans exactly.`,
 
   const send = async (text: string) => {
     if (!text.trim() || loading) return;
+    // 5.1.1(i): the FIRST thing send() may do with the user's text is check
+    // consent — getPlayerContext() below fetches question-derived player
+    // names to a server that fronts the AI service, so even that must not
+    // fire for a declined user.
+    if (!(await hasAIConsent())) {
+      setMessages(prev => [...prev,
+        { role: 'user', text },
+        { role: 'ai', text: 'AI features are turned off. To use the Coach, enable “Share data with AI service” in Settings.' },
+      ]);
+      setInput('');
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+      return;
+    }
     const rem = await getRemainingPrompts();
     if (rem <= 0) {
       const currentTier = await getCurrentTier();
@@ -1296,6 +1315,12 @@ Capture rookies and veterans exactly.`,
         ? (tier === 'free'
             ? "This device has used its 10 free prompts. Upgrade for 25–50 prompts every week."
             : "You've hit your weekly prompt limit. Upgrade to Pro for 50 prompts/week.")
+        : e?.message?.includes('ai_consent_required')
+        // 5.1.1(i): consent declined — say so plainly instead of a fake
+        // connection error, and point at the switch that re-enables it.
+        ? 'AI features are turned off. To use the Coach, enable “Share data with AI service” in Settings.'
+        : e?.message?.includes('not_authenticated')
+        ? 'Sign in to use AI features — create a free account from Settings.'
         : 'Connection error. Try again.';
       setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: errMsg }]);
     } finally {

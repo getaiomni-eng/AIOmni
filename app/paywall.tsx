@@ -10,7 +10,7 @@
 // for prices + features (so future price changes only land there).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -64,6 +64,15 @@ export default function PaywallScreen() {
   const [purchasing, setPurchasing] = useState(false);
   const [currentTier, setCurrentTier] = useState<string>('free');
   const [billing, setBilling] = useState<BillingCycle>('monthly');
+  const scrollRef = useRef<ScrollView>(null);
+
+  // The yearly cards are taller (they carry the ~$/mo line), so keeping the
+  // scroll offset across a toggle pushed the first card's tier name up under
+  // the header — "Rankings" rendered half-clipped or vanished entirely, which
+  // is what made the paywall look broken in screenshots.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [billing]);
 
   useEffect(() => {
     (async () => {
@@ -175,6 +184,7 @@ export default function PaywallScreen() {
         </View>
       ) : (
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
         >

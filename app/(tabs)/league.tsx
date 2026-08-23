@@ -4,7 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
-import { askAI } from "../../services/ai";
+import { askAI, hasAISession } from "../../services/ai";
+import { hasAIConsent } from "../../services/aiConsent";
 import { getCurrentTier } from '../../services/purchases';
 import { syncRosteredPlayers, type RosteredPlayer } from '../../services/rosterSync';
 import { consumePrompt } from '../../services/promptQuota';
@@ -634,6 +635,18 @@ export default function LeagueScreen() {
     setAdvice('');
     setModalVisible(true);
     setAdviceLoading(true);
+    // 5.1.1(i): never charge a prompt for a call the consent gate will refuse.
+    if (!(await hasAIConsent())) {
+      setAdvice('AI features are turned off. To get player advice, enable “Share data with AI service” in Settings.');
+      setAdviceLoading(false);
+      return;
+    }
+    // Guests can't reach the AI proxy — don't burn a lifetime prompt trying.
+    if (!(await hasAISession())) {
+      setAdvice('Sign in to use AI features — create a free account from Settings.');
+      setAdviceLoading(false);
+      return;
+    }
     // Atomic check-and-charge — if over cap, route to paywall instead of
     // calling Claude. consumePrompt() avoids the TOCTOU window the older
     // canSend+increment pair had.
@@ -659,6 +672,10 @@ export default function LeagueScreen() {
         ? 'Request timed out. Check your connection and try again.'
         : e?.message === 'prompt_limit_reached'
           ? 'You have reached your weekly prompts. Upgrade to Pro for 75 prompts per week.'
+          : e?.message?.includes('ai_consent_required')
+          ? 'AI features are turned off. Enable “Share data with AI service” in Settings.'
+          : e?.message?.includes('not_authenticated')
+          ? 'Sign in to use AI features — create a free account from Settings.'
           : 'Could not load advice. Tap retry or try again in a moment.';
       setAdvice(message);
     } finally { setAdviceLoading(false); }
