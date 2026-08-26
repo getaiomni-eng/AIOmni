@@ -70,9 +70,21 @@ const GLOBAL_TYPES = new Set([
   'topStarters', 'topOwns', 'projectedScores',
 ]);
 
-async function mflFetch<T>(type: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
-  const host = GLOBAL_TYPES.has(type) ? 'api.myfantasyleague.com' : await mflHost();
-  const season = await mflSeason();
+async function mflFetch<T>(
+  type: string,
+  params: Record<string, string | number | undefined> = {},
+  // Per-league host/season. MFL shards leagues across www-hosts and reshuffles
+  // them at season rollover; each connected league records its own values in
+  // mfl_leagues_v2. Falling back to the legacy single-value keys (synced to
+  // merged[0] only) sent every non-first league's fetches to the wrong
+  // server/year — MFL answers those with HTTP-200 {error} payloads, which
+  // read as "empty roster" and fed the Coach a phantom league state.
+  creds?: { host?: string; season?: string },
+): Promise<T> {
+  const host = GLOBAL_TYPES.has(type)
+    ? 'api.myfantasyleague.com'
+    : (creds?.host || await mflHost());
+  const season = creds?.season || await mflSeason();
   const cleaned: Record<string, string> = { TYPE: type, JSON: '1' };
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null && v !== '') cleaned[k] = String(v);
@@ -84,7 +96,21 @@ async function mflFetch<T>(type: string, params: Record<string, string | number 
     headers: { 'User-Agent': USER_AGENT },
   });
   if (!res.ok) throw new PlatformError(`MFL ${type} failed: ${res.status}`, 'mfl');
-  return res.json() as Promise<T>;
+  const json = await res.json();
+  // MFL reports wrong-host/bad-league errors inside an HTTP 200. Surface them
+  // as real failures so callers can't mistake an error for an empty payload.
+  const errMsg = (json as any)?.error?.$t ?? (json as any)?.error;
+  if (typeof errMsg === 'string' && errMsg) {
+    throw new PlatformError(`MFL ${type} error: ${errMsg}`, 'mfl');
+  }
+  return json as T;
+}
+
+// Resolve the stored per-league creds for league-scoped fetches. Null-safe:
+// an unknown league just falls back to the legacy keys inside mflFetch.
+async function leagueCreds(leagueId: string): Promise<{ host?: string; season?: string } | undefined> {
+  const c = await getCredsForLeague(leagueId);
+  return c ? { host: c.host, season: c.season } : undefined;
 }
 
 // ─── credential helpers ───────────────────────────────────────────────────
@@ -293,15 +319,39 @@ function isMflSuperFlex(starters: any): boolean {
   return false;
 }
 
+// MFL expresses flexible lineups as RANGE limits (e.g. RB "2-6" in a start-9
+// guillotine league). Collapsing each to parseInt's minimum produced a bogus
+// 6-slot lineup ("QB · 2RB · 2WR · TE") that the Coach then audited rosters
+// against. Expand minimums for slot counting, but keep the human-readable
+// range string + total starters so the prompt can state the real rule.
 function expandRosterSlots(starters: any): string[] {
   const out: string[] = [];
   const positions: any[] = Array.isArray(starters?.position) ? starters.position : [starters?.position].filter(Boolean);
   for (const p of positions) {
-    const limit = parseInt(p?.limit ?? '0', 10);
+    const limit = parseInt(String(p?.limit ?? '0').split('-')[0], 10) || 0;
     const name = String(p?.name ?? '');
     for (let i = 0; i < limit; i++) out.push(name);
   }
   return out;
+}
+
+// Human-readable lineup rule straight from MFL's own config: per-position
+// ranges plus the total-starters count. Empty string when data is missing —
+// callers must then say "unavailable", never invent a lineup.
+export function describeMflLineup(starters: any): string {
+  const positions: any[] = Array.isArray(starters?.position) ? starters.position : [starters?.position].filter(Boolean);
+  if (!positions.length) return '';
+  const parts = positions
+    .map(p => {
+      const limit = String(p?.limit ?? '').trim();
+      const name = String(p?.name ?? '').trim();
+      if (!name || !limit || limit === '0') return '';
+      return limit === '1' ? name : `${limit} ${name}`;
+    })
+    .filter(Boolean);
+  const total = parseInt(String(starters?.count ?? '').split('-')[0], 10);
+  const totalStr = Number.isFinite(total) && total > 0 ? ` (start ${total} total)` : '';
+  return parts.length ? `${parts.join(' · ')}${totalStr}` : '';
 }
 
 // ─── platform implementation ──────────────────────────────────────────────
@@ -331,7 +381,7 @@ export const mflPlatform: FantasyPlatform = {
     const season = await mflSeason();
     const results = await Promise.all(allCreds.map(async (creds) => {
       try {
-        const data = await mflFetch<any>('league', { L: creds.leagueId });
+        const data = await mflFetch<any>('league', { L: creds.leagueId }, { host: creds.host, season: creds.season });
         const league = data?.league;
         if (!league) return null;
         const ret: League = {
@@ -357,24 +407,27 @@ export const mflPlatform: FantasyPlatform = {
   },
 
   async getLeague(leagueId: string): Promise<LeagueDetail> {
-    const data = await mflFetch<any>('league', { L: leagueId });
+    const creds = await leagueCreds(leagueId);
+    const data = await mflFetch<any>('league', { L: leagueId }, creds);
     const league = data?.league;
     if (!league) throw new PlatformError('League not found', 'mfl');
 
     const starters = league.starters ?? {};
     const rosterSlots = expandRosterSlots(starters);
+    const lineupDescription = describeMflLineup(starters);
     const isDynasty = isMflDynasty(league);
 
     return {
       id:            String(league.id ?? leagueId),
       platformId:    'mfl',
       name:          league.name ?? 'MFL League',
-      season:        await mflSeason(),
+      season:        creds?.season ?? await mflSeason(),
       teamCount:     parseInt(league.franchises?.count ?? '12', 10),
       scoringFormat: inferScoringFormat(league),
       leagueType:    isDynasty ? 'dynasty' : 'redraft',
       currentWeek:   undefined,
       rosterSlots,
+      lineupDescription: lineupDescription || undefined,
       waiverType:    'rolling' as WaiverType,
       isDynasty,
       isSuperFlex:   isMflSuperFlex(starters),
@@ -398,10 +451,10 @@ export const mflPlatform: FantasyPlatform = {
     if (cached) return cached;
 
     const [rostersData, leagueData, playersBase, standingsData] = await Promise.all([
-      mflFetch<any>('rosters', { L: leagueId }),
-      mflFetch<any>('league',  { L: leagueId }),
+      leagueCreds(leagueId).then(c => mflFetch<any>('rosters', { L: leagueId }, c)),
+      leagueCreds(leagueId).then(c => mflFetch<any>('league',  { L: leagueId }, c)),
       getPlayers(),
-      mflFetch<any>('leagueStandings', { L: leagueId }).catch(() => null),
+      leagueCreds(leagueId).then(c => mflFetch<any>('leagueStandings', { L: leagueId }, c)).catch(() => null),
     ]);
 
     // Collect every player ID across every roster so we can top-up the
@@ -500,7 +553,7 @@ export const mflPlatform: FantasyPlatform = {
     if (cached) return cached;
 
     const [data, playersBase] = await Promise.all([
-      mflFetch<any>('freeAgents', { L: leagueId }),
+      leagueCreds(leagueId).then(c => mflFetch<any>('freeAgents', { L: leagueId }, c)),
       getPlayers(),
     ]);
 
@@ -545,8 +598,8 @@ export const mflPlatform: FantasyPlatform = {
     // freshly-created MFL leagues — e.g. "AIOmni Launch" had every team
     // showing as the literal "Franchise 0001").
     const [data, leagueData] = await Promise.all([
-      mflFetch<any>('leagueStandings', { L: leagueId }),
-      mflFetch<any>('league',          { L: leagueId }).catch(() => null),
+      leagueCreds(leagueId).then(c => mflFetch<any>('leagueStandings', { L: leagueId }, c)),
+      leagueCreds(leagueId).then(c => mflFetch<any>('league',          { L: leagueId }, c)).catch(() => null),
     ]);
     const rows = data?.leagueStandings?.franchise ?? [];
     const list = Array.isArray(rows) ? rows : [rows];
@@ -586,7 +639,7 @@ export const mflPlatform: FantasyPlatform = {
   async getMatchups(leagueId: string, week?: number): Promise<Matchup[]> {
     const params: any = { L: leagueId };
     if (week) params.W = week;
-    const data = await mflFetch<any>('liveScoring', params);
+    const data = await mflFetch<any>('liveScoring', params, await leagueCreds(leagueId));
     const matchups = data?.liveScoring?.matchup ?? [];
     const list = Array.isArray(matchups) ? matchups : [matchups];
     const creds = await getCredsForLeague(leagueId);
@@ -628,8 +681,8 @@ export const mflPlatform: FantasyPlatform = {
       const myFid = await this.getMyUserId();
       if (!myFid) return null;
       const [tradedRes, leagueRes] = await Promise.all([
-        mflFetch<any>('tradedPicks', { L: leagueId }).catch(() => null),
-        mflFetch<any>('league',      { L: leagueId }).catch(() => null),
+        leagueCreds(leagueId).then(c => mflFetch<any>('tradedPicks', { L: leagueId }, c)).catch(() => null),
+        leagueCreds(leagueId).then(c => mflFetch<any>('league',      { L: leagueId }, c)).catch(() => null),
       ]);
       if (!leagueRes) return null;
 
@@ -694,7 +747,7 @@ export const mflPlatform: FantasyPlatform = {
   },
 
   async getTransactions(leagueId: string, limit = 30): Promise<Transaction[]> {
-    const data = await mflFetch<any>('transactions', { L: leagueId });
+    const data = await mflFetch<any>('transactions', { L: leagueId }, await leagueCreds(leagueId));
     const list: any[] = data?.transactions?.transaction ?? [];
     const players = await getPlayers();
     const out: Transaction[] = [];

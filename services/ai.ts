@@ -86,16 +86,46 @@ export async function askAI(
       payload.system = [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }];
     }
 
-    const res = await fetch(PROXY_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-    });
+    // Explicit deadline. Without one, iOS's ~60s URLSession default was the
+    // real timeout, and a slow Claude call surfaced as a bare TypeError that
+    // the UI rendered as "Connection error" with no cause.
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), 50_000);
+    let res: Response;
+    try {
+      res = await fetch(PROXY_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } catch (fe: any) {
+      if (fe?.name === 'AbortError') throw new Error('ai_timeout');
+      throw fe;
+    } finally {
+      clearTimeout(deadline);
+    }
 
     if (!res.ok) {
       const errBody = await res.text();
       console.error(`askAI HTTP ${res.status} (${tier}/${model}):`, errBody);
-      if (res.status === 429) throw new Error('prompt_limit_reached');
+      // Taxonomy, not a bucket: each status maps to a distinct, actionable
+      // error the UI can name. Collapsing them all into "Connection error"
+      // is how a prompt-size failure masqueraded as bad wifi in production.
+      // The proxy emits 429 for THREE causes: weekly quota, per-IP burst
+      // throttle, and Anthropic's own rate limit passed through. Only the
+      // first is the user's quota — labeling the others "weekly limit"
+      // (with an upsell!) is confidently wrong. Branch on the body.
+      if (res.status === 429) {
+        throw new Error(/weekly prompt limit/i.test(errBody) ? 'prompt_limit_reached' : 'ai_rate_limited');
+      }
+      if (res.status === 401) throw new Error('session_expired');
+      // 400 is Anthropic's whole invalid_request class; only map to
+      // prompt-too-large when the body says so. 413 is unambiguous.
+      if (res.status === 413 || (res.status === 400 && /prompt is too long|too many tokens|max_tokens/i.test(errBody))) {
+        throw new Error('ai_prompt_too_large');
+      }
+      if (res.status === 529 || res.status >= 500) throw new Error('ai_overloaded');
       throw new Error(`AI request failed (${res.status})`);
     }
 
@@ -104,14 +134,34 @@ export async function askAI(
     if (data?.text) return data.text;
     if (data?.error) {
       console.error('askAI error in response:', data.error);
-      throw new Error(data.error.message || data.error);
+      const msg = String(data.error.message || data.error);
+      if (/overloaded/i.test(msg)) throw new Error('ai_overloaded');
+      if (/prompt is too long|max_tokens|too many tokens/i.test(msg)) throw new Error('ai_prompt_too_large');
+      throw new Error(msg);
     }
     console.error('askAI unexpected response shape:', JSON.stringify(data).slice(0, 200));
-    return '';
+    // An unrecognized 200 used to return '' — a silently blank AI bubble
+    // that still charged the prompt. Fail loudly instead.
+    throw new Error('ai_bad_response');
   } catch (e: any) {
     console.error('askAI error:', e.message);
     throw e;
   }
+}
+
+// Shared human-readable messages for the error taxonomy above. Call sites
+// pass their own generic fallback so surface-appropriate wording survives.
+export function describeAIError(e: any, fallback: string): string {
+  const m = String(e?.message ?? '');
+  if (m.includes('ai_consent_required')) return 'AI features are turned off. Enable “Share data with AI service” in Settings.';
+  if (m.includes('not_authenticated'))   return 'Sign in to use AI features — create a free account from Settings.';
+  if (m.includes('session_expired'))     return 'Your session expired — sign in again in Settings to keep using AI features.';
+  if (m.includes('ai_prompt_too_large')) return 'This conversation has grown too large for one request. Start a fresh chat (your leagues reload automatically).';
+  if (m.includes('ai_overloaded'))       return 'The AI service is briefly overloaded. Give it a minute and try again.';
+  if (m.includes('ai_rate_limited'))     return 'Too many requests right now — wait a minute and try again. (Your prompt was not charged.)';
+  if (m.includes('ai_timeout'))          return 'That request took too long and was cancelled. Try again — shorter questions come back faster.';
+  if (m.includes('ai_bad_response'))     return 'The AI returned an unreadable response. Try again.';
+  return fallback;
 }
 
 // v2026-06-10: vision call for reading screenshots (trade proposals, etc.).

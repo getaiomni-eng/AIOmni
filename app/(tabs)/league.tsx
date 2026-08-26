@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
-import { askAI, hasAISession } from "../../services/ai";
+import { askAI, describeAIError, hasAISession } from "../../services/ai";
 import { hasAIConsent } from "../../services/aiConsent";
 import { getCurrentTier } from '../../services/purchases';
 import { syncRosteredPlayers, type RosteredPlayer } from '../../services/rosterSync';
@@ -659,24 +659,17 @@ export default function LeagueScreen() {
       router.push(`/paywall?context=${ctx}` as any);
       return;
     }
-    const controller = new AbortController();
-    const timeout    = setTimeout(() => controller.abort(), 15000);
+    // (askAI carries its own 50s timeout + 'ai_timeout' error — the old
+    // local AbortController here aborted nothing since askAI takes no
+    // signal, so its 15s "deadline" was dead code.)
     try {
       const isPPR = leagueSettings?.scoring_settings?.rec > 0;
       const text  = await askAI(`You are AIOmni, expert fantasy football analyst.\nLeague: ${leagueName} (${platformStr.toUpperCase()}) | Scoring: ${isPPR ? 'PPR' : 'Standard'}\nPlayer: ${player.name} | ${player.position} | ${player.team}${player.injuryStatus ? ` | Injury: ${player.injuryStatus}` : ''}\n${isWaiver ? 'Should I add off waivers?' : 'Should I start or sit?'} Be sharp, direct, under 80 words. No intros.`, { tier: 'fast', maxTokens: 256 });
-      clearTimeout(timeout);
       setAdvice(text);
     } catch (e: any) {
-      clearTimeout(timeout);
-      const message = e?.name === 'AbortError'
-        ? 'Request timed out. Check your connection and try again.'
-        : e?.message === 'prompt_limit_reached'
-          ? 'You have reached your weekly prompts. Upgrade to Pro for 75 prompts per week.'
-          : e?.message?.includes('ai_consent_required')
-          ? 'AI features are turned off. Enable “Share data with AI service” in Settings.'
-          : e?.message?.includes('not_authenticated')
-          ? 'Sign in to use AI features — create a free account from Settings.'
-          : 'Could not load advice. Tap retry or try again in a moment.';
+      const message = e?.message === 'prompt_limit_reached'
+          ? 'You have reached your weekly prompts. Upgrade to Pro for 50 prompts per week.'
+          : describeAIError(e, 'Could not load advice. Tap retry or try again in a moment.');
       setAdvice(message);
     } finally { setAdviceLoading(false); }
   };

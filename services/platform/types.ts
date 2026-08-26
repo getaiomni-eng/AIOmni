@@ -106,6 +106,9 @@ export interface League {
 /** Full league detail — settings, roster slots, waivers config */
 export interface LeagueDetail extends League {
   rosterSlots: string[];
+  // Human-readable lineup rule when slot expansion can't express it (MFL
+  // range limits like "2-6 RB"). Preferred by the AI context builder.
+  lineupDescription?: string;
   waiverType: WaiverType;
   faabBudget?: number;
   faabRemaining?: number;

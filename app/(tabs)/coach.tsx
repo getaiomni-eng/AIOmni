@@ -10,7 +10,7 @@ import {
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { askAI, askAIVision } from '../../services/ai';
+import { askAI, askAIVision, describeAIError } from '../../services/ai';
 import { hasAIConsent } from '../../services/aiConsent';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials, ESPN_SLOTS } from '../../services/espn';
@@ -73,6 +73,10 @@ type LeagueContext = {
   // identical prompts. These two carry the real settings through.
   scoringDetail?: string;   // "rec 1 · bonus_rec_te 0.5 · pass_td 6"
   startingSlots?: string;   // "QB · 2RB · 3WR · TE · 2FLEX"
+  // v2026-08-26: explicit data-quality warnings (unresolved player IDs,
+  // failed fetches). Rendered into the prompt so the model hedges instead
+  // of confidently auditing a roster it only half-received.
+  dataNote?: string;
 };
 
 function getPaywallMessage(resetStr: string): string {
@@ -599,9 +603,33 @@ async function loadAbstractContext(
           const enrich = enrichByName(nameIndex, name, pos);
           return formatPlayerEntry(name, pos, s.player?.team, enrich);
         });
-        const availableNames: string[] = (fas as any[]).slice(0, 20).map((p: any) =>
-          `${p.name ?? 'Unknown'} (${p.position ?? 'FLEX'}${p.team ? ` · ${p.team}` : ''})`
-        );
+        // Data-quality accounting. MFL renders players missing from its
+        // cached snapshot as "Player 12345" with no position — a roster
+        // whose QBs are unresolved literally contains no QB-labeled entry,
+        // and the model (correctly reading what it was given) told a user
+        // with a full roster "you have no QB listed". Never let a partial
+        // roster reach the prompt without saying so.
+        const unresolved = rosterNames.filter(n => /^Player \d+/.test(n)).length;
+        const dataNotes: string[] = [];
+        if (unresolved > 0) {
+          dataNotes.push(`${unresolved} of ${rosterNames.length} roster entries could not be resolved to player names/positions (shown as "Player <id>") — the roster is INCOMPLETE. Do not audit lineup gaps (e.g. "you have no QB") from this data; ask the user instead.`);
+        }
+        const unresolvedPool = (fas as any[]).filter((pl: any) => !pl?.name || /^Player \d+/.test(String(pl.name))).length;
+        if (unresolvedPool > 0) {
+          dataNotes.push(`${unresolvedPool} FA-pool entries are unresolved IDs — the pool sample is partially unreadable.`);
+        }
+        if (!roster) {
+          dataNotes.push(`The roster fetch failed for this league — the roster shown is empty, NOT actually empty. Ask the user for their roster rather than reasoning from its absence.`);
+        }
+        // v2026-08-26: the FA pool gets the same Sleeper-feed enrichment as
+        // rosters (depth chart, injury, real team). Bare names forced the
+        // model to treat any pool QB as startable — it recommended a
+        // third-string QB as a Week 1 lineup fix.
+        const availableNames: string[] = (fas as any[]).slice(0, 20).map((p: any) => {
+          const nm = p.name ?? 'Unknown';
+          const pos = p.position ?? 'FLEX';
+          return formatPlayerEntry(nm, pos, p.team, enrichByName(nameIndex, nm, pos));
+        });
 
         // Format current-season picks from the platform's draft-board.
         // Fleaflicker gives full slot info → "1.08, 3.08". MFL ships
@@ -642,13 +670,25 @@ async function loadAbstractContext(
           season: parseInt(l.season) || new Date().getFullYear(),
           leagueType: lt, ownedPicks,
           scoringDetail,
-          startingSlots: formatStartingSlots((detail as any)?.rosterSlots),
+          // Prefer the platform's own lineup description (MFL emits range
+          // limits like "2-6 RB · start 9 total" that slot-expansion cannot
+          // express). NEVER silently omit: an absent line invites the model
+          // to invent a lineup and audit the roster against it.
+          startingSlots: (detail as any)?.lineupDescription
+            || formatStartingSlots((detail as any)?.rosterSlots)
+            || `not available from the ${platformLabel} integration — ask the user for their lineup rules before auditing their roster`,
+          dataNote: dataNotes.length ? dataNotes.join(' ') : undefined,
         };
       } catch {
         return {
           name: l.name, platform: platformLabel, format: fmt,
           record: '?', rank: '?', roster: [], available: [], week,
           season: parseInt(l.season) || new Date().getFullYear(),
+          // Even the failure path must keep the model honest: without
+          // these, the league block has no STARTING LINEUP line at all
+          // (inviting an invented one) and no incompleteness marker.
+          startingSlots: `not available from the ${platformLabel} integration — ask the user for their lineup rules before auditing their roster`,
+          dataNote: 'League data failed to load — the empty roster above is a fetch failure, not an empty team. Ask the user rather than reasoning from absence.',
         };
       }
     }));
@@ -764,9 +804,10 @@ function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueConte
         buzzBlock = `\nANALYST BUZZ (from podcasts/columns, last 14 days — opinions, not facts; cite the source in one clause when a take influences your answer, and weigh against this league's scoring):\n${top.map(t => `- ${t.line}`).join('\n')}`;
       }
     }
+    const note = l.dataNote ? `\n⚠ DATA QUALITY: ${l.dataNote}` : '';
     return `
 League: ${l.name} (${l.platform} · ${l.format}) ${typeLabel}${bestBall}
-Record: ${l.record} · Rank: ${l.rank} · Season: ${l.season} · Week: ${l.week}${taxi}${scoring}${starts}${buzzBlock}
+Record: ${l.record} · Rank: ${l.rank} · Season: ${l.season} · Week: ${l.week}${taxi}${scoring}${starts}${note}${buzzBlock}
 Roster${rosterMeta}: ${rosterStr}${picks}${avail}${allRost}
 `;
   }).join('\n---\n');
@@ -864,7 +905,36 @@ than answering blind.
   // block small. The system field precedes the user turn, so the rookie
   // board still leads — preserving the "don't fall back to training-data
   // rookies" guarantee that motivated hoisting it.
-  return `${calendarFraming}\n\nYou have loaded ${targets.length} league${targets.length > 1 ? 's' : ''}:\n${leagueBlocks}${focusNote}${scoringDirective}${memoryBlock}\n\n${seasonContext}`;
+  // v2026-08-26: EPISTEMICS. The training-data ban means the model knows
+  // ONLY what these blocks inject. Without provenance labels it treated a
+  // bare-name FA sample as a complete scouting report and asserted a
+  // third-string QB was a startable Week 1 fix. Confidence must come from
+  // data density, not persona.
+  const epistemics = `
+
+═══ WHAT YOUR DATA DOES AND DOES NOT CONTAIN ═══
+Every fact you state must trace to a block above. Know each block's limits:
+
+- ROSTER entries: name (position · team · age · exp · depth-chart tag like
+  "QB1"/"WR2" when known · injury tag when known). An entry WITHOUT a
+  depth-chart tag is NOT known to be a starter or a backup — you don't know.
+- "Top available" (FA pool): a SMALL SAMPLE (~20) of a much larger pool, in
+  no particular order. It is NOT the best available. Entries carry the same
+  fields as roster entries — same rule: no depth-chart tag = role unknown.
+  NEVER assert a pool player is an NFL starter, or recommend one as a lineup
+  fix, unless his entry carries a depth-chart tag showing it (e.g. "QB1").
+  If the pool sample has no clearly viable option, SAY THAT and tell the
+  user what to search for on their platform instead.
+- A "⚠ DATA QUALITY" line overrides everything: when present, the affected
+  data is incomplete — do not draw negative inferences ("you have no QB",
+  "you only have 2 WR") from what's missing.
+- STARTING LINEUP marked "not available": ask the user before auditing
+  their lineup against any assumed format.
+
+Being sharp and being certain are different things. When the data above is
+thin, the sharp answer names the uncertainty and tells the user exactly
+what to check — it never fills the gap with a guess stated as fact.`;
+  return `${calendarFraming}\n\nYou have loaded ${targets.length} league${targets.length > 1 ? 's' : ''}:\n${leagueBlocks}${focusNote}${scoringDirective}${epistemics}${memoryBlock}\n\n${seasonContext}`;
 }
 
 // ── Verdict card (blue) ─────────────────────────────────────
@@ -1315,13 +1385,11 @@ Capture rookies and veterans exactly.`,
         ? (tier === 'free'
             ? "This device has used its 10 free prompts. Upgrade for 25–50 prompts every week."
             : "You've hit your weekly prompt limit. Upgrade to Pro for 50 prompts/week.")
-        : e?.message?.includes('ai_consent_required')
-        // 5.1.1(i): consent declined — say so plainly instead of a fake
-        // connection error, and point at the switch that re-enables it.
-        ? 'AI features are turned off. To use the Coach, enable “Share data with AI service” in Settings.'
-        : e?.message?.includes('not_authenticated')
-        ? 'Sign in to use AI features — create a free account from Settings.'
-        : 'Connection error. Try again.';
+        // Everything else goes through the shared taxonomy — expired
+        // sessions, oversized prompts, overload, and timeouts each get a
+        // real explanation instead of the "Connection error" catch-all
+        // that masked an actual failure in production.
+        : describeAIError(e, 'Connection error. Try again.');
       setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: errMsg }]);
     } finally {
       setLoading(false);
