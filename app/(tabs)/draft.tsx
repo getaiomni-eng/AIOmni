@@ -22,7 +22,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { askAI, hasAISession } from '../../services/ai';
+import { askAI, describeAIError, hasAISession } from '../../services/ai';
 import { hasAIConsent } from '../../services/aiConsent';
 import { getCurrentTier } from '../../services/purchases';
 import { consumePrompt } from '../../services/promptQuota';
@@ -1181,13 +1181,9 @@ function DraftBoard({
       setAiResponse(res);
     } catch (e: any) {
       // Never surface raw internal errors to the sheet — build 197 lesson.
-      const msg = e?.message?.includes('ai_consent_required')
-        ? 'AI features are turned off. To use the Draft Copilot, enable “Share data with AI service” in Settings.'
-        : e?.message?.includes('not_authenticated')
-        ? 'Sign in to use AI features — create a free account from Settings.'
-        : e?.message?.includes('prompt_limit_reached')
+      const msg = e?.message?.includes('prompt_limit_reached')
         ? 'You’ve hit your weekly prompt limit.'
-        : 'Couldn’t get advice right now. Try again in a moment.';
+        : describeAIError(e, 'Couldn’t get advice right now. Try again in a moment.');
       setAiResponse(msg);
     } finally {
       setAiLoading(false);
