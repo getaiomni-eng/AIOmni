@@ -48,6 +48,11 @@ let configured = false;
 
 export async function initPurchases(userId?: string): Promise<void> {
   try {
+    // Web runs purchase-less: react-native-purchases has no web SDK, and
+    // Platform.OS === 'web' would otherwise select the Apple key and crash
+    // on Purchases.configure. Tier resolution falls through to the DB path,
+    // so iOS subscribers are recognized on web automatically.
+    if (Platform.OS === 'web') return;
     const apiKey = Platform.OS === 'android' ? REVENUECAT_GOOGLE_KEY : REVENUECAT_APPLE_KEY;
     if (!apiKey) return;   // Android pre-Play-launch: run purchase-less
     if (configured) {
@@ -269,11 +274,17 @@ export async function refreshTier(): Promise<Tier> {
 // another device) repopulate the cache without an app restart.
 let listenerAttached = false;
 export function attachCustomerInfoListener(): void {
-  if (listenerAttached) return;
-  Purchases.addCustomerInfoUpdateListener(() => {
-    void refreshTier();
-  });
-  listenerAttached = true;
+  if (listenerAttached || Platform.OS === 'web') return;
+  try {
+    Purchases.addCustomerInfoUpdateListener(() => {
+      void refreshTier();
+    });
+    listenerAttached = true;
+  } catch (e) {
+    // Native module absent (web) or not yet linked — tier still resolves
+    // via the DB path; just no live entitlement push.
+    console.log('attachCustomerInfoListener error:', e);
+  }
 }
 
 // ── Tier display info ─────────────────────────────────────────────────────────

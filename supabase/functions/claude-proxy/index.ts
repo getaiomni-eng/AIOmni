@@ -47,6 +47,7 @@ const TIER_LIMITS: Record<string, number> = {
 const ALLOWED_ORIGINS = new Set<string>([
   "https://www.getaiomni.com",
   "https://getaiomni.com",
+  "https://app.getaiomni.com",   // web app
   "http://localhost:3000",
   "http://localhost:8081",   // expo dev
 ]);

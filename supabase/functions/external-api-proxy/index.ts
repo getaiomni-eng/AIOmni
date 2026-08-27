@@ -27,6 +27,7 @@ const CFBD_API_KEY    = Deno.env.get("CFBD_API_KEY");
 const ALLOWED_ORIGINS = new Set<string>([
   "https://www.getaiomni.com",
   "https://getaiomni.com",
+  "https://app.getaiomni.com",   // web app
   "http://localhost:3000",
   "http://localhost:8081",
 ]);

@@ -20,6 +20,7 @@ const SUPABASE_ANON_KEY    = Deno.env.get("SUPABASE_ANON_KEY");
 const ALLOWED_ORIGINS = new Set<string>([
   "https://www.getaiomni.com",
   "https://getaiomni.com",
+  "https://app.getaiomni.com",   // web app
   "http://localhost:3000",
   "http://localhost:8081",
 ]);
