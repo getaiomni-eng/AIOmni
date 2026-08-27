@@ -82,8 +82,13 @@ export const QUESTIONS: QuizQuestion[] = [
     id: 'q7_injury_discount',
     phase: 1,
     type: 'binary',
-    prompt: 'Christian McCaffrey is on the board at his ADP (Round 3). Elite when healthy, but he’s now on the wrong side of 29 with a recent injury history.',
-    optionA: { label: "Take him — the ceiling when healthy still wins leagues",      value: 'A' },
+    // v2026-08-27: was "Christian McCaffrey ... at his ADP (Round 3)" — a
+    // hardcoded name + price that drifted from the live market within weeks
+    // and made the quiz read stale. The question measures injury-risk
+    // tolerance, not player knowledge; the archetype framing (like q8's)
+    // carries the same dilemma and can't go out of date.
+    prompt: 'A former overall RB1 is sliding in your draft — a full round below his usual price. Elite when healthy, but he’s on the wrong side of 29 with a recent injury history.',
+    optionA: { label: "Take the discount — the ceiling when healthy still wins leagues", value: 'A' },
     optionB: { label: "Pass — the body's a risk at his age, take a younger RB",      value: 'B' },
   },
   {
