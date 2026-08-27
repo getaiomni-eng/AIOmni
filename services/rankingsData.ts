@@ -217,7 +217,7 @@ interface SleeperPlayerRaw {
 
 let sleeperCache: Record<string, any> | null = null;
 
-async function getSleeperPlayers(): Promise<Record<string, any>> {
+export async function getSleeperPlayers(): Promise<Record<string, any>> {
   if (sleeperCache) return sleeperCache;
 
   try {

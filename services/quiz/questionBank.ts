@@ -38,13 +38,16 @@ export const QUESTIONS: QuizQuestion[] = [
     type: 'rank',
     prompt: 'Rank your top 3 WR2 targets for Round 3.',
     rankTopN: 3,
+    // v2026-08-27: ids are ARCHETYPES (est/inj/asc), not player slugs —
+    // scoring keys on the archetype, so dynamicQuestions.ts can swap the
+    // display names from the live board without touching getRankDeltas.
     rankOptions: [
-      { id: 'collins',  label: 'Nico Collins',         sublabel: 'HOU, proven alpha, locked-in target share' },
-      { id: 'higgins',  label: 'Tee Higgins',          sublabel: 'CIN, established, steady WR2 next to Chase' },
-      { id: 'olave',    label: 'Chris Olave',          sublabel: 'NO, talented but multiple concussions' },
-      { id: 'tmac',     label: 'Tetairoa McMillan',    sublabel: 'CAR, Year 2, ascending young alpha' },
-      { id: 'jameson',  label: 'Jameson Williams',     sublabel: 'DET, ascending, elite big-play speed' },
-      { id: 'devonta',  label: 'DeVonta Smith',        sublabel: 'PHI, now the clear WR1 after the A.J. Brown trade' },
+      { id: 'est1', label: 'Nico Collins',      sublabel: 'HOU, proven alpha, locked-in target share' },
+      { id: 'est2', label: 'Tee Higgins',       sublabel: 'CIN, established veteran, steady production' },
+      { id: 'inj1', label: 'Chris Olave',       sublabel: 'NO, talented but injury-flagged' },
+      { id: 'asc1', label: 'Tetairoa McMillan', sublabel: 'CAR, ascending Year-2 alpha' },
+      { id: 'asc2', label: 'Jameson Williams',  sublabel: 'DET, ascending, elite big-play speed' },
+      { id: 'asc3', label: 'DeVonta Smith',     sublabel: 'PHI, ascending target share' },
     ],
   },
   {
@@ -143,9 +146,9 @@ export const QUESTION_DIMENSION_MAP: Record<
 // ─── Rank-question delta logic ──────────────────────────────────────
 // Q3 — top-3 WR2 targets. The user's choices reveal both
 // established_ascending and injury_discount postures.
-//   established (veteran trust): collins, higgins
+//   established (veteran trust): est1, est2
 //   ascending  (breakout hunt):  tmac, jameson, devonta
-//   injury flag:                 olave (concussion history)
+//   injury flag:                 inj1 (injury-flagged archetype)
 
 export function getRankDeltas(
   questionId: string,
@@ -157,17 +160,17 @@ export function getRankDeltas(
     const top2 = rankedIds.slice(0, 2);
     const top3 = rankedIds.slice(0, 3);
 
-    // Established (Collins, Higgins) in top 2 → veteran trust signal
-    if (top2.includes('collins')) {
+    // Established archetypes in top 2 → veteran trust signal
+    if (top2.includes('est1')) {
       deltas.established_ascending = (deltas.established_ascending ?? 0) - 10;
       deltas.injury_discount       = (deltas.injury_discount ?? 0) - 8;
     }
-    if (top2.includes('higgins')) {
+    if (top2.includes('est2')) {
       deltas.established_ascending = (deltas.established_ascending ?? 0) - 6;
     }
 
-    // Ascending names in top 2 → breakout-hunter signal
-    const ascendingIds = ['tmac', 'jameson', 'devonta'];
+    // Ascending archetypes in top 2 → breakout-hunter signal
+    const ascendingIds = ['asc1', 'asc2', 'asc3'];
     const ascendingInTop2 = top2.filter(id => ascendingIds.includes(id)).length;
     if (ascendingInTop2 >= 1) {
       deltas.established_ascending = (deltas.established_ascending ?? 0) + 10;
@@ -177,17 +180,21 @@ export function getRankDeltas(
     }
 
     // Injury-prone (Olave) in top 3 → willing to take injury risk
-    if (top3.includes('olave')) {
+    if (top3.includes('inj1')) {
       deltas.injury_discount = (deltas.injury_discount ?? 0) + 8;
     }
 
     // Collins at #1 → strongest veteran-trust signal
-    if (rankedIds[0] === 'collins') {
+    if (rankedIds[0] === 'est1') {
       deltas.established_ascending = (deltas.established_ascending ?? 0) - 5;
     }
 
     // TMac or DeVonta at #1 → strongest ascending signal
-    if (rankedIds[0] === 'tmac' || rankedIds[0] === 'devonta') {
+    // Any ascending archetype first = the same breakout-hunter signal.
+    // (Was asc1|asc3 only, mirroring the old curated TMac/DeVonta copy —
+    // under dynamic fill the slot assignment is board order, so keying
+    // the bonus to specific slots made scoring arbitrary.)
+    if (rankedIds[0]?.startsWith('asc')) {
       deltas.established_ascending = (deltas.established_ascending ?? 0) + 5;
     }
   }

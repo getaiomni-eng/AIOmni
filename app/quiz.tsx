@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { computeDimensions, saveQuizResult } from '../services/quiz/engine';
 import { QUESTIONS } from '../services/quiz/questionBank';
+import { applyDynamicQuestions, enrichBoardForQuiz } from '../services/quiz/dynamicQuestions';
 import type {
   Position,
   PositionRanking,
@@ -47,6 +48,12 @@ export default function QuizScreen() {
 
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, QuizAnswer>>({});
+  // True from the user's first answer/advance — after that, question copy
+  // is frozen (see the dynamization effect).
+  const interactedRef = React.useRef(false);
+  useEffect(() => {
+    if (Object.keys(answers).length > 0 || currentStep > 0) interactedRef.current = true;
+  }, [answers, currentStep]);
   const [positionRanks, setPositionRanks] = useState<Record<Position, string[]>>({
     QB: [], RB: [], WR: [], TE: [], K: [],
   });
@@ -55,6 +62,7 @@ export default function QuizScreen() {
   });
 
   const [playerLookup, setPlayerLookup] = useState<PlayerLookup>({});
+  const [questions, setQuestions] = useState(QUESTIONS);
   const [pickerVisible, setPickerVisible] = useState(false);
 
   // Load formula once so Phase 2 slots can resolve player ids → display data
@@ -65,6 +73,14 @@ export default function QuizScreen() {
         const lookup: PlayerLookup = {};
         for (const p of data ?? []) lookup[p.id] = p;
         setPlayerLookup(lookup);
+        // Swap the curated player examples for live-board picks (labels
+        // only — ids/values/scoring untouched; falls back per-question).
+        // Enrichment adds injury/age/experience from the Sleeper feed —
+        // without it q3 and the injury guards have nothing to read.
+        // Never swap once the user has interacted: ids stay valid either
+        // way, but names changing under an answered card is disorienting.
+        const enriched = await enrichBoardForQuiz(data);
+        if (!interactedRef.current) setQuestions(applyDynamicQuestions(QUESTIONS, enriched));
       } catch {
         // Non-fatal — slots will show ids without metadata
       }
@@ -73,7 +89,7 @@ export default function QuizScreen() {
 
   const inPhase2 = currentStep >= TOTAL_PHASE1;
   const phase2Position: Position | null = inPhase2 ? POSITIONS[currentStep - TOTAL_PHASE1] : null;
-  const currentQuestion: QuizQuestion | null = !inPhase2 ? QUESTIONS[currentStep] : null;
+  const currentQuestion: QuizQuestion | null = !inPhase2 ? questions[currentStep] : null;
 
   // ─── Validation: can we advance? ─────────────────────────────────
   const canAdvance = useMemo(() => {
