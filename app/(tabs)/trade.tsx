@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { askAI, askAIVision, hasAISession } from '../../services/ai';
+import { askAI, askAIVision, describeAIError, hasAISession } from '../../services/ai';
 import { hasAIConsent } from '../../services/aiConsent';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchAIOmniFormula, fetchKTCValues, fetchNFLInjuries, fetchSnapCounts, fetchVegasLines, type InjuryInfo, type RankedPlayer, type ScoringFormat } from '../../services/rankingsData';
@@ -57,6 +57,29 @@ const normName = (n: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+// Resolve an abbreviated name ("A. Jeanty", "T. Henderson") against a set of
+// normalized full-name keys ("ashton jeanty"). Screenshot extraction and most
+// platform UIs abbreviate first names, and exact matching silently dropped
+// those players off the board — the analyzer then graded a Jeanty trade with
+// no rank or market value for Jeanty. Only resolves when the match is UNIQUE:
+// an ambiguous initial (two J. Allens) stays unmatched, which the prompt
+// handles honestly, rather than guessing the wrong player.
+function resolveInitial(key: string, keys: Iterable<string>): string | null {
+  const m = key.match(/^([a-z])\s+(.+)$/);
+  if (!m) return null;
+  const [, initial, last] = m;
+  let found: string | null = null;
+  for (const k of keys) {
+    const sp = k.indexOf(' ');
+    if (sp <= 0) continue;
+    if (k[0] === initial && k.slice(sp + 1) === last) {
+      if (found) return null; // ambiguous — refuse to guess
+      found = k;
+    }
+  }
+  return found;
+}
+
 // Split a free-text side ("CeeDee Lamb + 2026 1st") into candidate names and
 // resolve each against the AIOmni board. Matched players carry their
 // proprietary rank/tier PLUS market value (KTC) and live injury status, so the
@@ -94,7 +117,13 @@ function groundSide(
       if (pv) { ktcTotal += pv; return `- ${yr} Round ${rd} pick — market value ${pv} (KTC); a dynasty asset, weigh by your contention window`; }
       return `- ${yr} Round ${rd} pick (dynasty draft asset — value scales with your timeline)`;
     }
-    const key = normName(tok);
+    let key = normName(tok);
+    // "A. Jeanty" → "a jeanty" never exact-matches "ashton jeanty"; try the
+    // unique-initial resolver against the board before giving up.
+    if (!index.has(key) && !ktcByName.has(key)) {
+      const resolved = resolveInitial(key, index.keys()) ?? resolveInitial(key, ktcByName.keys());
+      if (resolved) key = resolved;
+    }
     const p = index.get(key);
     const ktc = ktcByName.get(key);
     const inj = injuryByName.get(key);
@@ -542,8 +571,8 @@ ${marketMath}${(() => {
         setVerdict('Sign in to use AI features.');
         setAnalysis('Create a free account (Settings → Sign in) to analyze trades.');
       } else {
-        setVerdict('Analysis timed out. Try again.');
-        setAnalysis('Unable to complete analysis. Tap Analyze Again to retry.');
+        setVerdict('Analysis failed.');
+        setAnalysis(describeAIError(error, 'Unable to complete analysis. Tap Analyze Again to retry.'));
       }
     }
   };
