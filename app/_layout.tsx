@@ -24,6 +24,7 @@ import { getAIConsent } from '../services/aiConsent';
 import { registerPushNotifications } from '../services/notifications';
 import { pullCloudDataOnLogin } from '../services/userSync';
 import { dark } from './constants/tokens';
+import { ThemeProvider } from './constants/theme';
 
 Sentry.init({
   dsn: 'https://bff368e4055a1f51bda1b9464e0d2a39@o4511046397394944.ingest.us.sentry.io/4511046438158336',
@@ -167,6 +168,7 @@ export default Sentry.wrap(function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
       <Stack>
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)"     options={{ headerShown: false }} />
@@ -181,6 +183,7 @@ export default Sentry.wrap(function RootLayout() {
         <Stack.Screen name="quiz" options={{ headerShown: false }} />
         <Stack.Screen name="quiz-reveal" options={{ headerShown: false }} />
       </Stack>
+      </ThemeProvider>
     </GestureHandlerRootView>
   );
 });

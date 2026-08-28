@@ -13,6 +13,7 @@ import { getNotificationPrefs, setNotificationPrefs } from '../../services/notif
 import { clearQuizResult } from '../../services/quiz/engine';
 import { dark, F, palette, SP } from '../constants/tokens';
 import { AI_DISCLOSURE, getAIConsent, setAIConsent } from '../../services/aiConsent';
+import { useTheme } from '../constants/theme';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function SettingsScreen() {
   const [yahooLinked, setYahooLinked] = useState(false);
   const [mflLinked, setMflLinked] = useState(false);
   const [fleaflickerLinked, setFleaflickerLinked] = useState(false);
-  const [darkMode, setDarkMode] = useState(true);
+  const { isDark, setMode } = useTheme();
   const [aiConsent, setAiConsent] = useState(false);
 
   useEffect(() => {
@@ -299,10 +300,10 @@ export default function SettingsScreen() {
             <Ionicons name="moon-outline" size={20} color={palette.aqua} />
             <Text style={s.rowLabel}>Dark Mode</Text>
             <Switch
-              value={darkMode}
-              onValueChange={setDarkMode}
+              value={isDark}
+              onValueChange={(v) => setMode(v ? 'dark' : 'light')}
               trackColor={{ false: dark.border, true: palette.aqua }}
-              thumbColor={darkMode ? dark.text : dark.textMuted}
+              thumbColor={isDark ? dark.text : dark.textMuted}
             />
           </View>
         </View>
