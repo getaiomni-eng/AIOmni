@@ -50,6 +50,27 @@ import {
     undoLastPick
 } from '../../services/draft';
 
+// Draft-setup option lists.
+//
+// v2026-08-28: team count was capped at 16 while the position picker is
+// generated from teamCount — so an 18-team league linked from a platform
+// (MFL guillotine leagues are routinely 18-20) rendered position chips up
+// to 18 with NO matching team chip, and tapping any team chip silently
+// shrank the user's league. Large sizes are now first-class, and any
+// non-standard count carried in from a platform is spliced in so the
+// user's real league is always representable. Rounds start at 10 —
+// shallow/guillotine formats draft fewer than 12.
+const BASE_TEAM_OPTIONS = [8, 10, 12, 14, 16, 18, 20];
+const BASE_ROUND_OPTIONS = [10, 12, 14, 15, 16, 18, 20];
+
+const withCurrent = (base: number[], current?: number): number[] =>
+  current && !base.includes(current)
+    ? [...base, current].sort((a, b) => a - b)
+    : base;
+
+const teamOptions  = (current?: number) => withCurrent(BASE_TEAM_OPTIONS, current);
+const roundOptions = (current?: number) => withCurrent(BASE_ROUND_OPTIONS, current);
+
 const { width: SCREEN_W } = Dimensions.get('window');
 
 // ─── V7 THEME ───────────────────────────────────────────────
@@ -822,7 +843,7 @@ function SetupWizard({
               />
               <Text style={styles.inputLabel}>Number of Teams</Text>
               <View style={styles.chipRow}>
-                {[8, 10, 12, 14, 16].map(n => (
+                {teamOptions(data.teamCount).map(n => (
                   <TouchableOpacity
                     key={n}
                     style={[styles.chip, data.teamCount === n && styles.chipActive]}
@@ -871,7 +892,7 @@ function SetupWizard({
               Platform-linked leagues prefill this from the league. */}
           <Text style={styles.inputLabel}>Teams</Text>
           <View style={styles.chipRow}>
-            {[8, 10, 12, 14, 16].map(n => (
+            {teamOptions(data.teamCount).map(n => (
               <TouchableOpacity
                 key={n}
                 style={[styles.chip, (data.teamCount || 12) === n && styles.chipActive]}
@@ -916,7 +937,7 @@ function SetupWizard({
 
           <Text style={styles.inputLabel}>Rounds</Text>
           <View style={styles.chipRow}>
-            {[12, 14, 15, 16, 18, 20].map(n => (
+            {roundOptions(data.rounds).map(n => (
               <TouchableOpacity
                 key={n}
                 style={[styles.chip, data.rounds === n && styles.chipActive]}
