@@ -492,27 +492,49 @@ export default function HomeScreen() {
       const buzz = await fetchAnalystBuzz().catch(() => new Map<string, BuzzLine[]>());
 
       // Podcast/article takes about THIS user's players, best-first.
-      const buzzLines: string[] = [];
-      for (const name of roster) {
-        for (const b of buzz.get(normalizePlayerName(name)) ?? []) {
-          buzzLines.push(b.line);
+      const rosterKeys = new Set(roster.map(n => normalizePlayerName(n)));
+      const myBuzz: BuzzLine[] = [];
+      for (const key of rosterKeys) {
+        for (const b of buzz.get(key) ?? []) myBuzz.push(b);
+      }
+      myBuzz.sort((a, b) => b.score - a.score);
+
+      // Roster coverage is thin some weeks (the pipeline can't have takes on
+      // everyone). Rather than dropping to generic process reminders, fall
+      // back to the pipeline's BEST takes league-wide — real analyst
+      // opinions about players the user doesn't own are still useful as
+      // waiver/trade context, and they're what the content pipeline exists
+      // to surface. Kept clearly separated so the model never implies the
+      // user rosters these players.
+      const MY_TARGET = 6;
+      const leagueWide: BuzzLine[] = [];
+      if (myBuzz.length < MY_TARGET) {
+        for (const [key, lines] of buzz) {
+          if (rosterKeys.has(key)) continue;   // already covered above
+          for (const b of lines) leagueWide.push(b);
         }
-        if (buzzLines.length >= 8) break;
+        leagueWide.sort((a, b) => b.score - a.score);
       }
 
       const rosterBlock = roster.length
         ? `\nYOUR ROSTER (${roster.length}): ${roster.join(', ')}`
         : `\nROSTER: not available — do NOT reference specific players on the user's team.`;
-      const buzzBlock = buzzLines.length
-        ? `\n\nANALYST BUZZ about the user's rostered players (podcasts + columns, last 14 days — opinions, not facts; these are the ONLY analyst takes you may cite):\n${buzzLines.slice(0, 8).map(l => `- ${l}`).join('\n')}`
+
+      const myBuzzBlock = myBuzz.length
+        ? `\n\nANALYST BUZZ about the user's OWN players (podcasts + columns, last 14 days — opinions, not facts):\n${myBuzz.slice(0, 8).map(b => `- ${b.line}`).join('\n')}`
         : '';
+      const wideBuzzBlock = leagueWide.length
+        ? `\n\nANALYST BUZZ from around the league — the user does NOT roster these players. Use them only as waiver targets, trade targets, or market context, and say so:\n${leagueWide.slice(0, Math.max(3, 8 - myBuzz.length)).map(b => `- ${b.line}`).join('\n')}`
+        : '';
+      const buzzBlock = `${myBuzzBlock}${wideBuzzBlock}${myBuzz.length || leagueWide.length ? '\n\nThese analyst takes are the ONLY analyst opinions you may cite.' : ''}`;
 
       const prompt = `You are AIOmni, an elite fantasy football analyst. Write 3 insight cards for the user's ${league.platform.toUpperCase()} league (${league.format}), Week ${league.week}.${rosterBlock}${buzzBlock}
 
 Rules:
 - Ground every card in the roster and analyst buzz above. Do not invent stats, projections, injuries or transactions.
 - When a card comes from an analyst take, name the analyst in the body.
-- If the data above doesn't support three specific cards, make the remainder general process reminders (lineup checks, inactive timing, waiver timing) rather than inventing player specifics.
+- Prefer cards built on the analyst buzz above, the user's own players first. If their own players are thin, use the around-the-league takes as waiver/trade/market cards — clearly framed as players they don't roster.
+- Only fall back to a general process reminder (lineup checks, inactive timing, waiver timing) when there is no usable buzz left. Never invent player specifics to fill a card.
 
 Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each object must have exactly these keys:
   "icon"  — one of: ${INSIGHT_ICONS.join(', ')}
