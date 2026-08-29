@@ -4,7 +4,7 @@
 // ESPN / Yahoo / Fleaflicker / Offline: companion mode (manual pick tracking)
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchBlendedConsensus, fetchSleeperADP } from './rankingsData';
+import { DRAFT_POOL_LIMIT, fetchBlendedConsensus, fetchSleeperADP } from './rankingsData';
 import { sanitizePromptInput } from './util/promptSafe';
 import { normalizePlayerName } from './util/normalizeName';
 
@@ -453,7 +453,7 @@ export async function loadLivePlayerDB(mode: DraftMode = 'redraft'): Promise<Pla
       // chooses to draft from. Prospects first (usually top picks), then NFL pool.
       const [prospects, ranked] = await Promise.all([
         fetchProspectDB(),
-        fetchBlendedConsensus(),
+        fetchBlendedConsensus('redraft', 'ppr', DRAFT_POOL_LIMIT),
       ]);
 
       const nflAsPlayerInfo: PlayerInfo[] = ranked.map((p, i) => ({
@@ -479,7 +479,7 @@ export async function loadLivePlayerDB(mode: DraftMode = 'redraft'): Promise<Pla
       ];
     }
 
-    const ranked = await fetchBlendedConsensus();
+    const ranked = await fetchBlendedConsensus('redraft', 'ppr', DRAFT_POOL_LIMIT);
     const nflPlayers: PlayerInfo[] = ranked.length === 0
       ? [...DEFAULT_PLAYER_DB]
       : ranked.map((p, i) => ({

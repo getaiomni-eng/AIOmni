@@ -253,7 +253,9 @@ export async function fetchSleeperADP(): Promise<RankedPlayer[]> {
 
     const eligible = Object.entries(players)
       .filter(([pid, p]: any) => {
-        if (!p.search_rank || p.search_rank >= 500) return false;
+        // 1200 (was 500): the draft pool draws from this list, and deep
+        // leagues draft well past Sleeper's top 500 searchable players.
+        if (!p.search_rank || p.search_rank >= 1200) return false;
         if (!['QB', 'RB', 'WR', 'TE', 'K'].includes(p.position)) return false;
         if (!p.team) return false;
         // If canonical list loaded, require player to be in it
@@ -724,9 +726,18 @@ async function fetchRotoNews(): Promise<NewsItem[]> {
 
 // ─── BLENDED CONSENSUS (the main engine) ────────────────────
 
+// How many ranked players the blend returns. 200 is right for the
+// Rankings tab (nobody scrolls past that), but it is NOT enough for a
+// draft board: an 18-team x 12-round draft is 216 picks, so the pool
+// was smaller than the draft itself — deep WRs, late-round fliers, K
+// and DEF simply did not exist to draft. Callers that need a real pool
+// pass DRAFT_POOL_LIMIT.
+export const DRAFT_POOL_LIMIT = 800;
+
 export async function fetchBlendedConsensus(
   leagueType: LeagueType = 'redraft',
-  scoringRules: ScoringRules = 'ppr'
+  scoringRules: ScoringRules = 'ppr',
+  limit = 200,
 ): Promise<RankedPlayer[]> {
   // Pull ALL data sources in parallel
   const [
@@ -925,7 +936,7 @@ export async function fetchBlendedConsensus(
   scored.sort((a, b) => b.score - a.score);
 
   const posCounters: Record<string, number> = {};
-  return scored.slice(0, 200).map((p, i) => {
+  return scored.slice(0, limit).map((p, i) => {
     posCounters[p.position] = (posCounters[p.position] || 0) + 1;
     return {
       ...p,
