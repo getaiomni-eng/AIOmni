@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Modal, Platform,
+  ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -975,6 +975,59 @@ const PLATFORM_COLOR: Record<string, string> = {
 };
 
 type Message = { role: 'ai' | 'user'; text: string; isLoading?: boolean };
+
+// ── Conversation persistence ──────────────────────────────────────────
+// v2026-08-29: `messages` was component state with no storage, so closing
+// the app erased the whole conversation — the Coach greeted a returning
+// user as a stranger, and any context they'd built up was gone. The
+// thread now survives restarts. Capped so a long-running thread can't
+// grow AsyncStorage without bound; the PROMPT window is budgeted
+// separately (see historyForPrompt).
+const THREAD_KEY = 'coach_thread_v1';
+const THREAD_MAX = 60;
+
+async function loadThread(): Promise<Message[]> {
+  try {
+    const raw = await AsyncStorage.getItem(THREAD_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((m: any) => m && (m.role === 'ai' || m.role === 'user') && typeof m.text === 'string')
+      .map((m: any) => ({ role: m.role, text: m.text }))   // never restore isLoading
+      .slice(-THREAD_MAX);
+  } catch { return []; }
+}
+
+async function saveThread(messages: Message[]): Promise<void> {
+  try {
+    const keep = messages.filter(m => !m.isLoading).slice(-THREAD_MAX);
+    await AsyncStorage.setItem(THREAD_KEY, JSON.stringify(keep));
+  } catch {}
+}
+
+// How much conversation to send. The old fixed .slice(-6) meant the Coach
+// forgot anything past three exchanges mid-conversation. Walk backwards
+// under a character budget instead: far more memory in normal chat, still
+// bounded so the assembled prompt (system + league blocks + rosters + FA
+// pool + buzz) can't blow past the model's input limit.
+const HISTORY_CHAR_BUDGET = 8000;
+// ...but never drop below two exchanges, or a pair of long answers would
+// leave the model with no conversation at all — worse than the old fixed
+// window it replaces.
+const HISTORY_MIN_MESSAGES = 4;
+
+function historyForPrompt(history: { role: string; content: string }[]): string {
+  const out: string[] = [];
+  let used = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const line = `${history[i].role}: ${history[i].content}`;
+    if (used + line.length > HISTORY_CHAR_BUDGET && out.length >= HISTORY_MIN_MESSAGES) break;
+    out.unshift(line);
+    used += line.length;
+  }
+  return out.join('\n');
+}
 const QUICK_PROMPTS = ['Start/Sit', 'Best waiver', 'Trade value', 'Matchup'];
 
 const renderAIText = (text: string) =>
@@ -999,6 +1052,7 @@ export default function CoachScreen() {
   const params = useLocalSearchParams<{ q?: string }>();
 
   const [messages,       setMessages]       = useState<Message[]>([]);
+  const threadLoaded = useRef(false);
   const [input,          setInput]          = useState('');
   const [loading,        setLoading]        = useState(false);
   const [reading,        setReading]        = useState(false);
@@ -1010,6 +1064,22 @@ export default function CoachScreen() {
   const [allLeagues,     setAllLeagues]     = useState<LeagueContext[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<LeagueContext | null>(null);
   const [pickerVisible,  setPickerVisible]  = useState(false);
+
+  // Restore the saved conversation once, then mirror every change back to
+  // storage. threadLoaded guards the save effect so the initial empty
+  // state can't clobber a saved thread before the load resolves.
+  useEffect(() => {
+    (async () => {
+      const saved = await loadThread();
+      if (saved.length) setMessages(saved);
+      threadLoaded.current = true;
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!threadLoaded.current) return;
+    void saveThread(messages);
+  }, [messages]);
   const [remaining,      setRemaining]      = useState(10);
   const [limit,          setLimit]          = useState(10);
   const [tier,           setTier]           = useState('free');
@@ -1364,7 +1434,7 @@ Capture rookies and veterans exactly.`,
       const fullPrompt = [
         systemPromptRef.current,
         playerContext ? `\nPLAYER INTELLIGENCE FROM DATABASE:\n${playerContext}` : '',
-        `\nConversation history:\n${history.slice(-6).map(h => `${h.role}: ${h.content}`).join('\n')}`,
+        `\nConversation history:\n${historyForPrompt(history)}`,
         `\nuser: ${safeText}`,
       ].filter(Boolean).join('\n');
 
@@ -1431,6 +1501,27 @@ Capture rookies and veterans exactly.`,
                 <View style={[styles.livePulse, !contextReady && { backgroundColor: C.gold }]} />
                 <Text style={[styles.liveTxt, !contextReady && { color: C.gold }]}>{contextReady ? 'LIVE' : 'SYNC'}</Text>
               </View>
+              {messages.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert(
+                      'Start a new chat?',
+                      'This clears the current conversation. Your leagues and rankings are unaffected.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'New chat',
+                          style: 'destructive',
+                          onPress: () => { setMessages([]); void saveThread([]); },
+                        },
+                      ],
+                    );
+                  }}
+                  style={styles.gearBtn}
+                >
+                  <Ionicons name="create-outline" size={20} color={C.dim2} />
+                </TouchableOpacity>
+              )}
               <TouchableOpacity onPress={() => router.push('/(tabs)/settings' as any)} style={styles.gearBtn}>
                 <Ionicons name="settings-sharp" size={20} color={C.dim2} />
               </TouchableOpacity>
