@@ -59,6 +59,14 @@ function withTags(board: RankedPlayer[]): Tagged[] {
 // 12-team rounds: rank 1-12 = R1, 13-24 = R2, …
 const inRankBand = (p: RankedPlayer, lo: number, hi: number) => p.rank >= lo && p.rank <= hi;
 
+// The SCENARIO must match where the named players actually sit. Static
+// prompts ("Pick 5 overall") plus live players produced nonsense — the
+// board's RB1/RB2 offered at pick 5, which no drafter has ever seen.
+// Derive the round from the LATER-ranked player of the pair, since both
+// have to still be on the board for the question to make sense.
+const roundOf = (...players: RankedPlayer[]): number =>
+  Math.max(1, Math.ceil(Math.max(...players.map(p => p.rank)) / 12));
+
 const rbLabel = (p: Tagged, flavor: string) => {
   const bits = [p.team, `RB${p.posRank ?? '?'}`, `Tier ${p.tier}`, flavor];
   return `${p.name} — ${bits.join(', ')}`;
@@ -92,6 +100,7 @@ export function applyDynamicQuestions(base: QuizQuestion[], boardRaw: RankedPlay
           const pair = rbPair(board, 1, 18, p => p.style === 'volume', p => p.style === 'efficiency');
           if (!pair) return q;
           return { ...q,
+            prompt: `Round ${roundOf(...pair)}. Two backs on the board, same projected points. Who do you take?`,
             optionA: { ...q.optionA!, label: rbLabel(pair[0], 'workhorse volume profile — the steady floor') },
             optionB: { ...q.optionB!, label: rbLabel(pair[1], 'explosive profile — the boom-week ceiling') },
           };
@@ -100,6 +109,7 @@ export function applyDynamicQuestions(base: QuizQuestion[], boardRaw: RankedPlay
           const pair = rbPair(board, 30, 66, p => p.style === 'volume', p => p.style === 'efficiency');
           if (!pair) return q;
           return { ...q,
+            prompt: `Round ${roundOf(...pair)}. Same projected fantasy points. Who do you draft?`,
             optionA: { ...q.optionA!, label: rbLabel(pair[0], 'guaranteed-touches grinder') },
             optionB: { ...q.optionB!, label: rbLabel(pair[1], 'fewer touches, more juice per touch') },
           };
@@ -108,6 +118,7 @@ export function applyDynamicQuestions(base: QuizQuestion[], boardRaw: RankedPlay
           const pair = rbPair(board, 30, 80, p => !!p.pureRusher && !p.pcRb, p => !!p.pcRb);
           if (!pair) return q;
           return { ...q,
+            prompt: `Round ${roundOf(...pair)}. PPR league. Pick one.`,
             optionA: { ...q.optionA!, label: rbLabel(pair[0], 'early-down ground game') },
             optionB: { ...q.optionB!, label: rbLabel(pair[1], 'three-down passing-game role') },
           };
@@ -117,6 +128,7 @@ export function applyDynamicQuestions(base: QuizQuestion[], boardRaw: RankedPlay
           const wr = board.find(p => p.position === 'WR' && (p.posRank ?? 99) <= 2 && p.rank <= 8);
           if (!rb || !wr) return q;
           return { ...q,
+            prompt: `Round ${roundOf(rb, wr)}. Both are on the board, same projected points. Pick one.`,
             optionA: { ...q.optionA!, label: `${rb.name} — ${rb.team}, RB${rb.posRank}, Tier ${rb.tier} bell-cow` },
             optionB: { ...q.optionB!, label: `${wr.name} — ${wr.team}, WR${wr.posRank}, Tier ${wr.tier} target monopoly` },
           };
@@ -132,6 +144,7 @@ export function applyDynamicQuestions(base: QuizQuestion[], boardRaw: RankedPlay
           let lastNames = streamers.map(s2 => lastName(s2.name));
           if (lastNames[0] === lastNames[1]) lastNames = streamers.map(s2 => s2.name);
           return { ...q,
+            prompt: `It's Round ${roundOf(te1)}. Pick your strategy.`,
             optionA: { ...q.optionA!, label: `Take ${te1.name} — the clear TE1, positional edge locked in` },
             optionB: { ...q.optionB!, label: `Skip TE — grab a WR/RB now, stream the ${lastNames.join(' / ')} tier later` },
           };
@@ -145,7 +158,10 @@ export function applyDynamicQuestions(base: QuizQuestion[], boardRaw: RankedPlay
           const asc = wr2s.filter(p => typeof p.years_exp === 'number' && p.years_exp <= 2 && !p.injuryStatus);
           if (est.length < 2 || inj.length < 1 || asc.length < 3) return q;
           const opt = (id: string, p: Tagged, sub: string) => ({ id, label: p.name, sublabel: `${p.team}, ${sub}` });
-          return { ...q, rankOptions: [
+          const shown = [est[0], est[1], inj[0], asc[0], asc[1], asc[2]];
+          return { ...q,
+            prompt: `Rank your top 3 WR targets for Round ${roundOf(...shown)}.`,
+            rankOptions: [
             opt('est1', est[0], 'proven alpha, locked-in target share'),
             opt('est2', est[1], 'established veteran, steady production'),
             opt('inj1', inj[0], `talented but flagged ${inj[0].injuryStatus}`),
