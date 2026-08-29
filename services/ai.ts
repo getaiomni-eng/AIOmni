@@ -157,6 +157,7 @@ export function describeAIError(e: any, fallback: string): string {
   if (m.includes('not_authenticated'))   return 'Sign in to use AI features — create a free account from Settings.';
   if (m.includes('session_expired'))     return 'Your session expired — sign in again in Settings to keep using AI features.';
   if (m.includes('ai_prompt_too_large')) return 'This conversation has grown too large for one request. Start a fresh chat (your leagues reload automatically).';
+  if (m.includes('ai_image_too_large'))  return 'That image was too large to process. Try a screenshot instead of a full-resolution photo.';
   if (m.includes('ai_overloaded'))       return 'The AI service is briefly overloaded. Give it a minute and try again.';
   if (m.includes('ai_rate_limited'))     return 'Too many requests right now — wait a minute and try again. (Your prompt was not charged.)';
   if (m.includes('ai_timeout'))          return 'That request took too long and was cancelled. Try again — shorter questions come back faster.';
@@ -190,6 +191,9 @@ export async function askAIVision(
   const tier = opts.tier ?? 'fast';
   const maxTokens = opts.maxTokens ?? 512;
   const model = MODELS[tier];
+  // Declared outside the try so the catch can always clear it.
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), 60_000);
   try {
     // 5.1.1(i): images are the most sensitive thing we transmit — the same
     // consent gate as askAI, no exceptions. (Build 197 shipped without this.)
@@ -198,8 +202,12 @@ export async function askAIVision(
     const { data: { session } } = await supabase.auth.getSession();
     const userJwt = session?.access_token;
     if (!userJwt) throw new Error('not_authenticated');
+    // Vision uploads are the biggest payload the app sends and were the
+    // ONLY AI path with no deadline — a stalled upload left the Coach
+    // stuck in its "reading" state with no way out.
     const res = await fetch(PROXY_URL, {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Content-Type':  'application/json',
         'apikey':        SUPABASE_ANON_KEY,
@@ -216,18 +224,31 @@ export async function askAIVision(
           ],
         }],
       }),
-    });
+    }).finally(() => clearTimeout(deadline));
     if (!res.ok) {
       const errBody = await res.text();
       console.error(`askAIVision HTTP ${res.status} (${tier}/${model}):`, errBody);
-      if (res.status === 429) throw new Error('prompt_limit_reached');
+      // Same taxonomy as askAI so call sites can explain themselves.
+      if (res.status === 429) {
+        throw new Error(/weekly prompt limit/i.test(errBody) ? 'prompt_limit_reached' : 'ai_rate_limited');
+      }
+      if (res.status === 401) throw new Error('session_expired');
+      if (res.status === 413 || (res.status === 400 && /too large|prompt is too long|image/i.test(errBody))) {
+        throw new Error('ai_image_too_large');
+      }
+      if (res.status === 529 || res.status >= 500) throw new Error('ai_overloaded');
       throw new Error(`AI vision request failed (${res.status})`);
     }
     const data = await res.json();
     if (data?.content?.[0]?.text) return data.content[0].text;
     if (data?.error) throw new Error(data.error.message || data.error);
-    return '';
+    throw new Error('ai_bad_response');
   } catch (e: any) {
+    clearTimeout(deadline);
+    if (e?.name === 'AbortError') {
+      console.error('askAIVision timed out');
+      throw new Error('ai_timeout');
+    }
     console.error('askAIVision error:', e.message);
     throw e;
   }

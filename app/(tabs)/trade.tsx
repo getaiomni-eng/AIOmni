@@ -4,8 +4,8 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
 import { askAI, askAIVision, describeAIError, hasAISession } from '../../services/ai';
+import { pickImageForVision } from '../../services/util/pickImage';
 import { hasAIConsent } from '../../services/aiConsent';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchAIOmniFormula, fetchKTCValues, fetchNFLInjuries, fetchSnapCounts, fetchVegasLines, type InjuryInfo, type RankedPlayer, type ScoringFormat } from '../../services/rankingsData';
@@ -285,11 +285,11 @@ export default function TradesScreen() {
   // normal engine-grounded grader then runs on the extracted players.
   const extractFromScreenshot = async () => {
     if (extracting || loading) return;
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { setVerdict('Photo access is needed to read a screenshot.'); return; }
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6, base64: true });
-    if (res.canceled || !res.assets?.[0]?.base64) return;
-    const asset = res.assets[0];
+    const picked = await pickImageForVision();
+    if (picked.status === 'canceled') return;
+    if (picked.status === 'no_permission') { setVerdict('Photo access is needed to read a screenshot.'); return; }
+    if (picked.status === 'failed') { setVerdict("Couldn't open that image. Try another screenshot."); return; }
+    const asset = { base64: picked.image.base64, mimeType: picked.image.mimeType };
     setExtracting(true);
     setVerdict(''); setAnalysis('');
     try {

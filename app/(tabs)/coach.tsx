@@ -1,7 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import * as ImagePicker from 'expo-image-picker';
 
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -13,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, askAIVision, describeAIError } from '../../services/ai';
 import { hasAIConsent } from '../../services/aiConsent';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
+import { pickImageForVision } from '../../services/util/pickImage';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials, ESPN_SLOTS } from '../../services/espn';
 import {
   summarizeSleeperScoring, summarizeESPNScoring, summarizeYahooScoring,
@@ -1283,14 +1283,19 @@ export default function CoachScreen() {
       router.push(`/paywall?context=${ctx}` as any);
       return;
     }
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
+    // Downscales before encoding — a full-res photo's base64 blocked the
+    // JS thread (looked like a freeze) and produced a multi-MB upload.
+    const picked = await pickImageForVision();
+    if (picked.status === 'canceled') return;
+    if (picked.status === 'no_permission') {
       setMessages(prev => [...prev, { role: 'ai', text: 'Photo access is needed to read your draft board.' }]);
       return;
     }
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6, base64: true });
-    if (res.canceled || !res.assets?.[0]?.base64) return;
-    const asset = res.assets[0];
+    if (picked.status === 'failed') {
+      setMessages(prev => [...prev, { role: 'ai', text: "Couldn't open that image. Try another screenshot." }]);
+      return;
+    }
+    const asset = { base64: picked.image.base64, mimeType: picked.image.mimeType };
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setReading(true);
     setMessages(prev => [...prev, { role: 'ai', text: '', isLoading: true }]);
