@@ -11,6 +11,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, hasAISession } from "../../services/ai";
+import { fetchAnalystBuzz, type BuzzLine } from '../../services/analystTakes';
+import { normalizePlayerName } from '../../services/util/normalizeName';
+import { ROOKIE_BOARD_2026_TEXT } from '../../services/seasonContext2026';
 import { hasAIConsent } from "../../services/aiConsent";
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../services/espn';
 import { getValidYahooToken } from '../../services/yahoo';
@@ -97,6 +100,35 @@ type Insight = { icon: string; title: string; body: string; tag: string; color: 
 
 // The model is not trusted to return well-formed rows: clamp every field and
 // fall back per-field rather than dropping the whole payload.
+// The insight cards get the same canonical rookie board + training-data ban
+// the Coach uses, so they can't fall back on stale training-data players.
+// Persona is trimmed — these are 120-character cards, not a chat.
+const INSIGHTS_SYSTEM = `You are AIOmni's fantasy football analyst writing short insight cards.
+Every claim must trace to the roster and analyst buzz provided in the user message. You have NO other
+knowledge of the current season: no stats, no injuries, no depth charts, no transactions beyond what
+is given. Never invent a number. If the data doesn't support a specific claim, write a general process
+reminder instead.
+${ROOKIE_BOARD_2026_TEXT}`;
+
+// The user's rostered player names for the anchor league, via whichever
+// platform owns it. Best-effort: an empty list makes the prompt say so
+// rather than letting the model imagine a roster.
+async function loadRosterNames(league: League): Promise<string[]> {
+  try {
+    const { getPlatform } = require('../../services/platform');
+    const plat = getPlatform(league.platform);
+    if (!plat?.getMyRoster) return [];
+    const roster = await plat.getMyRoster(league.id);
+    const slots = [...(roster?.starters ?? []), ...(roster?.bench ?? [])];
+    return slots
+      .map((s: any) => s?.player?.name)
+      .filter((n: any): n is string => typeof n === 'string' && n.length > 0)
+      .slice(0, 40);
+  } catch {
+    return [];
+  }
+}
+
 const sanitizeInsights = (raw: any): Insight[] =>
   (Array.isArray(raw) ? raw : [])
     .filter(o => o && typeof o.title === 'string' && typeof o.body === 'string')
@@ -432,7 +464,16 @@ export default function HomeScreen() {
   // a question the user asked. The daily cache is what bounds the cost.
   const fetchAIInsights = async (league: League) => {
     if (insightLoading) return;
-    const cacheKey = `insights:${league.id}:${new Date().toISOString().slice(0, 10)}`;
+    const day = new Date().toISOString().slice(0, 10);
+    // Cards are grounded in the roster now, so the cache has to notice when
+    // the roster changes — otherwise a waiver add wouldn't show up in the
+    // insights until tomorrow. Cheap order-independent fingerprint.
+    const roster = await loadRosterNames(league).catch(() => [] as string[]);
+    const rosterKey = roster.length
+      ? String(roster.map(n => normalizePlayerName(n)).sort().join('|')
+          .split('').reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0))
+      : 'noroster';
+    const cacheKey = `insights:${league.id}:${day}:${rosterKey}`;
     try {
       const cached = await AsyncStorage.getItem(cacheKey);
       if (cached) {
@@ -443,15 +484,46 @@ export default function HomeScreen() {
 
     setInsightLoading(true);
     try {
-      const prompt = `You are AIOmni, an elite fantasy football analyst. For this ${league.platform.toUpperCase()} league (${league.format}), provide 3 concise, actionable insights for Week ${league.week}. Focus on starting/sitting decisions, waiver wire adds, and matchup analysis.
+      // v2026-08-30: this call used to send ONLY platform + format + week.
+      // With nothing injected the model could only answer from training
+      // data — generic advice, the exact thing the product exists to beat,
+      // and the setup that once recommended a third-string QB. Ground it in
+      // the user's actual roster and the analyst-takes pipeline instead.
+      const buzz = await fetchAnalystBuzz().catch(() => new Map<string, BuzzLine[]>());
+
+      // Podcast/article takes about THIS user's players, best-first.
+      const buzzLines: string[] = [];
+      for (const name of roster) {
+        for (const b of buzz.get(normalizePlayerName(name)) ?? []) {
+          buzzLines.push(b.line);
+        }
+        if (buzzLines.length >= 8) break;
+      }
+
+      const rosterBlock = roster.length
+        ? `\nYOUR ROSTER (${roster.length}): ${roster.join(', ')}`
+        : `\nROSTER: not available — do NOT reference specific players on the user's team.`;
+      const buzzBlock = buzzLines.length
+        ? `\n\nANALYST BUZZ about the user's rostered players (podcasts + columns, last 14 days — opinions, not facts; these are the ONLY analyst takes you may cite):\n${buzzLines.slice(0, 8).map(l => `- ${l}`).join('\n')}`
+        : '';
+
+      const prompt = `You are AIOmni, an elite fantasy football analyst. Write 3 insight cards for the user's ${league.platform.toUpperCase()} league (${league.format}), Week ${league.week}.${rosterBlock}${buzzBlock}
+
+Rules:
+- Ground every card in the roster and analyst buzz above. Do not invent stats, projections, injuries or transactions.
+- When a card comes from an analyst take, name the analyst in the body.
+- If the data above doesn't support three specific cards, make the remainder general process reminders (lineup checks, inactive timing, waiver timing) rather than inventing player specifics.
 
 Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each object must have exactly these keys:
   "icon"  — one of: ${INSIGHT_ICONS.join(', ')}
   "title" — under 40 characters
   "body"  — under 120 characters
-  "tag"   — a single uppercase word, e.g. START, MONITOR, WAIVERS
+  "tag"   — a single uppercase word, e.g. START, MONITOR, WAIVERS, BUZZ
   "color" — one of: ${Object.keys(INSIGHT_COLORS).join(', ')}`;
-      const response = await askAI(prompt, { tier: 'fast', maxTokens: 400 });
+      // INSIGHTS_SYSTEM carries the canonical 2026 rookie board + the
+      // training-data ban that every other AI surface gets and this one
+      // was missing entirely.
+      const response = await askAI(prompt, { tier: 'fast', maxTokens: 400, system: INSIGHTS_SYSTEM });
       const insights = sanitizeInsights(
         JSON.parse(response?.replace(/```json|```/g, '').trim() || '[]')
       );
