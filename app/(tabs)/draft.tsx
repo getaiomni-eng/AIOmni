@@ -46,6 +46,7 @@ import {
     getSleeperDraft,
     getSleeperDraftPicks,
     loadDraftState,
+    refreshResumedPool,
     saveDraftState,
     undoLastPick
 } from '../../services/draft';
@@ -206,7 +207,21 @@ export default function DraftCopilotScreen() {
           `You have a draft in progress for ${saved.settings.leagueName}. Resume it?`,
           [
             { text: 'New Draft', style: 'destructive', onPress: () => clearDraftState() },
-            { text: 'Resume', onPress: () => { setDraftState(saved); setPhase('draft'); } },
+            { text: 'Resume', onPress: () => {
+              // Enter immediately on the saved board, then swap in a
+              // refreshed pool. A resumed draft otherwise keeps whatever
+              // player list it was created with — new/expanded pools
+              // never reached drafts already in progress.
+              setDraftState(saved);
+              setPhase('draft');
+              (async () => {
+                const refreshed = await refreshResumedPool(saved);
+                if (refreshed.availablePlayers.length !== saved.availablePlayers.length) {
+                  setDraftState(refreshed);
+                  void saveDraftState(refreshed);
+                }
+              })();
+            } },
           ]
         );
       }

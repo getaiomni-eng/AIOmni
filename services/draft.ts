@@ -655,6 +655,48 @@ export async function loadDraftState(): Promise<DraftState | null> {
   }
 }
 
+// Refresh a resumed draft's player pool against the CURRENT source list,
+// preserving every pick already made.
+//
+// Why this exists: saveDraftState serializes availablePlayers, so a draft
+// started before a pool change carries the old, smaller board forever —
+// the 200-player cap fix would only have reached people willing to
+// abandon a draft in progress. Merging on resume means an in-flight draft
+// picks up newly available players without losing its state.
+//
+// Identity is by normalized name, not id: pool ids differ between the
+// ranking sources and the platform feeds, and a name match is what the
+// pick-resolution path already relies on.
+export async function refreshResumedPool(state: DraftState): Promise<DraftState> {
+  try {
+    const fresh = await loadLivePlayerDB(state.settings.draftMode ?? 'redraft');
+    if (!fresh.length) return state;
+
+    // Everything already off the board: explicit picks plus anything the
+    // saved pool had flagged (platform sync marks rostered players drafted
+    // without creating picks).
+    const gone = new Set<string>();
+    for (const pick of state.picks) gone.add(normalizePlayerName(pick.playerName));
+    for (const p of state.availablePlayers) {
+      if (p.isDrafted) gone.add(normalizePlayerName(p.name));
+    }
+    // Never shrink: keep any saved player the fresh list lacks (platform
+    // free agents, prospects) so a resume can only ADD options.
+    const freshKeys = new Set(fresh.map(p => normalizePlayerName(p.name)));
+    const carried = state.availablePlayers.filter(p => !freshKeys.has(normalizePlayerName(p.name)));
+
+    const merged = [...fresh, ...carried].map(p => ({
+      ...p,
+      isDrafted: gone.has(normalizePlayerName(p.name)),
+    }));
+
+    return { ...state, availablePlayers: merged };
+  } catch (e) {
+    console.log('refreshResumedPool error:', e);
+    return state;
+  }
+}
+
 export async function clearDraftState(): Promise<void> {
   try {
     await AsyncStorage.removeItem(DRAFT_STATE_KEY);
