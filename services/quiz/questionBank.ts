@@ -12,31 +12,37 @@ export const QUESTIONS: QuizQuestion[] = [
     id: 'q1_floor_ceiling',
     phase: 1,
     type: 'binary',
-    prompt: "Pick 5 overall. Two backs left on the board, same projected points. Who do you take?",
-    optionA: { label: 'Jonathan Taylor — workhorse volume, ~90% to finish top-12, limited boom weeks', value: 'A' },
-    optionB: { label: "De'Von Achane — game-breaking ceiling, 35% shot at overall RB1, boom-or-bust", value: 'B' },
+    // v2026-08-28: archetypes, not names. Named players forced a fixed
+    // draft slot into the premise, and any live-board pick could land two
+    // top-2 backs in a "pick 5" scenario. The dilemma is what's measured.
+    prompt: 'Early rounds. Two backs on the board, same projected points. Who do you take?',
+    optionA: { label: 'The workhorse — huge touch volume, near-lock for top-12 at the position, limited boom weeks', value: 'A' },
+    optionB: { label: 'The explosive one — boom-or-bust week to week, but a real shot at the overall RB1 season', value: 'B' },
   },
   {
     id: 'q2_volume_efficiency',
     phase: 1,
     type: 'binary',
-    prompt: 'Same projected fantasy points, Round 4. Who do you draft?',
-    optionA: { label: 'David Montgomery — high-volume early-down grinder in Houston, safe touches but TD-dependent', value: 'A' },
-    optionB: { label: 'Omarion Hampton — fewer guaranteed touches but explosive, ascending efficiency and breakaway upside', value: 'B' },
+    prompt: 'Middle rounds, same projected fantasy points. Who do you draft?',
+    optionA: { label: 'The grinder — guaranteed early-down volume, safe touches but TD-dependent', value: 'A' },
+    optionB: { label: 'The efficiency back — fewer guaranteed touches, but more yards per touch and breakaway upside', value: 'B' },
   },
   {
     id: 'q9_rb_vs_wr_priority',
     phase: 1,
     type: 'binary',
-    prompt: 'Pick 3 overall. Bijan Robinson and Ja’Marr Chase both available, same projected points. Pick one.',
-    optionA: { label: 'Bijan Robinson — RB1 in a top-3 offense, 300 touches projected',        value: 'A' },
-    optionB: { label: 'Ja’Marr Chase — WR1 with target monopoly, ~165 targets projected',      value: 'B' },
+    prompt: 'Round 1. An elite back and an elite receiver are both on the board, same projected points. Pick one.',
+    optionA: { label: 'The bell-cow RB — 300-touch workload in a top offense, positional scarcity on your side', value: 'A' },
+    optionB: { label: 'The alpha WR — target monopoly, the safer week-to-week profile at a deeper position',     value: 'B' },
   },
   {
     id: 'q3_established_ascending',
     phase: 1,
     type: 'rank',
-    prompt: 'Rank your top 3 WR2 targets for Round 3.',
+    // The one question that KEEPS names — ranking archetypes against each
+    // other is meaningless. Names are refreshed from the live board and
+    // rotated per attempt (see dynamicQuestions.ts).
+    prompt: 'Rank your top 3 WR targets in the middle rounds.',
     rankTopN: 3,
     // v2026-08-27: ids are ARCHETYPES (est/inj/asc), not player slugs —
     // scoring keys on the archetype, so dynamicQuestions.ts can swap the
@@ -54,17 +60,17 @@ export const QUESTIONS: QuizQuestion[] = [
     id: 'q4_pass_catching_rb',
     phase: 1,
     type: 'binary',
-    prompt: 'Round 5. PPR league. Pick one.',
-    optionA: { label: 'Kyren Williams — 280 carries / ~20 catches, TD-dependent ground grinder', value: 'A' },
-    optionB: { label: 'Breece Hall — 230 touches with 60+ targets, true three-down PPR back',     value: 'B' },
+    prompt: 'Middle rounds, PPR league. Same projected points. Pick one.',
+    optionA: { label: 'The early-down hammer — heavy carries, barely targeted, leans on touchdowns', value: 'A' },
+    optionB: { label: 'The three-down back — fewer carries but 60+ targets, PPR points every week',  value: 'B' },
   },
   {
     id: 'q5_te_premium',
     phase: 1,
     type: 'binary',
-    prompt: "It's Round 2. Pick your strategy.",
-    optionA: { label: 'Take Trey McBride — the clear TE1, elite target share, positional edge locked in',           value: 'A' },
-    optionB: { label: 'Skip TE — grab a WR/RB now, stream the Hockenson / Kraft tier around Round 8',               value: 'B' },
+    prompt: 'Early rounds, the clear TE1 is on the board. Pick your strategy.',
+    optionA: { label: 'Take the TE1 — pay up now and lock a weekly edge the rest of the league lacks', value: 'A' },
+    optionB: { label: 'Skip TE — take a WR/RB here and stream the middle tier several rounds later',   value: 'B' },
   },
   {
     id: 'q6_qb_urgency',
