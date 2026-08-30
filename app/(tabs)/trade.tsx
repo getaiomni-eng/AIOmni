@@ -65,20 +65,38 @@ const normName = (n: string) =>
 // no rank or market value for Jeanty. Only resolves when the match is UNIQUE:
 // an ambiguous initial (two J. Allens) stays unmatched, which the prompt
 // handles honestly, rather than guessing the wrong player.
-function resolveInitial(key: string, keys: Iterable<string>): string | null {
+function resolveInitial(
+  key: string,
+  keys: Iterable<string>,
+  accept?: (k: string) => boolean,
+): string | null {
   const m = key.match(/^([a-z])\s+(.+)$/);
   if (!m) return null;
   const [, initial, last] = m;
-  let found: string | null = null;
+  const hits: string[] = [];
   for (const k of keys) {
     const sp = k.indexOf(' ');
     if (sp <= 0) continue;
-    if (k[0] === initial && k.slice(sp + 1) === last) {
-      if (found) return null; // ambiguous — refuse to guess
-      found = k;
-    }
+    if (k[0] === initial && k.slice(sp + 1) === last) hits.push(k);
   }
-  return found;
+  // "B. Robinson" matches Bijan AND Brian. Refusing to guess was correct
+  // but useless — it dropped the best player in the trade. Narrow with the
+  // position/team the screenshot showed; only give up if still ambiguous.
+  const narrowed = accept ? hits.filter(accept) : hits;
+  const pool = narrowed.length ? narrowed : hits;
+  return pool.length === 1 ? pool[0] : null;
+}
+
+// Screenshot extraction emits "Name (POS TEAM)" when the platform shows it.
+// Split the hint off so the name still matches the board, and the hint can
+// disambiguate players who share a surname.
+function splitHints(tok: string): { name: string; pos?: string; team?: string } {
+  const m = tok.match(/^(.*?)\s*[([]([^)\]]*)[)\]]\s*$/);
+  if (!m) return { name: tok };
+  const parts = m[2].split(/[,\s-]+/).map(h => h.trim().toUpperCase()).filter(Boolean);
+  const pos = parts.find(h => /^(QB|RB|WR|TE|K|DEF|DST)$/.test(h));
+  const team = parts.find(h => h !== pos && /^[A-Z]{2,3}$/.test(h));
+  return { name: m[1].trim() || tok, pos, team };
 }
 
 // Split a free-text side ("CeeDee Lamb + 2026 1st") into candidate names and
@@ -156,11 +174,20 @@ function groundSide(
       }
       return `- ${label} pick (dynasty draft asset — value scales with your timeline)`;
     }
-    let key = normName(tok);
+    const hint = splitHints(tok);
+    let key = normName(hint.name);
     // "A. Jeanty" → "a jeanty" never exact-matches "ashton jeanty"; try the
-    // unique-initial resolver against the board before giving up.
+    // initial resolver, narrowed by any position/team the screenshot gave.
     if (!index.has(key) && !ktcByName.has(key)) {
-      const resolved = resolveInitial(key, index.keys()) ?? resolveInitial(key, ktcByName.keys());
+      const accept = (k: string) => {
+        const cand = index.get(k);
+        if (!cand) return true;            // KTC-only entry — nothing to check
+        if (hint.pos && cand.position && cand.position.toUpperCase() !== hint.pos) return false;
+        if (hint.team && cand.team && cand.team.toUpperCase() !== hint.team) return false;
+        return true;
+      };
+      const resolved = resolveInitial(key, index.keys(), accept)
+        ?? resolveInitial(key, ktcByName.keys());
       if (resolved) key = resolved;
     }
     const p = index.get(key);
@@ -181,9 +208,9 @@ function groundSide(
     if (!p && !ktc) {
       // Phrased as a data note, not a crisis — the model was opening entire
       // answers with "I'm flying half-blind" off the back of this line.
-      return `- ${tok} (no ranking or market value on file — judge on situation and role, don't cite numbers)`;
+      return `- ${hint.name} (no ranking or market value on file — judge on situation and role, don't cite numbers)`;
     }
-    return `- ${p?.name ?? tok} — ${bits.join(' · ')}`;
+    return `- ${p?.name ?? hint.name} — ${bits.join(' · ')}`;
   }).join('\n');
   return { lines, ktcTotal };
 }
@@ -342,7 +369,12 @@ export default function TradesScreen() {
         `This is a screenshot of a fantasy football trade proposal. Read BOTH sides exactly and return ONLY this JSON, nothing else:
 {"giving":[everything the app's user SENDS AWAY],"getting":[everything the user RECEIVES]}
 Each array item is a string. Capture EVERY asset on each side — do NOT skip anything:
-- Players → full name, e.g. "Brian Thomas Jr.", "Nico Collins"
+- Players → full name, and APPEND the position and NFL team in parentheses
+  whenever the screenshot shows them: "Bijan Robinson (RB ATL)",
+  "B. Robinson (RB ATL)". This matters: platforms abbreviate first names,
+  and "B. Robinson" alone is ambiguous between Bijan Robinson and Brian
+  Robinson — the position and team are what tell them apart. If the shot
+  shows only a surname, still include whatever position/team is visible.
 - Draft picks → DRAFT PICKS ARE CRITICAL. Never omit them, even in small text or with "via [name]".
   PRESERVE THE PICK SLOT EXACTLY WHEN IT IS SHOWN. Sleeper and MFL display
   picks as "2026 - Rd 1.01" or "1.01" — that trailing number is the slot and
@@ -548,6 +580,13 @@ LOCKED BY THE ENGINE:
 
 Respond with ONLY a single valid JSON object — no markdown, no code fences, no preamble, and do NOT output a second or revised version:
 {"youReceiveGrade":"${lockedReceive}","youGiveGrade":"${lockedGive}","verdict":"<ONE punchy line matching the locked verdict direction — e.g. 'Smash accept — this is a straight-up fleece' or 'Hard pass, they're robbing you blind'>","analysis":"<2-3 sentences with conviction: WHY the locked call is right (cite AIOmni ranks + market values), plus any roster-fit caveat>"}
+
+NUMBERS — non-negotiable:
+- Every rank, tier and market value you cite must be copied VERBATIM from
+  the player lines above, attached to the player it was listed under.
+  Never carry a number from one player to another, never average, never
+  infer a rank you were not given. If a player's line has no rank, say he
+  has no rank rather than reusing a neighbour's.
 
 VOICE — non-negotiable:
 - OPEN WITH THE CALL. Never open with what you don't know. A verdict that
