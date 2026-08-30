@@ -10,11 +10,18 @@
 --        last episode is Jan 2022. Dead.
 --      · "PFF Fantasy Football Podcast" — last episode Mar 2026. Stale.
 --
---    The Athletic's draft/prospect material is NOT a separate Tuesday
---    show; it runs inside the main Athletic Football Show feed (roughly 1
---    in 10 episodes — "Building the Beast", rookie-class reviews, draft
---    retrospectives). Adding the one feed captures both the general NFL
---    knowledge and the prospect episodes.
+--    The Athletic's draft/prospect material runs INSIDE the main Athletic
+--    Football Show feed as "Building the Beast" — Dane Brugler's weekly
+--    prospect segment. Verified against the full 1,433-episode feed: 25
+--    editions, 21 of the last 25 on a WEDNESDAY (the 2025 season opener
+--    landed on a Tuesday). It runs weekly Sept–April, tracking the college
+--    season through the Senior Bowl, combine, free agency and the draft,
+--    then goes quiet May–Aug. It returned 2026-08-20, so it is about to be
+--    weekly again for the whole season.
+--
+--    This is the single best prospect-ranking input in the pipeline: ~25
+--    Brugler episodes a year, and the reason this feed is worth its
+--    transcription budget on its own.
 --
 --    Dynasty was the real gap: the original five had zero dynasty-specific
 --    shows despite dynasty being a first-class format in the app. FFT
