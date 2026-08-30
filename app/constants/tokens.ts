@@ -32,7 +32,11 @@ export const light = {
   card:        '#ffffff',
   text:        '#0a1a20',
   textSub:     '#3a6070',
-  textMuted:   '#8aa4ae',
+  // v2026-08-30: was #8aa4ae, which measured 2.39:1 on the page ground
+  // and 2.62:1 on cards — under the 3:1 floor, and visibly washed out in
+  // the first real light-mode render. #6b8794 keeps the same cool-grey
+  // character at 3.46:1 / 3.81:1.
+  textMuted:   '#6b8794',
   border:      '#d4dfe3',
   borderLight: '#e4ecef',
   navBg:       '#ffffff',

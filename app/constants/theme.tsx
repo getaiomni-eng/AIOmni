@@ -51,6 +51,61 @@ export const lightTheme = { ...light, ...lightAccents, isDark: false as const };
 
 export type ThemeTokens = typeof darkTheme | typeof lightTheme;
 
+// Data-driven colors (news-source tags, platform brands, position chips)
+// arrive as raw palette hexes from services at runtime, so no static
+// migration can catch them. On a dark ground the electric values are
+// correct; on white they measure ~1.5:1 and are effectively invisible.
+// Use this for such a color when it is TEXT — fills keep the electric
+// value in both themes.
+const LIGHT_TEXT_EQUIV: Record<string, string> = {
+  [palette.aqua]:       lightAccents.accentText,
+  [palette.green]:      lightAccents.successText,
+  [palette.chartreuse]: lightAccents.chartreuseText,
+  [palette.amber]:      lightAccents.warnText,
+  [palette.flame]:      lightAccents.dangerText,
+};
+
+// WCAG relative luminance for a #rrggbb string.
+function luminance(hex: string): number {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return 1;
+  const ch = [0, 2, 4].map(i => {
+    const v = parseInt(h.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
+const contrastOnWhite = (hex: string) => 1.05 / (luminance(hex) + 0.05);
+
+// Scale a color toward black until it clears the contrast floor. Keeps hue
+// and relative channel balance, so a brand color stays recognizable.
+function darkenToContrast(hex: string, target = 3.2): string {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return hex;
+  let [r, g, b] = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
+  for (let i = 0; i < 24 && contrastOnWhite(`#${[r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')}`) < target; i++) {
+    r = Math.round(r * 0.9); g = Math.round(g * 0.9); b = Math.round(b * 0.9);
+  }
+  return `#${[r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+// minContrast is measured against WHITE. The default (3) suits text on the
+// page or a card. Text sitting on a TINT of its own color needs more —
+// pass ~4.5, since the tint lifts the effective background well above the
+// card ground (a 15%-alpha aqua tint left #0a97b0 at 2.29:1).
+export function readableText(
+  t: ThemeTokens,
+  color: string | undefined,
+  minContrast = 3,
+): string | undefined {
+  if (!color || t.isDark) return color;
+  const known = LIGHT_TEXT_EQUIV[color.toLowerCase()];
+  const base = known ?? color;
+  if (!base.startsWith('#')) return base;        // rgba()/named — leave alone
+  return contrastOnWhite(base) >= minContrast ? base : darkenToContrast(base, minContrast);
+}
+
 type ThemeCtx = {
   t: ThemeTokens;
   isDark: boolean;

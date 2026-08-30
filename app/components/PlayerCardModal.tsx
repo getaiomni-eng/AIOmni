@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { findNewsForPlayer, NewsItem as FeedNewsItem } from '../../services/newsFeed';
 import { getPlayerByPlatformId, NFLPlayer, getPlayerSeasonStats, getLastNGames, getCurrentStatsSeason, PlayerSeason, WeeklyStat } from '../../services/nflPlayers';
-import { useTheme, type ThemeTokens } from '../constants/theme';
+import { readableText, useTheme, type ThemeTokens } from '../constants/theme';
 import TabIcon from './TabIcon';
 
 // ─── V7 THEME ───────────────────────────────────────────────
@@ -137,7 +137,7 @@ export default function PlayerCardModal({ visible, player, platform, onClose, on
   if (!player) return null;
 
   // Fallback is a position color (badge FILL + photo border) — stays literal.
-  const posColor = POS_COLORS[player.position] ?? '#7a9eaa';
+  const posColor = readableText(t, POS_COLORS[player.position], 4.5) ?? t.textSub;
   const photoUrl = `https://sleepercdn.com/content/nfl/players/thumb/${player.id}.jpg`;
 
   return (

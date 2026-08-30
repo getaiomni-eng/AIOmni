@@ -28,7 +28,7 @@ import {
 import { HeatIcon } from '../components/HeatIcon';
 import { PlatformErrorCard, classifyPlatformError } from '../components/PlatformErrorCard';
 import PlayerCardModal from '../components/PlayerCardModal';
-import { useTheme, type ThemeTokens } from '../constants/theme';
+import { readableText, useTheme, type ThemeTokens } from '../constants/theme';
 import { F, SP, dark, palette } from '../constants/tokens';
 import { HeatAccess, useHeatAccess } from '../hooks/useHeatAccess';
 
@@ -163,7 +163,9 @@ function PlayerCard({ player, index, onChangeRank, onOpenCard, heatAccess }: {
         <View style={s.metaRow}>
           <Text style={s.team}>{player.team}</Text>
           <View style={[s.posBadge, { backgroundColor: posStyle.bg }]}>
-            <Text style={[s.posText, { color: posStyle.color }]}>{player.position}</Text>
+            {/* Pill text sits on a 15%-alpha tint of its own hue — on a
+                light ground the electric value measures 1:1. */}
+            <Text style={[s.posText, { color: readableText(t, posStyle.color, 4.5) }]}>{player.position}</Text>
           </View>
         </View>
         <View style={s.consensusBar}>
@@ -863,7 +865,7 @@ export default function RankingsScreen() {
                     <View style={s.metaRow}>
                       <Text style={s.team}>{p.school || '—'}</Text>
                       <View style={[s.posBadge, { backgroundColor: posStyle.bg }]}>
-                        <Text style={[s.posText, { color: posStyle.color }]}>{p.position}</Text>
+                        <Text style={[s.posText, { color: readableText(th, posStyle.color, 4.5) }]}>{p.position}</Text>
                       </View>
                       {p.class_year && <Text style={{ fontFamily: F.body, fontSize: 9, color: th.textMuted, marginLeft: 4 }}>{p.class_year}</Text>}
                     </View>

@@ -30,7 +30,7 @@ import { getPlayerContext } from '../../services/playerIntelligence';
 import { PositionPill } from '../components/Atoms';
 import { AIOmniLogo } from '../components/AIOmniLogo';
 import { C, F, R, SP, SZ, palette } from '../constants/tokens';
-import { useTheme, type ThemeTokens } from '../constants/theme';
+import { readableText, useTheme, type ThemeTokens } from '../constants/theme';
 import { getPromptLimit, getRemainingPrompts, getResetTime, hasLinkedPlatform, incrementPrompt, LIMITS } from '../../services/promptQuota';
 import { logCaught } from '../../services/util/logCaught';
 import { getNFLSeason } from '../../services/season';
@@ -1730,7 +1730,10 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
 
   promptScroll: { maxHeight:36, marginBottom:10 },
   promptChip:   { paddingHorizontal:11, paddingVertical:5, borderRadius:20, backgroundColor:palette.aqua + '22', borderWidth:1.5, borderColor:palette.aqua + '50' },
-  promptTxt:    { fontSize:SZ.sm, color:t.accentText, fontFamily:F.mono },
+  // On a 22%-alpha aqua tint, plain accentText measures 2.97 in light —
+  // the deeper ink clears the floor. Dark is unaffected (readableText is
+  // a no-op there).
+  promptTxt:    { fontSize:SZ.sm, color:readableText(t, palette.aqua, 5) ?? t.accentText, fontFamily:F.mono },
 
   loadingSub: { color:t.textMuted, fontFamily:F.mono, fontSize:SZ.sm },
 
@@ -1831,7 +1834,11 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   attachBtn: { width:34, height:34, borderRadius:10, alignItems:'center', justifyContent:'center' },
   sendBtn:   { width:34, height:34, backgroundColor:palette.aqua, borderRadius:10, alignItems:'center', justifyContent:'center' },
   sendBtnOff:{ backgroundColor:palette.aqua + '22' },
-  sendArrow: { fontSize:14, fontFamily:F.bold, color:'#f0f4f5' },
+  // NOTE: '#f0f4f5' on the aqua fill measures 1.03:1 — effectively an
+  // invisible arrow, and that is true in DARK today too (pre-existing,
+  // not introduced here). Light gets readable ink now; changing dark is a
+  // deliberate visual change and is left for a product call.
+  sendArrow: { fontSize:14, fontFamily:F.bold, color: t.isDark ? '#f0f4f5' : t.text },
 
   // Picker modal — cream theme
   pickerOverlay:  { flex:1, backgroundColor:'rgba(10,18,20,0.7)', justifyContent:'flex-end' },

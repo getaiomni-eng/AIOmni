@@ -20,7 +20,7 @@ import { PlatformErrorCard, classifyPlatformError } from '../components/Platform
 import { getMyYahooTeam, getValidYahooToken, getYahooAllRosters, getYahooMatchups, getYahooStandings, getYahooTransactions } from '../../services/yahoo';
 import { getActiveSleeperIds } from '../../services/nflPlayers';
 import { C, F, R, SZ, BEVEL } from '../constants/tokens';
-import { useTheme, type ThemeTokens } from '../constants/theme';
+import { readableText, useTheme, type ThemeTokens } from '../constants/theme';
 
 const POS_COLORS: Record<string, string> = {
   QB: '#7b5ea7', RB: '#1e8c42', WR: '#2a7aaa', TE: '#b85a1a',
@@ -680,7 +680,7 @@ export default function LeagueScreen() {
   })();
 
   const renderPlayer = (player: Player, isWaiver = false, index = 0) => {
-    const posColor  = POS_COLORS[player.position] || t.textMuted;
+    const posColor  = readableText(t, POS_COLORS[player.position], 4.5) || t.textMuted;
     const isInjured = !!player.injuryStatus;
     const slotLabel = player.slotLabel || player.position;
     const active    = player.isStarter || isWaiver;

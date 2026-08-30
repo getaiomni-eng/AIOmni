@@ -19,7 +19,7 @@ import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../servic
 import { getValidYahooToken } from '../../services/yahoo';
 import { Icon } from '../components/AIOmniIcons';
 import { AIOmniLogo, AIOmniWordmark } from '../components/AIOmniLogo';
-import { useTheme, type ThemeTokens } from '../constants/theme';
+import { readableText, useTheme, type ThemeTokens } from '../constants/theme';
 import { dark, F, palette, SP, SZ } from '../constants/tokens';
 import { consumePrompt } from '../../services/promptQuota';
 
@@ -695,15 +695,19 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }} contentContainerStyle={{ gap: 6, paddingHorizontal: 2 }}>
-          {(['SLEEPER','NEWS','INJURIES','TRADES'] as NewsTab[]).map(t => {
-            const count = feed[t].length;
-            const isActive = newsTab === t;
-            const tabColor = t === 'SLEEPER' ? '#52c0e0' : t === 'INJURIES' ? '#ff4d6a' : t === 'TRADES' ? '#ffb800' : '#6eeb83';
+          {/* `tab` not `t` — the theme token object is `t` in this scope. */}
+          {(['SLEEPER','NEWS','INJURIES','TRADES'] as NewsTab[]).map(tab => {
+            const count = feed[tab].length;
+            const isActive = newsTab === tab;
+            const tabColor = tab === 'SLEEPER' ? '#52c0e0' : tab === 'INJURIES' ? '#ff4d6a' : tab === 'TRADES' ? '#ffb800' : '#6eeb83';
+            // Fill + border keep the electric hue; the label has to be
+            // readable on it, which on a light ground means darkening.
+            const tabInk = readableText(t, tabColor);
             return (
-              <TouchableOpacity key={t} onPress={() => setNewsTab(t)}
+              <TouchableOpacity key={tab} onPress={() => setNewsTab(tab)}
                 style={[s.feedTab, isActive && { backgroundColor: tabColor + '22', borderColor: tabColor }]}>
-                <Text style={[s.feedTabText, isActive && { color: tabColor }]}>{t}</Text>
-                {count > 0 && <Text style={[s.feedTabCount, isActive && { color: tabColor }]}>{count}</Text>}
+                <Text style={[s.feedTabText, isActive && { color: tabInk }]}>{tab}</Text>
+                {count > 0 && <Text style={[s.feedTabCount, isActive && { color: tabInk }]}>{count}</Text>}
               </TouchableOpacity>
             );
           })}
@@ -720,7 +724,7 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
               <View style={[s.newsDot, { backgroundColor: n.color }]} />
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                  <Text style={[s.newsSource, { color: n.color }]}>{n.sourceTag}</Text>
+                  <Text style={[s.newsSource, { color: readableText(t, n.color) }]}>{n.sourceTag}</Text>
                   <Text style={s.newsAge}>{n.age}</Text>
                 </View>
                 <Text style={s.newsText} numberOfLines={3}>{n.headline}</Text>
@@ -822,22 +826,32 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
           style={{ marginBottom: 4 }}
           onMomentumScrollEnd={e => setInsightIdx(Math.round(e.nativeEvent.contentOffset.x / (INSIGHT_W + 10)))}
         >
-          {displayInsights.map((insight, i) => (
-            <View key={i} style={[s.insightCard, { width: INSIGHT_W, borderColor: (insight.color || palette.aqua) + '25' }]}>
+          {displayInsights.map((insight, i) => {
+            // The card's accent is data-driven (the model picks it), so the
+            // tint/border keep the electric hue while the icon and tag text
+            // darken on a light ground — at 9px on a 15%-alpha tint of its
+            // own color, the electric version measured 1:1.
+            const accent = insight.color || palette.aqua;
+            // 4.5 not 3: this ink lands on a 15%-alpha tint of the same
+            // hue, not on the card ground.
+            const accentInk = readableText(t, accent, 4.5) ?? accent;
+            return (
+            <View key={i} style={[s.insightCard, { width: INSIGHT_W, borderColor: accent + '25' }]}>
               <View style={s.insightTop}>
-                <View style={[s.insightIconWrap, { backgroundColor: (insight.color || palette.aqua) + '15' }]}>
-                  <Icon name={insight.icon as any} size={18} color={insight.color || palette.aqua} />
+                <View style={[s.insightIconWrap, { backgroundColor: accent + '15' }]}>
+                  <Icon name={insight.icon as any} size={18} color={accentInk} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={s.insightTitle}>{insight.title}</Text>
                   <Text style={s.insightBody}>{insight.body}</Text>
                 </View>
               </View>
-              <View style={[s.insightTag, { backgroundColor: (insight.color || palette.aqua) + '15' }]}>
-                <Text style={[s.insightTagTxt, { color: insight.color || palette.aqua }]}>{insight.tag}</Text>
+              <View style={[s.insightTag, { backgroundColor: accent + '15' }]}>
+                <Text style={[s.insightTagTxt, { color: accentInk }]}>{insight.tag}</Text>
               </View>
             </View>
-          ))}
+            );
+          })}
         </ScrollView>
         <View style={s.insightDots}>
           {displayInsights.map((_, i) => (
