@@ -1834,10 +1834,10 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   attachBtn: { width:34, height:34, borderRadius:10, alignItems:'center', justifyContent:'center' },
   sendBtn:   { width:34, height:34, backgroundColor:palette.aqua, borderRadius:10, alignItems:'center', justifyContent:'center' },
   sendBtnOff:{ backgroundColor:palette.aqua + '22' },
-  // NOTE: '#f0f4f5' on the aqua fill measures 1.03:1 — effectively an
-  // invisible arrow, and that is true in DARK today too (pre-existing,
-  // not introduced here). Light gets readable ink now; changing dark is a
-  // deliberate visual change and is left for a product call.
+  // '#f0f4f5' on the aqua fill measures 1.36:1 in dark — well under the
+  // 3:1 floor. Raised with Patrick 2026-08-30 with a side-by-side;
+  // decision was to KEEP dark as-is. Light uses readable ink (11.78:1).
+  // Don't "fix" the dark branch without asking again.
   sendArrow: { fontSize:14, fontFamily:F.bold, color: t.isDark ? '#f0f4f5' : t.text },
 
   // Picker modal — cream theme
