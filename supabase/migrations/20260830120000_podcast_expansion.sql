@@ -52,25 +52,11 @@ ON CONFLICT (feed_url) DO NOTHING;
 -- Weights are not a quality signal until they're measured. Flatten.
 UPDATE content_sources SET weight = 1.0 WHERE weight <> 1.0;
 
--- Transcription cadence: one chunk per 5 min instead of 10.
---
--- Thirteen feeds is roughly 8-9 episodes/day in steady state (~34 chunks),
--- comfortably inside even the old 144-chunk/day ceiling. The reason to
--- double capacity is the FIRST poll: each new feed ingests its last 7 days
--- at once (the poller's lookback window), a one-time burst of ~100
--- episodes that would otherwise take about three days to drain. The job
--- only transcribes when there is queued work, so a faster cadence costs
--- nothing while idle.
-SELECT cron.unschedule('aiomni-content-transcribe');
-SELECT cron.schedule(
-  'aiomni-content-transcribe',
-  '*/5 * * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://khoruzvsprxyocisuhet.supabase.co/functions/v1/content-transcribe',
-    headers := '{"apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtob3J1enZzcHJ4eW9jaXN1aGV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDc5MTEsImV4cCI6MjA5MDU4MzkxMX0.YUIDZOJJhUc0ubkQxB_pSyXeE_xjcrqY7jGmbttlfRw", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtob3J1enZzcHJ4eW9jaXN1aGV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDc5MTEsImV4cCI6MjA5MDU4MzkxMX0.YUIDZOJJhUc0ubkQxB_pSyXeE_xjcrqY7jGmbttlfRw", "Content-Type": "application/json"}'::jsonb,
-    body := '{}'::jsonb,
-    timeout_milliseconds := 150000
-  );
-  $$
-);
+-- NOTE on transcription cadence: left at every 10 min, unchanged.
+-- An earlier draft of this migration doubled it to */5 to drain a
+-- first-poll backlog. That backlog does not exist: content-transcribe
+-- submits whole episodes to Deepgram in callback mode (SUBMIT_PER_RUN=3),
+-- so even */10 is 432 submissions/day against ~10 needed — 2%
+-- utilization. And with the no-backfill cutoff added to content-poll in
+-- this same change, new feeds fill forward from now rather than arriving
+-- as a burst at all.

@@ -100,10 +100,20 @@ serve(async (req) => {
         headers: { 'User-Agent': 'AIOmni/1.0 (+https://getaiomni.com)' },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // Two cutoffs, whichever is LATER:
+      //   · 7 days — history beyond that predates the pipeline and would
+      //     burn extraction budget on stale news.
+      //   · the source's created_at — a NEWLY ADDED feed must not backfill.
+      //     Adding 8 podcasts at once would otherwise ingest ~100 episodes
+      //     of week-old audio (~$25 of transcription) whose takes are
+      //     already stale. New sources start from the moment they're added
+      //     and fill forward.
+      const cutoff = Math.max(
+        Date.now() - 7 * 24 * 3600 * 1000,
+        new Date(src.created_at).getTime(),
+      );
       const items = parseFeed(await res.text())
-        // Only look back 7 days — history beyond that predates the pipeline
-        // and would burn extraction budget on stale news.
-        .filter(i => Date.now() - new Date(i.publishedAt).getTime() < 7 * 24 * 3600 * 1000)
+        .filter(i => new Date(i.publishedAt).getTime() >= cutoff)
         .slice(0, 50);
 
       const rows = items.map(i => ({
