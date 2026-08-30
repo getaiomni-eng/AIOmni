@@ -343,7 +343,13 @@ export default function TradesScreen() {
 {"giving":[everything the app's user SENDS AWAY],"getting":[everything the user RECEIVES]}
 Each array item is a string. Capture EVERY asset on each side — do NOT skip anything:
 - Players → full name, e.g. "Brian Thomas Jr.", "Nico Collins"
-- Draft picks → keep year + round, e.g. "2027 1st", "2026 2nd Rd". DRAFT PICKS ARE CRITICAL — never omit them, even if shown in small text or with "via [name]".
+- Draft picks → DRAFT PICKS ARE CRITICAL. Never omit them, even in small text or with "via [name]".
+  PRESERVE THE PICK SLOT EXACTLY WHEN IT IS SHOWN. Sleeper and MFL display
+  picks as "2026 - Rd 1.01" or "1.01" — that trailing number is the slot and
+  it is the single most important detail on the pick: the 1.01 is worth
+  multiples of a late first. Output slot picks as "YEAR R.SS", e.g.
+  "2026 - Rd 1.01" → "2026 1.01"; "Rd 2.07" → "2026 2.07".
+  ONLY when no slot is visible, fall back to year + round: "2027 1st".
 Decide which side is the user's by on-screen labels ("You give"/"You receive"/"You get"/"They get"/"Sends"/"Receives"). If a side shows "Receives", those are the items the user GETS.`,
         { tier: 'fast', maxTokens: 400 },
       );
