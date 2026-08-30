@@ -90,12 +90,42 @@ function resolveInitial(key: string, keys: Iterable<string>): string | null {
 const ROUND_WORD: Record<string, number> = { first: 1, second: 2, third: 3, fourth: 4, '1st': 1, '2nd': 2, '3rd': 3, '4th': 4 };
 // Detect a draft pick token ("2027 1st", "2026 2nd Rd", "2027 first") and
 // return its "<year> <round>" key, or null if it's not a pick.
-function pickKey(tok: string): string | null {
+// Parse a draft pick from free text. Handles the round-only form
+// ("2026 1st") AND slot notation ("2026 1.01", "1:01", "Rd 1.01") — the
+// latter previously fell through to the player-name path, so a trade for
+// the 1.01 was graded as an unknown player with no value at all.
+type ParsedPick = { year: string; round: number; slot?: number };
+
+function parsePick(tok: string): ParsedPick | null {
+  // Slot form first: optional year, optional "Rd", round . or : slot
+  const slotM = tok.match(/(?:(20\d\d)\s*[-–]?\s*)?(?:rd\.?\s*)?\b([1-5])\s*[.:]\s*(\d{1,2})\b/i);
+  if (slotM) {
+    const slot = parseInt(slotM[3], 10);
+    if (slot >= 1 && slot <= 32) {
+      return {
+        year: slotM[1] ?? String(new Date().getFullYear()),
+        round: parseInt(slotM[2], 10),
+        slot,
+      };
+    }
+  }
   const m = tok.match(/(20\d\d)\D*(1st|2nd|3rd|4th|first|second|third|fourth)/i);
   if (!m) return null;
   const round = ROUND_WORD[m[2].toLowerCase()];
-  return round ? `${m[1]} ${round}` : null;
+  return round ? { year: m[1], round } : null;
 }
+
+// KTC prices rookie picks as Early/Mid/Late tiers. With a known slot we can
+// use the RIGHT tier instead of the blended average — the difference
+// between the 1.01 and a generic first is the whole trade.
+function pickTier(slot: number): 'early' | 'mid' | 'late' {
+  if (slot <= 4) return 'early';
+  if (slot <= 8) return 'mid';
+  return 'late';
+}
+
+const pickLabel = (p: ParsedPick) =>
+  p.slot ? `${p.year} ${p.round}.${String(p.slot).padStart(2, '0')}` : `${p.year} Round ${p.round}`;
 
 function groundSide(
   raw: string,
@@ -111,12 +141,20 @@ function groundSide(
   let ktcTotal = 0;
   const lines = tokens.map(tok => {
     // Draft picks first — they carry their own KTC value, not a player rank.
-    const pk = pickKey(tok);
+    const pk = parsePick(tok);
     if (pk) {
-      const [yr, rd] = pk.split(' ');
-      const pv = pickValues.get(pk);
-      if (pv) { ktcTotal += pv; return `- ${yr} Round ${rd} pick — market value ${pv} (KTC); a dynasty asset, weigh by your contention window`; }
-      return `- ${yr} Round ${rd} pick (dynasty draft asset — value scales with your timeline)`;
+      // Prefer the slot-specific tier value; fall back to the round average.
+      const tierKey = pk.slot ? `${pk.year} ${pk.round} ${pickTier(pk.slot)}` : '';
+      const pv = (tierKey && pickValues.get(tierKey)) || pickValues.get(`${pk.year} ${pk.round}`);
+      const label = pickLabel(pk);
+      if (pv) {
+        ktcTotal += pv;
+        const slotNote = pk.slot
+          ? `${pickTier(pk.slot)}-round-${pk.round} slot${pk.slot === 1 && pk.round === 1 ? ' — the 1.01, the most valuable pick on the board' : ''}`
+          : 'slot unknown, priced as the round average';
+        return `- ${label} pick — market value ${pv} (KTC, ${slotNote})`;
+      }
+      return `- ${label} pick (dynasty draft asset — value scales with your timeline)`;
     }
     let key = normName(tok);
     // "A. Jeanty" → "a jeanty" never exact-matches "ashton jeanty"; try the
@@ -141,7 +179,9 @@ function groundSide(
     if (implied) bits.push(`team implied ~${implied} pts this week (Vegas)`);
     if (inj) bits.push(`INJURY: ${inj}`);
     if (!p && !ktc) {
-      return `- ${tok} (not on the AIOmni board — likely a pick or deep FA; weigh at your discretion)`;
+      // Phrased as a data note, not a crisis — the model was opening entire
+      // answers with "I'm flying half-blind" off the back of this line.
+      return `- ${tok} (no ranking or market value on file — judge on situation and role, don't cite numbers)`;
     }
     return `- ${p?.name ?? tok} — ${bits.join(' · ')}`;
   }).join('\n');
@@ -398,6 +438,10 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
               if (m && rd && v.oneQB > 0) {
                 const k = `${m[1]} ${rd}`;
                 (pickBuckets.get(k) ?? pickBuckets.set(k, []).get(k)!).push(v.oneQB);
+                // Also index the Early/Mid/Late tier on its own so a known
+                // slot can be priced exactly rather than averaged away.
+                const tier = /early/i.test(name) ? 'early' : /mid/i.test(name) ? 'mid' : /late/i.test(name) ? 'late' : '';
+                if (tier) pickValues.set(`${m[1]} ${rd} ${tier}`, v.oneQB);
               }
               continue;
             }
@@ -497,7 +541,21 @@ LOCKED BY THE ENGINE:
 - Verdict direction: ${lockedCall}
 
 Respond with ONLY a single valid JSON object — no markdown, no code fences, no preamble, and do NOT output a second or revised version:
-{"youReceiveGrade":"${lockedReceive}","youGiveGrade":"${lockedGive}","verdict":"<ONE punchy line matching the locked verdict direction — e.g. 'Smash accept — this is a straight-up fleece' or 'Hard pass, they're robbing you blind'>","analysis":"<2-3 sentences with conviction: WHY the locked call is right (cite AIOmni ranks + market values), plus any roster-fit caveat>"}`;
+{"youReceiveGrade":"${lockedReceive}","youGiveGrade":"${lockedGive}","verdict":"<ONE punchy line matching the locked verdict direction — e.g. 'Smash accept — this is a straight-up fleece' or 'Hard pass, they're robbing you blind'>","analysis":"<2-3 sentences with conviction: WHY the locked call is right (cite AIOmni ranks + market values), plus any roster-fit caveat>"}
+
+VOICE — non-negotiable:
+- OPEN WITH THE CALL. Never open with what you don't know. A verdict that
+  starts by discussing your own data ("I'm flying half-blind", "the board has
+  no read", "I won't pretend otherwise") is a failed answer, even when true.
+- Missing ranks are not an excuse to withhold judgment. You still know
+  football: role, target/touch competition, offensive context, age, timeline.
+  Grade on that and say so plainly.
+- If data is genuinely thin, ONE short clause at the END of the analysis —
+  "market values aren't loaded for these three, so this is a situational
+  read" — never the headline, never the verdict line.
+- Never say "coin flip" or "too close to call" as the whole verdict. Pick the
+  side the reasoning supports and name the condition that would flip it
+  (contending vs rebuilding, for instance).`;
 
       const prompt = `Format: ${format === 'dynasty' ? 'DYNASTY — value = age + multi-year production' : 'REDRAFT PPR — value = rest-of-season'}
 AIOmni board used: ${engineFmt}
@@ -519,7 +577,7 @@ ${marketMath}${(() => {
           return `\n\nROSTER DATA UNAVAILABLE for "${sel.label}" (likely pre-draft). League rules: ${rules}. Anchor the grade in how THESE RULES shift asset value — full PPR lifts target-earning RBs/WRs a tier; STD favors TD-and-volume runners; superflex/2QB makes QBs premium; dynasty weights age and picks, redraft weights this season only. Do NOT invent roster needs or claim to know the user's team.`;
         }
         return `\n\nNO ROSTER CONTEXT (user chose General) — grade pure asset value. Do NOT invent roster-fit arguments or claim to know what the user needs.`;
-      })()}${engineGrounded ? '' : `\n\n⚠ HEADS UP: AIOmni's proprietary ranking engine is temporarily unavailable, so you're grading on KTC market values + general knowledge — NOT our calibrated projections. Stay decisive, but don't cite precise AIOmni ranks you don't have, and lean on market value + clear situational reads.`}`;
+      })()}${engineGrounded ? '' : `\n\n⚠ INTERNAL NOTE (do NOT open your answer with this): AIOmni's ranking engine didn't load, so you're grading on KTC market values + situational reads rather than calibrated projections. Stay fully decisive and lead with the call. Don't cite precise AIOmni ranks you don't have. Mention the limitation at most once, in a short clause at the end.`}`;
       const response = await askAI(prompt, { maxTokens: 600, system });
       console.log('Raw AI response:', response);
       // The model is told to return one JSON object, but sometimes emits a

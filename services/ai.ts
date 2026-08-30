@@ -182,8 +182,11 @@ export async function hasAISession(): Promise<boolean> {
 // Sends a base64 image + a text instruction as Anthropic content blocks through
 // the same authenticated proxy (it forwards the body verbatim). Defaults to the
 // `fast` (Haiku) tier — cheap and reads on-screen text fine.
+// Accepts a single base64 image or several (a draft board rarely fits in
+// one screenshot). Images are sent in the order given, each labelled, so
+// the model can stitch a multi-part board together correctly.
 export async function askAIVision(
-  imageBase64: string,
+  imageBase64: string | string[],
   mediaType: string,
   prompt: string,
   opts: AskAIOptions = {},
@@ -191,9 +194,11 @@ export async function askAIVision(
   const tier = opts.tier ?? 'fast';
   const maxTokens = opts.maxTokens ?? 512;
   const model = MODELS[tier];
+  const images = Array.isArray(imageBase64) ? imageBase64 : [imageBase64];
   // Declared outside the try so the catch can always clear it.
   const controller = new AbortController();
-  const deadline = setTimeout(() => controller.abort(), 60_000);
+  // Multi-image uploads are proportionally bigger; give them more runway.
+  const deadline = setTimeout(() => controller.abort(), 60_000 + (images.length - 1) * 20_000);
   try {
     // 5.1.1(i): images are the most sensitive thing we transmit — the same
     // consent gate as askAI, no exceptions. (Build 197 shipped without this.)
@@ -219,7 +224,12 @@ export async function askAIVision(
         messages: [{
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+            ...images.flatMap((data, i) => ([
+              ...(images.length > 1
+                ? [{ type: 'text', text: `Image ${i + 1} of ${images.length}:` }]
+                : []),
+              { type: 'image', source: { type: 'base64', media_type: mediaType, data } },
+            ])),
             { type: 'text', text: prompt },
           ],
         }],

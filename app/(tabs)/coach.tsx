@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, askAIVision, describeAIError } from '../../services/ai';
 import { hasAIConsent } from '../../services/aiConsent';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
-import { pickImageForVision } from '../../services/util/pickImage';
+import { pickImagesForVision } from '../../services/util/pickImage';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials, ESPN_SLOTS } from '../../services/espn';
 import {
   summarizeSleeperScoring, summarizeESPNScoring, summarizeYahooScoring,
@@ -1303,19 +1303,25 @@ export default function CoachScreen() {
       router.push(`/paywall?context=${ctx}` as any);
       return;
     }
-    // Downscales before encoding — a full-res photo's base64 blocked the
-    // JS thread (looked like a freeze) and produced a multi-MB upload.
-    const picked = await pickImageForVision();
+    // Multi-select up to 3: a full draft board rarely fits in one
+    // screenshot. Each is downscaled before encoding — a full-res photo's
+    // base64 blocked the JS thread (looked like a freeze) and produced a
+    // multi-MB upload.
+    const picked = await pickImagesForVision();
     if (picked.status === 'canceled') return;
     if (picked.status === 'no_permission') {
       setMessages(prev => [...prev, { role: 'ai', text: 'Photo access is needed to read your draft board.' }]);
       return;
     }
     if (picked.status === 'failed') {
-      setMessages(prev => [...prev, { role: 'ai', text: "Couldn't open that image. Try another screenshot." }]);
+      setMessages(prev => [...prev, { role: 'ai', text: "Couldn't open those images. Try another screenshot." }]);
       return;
     }
-    const asset = { base64: picked.image.base64, mimeType: picked.image.mimeType };
+    const asset = {
+      base64: picked.images.map(i => i.base64),
+      mimeType: picked.images[0].mimeType,
+      count: picked.images.length,
+    };
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setReading(true);
     setMessages(prev => [...prev, { role: 'ai', text: '', isLoading: true }]);
@@ -1324,13 +1330,16 @@ export default function CoachScreen() {
       const out = await askAIVision(
         asset.base64!,
         asset.mimeType ?? 'image/jpeg',
-        `This is a screenshot of a LIVE fantasy football draft — a draft board or pick history. Read it and return ONLY this JSON, nothing else:
+        `${asset.count > 1
+          ? `These ${asset.count} images are consecutive parts of ONE live fantasy football draft board, in order. Merge them into a single list — a player appearing in two images is still ONE pick, and do not lose picks from the seams.`
+          : 'This is a screenshot of a LIVE fantasy football draft — a draft board or pick history.'} Read it and return ONLY this JSON, nothing else:
 {"drafted":["Bijan Robinson (1.01)","Ja'Marr Chase (1.02)"],"onClock":"","format":""}
 - "drafted": EVERY player already selected. Keep order and pick number (e.g. "1.05", "23rd") if shown, and position/team if shown. Full names exactly — do NOT skip anyone.
 - "onClock": which team/slot is currently picking, if shown, else "".
 - "format": any visible format clue (Superflex, Dynasty, PPR, # teams), else "".
 Capture rookies and veterans exactly.`,
-        { tier: 'fast', maxTokens: 900 },
+        // A merged 3-image board is a long list — 900 truncated it.
+        { tier: 'fast', maxTokens: asset.count > 1 ? 1800 : 900 },
       );
       const clean = out.slice(out.indexOf('{'), out.lastIndexOf('}') + 1);
       const parsed = JSON.parse(clean);
@@ -1632,7 +1641,7 @@ Capture rookies and veterans exactly.`,
                   freeNeedsLink
                     ? 'Connect a league to unlock your free prompts'
                     : remaining > 0
-                      ? 'Ask, or 📷 a live draft board…'
+                      ? 'Ask, or 📷 up to 3 draft-board shots…'
                       : tier === 'free'
                         ? 'This device has used its free prompts — upgrade to keep going'
                         : 'Out of prompts — upgrade for more'
