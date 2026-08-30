@@ -1,16 +1,17 @@
 import { Tabs } from 'expo-router';
 import TabIcon from '../components/TabIcon';
-import { dark, palette } from '../constants/tokens';
+import { useTheme } from '../constants/theme';
 
 export default function TabLayout() {
+  const { t } = useTheme();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: dark.navBg,
+          backgroundColor: t.navBg,
           borderTopWidth: 1,
-          borderTopColor: dark.border,
+          borderTopColor: t.border,
           paddingTop: 8,
           paddingBottom: 20,
           height: 72,
@@ -22,8 +23,8 @@ export default function TabLayout() {
           textTransform: 'uppercase',
           marginTop: 2,
         },
-        tabBarActiveTintColor: palette.aqua,
-        tabBarInactiveTintColor: dark.textMuted,
+        tabBarActiveTintColor: t.accentText,
+        tabBarInactiveTintColor: t.textMuted,
         tabBarIconStyle: { marginBottom: 0 },
       }}
     >

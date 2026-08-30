@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { askAI, describeAIError, hasAISession } from "../../services/ai";
@@ -19,15 +19,8 @@ import { useHeatAccess } from '../hooks/useHeatAccess';
 import { PlatformErrorCard, classifyPlatformError } from '../components/PlatformErrorCard';
 import { getMyYahooTeam, getValidYahooToken, getYahooAllRosters, getYahooMatchups, getYahooStandings, getYahooTransactions } from '../../services/yahoo';
 import { getActiveSleeperIds } from '../../services/nflPlayers';
-import { C, F, R, SZ, BEVEL, dark, palette } from '../constants/tokens';
-
-// ── Cream theme card constants ──────────────────────────────────────────────
-const SURFACE     = '#12252e';
-const BORDER      = '#1a3542';
-const DIM_BORDER  = '#14282f';
-const BEVEL_HI    = '#14282f';
-const BEVEL_LO    = '#1a3542';
-const INNER_GLOW  = 'rgba(27,231,255,0.06)';
+import { C, F, R, SZ, BEVEL } from '../constants/tokens';
+import { useTheme, type ThemeTokens } from '../constants/theme';
 
 const POS_COLORS: Record<string, string> = {
   QB: '#7b5ea7', RB: '#1e8c42', WR: '#2a7aaa', TE: '#b85a1a',
@@ -52,6 +45,8 @@ type OtherRoster   = { rosterId: any; username: string; players: Player[]; };
 type Transaction   = { type: string; adds: string[]; drops: string[]; trader: string; time: number; };
 
 function PlayerAvatar({ player, posColor, active }: { player: Player; posColor: string; active: boolean }) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   const [err, setErr] = useState(false);
   const uri = `https://sleepercdn.com/content/nfl/players/thumb/${player.id}.jpg`;
   if (!err) {
@@ -59,19 +54,19 @@ function PlayerAvatar({ player, posColor, active }: { player: Player; posColor: 
       <View style={{ width: 44, height: 44, marginHorizontal: 6 }}>
         <Image
           source={{ uri }}
-          style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: active ? posColor : BORDER }}
+          style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: active ? posColor : t.border }}
           onError={() => setErr(true)}
         />
-        <View style={[styles.posBadge, { backgroundColor: posColor }]}>
-          <Text style={styles.posBadgeText}>{player.position}</Text>
+        <View style={[s.posBadge, { backgroundColor: posColor }]}>
+          <Text style={s.posBadgeText}>{player.position}</Text>
         </View>
       </View>
     );
   }
   return (
-    <View style={styles.diamondWrap}>
-      <View style={[styles.diamond, { backgroundColor: active ? posColor : 'rgba(88,131,191,0.10)', borderColor: posColor, borderWidth: active ? 0 : 1 }]}>
-        <Text style={[styles.diamondText, { color: active ? '#ffffff' : posColor }]}>{player.position}</Text>
+    <View style={s.diamondWrap}>
+      <View style={[s.diamond, { backgroundColor: active ? posColor : 'rgba(88,131,191,0.10)', borderColor: posColor, borderWidth: active ? 0 : 1 }]}>
+        <Text style={[s.diamondText, { color: active ? '#ffffff' : posColor }]}>{player.position}</Text>
       </View>
     </View>
   );
@@ -121,6 +116,8 @@ function LeagueAvatar({ avatarId, size = 36 }: { avatarId: string; size?: number
 }
 
 export default function LeagueScreen() {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   const { leagueId, leagueName, platform, avatar } = useLocalSearchParams();
   const platformStr = (platform as string) || 'sleeper';
   const avatarId    = (avatar as string) || '';
@@ -211,15 +208,15 @@ export default function LeagueScreen() {
     if (!starters || starters.length === 0) return null;
     return (
       <View style={{ marginTop: 8 }}>
-        <Text style={{ fontFamily: F.mono, fontSize: 9, color: C.dim2, letterSpacing: 1.5, marginBottom: 6 }}>{label}</Text>
+        <Text style={{ fontFamily: F.mono, fontSize: 9, color: t.textMuted, letterSpacing: 1.5, marginBottom: 6 }}>{label}</Text>
         {starters.map((id: string, idx: number) => {
           const { name, pos } = resolvePlayerName(id);
           const pts = points[idx] ?? 0;
           return (
-            <View key={id + idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, borderBottomWidth: 0.5, borderBottomColor: '#1a3542' }}>
-              <Text style={{ fontFamily: F.mono, fontSize: 9, color: C.dim2, width: 28 }}>{pos}</Text>
-              <Text style={{ fontFamily: F.body, fontSize: 12, color: '#f0f4f5', flex: 1 }} numberOfLines={1}>{name}</Text>
-              <Text style={{ fontFamily: F.bold, fontSize: 12, color: pts > 15 ? C.mint : pts > 8 ? '#f0f4f5' : '#7a9eaa' }}>{pts.toFixed(1)}</Text>
+            <View key={id + idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, borderBottomWidth: 0.5, borderBottomColor: t.border }}>
+              <Text style={{ fontFamily: F.mono, fontSize: 9, color: t.textMuted, width: 28 }}>{pos}</Text>
+              <Text style={{ fontFamily: F.body, fontSize: 12, color: t.text, flex: 1 }} numberOfLines={1}>{name}</Text>
+              <Text style={{ fontFamily: F.bold, fontSize: 12, color: pts > 15 ? t.successText : pts > 8 ? t.text : t.textSub }}>{pts.toFixed(1)}</Text>
             </View>
           );
         })}
@@ -683,30 +680,30 @@ export default function LeagueScreen() {
   })();
 
   const renderPlayer = (player: Player, isWaiver = false, index = 0) => {
-    const posColor  = POS_COLORS[player.position] || C.dim2;
+    const posColor  = POS_COLORS[player.position] || t.textMuted;
     const isInjured = !!player.injuryStatus;
     const slotLabel = player.slotLabel || player.position;
     const active    = player.isStarter || isWaiver;
     return (
       <TouchableOpacity
         key={`${player.id}-${index}`}
-        style={[styles.playerCard, !active && styles.benchCard]}
+        style={[s.playerCard, !active && s.benchCard]}
         onPress={() => { setSelectedPlayer(player); setCardVisible(true); }}
         activeOpacity={0.8}
       >
         {/* bevel catchlight */}
-        <View style={styles.playerCardShine} />
-        <View style={[styles.playerAccentBar, { backgroundColor: active ? posColor : DIM_BORDER }]} />
-        <Text style={styles.slotLabel}>{slotLabel}</Text>
+        <View style={s.playerCardShine} />
+        <View style={[s.playerAccentBar, { backgroundColor: active ? posColor : t.borderLight }]} />
+        <Text style={s.slotLabel}>{slotLabel}</Text>
         <PlayerAvatar player={player} posColor={posColor} active={active} />
-        <View style={styles.playerInfoCol}>
-          <Text style={[styles.playerName, !active && { color: C.dim2 }]} numberOfLines={1}>{player.name}</Text>
-          <View style={styles.playerMeta}>
-            <Text style={styles.playerTeam}>{player.team}</Text>
-            {isInjured && (<><Text style={styles.metaDot}>·</Text><Text style={styles.injuryText}>{player.injuryStatus}</Text></>)}
+        <View style={s.playerInfoCol}>
+          <Text style={[s.playerName, !active && { color: t.textMuted }]} numberOfLines={1}>{player.name}</Text>
+          <View style={s.playerMeta}>
+            <Text style={s.playerTeam}>{player.team}</Text>
+            {isInjured && (<><Text style={s.metaDot}>·</Text><Text style={s.injuryText}>{player.injuryStatus}</Text></>)}
           </View>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${Math.random() * 60 + 20}%`, backgroundColor: active ? posColor : DIM_BORDER }]} />
+          <View style={s.progressTrack}>
+            <View style={[s.progressFill, { width: `${Math.random() * 60 + 20}%`, backgroundColor: active ? posColor : t.borderLight }]} />
           </View>
         </View>
         {heatAccess.showIcon && (((player as any).heatScore ?? 0) >= heatAccess.iconThreshold) && (
@@ -720,8 +717,8 @@ export default function LeagueScreen() {
             />
           </View>
         )}
-        <View style={styles.aiTag}>
-          <Text style={styles.aiTagText}>AI</Text>
+        <View style={s.aiTag}>
+          <Text style={s.aiTagText}>AI</Text>
         </View>
       </TouchableOpacity>
     );
@@ -736,49 +733,49 @@ export default function LeagueScreen() {
   ] as const;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0a1214' }}>
+    <View style={{ flex: 1, backgroundColor: t.bg }}>
 
       {/* ── Header ── */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>← BACK</Text>
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Text style={s.backText}>← BACK</Text>
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
+        <View style={s.headerCenter}>
           <LeagueAvatar avatarId={avatarId} size={36} />
           <View style={{ marginLeft: 10 }}>
-            <Text style={styles.leagueName} numberOfLines={1}>{leagueName || 'MY LEAGUE'}</Text>
-            <Text style={styles.leagueSub}>{platformStr.toUpperCase()}</Text>
+            <Text style={s.leagueName} numberOfLines={1}>{leagueName || 'MY LEAGUE'}</Text>
+            <Text style={s.leagueSub}>{platformStr.toUpperCase()}</Text>
           </View>
         </View>
-        <View style={[styles.platformBadge, { backgroundColor: PLATFORM_COLOR }]}>
-          <Text style={[styles.platformBadgeText, { color: platformStr === 'sleeper' ? '#1a1a1a' : '#fff' }]}>
+        <View style={[s.platformBadge, { backgroundColor: PLATFORM_COLOR }]}>
+          <Text style={[s.platformBadgeText, { color: platformStr === 'sleeper' ? '#1a1a1a' : '#fff' }]}>
             {platformStr.toUpperCase()}
           </Text>
         </View>
       </View>
 
       {/* ── Tabs ── */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll} contentContainerStyle={styles.tabRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabScroll} contentContainerStyle={s.tabRow}>
         {TAB_DATA.map(tab => (
           <TouchableOpacity
             key={tab.key}
-            style={[styles.tabBtn, activeTab === tab.key && { borderBottomColor: PLATFORM_COLOR, borderBottomWidth: 2 }]}
+            style={[s.tabBtn, activeTab === tab.key && { borderBottomColor: PLATFORM_COLOR, borderBottomWidth: 2 }]}
             onPress={() => setActiveTab(tab.key)}
           >
-            <Text style={[styles.tabText, activeTab === tab.key && { color: C.blueDeep }]}>{tab.label}</Text>
+            <Text style={[s.tabText, activeTab === tab.key && { color: t.accentText }]}>{tab.label}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
       {/* ── Content ── */}
       {loading ? (
-        <View style={styles.loadingBox}>
-          <ActivityIndicator color={C.blueDeep} size="large" />
-          <Text style={styles.loadingText}>LOADING ROSTER</Text>
+        <View style={s.loadingBox}>
+          <ActivityIndicator color={t.accentText} size="large" />
+          <Text style={s.loadingText}>LOADING ROSTER</Text>
         </View>
 
       ) : activeTab === 'roster' ? (
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+        <ScrollView style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
           {rosterError ? (() => {
             const c = classifyPlatformError(rosterError);
             return (
@@ -790,17 +787,17 @@ export default function LeagueScreen() {
               />
             );
           })() : null}
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionAccent} />
-            <Text style={styles.sectionLabel}>STARTERS</Text>
-            <View style={styles.sectionCount}><Text style={styles.sectionCountText}>{starters.length}</Text></View>
+          <View style={s.sectionHeader}>
+            <View style={s.sectionAccent} />
+            <Text style={s.sectionLabel}>STARTERS</Text>
+            <View style={s.sectionCount}><Text style={s.sectionCountText}>{starters.length}</Text></View>
           </View>
           {starters.map((p, i) => renderPlayer(p, false, i))}
-          <View style={[styles.sectionHeader, { marginTop: 20 }]}>
-            <View style={[styles.sectionAccent, { backgroundColor: C.dim2 }]} />
-            <Text style={[styles.sectionLabel, { color: C.dim2 }]}>BENCH</Text>
-            <View style={[styles.sectionCount, { backgroundColor: 'rgba(26,31,46,0.06)' }]}>
-              <Text style={[styles.sectionCountText, { color: C.dim2 }]}>{bench.length}</Text>
+          <View style={[s.sectionHeader, { marginTop: 20 }]}>
+            <View style={[s.sectionAccent, { backgroundColor: t.textMuted }]} />
+            <Text style={[s.sectionLabel, { color: t.textMuted }]}>BENCH</Text>
+            <View style={[s.sectionCount, { backgroundColor: 'rgba(26,31,46,0.06)' }]}>
+              <Text style={[s.sectionCountText, { color: t.textMuted }]}>{bench.length}</Text>
             </View>
           </View>
           {bench.map((p, i) => renderPlayer(p, false, i))}
@@ -809,22 +806,22 @@ export default function LeagueScreen() {
 
       ) : activeTab === 'standings' ? (
         standingsLoading ? (
-          <View style={styles.loadingBox}><ActivityIndicator color={C.blueDeep} /><Text style={styles.loadingText}>LOADING</Text></View>
+          <View style={s.loadingBox}><ActivityIndicator color={t.accentText} /><Text style={s.loadingText}>LOADING</Text></View>
         ) : (
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
-            <Text style={styles.sectionLabel}>STANDINGS · TAP TO SPY ROSTER</Text>
+          <ScrollView style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
+            <Text style={s.sectionLabel}>STANDINGS · TAP TO SPY ROSTER</Text>
             {standings.map((team, i) => (
-              <TouchableOpacity key={String(team.rosterId)} style={styles.standingRow} onPress={() => { const r = otherRosters.find(r => r.rosterId === team.rosterId); if (r) { setSelectedRoster(r); setRosterModalVisible(true); } }}>
-                <Text style={[styles.standingRank, i < 3 && { color: C.gold, textShadowColor: 'rgba(61,106,170,0.3)', textShadowOffset:{width:0,height:1}, textShadowRadius:4 }]}>{i + 1}</Text>
-                <View style={styles.standingInfo}>
-                  <Text style={styles.standingName}>{team.username}</Text>
-                  <Text style={styles.standingPts}>{team.pointsFor.toFixed(1)} PF · {team.pointsAgainst.toFixed(1)} PA</Text>
+              <TouchableOpacity key={String(team.rosterId)} style={s.standingRow} onPress={() => { const r = otherRosters.find(r => r.rosterId === team.rosterId); if (r) { setSelectedRoster(r); setRosterModalVisible(true); } }}>
+                <Text style={[s.standingRank, i < 3 && { color: t.accentText, textShadowColor: 'rgba(61,106,170,0.3)', textShadowOffset:{width:0,height:1}, textShadowRadius:4 }]}>{i + 1}</Text>
+                <View style={s.standingInfo}>
+                  <Text style={s.standingName}>{team.username}</Text>
+                  <Text style={s.standingPts}>{team.pointsFor.toFixed(1)} PF · {team.pointsAgainst.toFixed(1)} PA</Text>
                 </View>
-                <View style={styles.standingRecord}>
-                  <Text style={styles.standingRecordText}>{team.wins}–{team.losses}{team.ties > 0 ? `–${team.ties}` : ''}</Text>
-                  {team.streak ? <Text style={[styles.standingStreak, { color: team.streak.startsWith('W') ? C.mint : '#a83040' }]}>{team.streak}</Text> : null}
+                <View style={s.standingRecord}>
+                  <Text style={s.standingRecordText}>{team.wins}–{team.losses}{team.ties > 0 ? `–${team.ties}` : ''}</Text>
+                  {team.streak ? <Text style={[s.standingStreak, { color: team.streak.startsWith('W') ? t.successText : '#a83040' }]}>{team.streak}</Text> : null}
                 </View>
-                <Text style={styles.standingArrow}>›</Text>
+                <Text style={s.standingArrow}>›</Text>
               </TouchableOpacity>
             ))}
             <View style={{ height: 40 }} />
@@ -832,29 +829,29 @@ export default function LeagueScreen() {
         )
 
       ) : activeTab === 'matchup' ? (
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+        <ScrollView style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
           {matchup ? (
             <>
-              <View style={styles.matchupCard}>
-                <Text style={styles.matchupWeekLabel}>WEEK {matchup.week} · YOUR MATCHUP</Text>
-                <View style={styles.matchupScoreRow}>
-                  <View style={styles.matchupTeamCol}>
-                    <Text style={styles.matchupTeamName} numberOfLines={1}>{matchup.myTeam}</Text>
-                    <Text style={styles.matchupScore}>{matchup.myPoints?.toFixed(2)}</Text>
-                    <Text style={styles.matchupLabel}>YOU</Text>
+              <View style={s.matchupCard}>
+                <Text style={s.matchupWeekLabel}>WEEK {matchup.week} · YOUR MATCHUP</Text>
+                <View style={s.matchupScoreRow}>
+                  <View style={s.matchupTeamCol}>
+                    <Text style={s.matchupTeamName} numberOfLines={1}>{matchup.myTeam}</Text>
+                    <Text style={s.matchupScore}>{matchup.myPoints?.toFixed(2)}</Text>
+                    <Text style={s.matchupLabel}>YOU</Text>
                   </View>
-                  <Text style={styles.matchupVs}>VS</Text>
-                  <View style={[styles.matchupTeamCol, { alignItems: 'flex-end' }]}>
-                    <Text style={styles.matchupTeamName} numberOfLines={1}>{matchup.opponentTeam}</Text>
-                    <Text style={styles.matchupScore}>{matchup.opponentPoints?.toFixed(2)}</Text>
-                    <Text style={styles.matchupLabel}>OPP</Text>
+                  <Text style={s.matchupVs}>VS</Text>
+                  <View style={[s.matchupTeamCol, { alignItems: 'flex-end' }]}>
+                    <Text style={s.matchupTeamName} numberOfLines={1}>{matchup.opponentTeam}</Text>
+                    <Text style={s.matchupScore}>{matchup.opponentPoints?.toFixed(2)}</Text>
+                    <Text style={s.matchupLabel}>OPP</Text>
                   </View>
                 </View>
-                <View style={[styles.matchupStatus, {
+                <View style={[s.matchupStatus, {
                   borderColor: matchup.myPoints >= matchup.opponentPoints ? 'rgba(30,140,66,0.3)' : 'rgba(168,48,64,0.3)',
                   backgroundColor: matchup.myPoints >= matchup.opponentPoints ? 'rgba(30,140,66,0.08)' : 'rgba(168,48,64,0.08)',
                 }]}>
-                  <Text style={[styles.matchupStatusText, { color: matchup.myPoints >= matchup.opponentPoints ? C.mint : '#a83040' }]}>
+                  <Text style={[s.matchupStatusText, { color: matchup.myPoints >= matchup.opponentPoints ? t.successText : '#a83040' }]}>
                     {matchup.myPoints > matchup.opponentPoints ? 'WINNING ✓' : matchup.myPoints < matchup.opponentPoints ? 'LOSING ✗' : 'TIED'}
                   </Text>
                 </View>
@@ -862,7 +859,7 @@ export default function LeagueScreen() {
                   <View style={{ flex: 1 }}>
                     <StarterBreakdown starters={matchup.myStarters} points={matchup.myStarterPoints} label="YOUR STARTERS" />
                   </View>
-                  <View style={{ width: 1, backgroundColor: '#1a3542' }} />
+                  <View style={{ width: 1, backgroundColor: t.border }} />
                   <View style={{ flex: 1 }}>
                     <StarterBreakdown starters={matchup.oppStarters} points={matchup.oppStarterPoints} label="OPP STARTERS" />
                   </View>
@@ -870,27 +867,27 @@ export default function LeagueScreen() {
               </View>
               {matchup.allMatchups?.length > 0 && (
                 <>
-                  <Text style={[styles.sectionLabel, { marginTop: 24 }]}>ALL MATCHUPS</Text>
+                  <Text style={[s.sectionLabel, { marginTop: 24 }]}>ALL MATCHUPS</Text>
                   {matchup.allMatchups.map((m: any, i: number) => (
                     <View key={i}>
-                      <TouchableOpacity activeOpacity={0.7} onPress={() => { getPlayersDb(); setExpandedMatchup(expandedMatchup === i ? null : i); }} style={[styles.allMatchupRow, m.isMyMatchup && { borderColor: PLATFORM_COLOR, borderWidth: 1.5 }, expandedMatchup === i && { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, marginBottom: 0 }]}>
+                      <TouchableOpacity activeOpacity={0.7} onPress={() => { getPlayersDb(); setExpandedMatchup(expandedMatchup === i ? null : i); }} style={[s.allMatchupRow, m.isMyMatchup && { borderColor: PLATFORM_COLOR, borderWidth: 1.5 }, expandedMatchup === i && { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, marginBottom: 0 }]}>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.allMatchupTeam} numberOfLines={1}>{m.team1}</Text>
-                          <Text style={styles.allMatchupScore}>{m.team1Points?.toFixed(2)}</Text>
+                          <Text style={s.allMatchupTeam} numberOfLines={1}>{m.team1}</Text>
+                          <Text style={s.allMatchupScore}>{m.team1Points?.toFixed(2)}</Text>
                         </View>
-                        <Text style={styles.allMatchupVs}>{expandedMatchup === i ? '▾' : 'vs'}</Text>
+                        <Text style={s.allMatchupVs}>{expandedMatchup === i ? '▾' : 'vs'}</Text>
                         <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                          <Text style={styles.allMatchupTeam} numberOfLines={1}>{m.team2}</Text>
-                          <Text style={styles.allMatchupScore}>{m.team2Points?.toFixed(2)}</Text>
+                          <Text style={s.allMatchupTeam} numberOfLines={1}>{m.team2}</Text>
+                          <Text style={s.allMatchupScore}>{m.team2Points?.toFixed(2)}</Text>
                         </View>
                       </TouchableOpacity>
                       {expandedMatchup === i && (
-                        <View style={{ backgroundColor: '#0f1c22', borderWidth: 1, borderTopWidth: 0, borderColor: '#1a3542', borderBottomLeftRadius: 10, borderBottomRightRadius: 10, paddingHorizontal: 12, paddingBottom: 12, marginBottom: 10 }}>
+                        <View style={{ backgroundColor: t.surface, borderWidth: 1, borderTopWidth: 0, borderColor: t.border, borderBottomLeftRadius: 10, borderBottomRightRadius: 10, paddingHorizontal: 12, paddingBottom: 12, marginBottom: 10 }}>
                           <View style={{ flexDirection: 'row', gap: 12 }}>
                             <View style={{ flex: 1 }}>
                               <StarterBreakdown starters={m.team1Starters} points={m.team1StarterPoints} label={m.team1} />
                             </View>
-                            <View style={{ width: 1, backgroundColor: '#1a3542' }} />
+                            <View style={{ width: 1, backgroundColor: t.border }} />
                             <View style={{ flex: 1 }}>
                               <StarterBreakdown starters={m.team2Starters} points={m.team2StarterPoints} label={m.team2} />
                             </View>
@@ -904,34 +901,34 @@ export default function LeagueScreen() {
               <View style={{ height: 40 }} />
             </>
           ) : (
-            <View style={styles.loadingBox}><ActivityIndicator color={C.blueDeep} /><Text style={styles.loadingText}>LOADING</Text></View>
+            <View style={s.loadingBox}><ActivityIndicator color={t.accentText} /><Text style={s.loadingText}>LOADING</Text></View>
           )}
         </ScrollView>
 
       ) : activeTab === 'waivers' ? (
         <View style={{ flex: 1 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={{ paddingHorizontal: 20 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterRow} contentContainerStyle={{ paddingHorizontal: 20 }}>
             {POSITIONS.map(pos => (
-              <TouchableOpacity key={pos} style={[styles.filterBtn, selectedPosition === pos && { borderColor: C.blueDeep, backgroundColor: C.sageS }]} onPress={() => setSelectedPosition(pos)}>
-                <Text style={[styles.filterText, selectedPosition === pos && { color: C.blueDeep }]}>{pos}</Text>
+              <TouchableOpacity key={pos} style={[s.filterBtn, selectedPosition === pos && { borderColor: C.blueDeep, backgroundColor: t.greenTint }]} onPress={() => setSelectedPosition(pos)}>
+                <Text style={[s.filterText, selectedPosition === pos && { color: t.accentText }]}>{pos}</Text>
               </TouchableOpacity>
             ))}
             <TouchableOpacity
-              style={[styles.filterBtn, sortByHeat && heatAccess.canSortByHeat && { borderColor: '#ff5714', backgroundColor: 'rgba(255,87,20,0.12)' }]}
+              style={[s.filterBtn, sortByHeat && heatAccess.canSortByHeat && { borderColor: '#ff5714', backgroundColor: 'rgba(255,87,20,0.12)' }]}
               onPress={() => {
                 if (heatAccess.canSortByHeat) setSortByHeat(v => !v);
                 else setHeatUpgradeVisible(true);
               }}
             >
-              <Text style={[styles.filterText, sortByHeat && heatAccess.canSortByHeat && { color: '#ff5714' }]}>
+              <Text style={[s.filterText, sortByHeat && heatAccess.canSortByHeat && { color: t.dangerText }]}>
                 {sortByHeat && heatAccess.canSortByHeat ? '🔥 HEAT' : 'SORT: HEAT'}
               </Text>
             </TouchableOpacity>
           </ScrollView>
           {waiverLoading ? (
-            <View style={styles.loadingBox}><ActivityIndicator color={C.blueDeep} /><Text style={styles.loadingText}>LOADING</Text></View>
+            <View style={s.loadingBox}><ActivityIndicator color={t.accentText} /><Text style={s.loadingText}>LOADING</Text></View>
           ) : (
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+            <ScrollView style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
               {waiverError ? (() => {
                 const c = classifyPlatformError(waiverError);
                 return (
@@ -951,22 +948,22 @@ export default function LeagueScreen() {
 
       ) : activeTab === 'activity' ? (
         activityLoading ? (
-          <View style={styles.loadingBox}><ActivityIndicator color={C.blueDeep} /><Text style={styles.loadingText}>LOADING</Text></View>
+          <View style={s.loadingBox}><ActivityIndicator color={t.accentText} /><Text style={s.loadingText}>LOADING</Text></View>
         ) : (
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
-            <Text style={styles.sectionLabel}>RECENT TRANSACTIONS</Text>
-            {transactions.length === 0 && <Text style={styles.emptyText}>No recent transactions found.</Text>}
+          <ScrollView style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
+            <Text style={s.sectionLabel}>RECENT TRANSACTIONS</Text>
+            {transactions.length === 0 && <Text style={s.emptyText}>No recent transactions found.</Text>}
             {transactions.map((tx, i) => (
-              <View key={i} style={styles.txCard}>
-                <View style={styles.txCardShine} />
-                <View style={[styles.txAccent, { backgroundColor: tx.type === 'trade' ? C.gold : tx.type === 'waiver' ? C.mint : C.sage }]} />
-                <View style={styles.txHeader}>
-                  <Text style={[styles.txType, { color: tx.type === 'trade' ? C.blueDeep : C.blueDeep }]}>{tx.type === 'trade' ? '⇄ TRADE' : tx.type === 'waiver' ? '◎ WAIVER' : '+ FREE AGENT'}</Text>
-                  <Text style={styles.txTrader}>{tx.trader}</Text>
+              <View key={i} style={s.txCard}>
+                <View style={s.txCardShine} />
+                <View style={[s.txAccent, { backgroundColor: tx.type === 'trade' ? C.gold : tx.type === 'waiver' ? C.mint : C.sage }]} />
+                <View style={s.txHeader}>
+                  <Text style={[s.txType, { color: tx.type === 'trade' ? t.accentText : t.accentText }]}>{tx.type === 'trade' ? '⇄ TRADE' : tx.type === 'waiver' ? '◎ WAIVER' : '+ FREE AGENT'}</Text>
+                  <Text style={s.txTrader}>{tx.trader}</Text>
                 </View>
-                {tx.adds.length  > 0 && <Text style={styles.txAdds}>+ {tx.adds.join(', ')}</Text>}
-                {tx.drops.length > 0 && <Text style={styles.txDrops}>– {tx.drops.join(', ')}</Text>}
-                <Text style={styles.txTime}>{new Date(tx.time).toLocaleDateString()}</Text>
+                {tx.adds.length  > 0 && <Text style={s.txAdds}>+ {tx.adds.join(', ')}</Text>}
+                {tx.drops.length > 0 && <Text style={s.txDrops}>– {tx.drops.join(', ')}</Text>}
+                <Text style={s.txTime}>{new Date(tx.time).toLocaleDateString()}</Text>
               </View>
             ))}
             <View style={{ height: 40 }} />
@@ -990,38 +987,38 @@ export default function LeagueScreen() {
       />
 
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalCardShine} />
-            <View style={[styles.modalTopAccent, { backgroundColor: POS_COLORS[selectedPlayer?.position || ''] || C.gold }]} />
-            <View style={styles.modalHeader}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <View style={s.modalCardShine} />
+            <View style={[s.modalTopAccent, { backgroundColor: POS_COLORS[selectedPlayer?.position || ''] || C.gold }]} />
+            <View style={s.modalHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalPlayerName}>{selectedPlayer?.name}</Text>
-                <View style={[styles.modalPosBadge, { backgroundColor: POS_COLORS[selectedPlayer?.position || ''] || C.sageS }]}>
-                  <Text style={styles.modalPosBadgeText}>{selectedPlayer?.position} · {selectedPlayer?.team}</Text>
+                <Text style={s.modalPlayerName}>{selectedPlayer?.name}</Text>
+                <View style={[s.modalPosBadge, { backgroundColor: POS_COLORS[selectedPlayer?.position || ''] || t.greenTint }]}>
+                  <Text style={s.modalPosBadgeText}>{selectedPlayer?.position} · {selectedPlayer?.team}</Text>
                 </View>
               </View>
-              <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}>
-                <Icon name="x" size={16} color={C.blueDeep} />
+              <TouchableOpacity style={s.closeBtn} onPress={() => setModalVisible(false)}>
+                <Icon name="x" size={16} color={t.accentText} />
               </TouchableOpacity>
             </View>
             {adviceLoading ? (
-              <View style={styles.loadingAdvice}>
-                <ActivityIndicator color={C.blueDeep} size="large" />
-                <Text style={styles.loadingAdviceText}>ANALYZING...</Text>
+              <View style={s.loadingAdvice}>
+                <ActivityIndicator color={t.accentText} size="large" />
+                <Text style={s.loadingAdviceText}>ANALYZING...</Text>
               </View>
             ) : (
               <>
-                <Text style={styles.adviceText}>{advice}</Text>
+                <Text style={s.adviceText}>{advice}</Text>
                 {(advice.includes('try again') || advice.includes('timed out')) && (
-                  <TouchableOpacity style={[styles.gotItBtn, { backgroundColor: C.sageS, borderWidth:1, borderColor: BORDER, marginBottom: 8 }]} onPress={() => selectedPlayer && handleAdvice(selectedPlayer)}>
-                    <Text style={[styles.gotItText, { color: C.blueDeep }]}>RETRY</Text>
+                  <TouchableOpacity style={[s.gotItBtn, { backgroundColor: t.greenTint, borderWidth:1, borderColor: t.border, marginBottom: 8 }]} onPress={() => selectedPlayer && handleAdvice(selectedPlayer)}>
+                    <Text style={[s.gotItText, { color: t.accentText }]}>RETRY</Text>
                   </TouchableOpacity>
                 )}
               </>
             )}
-            <TouchableOpacity style={[styles.gotItBtn, { backgroundColor: C.gold }]} onPress={() => setModalVisible(false)}>
-              <Text style={styles.gotItText}>GOT IT</Text>
+            <TouchableOpacity style={[s.gotItBtn, { backgroundColor: C.gold }]} onPress={() => setModalVisible(false)}>
+              <Text style={s.gotItText}>GOT IT</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1029,25 +1026,25 @@ export default function LeagueScreen() {
 
       {/* ── Other Roster Modal ── */}
       <Modal visible={rosterModalVisible} transparent animationType="slide" onRequestClose={() => setRosterModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { maxHeight: '85%' }]}>
-            <View style={styles.modalCardShine} />
-            <View style={[styles.modalTopAccent, { backgroundColor: PLATFORM_COLOR }]} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalPlayerName}>{selectedRoster?.username}</Text>
-              <TouchableOpacity style={styles.closeBtn} onPress={() => setRosterModalVisible(false)}>
-                <Text style={styles.closeBtnText}>✕</Text>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalCard, { maxHeight: '85%' }]}>
+            <View style={s.modalCardShine} />
+            <View style={[s.modalTopAccent, { backgroundColor: PLATFORM_COLOR }]} />
+            <View style={s.modalHeader}>
+              <Text style={s.modalPlayerName}>{selectedRoster?.username}</Text>
+              <TouchableOpacity style={s.closeBtn} onPress={() => setRosterModalVisible(false)}>
+                <Text style={s.closeBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
             <ScrollView>
-              <Text style={styles.sectionLabel}>STARTERS</Text>
+              <Text style={s.sectionLabel}>STARTERS</Text>
               {selectedRoster?.players.filter(p =>  p.isStarter).map((p, i) => renderPlayer(p, false, i))}
-              <Text style={[styles.sectionLabel, { marginTop: 16 }]}>BENCH</Text>
+              <Text style={[s.sectionLabel, { marginTop: 16 }]}>BENCH</Text>
               {selectedRoster?.players.filter(p => !p.isStarter).map((p, i) => renderPlayer(p, false, i))}
               <View style={{ height: 20 }} />
             </ScrollView>
-            <TouchableOpacity style={[styles.gotItBtn, { backgroundColor: PLATFORM_COLOR }]} onPress={() => setRosterModalVisible(false)}>
-              <Text style={[styles.gotItText, { color: platformStr === 'sleeper' ? '#1a1a1a' : '#fff' }]}>CLOSE</Text>
+            <TouchableOpacity style={[s.gotItBtn, { backgroundColor: PLATFORM_COLOR }]} onPress={() => setRosterModalVisible(false)}>
+              <Text style={[s.gotItText, { color: platformStr === 'sleeper' ? '#1a1a1a' : '#fff' }]}>CLOSE</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1055,18 +1052,18 @@ export default function LeagueScreen() {
 
       {/* Heat sort upgrade modal — Pro tier only */}
       <Modal visible={heatUpgradeVisible} transparent animationType="fade" onRequestClose={() => setHeatUpgradeVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { minHeight: 240 }]}>
-            <View style={[styles.modalTopAccent, { backgroundColor: '#ff5714' }]} />
-            <Text style={[styles.modalPlayerName, { marginBottom: 12 }]}>🔥 SORT BY HEAT</Text>
-            <Text style={styles.adviceText}>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalCard, { minHeight: 240 }]}>
+            <View style={[s.modalTopAccent, { backgroundColor: '#ff5714' }]} />
+            <Text style={[s.modalPlayerName, { marginBottom: 12 }]}>🔥 SORT BY HEAT</Text>
+            <Text style={s.adviceText}>
               Heat sort is a Pro feature. Surface the fastest-rising waiver targets across all of fantasy — before your leaguemates see them.
             </Text>
-            <TouchableOpacity style={[styles.gotItBtn, { backgroundColor: '#ff5714', marginBottom: 8 }]} onPress={() => { setHeatUpgradeVisible(false); router.push('/paywall' as any); }}>
-              <Text style={[styles.gotItText, { color: '#fff' }]}>UPGRADE TO PRO</Text>
+            <TouchableOpacity style={[s.gotItBtn, { backgroundColor: '#ff5714', marginBottom: 8 }]} onPress={() => { setHeatUpgradeVisible(false); router.push('/paywall' as any); }}>
+              <Text style={[s.gotItText, { color: '#fff' }]}>UPGRADE TO PRO</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.gotItBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#1a3542' }]} onPress={() => setHeatUpgradeVisible(false)}>
-              <Text style={[styles.gotItText, { color: '#7a9eaa' }]}>NOT NOW</Text>
+            <TouchableOpacity style={[s.gotItBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: t.border }]} onPress={() => setHeatUpgradeVisible(false)}>
+              <Text style={[s.gotItText, { color: t.textSub }]}>NOT NOW</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1075,46 +1072,46 @@ export default function LeagueScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  header:            { paddingTop: 56, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: DIM_BORDER, gap: 10, backgroundColor: '#0a1214' },
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
+  header:            { paddingTop: 56, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: t.borderLight, gap: 10, backgroundColor: t.bg },
   backBtn:           { paddingRight: 4 },
-  backText:          { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.xs, letterSpacing: 1.5 },
+  backText:          { fontFamily: F.mono, color: t.accentText, fontSize: SZ.xs, letterSpacing: 1.5 },
   headerCenter:      { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  leagueName:        { fontFamily: F.bold, color: '#f0f4f5', fontSize: SZ.lg, maxWidth: 180 },
-  leagueSub:         { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 1.5, marginTop: 1 },
+  leagueName:        { fontFamily: F.bold, color: t.text, fontSize: SZ.lg, maxWidth: 180 },
+  leagueSub:         { fontFamily: F.mono, color: t.textMuted, fontSize: SZ.xs - 1, letterSpacing: 1.5, marginTop: 1 },
   platformBadge:     { borderRadius: R.xs, paddingHorizontal: 8, paddingVertical: 4 },
   platformBadgeText: { fontFamily: F.mono, fontSize: SZ.xs - 1, letterSpacing: 1.5, fontWeight: '700' },
 
-  tabScroll: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: DIM_BORDER, backgroundColor: '#0a1214' },
+  tabScroll: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: t.borderLight, backgroundColor: t.bg },
   tabRow:    { paddingHorizontal: 8, flexDirection: 'row', gap: 8 },
-  tabBtn:    { paddingVertical: 10, paddingHorizontal: 14, borderRadius: R.sm, borderWidth: 1.5, borderColor: C.glassBorder, borderTopColor: C.glassShine, borderLeftColor: C.surfShine, borderBottomColor: C.sageBorder, borderRightColor: C.sageBorder, backgroundColor: C.glass },
-  tabText:   { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 1.5 },
+  tabBtn:    { paddingVertical: 10, paddingHorizontal: 14, borderRadius: R.sm, borderWidth: 1.5, borderColor: t.border, borderTopColor: t.borderLight, borderLeftColor: t.borderLight, borderBottomColor: C.sageBorder, borderRightColor: C.sageBorder, backgroundColor: t.card },
+  tabText:   { fontFamily: F.mono, color: t.textMuted, fontSize: SZ.xs - 1, letterSpacing: 1.5 },
 
   loadingBox:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  loadingText: { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.xs, letterSpacing: 3, opacity: 0.7 },
+  loadingText: { fontFamily: F.mono, color: t.accentText, fontSize: SZ.xs, letterSpacing: 3, opacity: 0.7 },
 
   scroll:    { flex: 1 },
   scrollPad: { paddingHorizontal: 16, paddingTop: 4 },
 
   sectionHeader:    { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16, marginBottom: 8 },
   sectionAccent:    { width: 3, height: 18, backgroundColor: C.gold, borderRadius: 2 },
-  sectionLabel:     { fontFamily: F.bold, color: C.blueDeep, fontSize: SZ.base, letterSpacing: 2, flex: 1 },
+  sectionLabel:     { fontFamily: F.bold, color: t.accentText, fontSize: SZ.base, letterSpacing: 2, flex: 1 },
   sectionCount:     { backgroundColor: C.goldS, paddingHorizontal: 8, paddingVertical: 2, borderRadius: R.xs, borderWidth: 1, borderColor: C.goldBorder },
-  sectionCountText: { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.xs, letterSpacing: 1 },
-  emptyText:        { fontFamily: F.outfit, color: C.dim2, fontSize: SZ.md },
+  sectionCountText: { fontFamily: F.mono, color: t.accentText, fontSize: SZ.xs, letterSpacing: 1 },
+  emptyText:        { fontFamily: F.outfit, color: t.textMuted, fontSize: SZ.md },
 
   // Player card — cream glass with bevel
   playerCard: {
     ...BEVEL.card,
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: SURFACE,
+    backgroundColor: t.card, borderColor: t.border,
     borderRadius: R.sm, marginBottom: 6,
     overflow: 'hidden', minHeight: 68,
   },
   playerCardShine: { ...BEVEL.shine, height: 1 },
   benchCard:       { opacity: 0.55 },
   playerAccentBar: { width: 3, alignSelf: 'stretch' },
-  slotLabel:       { fontFamily: F.mono, color: C.dim2, fontSize: 8, letterSpacing: 1, width: 26, textAlign: 'center' },
+  slotLabel:       { fontFamily: F.mono, color: t.textMuted, fontSize: 8, letterSpacing: 1, width: 26, textAlign: 'center' },
 
   posBadge:     { position: 'absolute', bottom: -2, right: -2, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, minWidth: 22, alignItems: 'center' },
   posBadgeText: { fontFamily: F.mono, fontSize: 7, fontWeight: '700', color: '#ffffff', letterSpacing: 0.3 },
@@ -1124,110 +1121,110 @@ const styles = StyleSheet.create({
   diamondText: { fontFamily: F.mono, fontSize: 7, fontWeight: '700', transform: [{ rotate: '-45deg' }], letterSpacing: 0.3 },
 
   playerInfoCol: { flex: 1, paddingVertical: 10, paddingRight: 8 },
-  playerName:    { fontFamily: F.bold, color: '#f0f4f5', fontSize: SZ.base, letterSpacing: 0.3, lineHeight: 20 },
+  playerName:    { fontFamily: F.bold, color: t.text, fontSize: SZ.base, letterSpacing: 0.3, lineHeight: 20 },
   playerMeta:    { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
-  playerTeam:    { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
-  metaDot:       { color: C.dim2, fontSize: SZ.xs },
-  injuryText:    { fontFamily: F.mono, color: C.amber, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
-  progressTrack: { height: 3, backgroundColor: DIM_BORDER, borderRadius: 2, marginTop: 6, overflow: 'hidden' },
+  playerTeam:    { fontFamily: F.mono, color: t.textMuted, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
+  metaDot:       { color: t.textMuted, fontSize: SZ.xs },
+  injuryText:    { fontFamily: F.mono, color: t.warnText, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
+  progressTrack: { height: 3, backgroundColor: t.borderLight, borderRadius: 2, marginTop: 6, overflow: 'hidden' },
   progressFill:  { height: 3, borderRadius: 2 },
   aiTag:         { width: 28, height: 28, borderRadius: R.xs, borderWidth: 1, borderColor: C.goldBorder, alignItems: 'center', justifyContent: 'center', marginRight: 10, backgroundColor: C.goldS },
-  aiTagText:     { fontFamily: F.mono, color: C.blueDeep, fontSize: 8, letterSpacing: 1 },
+  aiTagText:     { fontFamily: F.mono, color: t.accentText, fontSize: 8, letterSpacing: 1 },
 
   // Standings
   standingRow: {
     ...BEVEL.card,
-    backgroundColor: SURFACE,
+    backgroundColor: t.card, borderColor: t.border,
     borderRadius: R.sm, padding: 14, marginBottom: 6,
     flexDirection: 'row', alignItems: 'center',
   },
-  standingRank:       { fontFamily: F.bold, color: C.dim2, fontSize: SZ['2xl'], width: 32 },
+  standingRank:       { fontFamily: F.bold, color: t.textMuted, fontSize: SZ['2xl'], width: 32 },
   standingInfo:       { flex: 1 },
-  standingName:       { fontFamily: F.bold, color: '#f0f4f5', fontSize: SZ.md, marginBottom: 2 },
-  standingPts:        { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
+  standingName:       { fontFamily: F.bold, color: t.text, fontSize: SZ.md, marginBottom: 2 },
+  standingPts:        { fontFamily: F.mono, color: t.textMuted, fontSize: SZ.xs - 1, letterSpacing: 0.5 },
   standingRecord:     { alignItems: 'flex-end', marginRight: 8 },
-  standingRecordText: { fontFamily: F.bold, color: '#f0f4f5', fontSize: SZ.lg },
+  standingRecordText: { fontFamily: F.bold, color: t.text, fontSize: SZ.lg },
   standingStreak:     { fontFamily: F.mono, fontSize: SZ.xs - 1, fontWeight: '700', marginTop: 2 },
-  standingArrow:      { color: C.dim2, fontSize: SZ.xl },
+  standingArrow:      { color: t.textMuted, fontSize: SZ.xl },
 
   // Matchup
   matchupCard: {
     ...BEVEL.card,
-    backgroundColor: SURFACE,
+    backgroundColor: t.card, borderColor: t.border,
     borderRadius: R.sm, padding: 20, marginTop: 16,
   },
-  matchupWeekLabel:  { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, letterSpacing: 2, marginBottom: 16, textAlign: 'center' },
+  matchupWeekLabel:  { fontFamily: F.mono, color: t.textMuted, fontSize: SZ.xs - 1, letterSpacing: 2, marginBottom: 16, textAlign: 'center' },
   matchupScoreRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   matchupTeamCol:    { flex: 1 },
-  matchupTeamName:   { fontFamily: F.outfit, color: C.dim, fontSize: SZ.sm, marginBottom: 4 },
+  matchupTeamName:   { fontFamily: F.outfit, color: t.textSub, fontSize: SZ.sm, marginBottom: 4 },
   // ── Scores: gold fill + blue stroke — same treatment as mockup ──
   matchupScore: {
     fontFamily: F.mono, fontWeight: '700', fontSize: SZ['5xl'],
-    color: '#ffb800',
+    color: t.warnText,
     // RN text stroke via text shadow layering (best available on iOS)
     textShadowColor: '#1be7ff',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 1,
     letterSpacing: -1.5, lineHeight: 44,
   },
-  matchupLabel:    { fontFamily: F.mono, color: C.dim2, fontSize: 8, letterSpacing: 2, marginTop: 2 },
-  matchupVs:       { fontFamily: F.bold, color: C.dim2, fontSize: SZ.lg, marginHorizontal: 10 },
+  matchupLabel:    { fontFamily: F.mono, color: t.textMuted, fontSize: 8, letterSpacing: 2, marginTop: 2 },
+  matchupVs:       { fontFamily: F.bold, color: t.textMuted, fontSize: SZ.lg, marginHorizontal: 10 },
   matchupStatus:   { borderRadius: R.xs, padding: 10, alignItems: 'center', marginTop: 16, borderWidth: 1 },
   matchupStatusText: { fontFamily: F.bold, fontSize: SZ.base, letterSpacing: 2 },
   allMatchupRow:   {
     ...BEVEL.card,
-    backgroundColor: SURFACE, borderRadius: R.xs, padding: 12, marginBottom: 6,
+    backgroundColor: t.card, borderColor: t.border, borderRadius: R.xs, padding: 12, marginBottom: 6,
     flexDirection: 'row', alignItems: 'center',
   },
-  allMatchupTeam:  { fontFamily: F.outfit, color: C.dim2, fontSize: SZ.md },
-  allMatchupScore: { fontFamily: F.bold, color: '#f0f4f5', fontSize: SZ.lg, marginTop: 2 },
-  allMatchupVs:    { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs, marginHorizontal: 8 },
+  allMatchupTeam:  { fontFamily: F.outfit, color: t.textMuted, fontSize: SZ.md },
+  allMatchupScore: { fontFamily: F.bold, color: t.text, fontSize: SZ.lg, marginTop: 2 },
+  allMatchupVs:    { fontFamily: F.mono, color: t.textMuted, fontSize: SZ.xs, marginHorizontal: 8 },
 
   // Waivers
   filterRow: { flexGrow: 0, marginVertical: 10 },
   filterBtn: {
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: R.xs,
-    borderWidth: 1.5, borderColor: BORDER, marginRight: 8,
-    backgroundColor: SURFACE,
+    borderWidth: 1.5, borderColor: t.border, marginRight: 8,
+    backgroundColor: t.card,
   },
-  filterText: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs, letterSpacing: 1 },
+  filterText: { fontFamily: F.mono, color: t.textMuted, fontSize: SZ.xs, letterSpacing: 1 },
 
   // Activity
   txCard: {
     ...BEVEL.card,
-    backgroundColor: SURFACE, borderRadius: R.sm, padding: 14, marginBottom: 6,
+    backgroundColor: t.card, borderColor: t.border, borderRadius: R.sm, padding: 14, marginBottom: 6,
     overflow: 'hidden',
   },
   txCardShine: { ...BEVEL.shine, height: 1 },
   txAccent:    { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
   txHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   txType:      { fontFamily: F.mono, fontSize: SZ.xs, letterSpacing: 1 },
-  txTrader:    { fontFamily: F.outfit, color: C.dim2, fontSize: SZ.sm },
-  txAdds:      { fontFamily: F.bold, color: C.mint, fontSize: SZ.md, marginBottom: 2 },
+  txTrader:    { fontFamily: F.outfit, color: t.textMuted, fontSize: SZ.sm },
+  txAdds:      { fontFamily: F.bold, color: t.successText, fontSize: SZ.md, marginBottom: 2 },
   txDrops:     { fontFamily: F.bold, color: '#a83040', fontSize: SZ.md, marginBottom: 4 },
-  txTime:      { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, marginTop: 4 },
+  txTime:      { fontFamily: F.mono, color: t.textMuted, fontSize: SZ.xs - 1, marginTop: 4 },
 
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(26,31,46,0.55)', justifyContent: 'flex-end' },
   modalCard: {
-    backgroundColor: '#12252e',
+    backgroundColor: t.card,
     borderTopLeftRadius: R.lg, borderTopRightRadius: R.lg,
     padding: 24, minHeight: 280,
     borderTopWidth: 1.5, borderLeftWidth: 1.5, borderRightWidth: 1.5,
-    borderColor: BORDER, overflow: 'hidden',
+    borderColor: t.border, overflow: 'hidden',
     shadowColor: '#1be7ff', shadowOffset:{width:0,height:-4}, shadowOpacity:0.12, shadowRadius:20, elevation:12,
   },
   modalCardShine:    { ...BEVEL.shine, zIndex: 6 },
   modalTopAccent:    { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
   modalHeader:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  modalPlayerName:   { fontFamily: F.bold, color: '#f0f4f5', fontSize: SZ['2xl'], letterSpacing: 0.5 },
+  modalPlayerName:   { fontFamily: F.bold, color: t.text, fontSize: SZ['2xl'], letterSpacing: 0.5 },
   modalPosBadge:     { paddingHorizontal: 10, paddingVertical: 3, borderRadius: R.xs, alignSelf: 'flex-start', marginTop: 6 },
   modalPosBadgeText: { fontFamily: F.mono, fontSize: SZ.xs - 1, color: '#ffffff', letterSpacing: 1 },
-  closeBtn:          { width: 32, height: 32, borderRadius: R.xs, borderWidth: 1.5, borderColor: BORDER, alignItems: 'center', justifyContent: 'center', backgroundColor: C.sageS },
-  closeBtnText:      { color: C.blueDeep, fontSize: 14, fontFamily: F.bold },
+  closeBtn:          { width: 32, height: 32, borderRadius: R.xs, borderWidth: 1.5, borderColor: t.border, alignItems: 'center', justifyContent: 'center', backgroundColor: t.greenTint },
+  closeBtnText:      { color: t.accentText, fontSize: 14, fontFamily: F.bold },
   loadingAdvice:     { alignItems: 'center', padding: 24, gap: 14 },
-  loadingAdviceText: { fontFamily: F.mono, color: C.blueDeep, fontSize: SZ.xs, letterSpacing: 3, opacity: 0.7 },
-  adviceText:        { fontFamily: F.outfit, color: '#f0f4f5', fontSize: SZ.md, lineHeight: 24, marginBottom: 20 },
+  loadingAdviceText: { fontFamily: F.mono, color: t.accentText, fontSize: SZ.xs, letterSpacing: 3, opacity: 0.7 },
+  adviceText:        { fontFamily: F.outfit, color: t.text, fontSize: SZ.md, lineHeight: 24, marginBottom: 20 },
   gotItBtn:          { borderRadius: R.sm, padding: 16, alignItems: 'center', marginTop: 8 },
   gotItText:         { fontFamily: F.bold, fontSize: SZ.lg, letterSpacing: 2, color: '#1a1f2e' },
 });

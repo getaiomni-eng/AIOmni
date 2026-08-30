@@ -28,6 +28,7 @@ import {
 import { HeatIcon } from '../components/HeatIcon';
 import { PlatformErrorCard, classifyPlatformError } from '../components/PlatformErrorCard';
 import PlayerCardModal from '../components/PlayerCardModal';
+import { useTheme, type ThemeTokens } from '../constants/theme';
 import { F, SP, dark, palette } from '../constants/tokens';
 import { HeatAccess, useHeatAccess } from '../hooks/useHeatAccess';
 
@@ -108,6 +109,7 @@ const SEED: RankedPlayer[] = [
 ];
 
 function PlayerPhoto({ playerId, sleeperId, size = 48 }: { playerId: string; sleeperId?: string; size?: number }) {
+  const { t } = useTheme();
   const [err, setErr] = useState(false);
   // Prefer sleeperId (always works with Sleeper CDN). Fall back to playerId
   // only if it does NOT look like a gsis_id (e.g. "00-0034796"); raw gsis_ids
@@ -117,13 +119,13 @@ function PlayerPhoto({ playerId, sleeperId, size = 48 }: { playerId: string; sle
   if (!err && effectiveId) return (
     <Image
       source={{ uri: `https://sleepercdn.com/content/nfl/players/thumb/${effectiveId}.jpg` }}
-      style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: dark.surface, borderWidth: 2, borderColor: dark.border }}
+      style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: t.surface, borderWidth: 2, borderColor: t.border }}
       onError={() => setErr(true)}
     />
   );
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: dark.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: dark.border }}>
-      <Text style={{ fontSize: size * 0.35, fontFamily: F.bold, color: dark.textMuted }}>?</Text>
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: t.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: t.border }}>
+      <Text style={{ fontSize: size * 0.35, fontFamily: F.bold, color: t.textMuted }}>?</Text>
     </View>
   );
 }
@@ -146,13 +148,15 @@ function PlayerCard({ player, index, onChangeRank, onOpenCard, heatAccess }: {
   player: RankedPlayer; index: number; onChangeRank?: (p: RankedPlayer) => void; onOpenCard?: (p: RankedPlayer) => void;
   heatAccess?: HeatAccess;
 }) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   const posStyle = POS_COLORS[player.position] || POS_COLORS.K;
   const consensus = Math.max(50, 100 - index * 2.5);
   const isTop3 = index < 3;
 
   return (
     <TouchableOpacity style={s.card} activeOpacity={0.7} onPress={() => onOpenCard?.(player)}>
-      <Text style={[s.rank, isTop3 && { color: palette.amber }]}>{index + 1}</Text>
+      <Text style={[s.rank, isTop3 && { color: t.warnText }]}>{index + 1}</Text>
       <PlayerPhoto playerId={player.id} sleeperId={(player as any).sleeperId} size={48} />
       <View style={s.info}>
         <Text style={s.name}>{player.name.toUpperCase()}</Text>
@@ -174,7 +178,7 @@ function PlayerCard({ player, index, onChangeRank, onOpenCard, heatAccess }: {
         ) : (
           <>
             <Text style={s.adp}>ADP {player.adp}</Text>
-            <Text style={[s.trend, player.trend === 'up' && { color: palette.aqua }, player.trend === 'down' && { color: palette.flame }, player.trend === 'flat' && { color: dark.textMuted }]}>
+            <Text style={[s.trend, player.trend === 'up' && { color: t.accentText }, player.trend === 'down' && { color: t.dangerText }, player.trend === 'flat' && { color: t.textMuted }]}>
               {player.trend === 'up' ? `▲ ${player.trendVal}` : player.trend === 'down' ? `▼ ${player.trendVal}` : '—'}
             </Text>
           </>
@@ -201,6 +205,8 @@ function BaseSelectionModal({ visible, onSelect, onClose }: {
   onSelect: (source: RankingsSource) => void;
   onClose: () => void;
 }) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={s.modalOverlay}>
@@ -240,6 +246,8 @@ function ChangeBaseModal({ visible, onRestart, onClose }: {
   onRestart: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.modalOverlay}>
@@ -252,7 +260,7 @@ function ChangeBaseModal({ visible, onRestart, onClose }: {
             style={[s.changeBtn, { backgroundColor: palette.amber + '15', borderColor: palette.amber + '30' }]}
             onPress={onRestart}
           >
-            <Text style={[s.changeBtnTxt, { color: palette.amber }]}>RESTART FROM NEW BASE</Text>
+            <Text style={[s.changeBtnTxt, { color: t.warnText }]}>RESTART FROM NEW BASE</Text>
             <Text style={s.changeBtnSub}>Pick a new source and start fresh</Text>
           </TouchableOpacity>
 
@@ -266,6 +274,8 @@ function ChangeBaseModal({ visible, onRestart, onClose }: {
 }
 
 export default function RankingsScreen() {
+  const { t: th } = useTheme();
+  const s = useMemo(() => makeStyles(th), [th]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<Mode>('community');
@@ -621,7 +631,7 @@ export default function RankingsScreen() {
     : null;
 
   const Header = () => (
-    <View style={{ paddingTop: insets.top + 8, backgroundColor: dark.bg }}>
+    <View style={{ paddingTop: insets.top + 8, backgroundColor: th.bg }}>
       <Text style={s.eyebrow}>RANKINGS</Text>
       <Text style={s.title}>RANKINGS.</Text>
 
@@ -651,7 +661,7 @@ export default function RankingsScreen() {
 
       <View style={s.searchWrap}>
         <Text style={s.searchIcon}>⌕</Text>
-        <TextInput style={s.searchInput} placeholder="SEARCH PLAYERS OR TEAMS" placeholderTextColor={dark.textMuted} value={search} onChangeText={setSearch} autoCapitalize="none" autoCorrect={false} />
+        <TextInput style={s.searchInput} placeholder="SEARCH PLAYERS OR TEAMS" placeholderTextColor={th.textMuted} value={search} onChangeText={setSearch} autoCapitalize="none" autoCorrect={false} />
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.pillScroll}>
@@ -722,7 +732,7 @@ export default function RankingsScreen() {
       {loading && (
         <View style={{ alignItems: 'center', paddingVertical: 20 }}>
           <ActivityIndicator color={palette.green} size="large" />
-          <Text style={{ color: dark.textMuted, fontFamily: F.body, fontSize: 11, marginTop: 8 }}>LOADING RANKINGS FROM SOURCE...</Text>
+          <Text style={{ color: th.textMuted, fontFamily: F.body, fontSize: 11, marginTop: 8 }}>LOADING RANKINGS FROM SOURCE...</Text>
         </View>
       )}
     </View>
@@ -730,7 +740,7 @@ export default function RankingsScreen() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={{ flex: 1, backgroundColor: dark.bg }}>
+      <View style={{ flex: 1, backgroundColor: th.bg }}>
         {mode === 'mine' && myRanks.length > 0 ? (
           <>
           <FlatList
@@ -805,8 +815,8 @@ export default function RankingsScreen() {
             <Header />
             {prospectsGated ? (
             <View style={{ alignItems: 'center', paddingTop: 60, paddingHorizontal: 20 }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 22, color: dark.text, textAlign: 'center', letterSpacing: 1, marginBottom: 12 }}>PROSPECT RANKINGS</Text>
-              <Text style={{ fontFamily: F.body, fontSize: 14, color: dark.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
+              <Text style={{ fontFamily: F.bold, fontSize: 22, color: th.text, textAlign: 'center', letterSpacing: 1, marginBottom: 12 }}>PROSPECT RANKINGS</Text>
+              <Text style={{ fontFamily: F.body, fontSize: 14, color: th.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
                 College prospect rankings filtered through your dynasty scoring format. Requires Rankings subscription ($2.99/mo).
               </Text>
               <TouchableOpacity 
@@ -818,8 +828,8 @@ export default function RankingsScreen() {
             </View>
           ) : prospectsError ? (
             <View style={{ alignItems: 'center', paddingTop: 60, paddingHorizontal: 20 }}>
-              <Text style={{ color: palette.flame, fontFamily: F.bold, fontSize: 14, letterSpacing: 1, marginBottom: 12 }}>COULDN'T LOAD PROSPECTS</Text>
-              <Text style={{ color: dark.textMuted, fontFamily: F.body, fontSize: 13, lineHeight: 20, textAlign: 'center', marginBottom: 24 }}>{prospectsError}</Text>
+              <Text style={{ color: th.dangerText, fontFamily: F.bold, fontSize: 14, letterSpacing: 1, marginBottom: 12 }}>COULDN'T LOAD PROSPECTS</Text>
+              <Text style={{ color: th.textMuted, fontFamily: F.body, fontSize: 13, lineHeight: 20, textAlign: 'center', marginBottom: 24 }}>{prospectsError}</Text>
               <TouchableOpacity 
                 style={{ backgroundColor: palette.flame, borderRadius: 12, paddingHorizontal: 28, paddingVertical: 14 }}
                 onPress={() => { setProspectsError(null); setProspects([]); handleProspectsTab(); }}
@@ -830,12 +840,12 @@ export default function RankingsScreen() {
           ) : prospectsLoading ? (
             <View style={{ alignItems: 'center', paddingTop: 60 }}>
               <ActivityIndicator color={palette.flame} size="large" />
-              <Text style={{ color: dark.textMuted, fontFamily: F.body, marginTop: 12 }}>Loading prospects...</Text>
+              <Text style={{ color: th.textMuted, fontFamily: F.body, marginTop: 12 }}>Loading prospects...</Text>
             </View>
           ) : prospects.length === 0 ? (
             <View style={{ alignItems: 'center', paddingTop: 60, paddingHorizontal: 20 }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 14, color: dark.textMuted, letterSpacing: 2, marginBottom: 12 }}>OFFSEASON</Text>
-              <Text style={{ color: dark.textMuted, fontFamily: F.body, fontSize: 13, lineHeight: 20, textAlign: 'center' }}>
+              <Text style={{ fontFamily: F.bold, fontSize: 14, color: th.textMuted, letterSpacing: 2, marginBottom: 12 }}>OFFSEASON</Text>
+              <Text style={{ color: th.textMuted, fontFamily: F.body, fontSize: 13, lineHeight: 20, textAlign: 'center' }}>
                 2026 NFL Draft complete — those rookies now appear in your regular rankings. The 2027 prospect class will be ranked closer to the season.
               </Text>
             </View>
@@ -847,7 +857,7 @@ export default function RankingsScreen() {
               const posStyle = POS_COLORS[p.position] || POS_COLORS.K;
               return (
                 <View key={p.id} style={s.card}>
-                  <Text style={[s.rank, i < 3 && { color: palette.flame }]}>{p.consensus_rank || i + 1}</Text>
+                  <Text style={[s.rank, i < 3 && { color: th.dangerText }]}>{p.consensus_rank || i + 1}</Text>
                   <View style={s.info}>
                     <Text style={s.name}>{(p.name || '').toUpperCase()}</Text>
                     <View style={s.metaRow}>
@@ -855,19 +865,19 @@ export default function RankingsScreen() {
                       <View style={[s.posBadge, { backgroundColor: posStyle.bg }]}>
                         <Text style={[s.posText, { color: posStyle.color }]}>{p.position}</Text>
                       </View>
-                      {p.class_year && <Text style={{ fontFamily: F.body, fontSize: 9, color: dark.textMuted, marginLeft: 4 }}>{p.class_year}</Text>}
+                      {p.class_year && <Text style={{ fontFamily: F.body, fontSize: 9, color: th.textMuted, marginLeft: 4 }}>{p.class_year}</Text>}
                     </View>
                     {(p.height || p.weight || p.forty_time) && (
                       <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                        {p.height ? <Text style={{ fontFamily: F.body, fontSize: 9, color: dark.textMuted }}>{p.height}</Text> : null}
-                        {p.weight ? <Text style={{ fontFamily: F.body, fontSize: 9, color: dark.textMuted }}>{p.weight} lbs</Text> : null}
-                        {p.forty_time ? <Text style={{ fontFamily: F.body, fontSize: 9, color: palette.amber }}>{p.forty_time}s 40</Text> : null}
+                        {p.height ? <Text style={{ fontFamily: F.body, fontSize: 9, color: th.textMuted }}>{p.height}</Text> : null}
+                        {p.weight ? <Text style={{ fontFamily: F.body, fontSize: 9, color: th.textMuted }}>{p.weight} lbs</Text> : null}
+                        {p.forty_time ? <Text style={{ fontFamily: F.body, fontSize: 9, color: th.warnText }}>{p.forty_time}s 40</Text> : null}
                       </View>
                     )}
                   </View>
                   <View style={s.rightCol}>
-                    {p.positional_rank && <Text style={{ fontFamily: F.body, fontSize: 9, color: dark.textMuted }}>{p.position}{p.positional_rank}</Text>}
-                    {p.prospect_grade > 0 && <Text style={{ fontFamily: F.bold, fontSize: 11, color: palette.flame }}>Grade {p.prospect_grade}</Text>}
+                    {p.positional_rank && <Text style={{ fontFamily: F.body, fontSize: 9, color: th.textMuted }}>{p.position}{p.positional_rank}</Text>}
+                    {p.prospect_grade > 0 && <Text style={{ fontFamily: F.bold, fontSize: 11, color: th.dangerText }}>Grade {p.prospect_grade}</Text>}
                   </View>
                 </View>
               );
@@ -907,13 +917,13 @@ export default function RankingsScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  eyebrow:    { fontFamily: F.body, fontSize: 10, letterSpacing: 3, color: dark.textMuted, marginBottom: 2 },
-  title:      { fontFamily: F.bold, fontSize: 42, color: dark.text, letterSpacing: 2, marginBottom: 14 },
-  toggle:     { flexDirection: 'row', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: dark.border, backgroundColor: dark.card, marginBottom: 14 },
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
+  eyebrow:    { fontFamily: F.body, fontSize: 10, letterSpacing: 3, color: t.textMuted, marginBottom: 2 },
+  title:      { fontFamily: F.bold, fontSize: 42, color: t.text, letterSpacing: 2, marginBottom: 14 },
+  toggle:     { flexDirection: 'row', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: t.border, backgroundColor: t.card, marginBottom: 14 },
   toggleBtn:  { flex: 1, paddingVertical: 11, paddingHorizontal: 4, alignItems: 'center' },
   toggleBtnOn:{ backgroundColor: palette.green },
-  toggleText: { fontFamily: F.bold, fontSize: 13, letterSpacing: 1, color: dark.textSub, textAlign: 'center' },
+  toggleText: { fontFamily: F.bold, fontSize: 13, letterSpacing: 1, color: t.textSub, textAlign: 'center' },
   toggleTextOn:{ color: dark.bg },
   pulseTabInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   pulseDot:   { width: 8, height: 8, borderRadius: 4, backgroundColor: palette.aqua, marginLeft: 6 },
@@ -924,80 +934,80 @@ const s = StyleSheet.create({
     paddingVertical: 12, paddingHorizontal: 14,
     marginBottom: 12,
   },
-  quizBannerTitle: { fontFamily: F.bold, fontSize: 12, color: palette.aqua, letterSpacing: 1.5 },
-  quizBannerSub:   { fontFamily: F.body, fontSize: 11, color: dark.textSub, marginTop: 2 },
-  quizBannerArrow: { fontFamily: F.bold, fontSize: 18, color: palette.aqua, marginLeft: 8 },
-  searchWrap: { backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, borderColor: dark.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, marginBottom: 12 },
-  searchIcon: { fontSize: 18, color: palette.green, marginRight: 10 },
-  searchInput:{ flex: 1, fontFamily: F.body, fontSize: 11, letterSpacing: 1.5, color: dark.text, paddingVertical: 12 },
+  quizBannerTitle: { fontFamily: F.bold, fontSize: 12, color: t.accentText, letterSpacing: 1.5 },
+  quizBannerSub:   { fontFamily: F.body, fontSize: 11, color: t.textSub, marginTop: 2 },
+  quizBannerArrow: { fontFamily: F.bold, fontSize: 18, color: t.accentText, marginLeft: 8 },
+  searchWrap: { backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, marginBottom: 12 },
+  searchIcon: { fontSize: 18, color: t.successText, marginRight: 10 },
+  searchInput:{ flex: 1, fontFamily: F.body, fontSize: 11, letterSpacing: 1.5, color: t.text, paddingVertical: 12 },
   pillScroll: { marginBottom: 8 },
-  pill:       { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: dark.border, marginRight: 6 },
+  pill:       { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: t.border, marginRight: 6 },
   pillOn:     { backgroundColor: palette.amber, borderColor: palette.amber },
-  pillText:   { fontFamily: F.bold, fontSize: 14, letterSpacing: 2, color: dark.textSub },
+  pillText:   { fontFamily: F.bold, fontSize: 14, letterSpacing: 2, color: t.textSub },
   pillTextOn: { color: dark.bg },
   formatScroll:{ marginBottom: 10 },
-  formatPill: { paddingHorizontal: 13, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: dark.border, marginRight: 5 },
-  formatPillOn:{ backgroundColor: palette.green + '18', borderColor: palette.green + '40' },
-  formatText: { fontFamily: F.body, fontSize: 10, letterSpacing: 1, color: dark.textMuted },
-  formatTextOn:{ color: palette.green, fontWeight: '700' },
+  formatPill: { paddingHorizontal: 13, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: t.border, marginRight: 5 },
+  formatPillOn:{ backgroundColor: t.greenTint, borderColor: palette.green + '40' },
+  formatText: { fontFamily: F.body, fontSize: 10, letterSpacing: 1, color: t.textMuted },
+  formatTextOn:{ color: t.successText, fontWeight: '700' },
   hintRow:    { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6, paddingHorizontal: 4 },
-  hint:       { fontFamily: F.body, fontSize: 9, letterSpacing: 1.5, color: dark.textMuted },
+  hint:       { fontFamily: F.body, fontSize: 9, letterSpacing: 1.5, color: t.textMuted },
 
   // Edit bar
   editBar:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 },
   changeBaseBtn:{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: palette.green + '10', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: palette.green + '25' },
-  changeBaseTxt:{ fontFamily: F.bold, fontSize: 10, letterSpacing: 1, color: palette.green },
-  changeBaseArrow:{ fontFamily: F.body, fontSize: 10, color: palette.green, opacity: 0.6 },
-  resetBtn:     { backgroundColor: dark.surface, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: dark.border },
-  resetText:    { fontFamily: F.bold, fontSize: 9, letterSpacing: 1.5, color: dark.textMuted },
+  changeBaseTxt:{ fontFamily: F.bold, fontSize: 10, letterSpacing: 1, color: t.successText },
+  changeBaseArrow:{ fontFamily: F.body, fontSize: 10, color: t.successText, opacity: 0.6 },
+  resetBtn:     { backgroundColor: t.surface, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: t.border },
+  resetText:    { fontFamily: F.bold, fontSize: 9, letterSpacing: 1.5, color: t.textMuted },
 
   // Tier
   tierDivider:{ flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 10, paddingHorizontal: 4 },
-  tierLine:   { flex: 1, height: 1, backgroundColor: dark.border },
-  tierLabel:  { fontFamily: F.bold, fontSize: 14, letterSpacing: 3, color: palette.green },
+  tierLine:   { flex: 1, height: 1, backgroundColor: t.border },
+  tierLabel:  { fontFamily: F.bold, fontSize: 14, letterSpacing: 3, color: t.successText },
 
   // Card
-  card:       { backgroundColor: dark.card, borderRadius: 16, borderWidth: 1, borderColor: dark.border, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10, height: 74 },
+  card:       { backgroundColor: t.card, borderRadius: 16, borderWidth: 1, borderColor: t.border, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10, height: 74 },
   cardActive: { borderColor: palette.green + '40', transform: [{ scale: 1.02 }] },
-  rank:       { fontFamily: F.bold, fontSize: 28, color: palette.green, width: 30, textAlign: 'center' },
+  rank:       { fontFamily: F.bold, fontSize: 28, color: t.successText, width: 30, textAlign: 'center' },
   info:       { flex: 1, minWidth: 0 },
-  name:       { fontFamily: F.bold, fontSize: 17, color: dark.text, letterSpacing: 1, lineHeight: 20 },
+  name:       { fontFamily: F.bold, fontSize: 17, color: t.text, letterSpacing: 1, lineHeight: 20 },
   metaRow:    { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
-  team:       { fontFamily: F.body, fontSize: 10, color: dark.textMuted, letterSpacing: 1 },
+  team:       { fontFamily: F.body, fontSize: 10, color: t.textMuted, letterSpacing: 1 },
   posBadge:   { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 },
   posText:    { fontFamily: F.body, fontSize: 9, letterSpacing: 1, fontWeight: '700' },
-  consensusBar:{ height: 3, borderRadius: 2, backgroundColor: dark.border, marginTop: 5, overflow: 'hidden' },
+  consensusBar:{ height: 3, borderRadius: 2, backgroundColor: t.border, marginTop: 5, overflow: 'hidden' },
   consensusFill:{ height: 3, borderRadius: 2 },
   rightCol:   { alignItems: 'flex-end', gap: 3, flexShrink: 0 },
-  adp:        { fontFamily: F.body, fontSize: 9, color: dark.textMuted, letterSpacing: 0.5 },
+  adp:        { fontFamily: F.body, fontSize: 9, color: t.textMuted, letterSpacing: 0.5 },
   trend:      { fontFamily: F.body, fontSize: 10, fontWeight: '700' },
-  rankChangeBtn: { paddingHorizontal: 10, paddingVertical: 7, backgroundColor: palette.green + '18', borderRadius: 8, borderWidth: 1, borderColor: palette.green + '44' },
-  rankChangeTxt: { fontFamily: F.bold, fontSize: 9, color: palette.green, letterSpacing: 1.2 },
+  rankChangeBtn: { paddingHorizontal: 10, paddingVertical: 7, backgroundColor: t.greenTint, borderRadius: 8, borderWidth: 1, borderColor: palette.green + '44' },
+  rankChangeTxt: { fontFamily: F.bold, fontSize: 9, color: t.successText, letterSpacing: 1.2 },
   moveBg:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  moveCard:  { backgroundColor: dark.card, borderRadius: 18, padding: 24, width: '100%', maxWidth: 340, borderWidth: 1, borderColor: dark.border },
-  moveTitle: { fontFamily: F.bold, fontSize: 10, color: palette.green, letterSpacing: 2, marginBottom: 8 },
-  moveName:  { fontFamily: F.bold, fontSize: 20, color: dark.text, marginBottom: 18 },
-  moveLabel: { fontFamily: F.body, fontSize: 10, color: dark.textMuted, letterSpacing: 1.5, marginBottom: 6 },
-  moveInput: { backgroundColor: dark.surface, borderRadius: 10, borderWidth: 1, borderColor: dark.border, fontFamily: F.bold, fontSize: 24, color: dark.text, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 18, textAlign: 'center' },
-  moveBtnCancel: { flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: 'center', backgroundColor: dark.surface, borderWidth: 1, borderColor: dark.border },
+  moveCard:  { backgroundColor: t.card, borderRadius: 18, padding: 24, width: '100%', maxWidth: 340, borderWidth: 1, borderColor: t.border },
+  moveTitle: { fontFamily: F.bold, fontSize: 10, color: t.successText, letterSpacing: 2, marginBottom: 8 },
+  moveName:  { fontFamily: F.bold, fontSize: 20, color: t.text, marginBottom: 18 },
+  moveLabel: { fontFamily: F.body, fontSize: 10, color: t.textMuted, letterSpacing: 1.5, marginBottom: 6 },
+  moveInput: { backgroundColor: t.surface, borderRadius: 10, borderWidth: 1, borderColor: t.border, fontFamily: F.bold, fontSize: 24, color: t.text, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 18, textAlign: 'center' },
+  moveBtnCancel: { flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: 'center', backgroundColor: t.surface, borderWidth: 1, borderColor: t.border },
   moveBtnConfirm:{ flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: 'center', backgroundColor: palette.green },
-  moveBtnCancelTxt: { fontFamily: F.bold, fontSize: 11, color: dark.textMuted, letterSpacing: 1.5 },
+  moveBtnCancelTxt: { fontFamily: F.bold, fontSize: 11, color: t.textMuted, letterSpacing: 1.5 },
   moveBtnConfirmTxt:{ fontFamily: F.bold, fontSize: 11, color: '#0a1214', letterSpacing: 1.5 },
 
   // Modals
   modalOverlay:  { flex: 1, backgroundColor: 'rgba(10,18,20,0.7)', justifyContent: 'flex-end' },
-  modalSheet:    { backgroundColor: dark.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12, paddingBottom: 40, paddingHorizontal: 20, borderTopWidth: 1, borderColor: dark.border },
-  modalHandle:   { width: 36, height: 4, borderRadius: 2, backgroundColor: dark.border, alignSelf: 'center', marginBottom: 20 },
-  modalTitle:    { fontFamily: F.bold, color: dark.text, fontSize: 16, letterSpacing: 2, marginBottom: 6 },
-  modalSub:      { fontFamily: F.body, color: dark.textMuted, fontSize: 12, lineHeight: 18, marginBottom: 20 },
-  sourceRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4, backgroundColor: dark.surface, borderWidth: 1, borderColor: dark.border },
+  modalSheet:    { backgroundColor: t.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12, paddingBottom: 40, paddingHorizontal: 20, borderTopWidth: 1, borderColor: t.border },
+  modalHandle:   { width: 36, height: 4, borderRadius: 2, backgroundColor: t.border, alignSelf: 'center', marginBottom: 20 },
+  modalTitle:    { fontFamily: F.bold, color: t.text, fontSize: 16, letterSpacing: 2, marginBottom: 6 },
+  modalSub:      { fontFamily: F.body, color: t.textMuted, fontSize: 12, lineHeight: 18, marginBottom: 20 },
+  sourceRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border },
   sourceDot:     { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
-  sourceLabel:   { fontFamily: F.bold, color: dark.text, fontSize: 14, letterSpacing: 0.5 },
-  sourceSub:     { fontFamily: F.body, color: dark.textMuted, fontSize: 10, marginTop: 2 },
+  sourceLabel:   { fontFamily: F.bold, color: t.text, fontSize: 14, letterSpacing: 0.5 },
+  sourceSub:     { fontFamily: F.body, color: t.textMuted, fontSize: 10, marginTop: 2 },
   sourceArrow:   { fontSize: 18, fontWeight: '700' },
-  modalCancel:   { marginTop: 12, alignItems: 'center', paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: dark.border },
-  modalCancelTxt:{ fontFamily: F.body, color: dark.textMuted, fontSize: 12, letterSpacing: 1.5 },
+  modalCancel:   { marginTop: 12, alignItems: 'center', paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: t.border },
+  modalCancelTxt:{ fontFamily: F.body, color: t.textMuted, fontSize: 12, letterSpacing: 1.5 },
   changeBtn:     { borderRadius: 14, padding: 18, marginBottom: 8, borderWidth: 1 },
   changeBtnTxt:  { fontFamily: F.bold, fontSize: 14, letterSpacing: 1, marginBottom: 4 },
-  changeBtnSub:  { fontFamily: F.body, fontSize: 11, color: dark.textMuted },
+  changeBtnSub:  { fontFamily: F.body, fontSize: 11, color: t.textMuted },
 });

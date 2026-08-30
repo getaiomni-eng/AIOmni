@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchNewsFeed, FeedByTab, NewsTab, NewsItem as FeedNewsItem } from '../../services/newsFeed';
 import { getNFLSeason, getAvailableSeasons } from '../../services/season';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Animated, Dimensions,
   Linking, Modal, RefreshControl, ScrollView,
@@ -19,6 +19,7 @@ import { findMyESPNTeam, getESPNLeague, loadESPNCredentials } from '../../servic
 import { getValidYahooToken } from '../../services/yahoo';
 import { Icon } from '../components/AIOmniIcons';
 import { AIOmniLogo, AIOmniWordmark } from '../components/AIOmniLogo';
+import { useTheme, type ThemeTokens } from '../constants/theme';
 import { dark, F, palette, SP, SZ } from '../constants/tokens';
 import { consumePrompt } from '../../services/promptQuota';
 
@@ -141,13 +142,15 @@ const sanitizeInsights = (raw: any): Insight[] =>
       color: INSIGHT_COLORS[String(o.color).toLowerCase()] ?? palette.aqua,
     }));
 
-const FlatCard: React.FC<{ style?: any; children: React.ReactNode }> = ({ style, children }) => (
-  <View style={[styles.flatCard, style]}>{children}</View>
+const FlatCard: React.FC<{ s: any; style?: any; children: React.ReactNode }> = ({ s, style, children }) => (
+  <View style={[s.flatCard, style]}>{children}</View>
 );
 
 export default function HomeScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
+  const { t }   = useTheme();
+  const s       = useMemo(() => makeStyles(t), [t]);
 
   const [leagues,        setLeagues]        = useState<League[]>([]);
   const [username,       setUsername]       = useState('');
@@ -629,34 +632,34 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
   const displayInsights = aiInsights.length > 0 ? aiInsights : FALLBACK_INSIGHTS;
 
   return (
-    <View style={{ flex: 1, backgroundColor: dark.bg }}>
+    <View style={{ flex: 1, backgroundColor: t.bg }}>
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 8 }]}
+        contentContainerStyle={[s.scroll, { paddingTop: insets.top + 8 }]}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.aqua} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={t.accentText} />}
       >
         {/* ── Header ── */}
-        <View style={styles.headerBar}>
-          <AIOmniWordmark fontSize={22} color={dark.text} />
+        <View style={s.headerBar}>
+          <AIOmniWordmark fontSize={22} color={t.text} />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {username ? (
-              <View style={styles.handlePill}>
-                <Text style={styles.handleTxt}>@{username}</Text>
+              <View style={s.handlePill}>
+                <Text style={s.handleTxt}>@{username}</Text>
               </View>
             ) : null}
-            <TouchableOpacity onPress={() => router.push('/(tabs)/settings' as any)} style={styles.gearBtn}>
-              <Ionicons name="settings-sharp" size={20} color={dark.textMuted} />
+            <TouchableOpacity onPress={() => router.push('/(tabs)/settings' as any)} style={s.gearBtn}>
+              <Ionicons name="settings-sharp" size={20} color={t.textMuted} />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* ── Platform pills + season ── */}
-        <View style={styles.platformRow}>
+        <View style={s.platformRow}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             style={{ flex: 1, marginRight: 8 }}
-            contentContainerStyle={styles.platformToggles}
+            contentContainerStyle={s.platformToggles}
             keyboardShouldPersistTaps="handled"
           >
             {(['sleeper', 'espn', 'yahoo', 'mfl', 'fleaflicker'] as Platform[]).map(platform => {
@@ -666,9 +669,9 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
                 <TouchableOpacity
                   key={platform}
                   onPress={() => setSelectedPlatforms(prev => isSelected ? prev.filter(p => p !== platform) : [...prev, platform])}
-                  style={[styles.platformToggle, isSelected && { backgroundColor: color, borderColor: color }]}
+                  style={[s.platformToggle, isSelected && { backgroundColor: color, borderColor: color }]}
                 >
-                  <Text style={[styles.platformToggleText, isSelected && { color: dark.bg }]}>
+                  <Text style={[s.platformToggleText, isSelected && { color: dark.bg }]}>
                     {PLAT_LABEL(platform)}
                   </Text>
                 </TouchableOpacity>
@@ -677,17 +680,17 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
           </ScrollView>
           <TouchableOpacity
             onPress={() => { const seasons = getAvailableSeasons(); Alert.alert('Select Season', '', seasons.map(y => ({ text: y, onPress: () => setSelectedSeason(y) })), { cancelable: true }); }}
-            style={styles.seasonPill}
+            style={s.seasonPill}
           >
-            <Text style={styles.seasonPillText}>{selectedSeason} ▾</Text>
+            <Text style={s.seasonPillText}>{selectedSeason} ▾</Text>
           </TouchableOpacity>
         </View>
 
         {/* ── Live Feed ── */}
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionLabel}>LIVE FEED</Text>
+        <View style={s.sectionRow}>
+          <Text style={s.sectionLabel}>LIVE FEED</Text>
           <TouchableOpacity onPress={() => loadNewsFeed(true)}>
-            <Text style={styles.sectionHint}>↻ refresh</Text>
+            <Text style={s.sectionHint}>↻ refresh</Text>
           </TouchableOpacity>
         </View>
 
@@ -698,9 +701,9 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
             const tabColor = t === 'SLEEPER' ? '#52c0e0' : t === 'INJURIES' ? '#ff4d6a' : t === 'TRADES' ? '#ffb800' : '#6eeb83';
             return (
               <TouchableOpacity key={t} onPress={() => setNewsTab(t)}
-                style={[styles.feedTab, isActive && { backgroundColor: tabColor + '22', borderColor: tabColor }]}>
-                <Text style={[styles.feedTabText, isActive && { color: tabColor }]}>{t}</Text>
-                {count > 0 && <Text style={[styles.feedTabCount, isActive && { color: tabColor }]}>{count}</Text>}
+                style={[s.feedTab, isActive && { backgroundColor: tabColor + '22', borderColor: tabColor }]}>
+                <Text style={[s.feedTabText, isActive && { color: tabColor }]}>{t}</Text>
+                {count > 0 && <Text style={[s.feedTabCount, isActive && { color: tabColor }]}>{count}</Text>}
               </TouchableOpacity>
             );
           })}
@@ -708,19 +711,19 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
           {feed[newsTab].length === 0 ? (
-            <View style={styles.feedEmpty}>
-              <Text style={styles.feedEmptyText}>No {newsTab.toLowerCase()} to show.</Text>
+            <View style={s.feedEmpty}>
+              <Text style={s.feedEmptyText}>No {newsTab.toLowerCase()} to show.</Text>
             </View>
           ) : feed[newsTab].map((n: FeedNewsItem) => (
             <TouchableOpacity key={n.id} activeOpacity={0.7} onPress={() => n.url ? Linking.openURL(n.url) : undefined}
-              style={[styles.newsChip, { borderColor: n.color + '35' }]}>
-              <View style={[styles.newsDot, { backgroundColor: n.color }]} />
+              style={[s.newsChip, { borderColor: n.color + '35' }]}>
+              <View style={[s.newsDot, { backgroundColor: n.color }]} />
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                  <Text style={[styles.newsSource, { color: n.color }]}>{n.sourceTag}</Text>
-                  <Text style={styles.newsAge}>{n.age}</Text>
+                  <Text style={[s.newsSource, { color: n.color }]}>{n.sourceTag}</Text>
+                  <Text style={s.newsAge}>{n.age}</Text>
                 </View>
-                <Text style={styles.newsText} numberOfLines={3}>{n.headline}</Text>
+                <Text style={s.newsText} numberOfLines={3}>{n.headline}</Text>
               </View>
             </TouchableOpacity>
           ))}
@@ -728,12 +731,12 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
 
         {/* ── Score cards ── */}
         {loading ? (
-          <FlatCard style={styles.loadingCard}>
-            <ActivityIndicator color={palette.aqua} size="large" />
-            <Text style={styles.loadingTxt}>Loading your leagues...</Text>
+          <FlatCard s={s} style={s.loadingCard}>
+            <ActivityIndicator color={t.accentText} size="large" />
+            <Text style={s.loadingTxt}>Loading your leagues...</Text>
           </FlatCard>
         ) : leagues.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scoreScroll} style={{ marginBottom: 16 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.scoreScroll} style={{ marginBottom: 16 }}>
             {(() => {
               const filtered = leagues.filter(lg => selectedPlatforms.includes(lg.platform));
               const pairs: any[][] = [];
@@ -751,28 +754,28 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
                   key={lg.id}
                   onPress={() => aiCoachActive ? openAiCoachModal(lg) : goToLeague(lg)}
                   activeOpacity={0.8}
-                  style={styles.scoreCardGrid}
+                  style={s.scoreCardGrid}
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <Text style={styles.leagueNameGrid} numberOfLines={1}>{lg.name}</Text>
-                    <View style={[styles.badge, { backgroundColor: PLAT_COLOR(lg.platform) + '18' }]}>
-                      <Text style={[styles.badgeText, { color: PLAT_COLOR(lg.platform) }]}>{PLAT_LABEL(lg.platform)}</Text>
+                    <Text style={s.leagueNameGrid} numberOfLines={1}>{lg.name}</Text>
+                    <View style={[s.badge, { backgroundColor: PLAT_COLOR(lg.platform) + '18' }]}>
+                      <Text style={[s.badgeText, { color: PLAT_COLOR(lg.platform) }]}>{PLAT_LABEL(lg.platform)}</Text>
                     </View>
                   </View>
-                  <Text style={styles.leagueMetaGrid}>{lg.format} · Wk {lg.week}</Text>
+                  <Text style={s.leagueMetaGrid}>{lg.format} · Wk {lg.week}</Text>
                   {/* Always render the rank line so every card is the same
                       height — pre-draft leagues (no standings yet) show a
                       placeholder instead of collapsing the row. */}
-                  <Text style={styles.leagueRankGrid}>{lg.rank ?? '—'}</Text>
-                  <View style={styles.scoreRowGrid}>
-                    <View style={styles.scoreBoxGrid}>
-                      <Text style={styles.scoreLabelGrid}>YOU</Text>
-                      <Text style={[styles.scoreNumGrid, { color: winning ? palette.green : dark.text }]}>{ptsVal}</Text>
+                  <Text style={s.leagueRankGrid}>{lg.rank ?? '—'}</Text>
+                  <View style={s.scoreRowGrid}>
+                    <View style={s.scoreBoxGrid}>
+                      <Text style={s.scoreLabelGrid}>YOU</Text>
+                      <Text style={[s.scoreNumGrid, { color: winning ? t.successText : t.text }]}>{ptsVal}</Text>
                     </View>
-                    <Text style={styles.scoreVsGrid}>vs</Text>
-                    <View style={styles.scoreBoxGrid}>
-                      <Text style={styles.scoreLabelGrid}>OPP</Text>
-                      <Text style={[styles.scoreNumGrid, { color: !winning ? palette.flame : dark.text }]}>{oppVal}</Text>
+                    <Text style={s.scoreVsGrid}>vs</Text>
+                    <View style={s.scoreBoxGrid}>
+                      <Text style={s.scoreLabelGrid}>OPP</Text>
+                      <Text style={[s.scoreNumGrid, { color: !winning ? t.dangerText : t.text }]}>{oppVal}</Text>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -783,34 +786,34 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
             })()}
           </ScrollView>
         ) : (
-          <FlatCard style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No leagues found</Text>
-            <Text style={styles.emptyTxt}>Connect Sleeper, ESPN, Yahoo, MFL, or Fleaflicker in Settings.</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/settings' as any)} style={styles.emptyBtn}>
-              <Text style={styles.emptyBtnTxt}>GO TO SETTINGS</Text>
+          <FlatCard s={s} style={s.emptyCard}>
+            <Text style={s.emptyTitle}>No leagues found</Text>
+            <Text style={s.emptyTxt}>Connect Sleeper, ESPN, Yahoo, MFL, or Fleaflicker in Settings.</Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/settings' as any)} style={s.emptyBtn}>
+              <Text style={s.emptyBtnTxt}>GO TO SETTINGS</Text>
             </TouchableOpacity>
           </FlatCard>
         )}
 
         {/* ── AI Coach Bar ── */}
         <TouchableOpacity
-          style={[styles.aiCoachBar, aiCoachActive && styles.aiCoachBarActive]}
+          style={[s.aiCoachBar, aiCoachActive && s.aiCoachBarActive]}
           onPress={() => setAiCoachActive(!aiCoachActive)}
           activeOpacity={0.8}
         >
           <AIOmniLogo size={28} />
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={styles.aiCoachLabel}>AI COACH</Text>
-            <Text style={styles.aiCoachHint}>{aiCoachActive ? 'Active — tap any score card' : 'Tap to activate'}</Text>
+            <Text style={s.aiCoachLabel}>AI COACH</Text>
+            <Text style={s.aiCoachHint}>{aiCoachActive ? 'Active — tap any score card' : 'Tap to activate'}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={dark.textMuted} />
+          <Ionicons name="chevron-forward" size={16} color={t.textMuted} />
         </TouchableOpacity>
 
 
         {/* ── AI Insights ── */}
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionLabel}>AI INSIGHTS</Text>
-          <Text style={styles.sectionHint}>swipe</Text>
+        <View style={s.sectionRow}>
+          <Text style={s.sectionLabel}>AI INSIGHTS</Text>
+          <Text style={s.sectionHint}>swipe</Text>
         </View>
         <ScrollView
           horizontal pagingEnabled showsHorizontalScrollIndicator={false}
@@ -820,25 +823,25 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
           onMomentumScrollEnd={e => setInsightIdx(Math.round(e.nativeEvent.contentOffset.x / (INSIGHT_W + 10)))}
         >
           {displayInsights.map((insight, i) => (
-            <View key={i} style={[styles.insightCard, { width: INSIGHT_W, borderColor: (insight.color || palette.aqua) + '25' }]}>
-              <View style={styles.insightTop}>
-                <View style={[styles.insightIconWrap, { backgroundColor: (insight.color || palette.aqua) + '15' }]}>
+            <View key={i} style={[s.insightCard, { width: INSIGHT_W, borderColor: (insight.color || palette.aqua) + '25' }]}>
+              <View style={s.insightTop}>
+                <View style={[s.insightIconWrap, { backgroundColor: (insight.color || palette.aqua) + '15' }]}>
                   <Icon name={insight.icon as any} size={18} color={insight.color || palette.aqua} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.insightTitle}>{insight.title}</Text>
-                  <Text style={styles.insightBody}>{insight.body}</Text>
+                  <Text style={s.insightTitle}>{insight.title}</Text>
+                  <Text style={s.insightBody}>{insight.body}</Text>
                 </View>
               </View>
-              <View style={[styles.insightTag, { backgroundColor: (insight.color || palette.aqua) + '15' }]}>
-                <Text style={[styles.insightTagTxt, { color: insight.color || palette.aqua }]}>{insight.tag}</Text>
+              <View style={[s.insightTag, { backgroundColor: (insight.color || palette.aqua) + '15' }]}>
+                <Text style={[s.insightTagTxt, { color: insight.color || palette.aqua }]}>{insight.tag}</Text>
               </View>
             </View>
           ))}
         </ScrollView>
-        <View style={styles.insightDots}>
+        <View style={s.insightDots}>
           {displayInsights.map((_, i) => (
-            <View key={i} style={[styles.insightDot, i === insightIdx && styles.insightDotOn]} />
+            <View key={i} style={[s.insightDot, i === insightIdx && s.insightDotOn]} />
           ))}
         </View>
 
@@ -848,23 +851,23 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
       {/* ── AI Coach Modal ── */}
       <Modal visible={!!selectedLeague && aiCoachActive} transparent animationType="slide" onRequestClose={() => setSelectedLeague(null)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(10,18,20,0.7)', justifyContent: 'flex-end' }}>
-          <View style={styles.modalSheet}>
+          <View style={s.modalSheet}>
             <TouchableOpacity onPress={() => setSelectedLeague(null)} style={{ alignSelf: 'flex-end' }} hitSlop={12}>
-              <Ionicons name="close" size={22} color={dark.textMuted} />
+              <Ionicons name="close" size={22} color={t.textMuted} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>{selectedLeague?.name}</Text>
-            <View style={styles.modalScores}>
-              <View><Text style={styles.modalLabel}>YOU</Text><Text style={styles.modalScore}>{(selectedLeague?.pts ?? 0).toFixed(1)}</Text></View>
-              <Text style={styles.modalVs}>vs</Text>
-              <View style={{ alignItems: 'flex-end' }}><Text style={styles.modalLabel}>OPP</Text><Text style={styles.modalScore}>{(selectedLeague?.opp ?? 0).toFixed(1)}</Text></View>
+            <Text style={s.modalTitle}>{selectedLeague?.name}</Text>
+            <View style={s.modalScores}>
+              <View><Text style={s.modalLabel}>YOU</Text><Text style={s.modalScore}>{(selectedLeague?.pts ?? 0).toFixed(1)}</Text></View>
+              <Text style={s.modalVs}>vs</Text>
+              <View style={{ alignItems: 'flex-end' }}><Text style={s.modalLabel}>OPP</Text><Text style={s.modalScore}>{(selectedLeague?.opp ?? 0).toFixed(1)}</Text></View>
             </View>
             {aiCoachLoading ? (
-              <ActivityIndicator color={palette.aqua} size="large" style={{ paddingVertical: 24 }} />
+              <ActivityIndicator color={t.accentText} size="large" style={{ paddingVertical: 24 }} />
             ) : (
-              <Text style={styles.modalInsight}>{aiCoachInsight}</Text>
+              <Text style={s.modalInsight}>{aiCoachInsight}</Text>
             )}
-            <TouchableOpacity style={styles.modalBtn} onPress={() => setSelectedLeague(null)}>
-              <Text style={styles.modalBtnTxt}>GOT IT</Text>
+            <TouchableOpacity style={s.modalBtn} onPress={() => setSelectedLeague(null)}>
+              <Text style={s.modalBtnTxt}>GOT IT</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -873,113 +876,113 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   scroll: { paddingHorizontal: SP[3] },
 
   // Header
   headerBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  handlePill: { backgroundColor: dark.surface, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: dark.border },
-  handleTxt: { fontSize: SZ.xs, fontFamily: F.mono, color: dark.textSub },
+  handlePill: { backgroundColor: t.surface, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: t.border },
+  handleTxt: { fontSize: SZ.xs, fontFamily: F.mono, color: t.textSub },
   gearBtn: { padding: 6 },
 
   // Platform pills
   platformRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   platformToggles: { flexDirection: 'row', gap: 4 },
-  platformToggle: { paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7, borderWidth: 1, borderColor: dark.border, backgroundColor: dark.card },
-  platformToggleText: { fontSize: 9, fontFamily: F.bold, color: dark.textSub, letterSpacing: 0.2 },
-  seasonPill: { backgroundColor: dark.card, borderRadius: 8, borderWidth: 1, borderColor: dark.border, paddingHorizontal: 12, paddingVertical: 6 },
-  seasonPillText: { fontSize: 10, fontFamily: F.mono, color: dark.textSub },
+  platformToggle: { paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7, borderWidth: 1, borderColor: t.border, backgroundColor: t.card },
+  platformToggleText: { fontSize: 9, fontFamily: F.bold, color: t.textSub, letterSpacing: 0.2 },
+  seasonPill: { backgroundColor: t.card, borderRadius: 8, borderWidth: 1, borderColor: t.border, paddingHorizontal: 12, paddingVertical: 6 },
+  seasonPillText: { fontSize: 10, fontFamily: F.mono, color: t.textSub },
 
   // Section headers
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  sectionLabel: { fontSize: 10, fontFamily: F.bold, color: palette.aqua, letterSpacing: 1.5 },
-  sectionHint: { fontSize: 9, fontFamily: F.mono, color: dark.textMuted },
+  sectionLabel: { fontSize: 10, fontFamily: F.bold, color: t.accentText, letterSpacing: 1.5 },
+  sectionHint: { fontSize: 9, fontFamily: F.mono, color: t.textMuted },
 
   // News feed
-  newsChip: { backgroundColor: dark.card, borderRadius: 12, padding: 12, borderWidth: 1, minWidth: 240, flexDirection: 'row', alignItems: 'flex-start' },
+  newsChip: { backgroundColor: t.card, borderRadius: 12, padding: 12, borderWidth: 1, minWidth: 240, flexDirection: 'row', alignItems: 'flex-start' },
   newsDot: { width: 6, height: 6, borderRadius: 3, marginRight: 8, marginTop: 4 },
   newsSource: { fontSize: 9, fontFamily: F.monoBold, letterSpacing: 1, marginBottom: 2 },
-  newsText: { fontSize: 12, color: dark.textSub, lineHeight: 17, fontFamily: F.body },
+  newsText: { fontSize: 12, color: t.textSub, lineHeight: 17, fontFamily: F.body },
 
   // Flat card base
-  flatCard: { backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, borderColor: dark.border, padding: 16 },
+  flatCard: { backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.border, padding: 16 },
 
   // Loading
   loadingCard: { alignItems: 'center', padding: 40 },
-  loadingTxt: { fontSize: SZ.sm, color: dark.textMuted, marginTop: 12, fontFamily: F.body },
+  loadingTxt: { fontSize: SZ.sm, color: t.textMuted, marginTop: 12, fontFamily: F.body },
 
   // Score grid
   scoreScroll: { gap: 10, paddingHorizontal: 2 },
   scoreCardGrid: {
-    backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, borderColor: dark.border,
+    backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.border,
     padding: 14, width: SCREEN_W * 0.65, flexShrink: 0,
   },
-  leagueNameGrid: { fontSize: 11, color: dark.text, fontFamily: F.bodyBold, flex: 1, marginRight: 6 },
-  leagueMetaGrid: { fontSize: 9, color: dark.textMuted, fontFamily: F.body, marginBottom: 4 },
-  leagueRankGrid: { fontSize: 10, color: palette.aqua, fontFamily: F.body, marginBottom: 6 },
+  leagueNameGrid: { fontSize: 11, color: t.text, fontFamily: F.bodyBold, flex: 1, marginRight: 6 },
+  leagueMetaGrid: { fontSize: 9, color: t.textMuted, fontFamily: F.body, marginBottom: 4 },
+  leagueRankGrid: { fontSize: 10, color: t.accentText, fontFamily: F.body, marginBottom: 6 },
   badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   badgeText: { fontSize: 7, fontFamily: F.monoBold, letterSpacing: 1 },
   scoreRowGrid: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   scoreBoxGrid: { alignItems: 'center', flex: 1 },
-  scoreLabelGrid: { fontSize: 8, color: dark.textMuted, fontFamily: F.mono, letterSpacing: 1, marginBottom: 2 },
-  scoreNumGrid: { fontSize: 22, fontFamily: F.bold, color: dark.text },
-  scoreVsGrid: { fontSize: 11, color: dark.textMuted, fontFamily: F.body, marginHorizontal: 6 },
+  scoreLabelGrid: { fontSize: 8, color: t.textMuted, fontFamily: F.mono, letterSpacing: 1, marginBottom: 2 },
+  scoreNumGrid: { fontSize: 22, fontFamily: F.bold, color: t.text },
+  scoreVsGrid: { fontSize: 11, color: t.textMuted, fontFamily: F.body, marginHorizontal: 6 },
 
   // Empty state
   emptyCard: { alignItems: 'center', padding: 28, marginBottom: 16 },
-  emptyTitle: { fontSize: SZ.base, fontFamily: F.bold, color: dark.text, marginBottom: 6 },
-  emptyTxt: { fontSize: SZ.sm, color: dark.textSub, textAlign: 'center', marginBottom: 16, fontFamily: F.body },
+  emptyTitle: { fontSize: SZ.base, fontFamily: F.bold, color: t.text, marginBottom: 6 },
+  emptyTxt: { fontSize: SZ.sm, color: t.textSub, textAlign: 'center', marginBottom: 16, fontFamily: F.body },
   emptyBtn: { backgroundColor: palette.aqua, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 24 },
   emptyBtnTxt: { fontFamily: F.bold, color: dark.bg, fontSize: SZ.sm, letterSpacing: 1 },
 
   // AI Coach bar
-  aiCoachBar: { flexDirection: 'row', alignItems: 'center', padding: 14, marginBottom: 16, backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, borderColor: dark.border },
+  aiCoachBar: { flexDirection: 'row', alignItems: 'center', padding: 14, marginBottom: 16, backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.border },
   aiCoachBarActive: { borderColor: palette.aqua + '40', backgroundColor: palette.aqua + '08' },
-  aiCoachLabel: { fontSize: 11, fontFamily: F.bold, color: dark.text, letterSpacing: 1 },
-  aiCoachHint: { fontSize: 9, fontFamily: F.body, color: dark.textMuted, marginTop: 1 },
+  aiCoachLabel: { fontSize: 11, fontFamily: F.bold, color: t.text, letterSpacing: 1 },
+  aiCoachHint: { fontSize: 9, fontFamily: F.body, color: t.textMuted, marginTop: 1 },
 
   // Insights
-  insightCard: { backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, padding: 16 },
+  insightCard: { backgroundColor: t.card, borderRadius: 14, borderWidth: 1, padding: 16 },
   insightTop: { flexDirection: 'row', marginBottom: 10, alignItems: 'center' },
   insightIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  insightTitle: { fontSize: SZ.base, color: dark.text, fontFamily: F.bodyBold, marginBottom: 3 },
-  insightBody: { fontSize: SZ.sm, color: dark.textSub, lineHeight: 18, fontFamily: F.body },
+  insightTitle: { fontSize: SZ.base, color: t.text, fontFamily: F.bodyBold, marginBottom: 3 },
+  insightBody: { fontSize: SZ.sm, color: t.textSub, lineHeight: 18, fontFamily: F.body },
   insightTag: { alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   insightTagTxt: { fontSize: 9, fontFamily: F.monoBold, letterSpacing: 1 },
   insightDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 20 },
-  insightDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: dark.textMuted },
+  insightDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: t.textMuted },
   insightDotOn: { backgroundColor: palette.aqua },
 
   // Modal
-  modalSheet: { backgroundColor: dark.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, minHeight: 300, borderTopWidth: 1, borderColor: dark.border },
-  modalTitle: { fontSize: SZ.xl, fontFamily: F.bold, color: dark.text, marginBottom: 16 },
+  modalSheet: { backgroundColor: t.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, minHeight: 300, borderTopWidth: 1, borderColor: t.border },
+  modalTitle: { fontSize: SZ.xl, fontFamily: F.bold, color: t.text, marginBottom: 16 },
   modalScores: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalLabel: { fontSize: 9, fontFamily: F.mono, color: dark.textMuted, letterSpacing: 1 },
-  modalScore: { fontSize: SZ['2xl'], fontFamily: F.bold, color: palette.aqua, marginTop: 4 },
-  modalVs: { fontSize: SZ.lg, fontFamily: F.body, color: dark.textMuted },
-  modalInsight: { fontSize: SZ.sm, fontFamily: F.body, color: dark.textSub, lineHeight: 20, marginBottom: 20 },
+  modalLabel: { fontSize: 9, fontFamily: F.mono, color: t.textMuted, letterSpacing: 1 },
+  modalScore: { fontSize: SZ['2xl'], fontFamily: F.bold, color: t.accentText, marginTop: 4 },
+  modalVs: { fontSize: SZ.lg, fontFamily: F.body, color: t.textMuted },
+  modalInsight: { fontSize: SZ.sm, fontFamily: F.body, color: t.textSub, lineHeight: 20, marginBottom: 20 },
   modalBtn: { backgroundColor: palette.aqua, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   modalBtnTxt: { fontFamily: F.bold, color: dark.bg, fontSize: SZ.base, letterSpacing: 1 },
 
   feedTab: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 11, paddingVertical: 6, borderRadius: 10,
-    borderWidth: 1, borderColor: '#1a3542', backgroundColor: '#0f1c22',
+    borderWidth: 1, borderColor: t.border, backgroundColor: t.surface,
   },
   feedTabText: {
-    fontFamily: F.mono, fontSize: 9, letterSpacing: 1.2, color: '#7a9eaa', fontWeight: '700',
+    fontFamily: F.mono, fontSize: 9, letterSpacing: 1.2, color: t.textSub, fontWeight: '700',
   },
   feedTabCount: {
-    fontFamily: F.mono, fontSize: 9, color: '#7a9eaa', opacity: 0.7,
+    fontFamily: F.mono, fontSize: 9, color: t.textSub, opacity: 0.7,
   },
   feedEmpty: {
-    width: 220, padding: 16, backgroundColor: '#0f1c22', borderRadius: 10,
-    borderWidth: 1, borderColor: '#1a3542', alignItems: 'center',
+    width: 220, padding: 16, backgroundColor: t.surface, borderRadius: 10,
+    borderWidth: 1, borderColor: t.border, alignItems: 'center',
   },
   feedEmptyText: {
-    fontFamily: F.body, fontSize: 12, color: '#7a9eaa',
+    fontFamily: F.body, fontSize: 12, color: t.textSub,
   },
   newsAge: {
-    fontFamily: F.mono, fontSize: 9, color: '#7a9eaa',
+    fontFamily: F.mono, fontSize: 9, color: t.textSub,
   },
 });

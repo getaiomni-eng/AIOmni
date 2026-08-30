@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
@@ -29,16 +29,14 @@ import { fetchSleeperTransactions } from '../../services/newsFeed';
 import { getPlayerContext } from '../../services/playerIntelligence';
 import { PositionPill } from '../components/Atoms';
 import { AIOmniLogo } from '../components/AIOmniLogo';
-import { C, F, R, SP, SZ } from '../constants/tokens';
+import { C, F, R, SP, SZ, palette } from '../constants/tokens';
+import { useTheme, type ThemeTokens } from '../constants/theme';
 import { getPromptLimit, getRemainingPrompts, getResetTime, hasLinkedPlatform, incrementPrompt, LIMITS } from '../../services/promptQuota';
 import { logCaught } from '../../services/util/logCaught';
 import { getNFLSeason } from '../../services/season';
 import { getValidYahooToken, getYahooLeagues, getMyYahooTeam, getYahooStandings, getYahooLeagueSettings, YahooLeague, YahooPlayer } from '../../services/yahoo';
 
 // Prompt limits are tier-aware — see getPromptDisplayInfo()
-const BORDER   = '#1a3542';
-const BEVEL_HI = '#12252e';
-
 const BASE_SYSTEM = `You are The O — AIOmni's AI fantasy coach. You're the user's sharpest fantasy-football friend: confident, opinionated, a little cocky, occasionally funny — never a hedging corporate robot. You HAVE takes and you back them. Talk like a real fantasy player — "league-winner", "smash", "hard pass", "buy-low", "ship it", "ascending", "RB dead zone", "handcuff", "league-winner". Be decisive; if it's close, still pick a side and tell them why. Open with the verdict, not a preamble.
 You ALWAYS read the league's settings + roster FIRST — advice that ignores their format and roster is worthless. Lean on AIOmni's proprietary rankings as your edge, and flex it when the market's wrong.
 Keep it tight — this is a mobile chat. Never compare players across different leagues (each is scored independently).
@@ -938,37 +936,55 @@ what to check — it never fills the gap with a guess stated as fact.`;
 }
 
 // ── Verdict card (blue) ─────────────────────────────────────
-const VerdictCard: React.FC<{ text: string; color?: string }> = ({ text, color = C.mint }) => (
-  <View style={[styles.verdict, { borderLeftColor: color, backgroundColor: color + '18' }]}>
-    <Text style={[styles.verdictEye, { color }]}>VERDICT</Text>
-    <Text style={styles.verdictTxt}>{text}</Text>
-  </View>
-);
+const VerdictCard: React.FC<{ text: string; color?: string }> = ({ text, color }) => {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
+  // One prop, three roles: border/fill keeps the electric palette, the
+  // eyebrow is text, and the wash is the theme's tint. Dark resolves to
+  // exactly the old `C.mint` / `C.mint + '18'` pair.
+  const edge = color ?? palette.green;
+  const tint = color ? color + '18' : t.greenTint;
+  const eyebrow = color ?? t.successText;
+  return (
+    <View style={[s.verdict, { borderLeftColor: edge, backgroundColor: tint }]}>
+      <Text style={[s.verdictEye, { color: eyebrow }]}>VERDICT</Text>
+      <Text style={s.verdictTxt}>{text}</Text>
+    </View>
+  );
+};
 
 // ── Recommendation card (blue bevel — matches mockup) ───────
-const RecoCard: React.FC<{ emoji: string; title: string; body: string }> = ({ emoji, title, body }) => (
-  <View style={styles.recoCard}>
-    <View style={styles.bevelShine} />
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-      <Text style={{ fontSize: 14 }}>{emoji}</Text>
-      <Text style={styles.recoTitle}>{title}</Text>
+const RecoCard: React.FC<{ emoji: string; title: string; body: string }> = ({ emoji, title, body }) => {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
+  return (
+    <View style={s.recoCard}>
+      <View style={s.bevelShine} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+        <Text style={{ fontSize: 14 }}>{emoji}</Text>
+        <Text style={s.recoTitle}>{title}</Text>
+      </View>
+      <Text style={s.recoBody}>{body}</Text>
     </View>
-    <Text style={styles.recoBody}>{body}</Text>
-  </View>
-);
+  );
+};
 
-const AddCard: React.FC<{ pos: string; name: string; team: string; detail: string }> = ({ pos, name, team, detail }) => (
-  <View style={styles.addCard}>
-    <PositionPill pos={pos} />
-    <View style={{ flex: 1 }}>
-      <Text style={styles.addName}>{name}</Text>
-      <Text style={styles.addSub}>{team} · {detail}</Text>
+const AddCard: React.FC<{ pos: string; name: string; team: string; detail: string }> = ({ pos, name, team, detail }) => {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
+  return (
+    <View style={s.addCard}>
+      <PositionPill pos={pos} />
+      <View style={{ flex: 1 }}>
+        <Text style={s.addName}>{name}</Text>
+        <Text style={s.addSub}>{team} · {detail}</Text>
+      </View>
+      <TouchableOpacity style={s.addBtn} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
+        <Text style={s.addBtnTxt}>+ADD</Text>
+      </TouchableOpacity>
     </View>
-    <TouchableOpacity style={styles.addBtn} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
-      <Text style={styles.addBtnTxt}>+ADD</Text>
-    </TouchableOpacity>
-  </View>
-);
+  );
+};
 
 const PLATFORM_COLOR: Record<string, string> = {
   Sleeper: C.gold, ESPN: '#e03030', Yahoo: '#6001D2', Fleaflicker: '#ff7a00', MFL: '#e4ff1a',
@@ -1030,7 +1046,9 @@ function historyForPrompt(history: { role: string; content: string }[]): string 
 }
 const QUICK_PROMPTS = ['Start/Sit', 'Best waiver', 'Trade value', 'Matchup'];
 
-const renderAIText = (text: string) =>
+// Not a component (it's called from inside CoachScreen's render), so it
+// takes the resolved stylesheet rather than calling useTheme() itself.
+const renderAIText = (text: string, styles: CoachStyles) =>
   text.split('\n').map((line, i) => {
     if (line.startsWith('__verdict__')) return <VerdictCard key={i} text={line.replace('__verdict__', '')} />;
     if (line.startsWith('__reco__')) {
@@ -1050,6 +1068,8 @@ export default function CoachScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ q?: string }>();
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
 
   const [messages,       setMessages]       = useState<Message[]>([]);
   const threadLoaded = useRef(false);
@@ -1472,7 +1492,7 @@ Capture rookies and veterans exactly.`,
     }
   };
 
-  const promptColor   = remaining <= 5 ? '#a83040' : remaining <= 10 ? C.amber : C.mint;
+  const promptColor   = remaining <= 5 ? '#a83040' : remaining <= 10 ? t.warnText : t.successText;
   // Free tier + nothing linked (and no leagues loaded, which implies linked)
   // → prompts stay locked behind connecting a platform.
   const freeNeedsLink = tier === 'free' && !linkedPlatform && allLeagues.length === 0;
@@ -1483,28 +1503,28 @@ Capture rookies and veterans exactly.`,
   const selectorColor = selectedLeague ? (PLATFORM_COLOR[selectedLeague.platform] ?? C.gold) : C.gold;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0a1214' }}>
+    <View style={{ flex: 1, backgroundColor: t.bg }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
-        <View style={[styles.wrap, { paddingTop: insets.top + 8 }]}>
+        <View style={[s.wrap, { paddingTop: insets.top + 8 }]}>
 
           {/* ── Header — matches mockup ── */}
-          <View style={styles.hdr}>
+          <View style={s.hdr}>
             {/* Mini logo avatar */}
-            <View style={styles.logoAvatar}>
+            <View style={s.logoAvatar}>
               <AIOmniLogo width={48} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>AI Coach</Text>
-              <Text style={styles.subtitle}>{contextReady ? selectorSub : 'LOADING LEAGUES...'}</Text>
+              <Text style={s.title}>AI Coach</Text>
+              <Text style={s.subtitle}>{contextReady ? selectorSub : 'LOADING LEAGUES...'}</Text>
             </View>
-            <View style={styles.rightHdr}>
-              <View style={[styles.promptCounter, { borderColor: promptColor + '55', backgroundColor: promptColor + '12' }]}>
-                <Text style={[styles.promptCountNum, { color: promptColor }]}>{remaining > 900 ? '∞' : remaining}</Text>
-                <Text style={[styles.promptCountLbl, { color: promptColor }]}>{remaining > 900 ? '' : `/${limit}`}</Text>
+            <View style={s.rightHdr}>
+              <View style={[s.promptCounter, { borderColor: promptColor + '55', backgroundColor: promptColor + '12' }]}>
+                <Text style={[s.promptCountNum, { color: promptColor }]}>{remaining > 900 ? '∞' : remaining}</Text>
+                <Text style={[s.promptCountLbl, { color: promptColor }]}>{remaining > 900 ? '' : `/${limit}`}</Text>
               </View>
-              <View style={styles.liveDot}>
-                <View style={[styles.livePulse, !contextReady && { backgroundColor: C.gold }]} />
-                <Text style={[styles.liveTxt, !contextReady && { color: C.gold }]}>{contextReady ? 'LIVE' : 'SYNC'}</Text>
+              <View style={s.liveDot}>
+                <View style={[s.livePulse, !contextReady && { backgroundColor: palette.aqua }]} />
+                <Text style={[s.liveTxt, !contextReady && { color: t.accentText }]}>{contextReady ? 'LIVE' : 'SYNC'}</Text>
               </View>
               {messages.length > 0 && (
                 <TouchableOpacity
@@ -1522,13 +1542,13 @@ Capture rookies and veterans exactly.`,
                       ],
                     );
                   }}
-                  style={styles.gearBtn}
+                  style={s.gearBtn}
                 >
-                  <Ionicons name="create-outline" size={20} color={C.dim2} />
+                  <Ionicons name="create-outline" size={20} color={t.textMuted} />
                 </TouchableOpacity>
               )}
-              <TouchableOpacity onPress={() => router.push('/(tabs)/settings' as any)} style={styles.gearBtn}>
-                <Ionicons name="settings-sharp" size={20} color={C.dim2} />
+              <TouchableOpacity onPress={() => router.push('/(tabs)/settings' as any)} style={s.gearBtn}>
+                <Ionicons name="settings-sharp" size={20} color={t.textMuted} />
               </TouchableOpacity>
             </View>
           </View>
@@ -1536,21 +1556,21 @@ Capture rookies and veterans exactly.`,
           {/* ── League selector ── */}
           {contextReady && allLeagues.length > 0 && (
             <TouchableOpacity
-              style={[styles.leaguePicker, { borderColor: selectorColor + '55', backgroundColor: selectorColor + '12' }]}
+              style={[s.leaguePicker, { borderColor: selectorColor + '55', backgroundColor: selectorColor + '12' }]}
               onPress={() => setPickerVisible(true)}
               activeOpacity={0.75}
             >
-              <View style={[styles.leaguePickerDot, { backgroundColor: selectorColor }]} />
-              <Text style={[styles.leaguePickerLabel, { color: selectorColor }]} numberOfLines={1}>{selectorLabel}</Text>
+              <View style={[s.leaguePickerDot, { backgroundColor: selectorColor }]} />
+              <Text style={[s.leaguePickerLabel, { color: selectorColor }]} numberOfLines={1}>{selectorLabel}</Text>
               <Ionicons name="chevron-down" size={14} color={selectorColor} style={{ marginLeft: 2 }} />
             </TouchableOpacity>
           )}
 
           {/* ── Quick prompts ── */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.promptScroll} contentContainerStyle={{ gap: 5 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.promptScroll} contentContainerStyle={{ gap: 5 }}>
             {QUICK_PROMPTS.map(p => (
-              <TouchableOpacity key={p} style={styles.promptChip} onPress={() => send(p)}>
-                <Text style={styles.promptTxt}>{p}</Text>
+              <TouchableOpacity key={p} style={s.promptChip} onPress={() => send(p)}>
+                <Text style={s.promptTxt}>{p}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -1559,33 +1579,33 @@ Capture rookies and veterans exactly.`,
           <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 8, gap: 10 }} showsVerticalScrollIndicator={false}>
             {!contextReady && messages.length === 0 && (
               <View style={{ alignItems:'center', paddingVertical:40, gap:10 }}>
-                <ActivityIndicator color={C.blueDeep} size="large" />
-                <Text style={styles.loadingSub}>Loading your leagues...</Text>
+                <ActivityIndicator color={t.accentText} size="large" />
+                <Text style={s.loadingSub}>Loading your leagues...</Text>
               </View>
             )}
             {messages.map((m, i) => (
               m.role === 'user' ? (
                 // User bubble — gold card (matches mockup)
-                <View key={i} style={styles.userRow}>
-                  <View style={styles.userBubble}>
-                    <View style={styles.userBubbleShine} />
-                    <Text selectable style={styles.userTxt}>{m.text}</Text>
+                <View key={i} style={s.userRow}>
+                  <View style={s.userBubble}>
+                    <View style={s.userBubbleShine} />
+                    <Text selectable style={s.userTxt}>{m.text}</Text>
                   </View>
                 </View>
               ) : (
                 // AI bubble — cream bevel card (matches mockup)
-                <View key={i} style={styles.aiRow}>
-                  <View style={styles.aiBubbleAvatar}>
+                <View key={i} style={s.aiRow}>
+                  <View style={s.aiBubbleAvatar}>
                     <AIOmniLogo size={20} />
                   </View>
-                  <View style={[styles.aiBubble, { maxWidth: '85%' }]}>
-                    <View style={styles.bevelShine} />
+                  <View style={[s.aiBubble, { maxWidth: '85%' }]}>
+                    <View style={s.bevelShine} />
                     {m.isLoading ? (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 4 }}>
-                        <ActivityIndicator color={C.blueDeep} size="small" />
-                        <Text style={[styles.aiTxt, { color: C.dim2 }]}>Analyzing...</Text>
+                        <ActivityIndicator color={t.accentText} size="small" />
+                        <Text style={[s.aiTxt, { color: t.textMuted }]}>Analyzing...</Text>
                       </View>
-                    ) : renderAIText(m.text)}
+                    ) : renderAIText(m.text, s)}
                   </View>
                 </View>
               )
@@ -1593,17 +1613,17 @@ Capture rookies and veterans exactly.`,
           </ScrollView>
 
           {/* ── Input ── */}
-          <View style={[styles.inputWrap, { paddingBottom: insets.bottom + 4 }]}>
-            <View style={styles.inputRow}>
+          <View style={[s.inputWrap, { paddingBottom: insets.bottom + 4 }]}>
+            <View style={s.inputRow}>
               <TouchableOpacity
-                style={[styles.attachBtn, (loading || reading || remaining <= 0) && { opacity: 0.4 }]}
+                style={[s.attachBtn, (loading || reading || remaining <= 0) && { opacity: 0.4 }]}
                 onPress={readDraftBoard}
                 disabled={loading || reading || remaining <= 0}
                 accessibilityLabel="Read draft board from a screenshot"
               >
                 {reading
-                  ? <ActivityIndicator color={C.blueDeep} size="small" />
-                  : <Ionicons name="image-outline" size={20} color={C.blueDeep} />}
+                  ? <ActivityIndicator color={t.accentText} size="small" />
+                  : <Ionicons name="image-outline" size={20} color={t.accentText} />}
               </TouchableOpacity>
               <TextInput
                 value={input}
@@ -1617,18 +1637,18 @@ Capture rookies and veterans exactly.`,
                         ? 'This device has used its free prompts — upgrade to keep going'
                         : 'Out of prompts — upgrade for more'
                 }
-                placeholderTextColor={C.dim2}
-                style={styles.input}
+                placeholderTextColor={t.textMuted}
+                style={s.input}
                 onSubmitEditing={() => send(input)}
                 returnKeyType="send"
                 editable={remaining > 0 && !freeNeedsLink}
               />
               <TouchableOpacity
-                style={[styles.sendBtn, (!input.trim() || loading || remaining <= 0 || freeNeedsLink) && styles.sendBtnOff]}
+                style={[s.sendBtn, (!input.trim() || loading || remaining <= 0 || freeNeedsLink) && s.sendBtnOff]}
                 onPress={() => send(input)}
                 disabled={!input.trim() || loading || remaining <= 0 || freeNeedsLink}
               >
-                <Text style={styles.sendArrow}>↑</Text>
+                <Text style={s.sendArrow}>↑</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1637,38 +1657,38 @@ Capture rookies and veterans exactly.`,
 
       {/* ── League Picker Modal ── */}
       <Modal visible={pickerVisible} transparent animationType="slide" onRequestClose={() => setPickerVisible(false)}>
-        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setPickerVisible(false)}>
+        <TouchableOpacity style={s.pickerOverlay} activeOpacity={1} onPress={() => setPickerVisible(false)}>
           {/* maxHeight + scrollable list: with every league now loading
               (20+ across platforms) the sheet outgrew the screen and the
               top rows were unreachable — the row list scrolls, while the
               title and CANCEL stay pinned. */}
-          <View style={[styles.pickerSheet, { maxHeight: '82%' }]}>
-            <View style={styles.pickerShineBar} />
-            <View style={styles.pickerHandle} />
-            <Text style={styles.pickerTitle}>FOCUS ON A LEAGUE</Text>
-            <Text style={styles.pickerSub}>AI advice will be tailored to the selected league's roster and scoring format.</Text>
+          <View style={[s.pickerSheet, { maxHeight: '82%' }]}>
+            <View style={s.pickerShineBar} />
+            <View style={s.pickerHandle} />
+            <Text style={s.pickerTitle}>FOCUS ON A LEAGUE</Text>
+            <Text style={s.pickerSub}>AI advice will be tailored to the selected league's roster and scoring format.</Text>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ flexGrow: 0 }}>
-              <TouchableOpacity style={[styles.pickerRow, !selectedLeague && styles.pickerRowActive]} onPress={() => selectLeague(null)}>
-                <View style={[styles.pickerDot, { backgroundColor: C.gold }]} />
+              <TouchableOpacity style={[s.pickerRow, !selectedLeague && s.pickerRowActive]} onPress={() => selectLeague(null)}>
+                <View style={[s.pickerDot, { backgroundColor: palette.aqua }]} />
                 <View style={{ flex:1 }}>
-                  <Text style={[styles.pickerRowLabel, !selectedLeague && { color: C.gold }]}>All Leagues</Text>
-                  <Text style={styles.pickerRowSub}>{allLeagues.length} leagues · Cross-league insights</Text>
+                  <Text style={[s.pickerRowLabel, !selectedLeague && { color: t.accentText }]}>All Leagues</Text>
+                  <Text style={s.pickerRowSub}>{allLeagues.length} leagues · Cross-league insights</Text>
                 </View>
-                {!selectedLeague && <Ionicons name="checkmark" size={18} color={C.gold} />}
+                {!selectedLeague && <Ionicons name="checkmark" size={18} color={t.accentText} />}
               </TouchableOpacity>
 
-              <View style={styles.pickerDivider} />
+              <View style={s.pickerDivider} />
 
               {allLeagues.map((lg, i) => {
                 const isActive = selectedLeague?.name === lg.name && selectedLeague?.platform === lg.platform;
                 const color    = PLATFORM_COLOR[lg.platform] ?? C.gold;
                 return (
-                  <TouchableOpacity key={i} style={[styles.pickerRow, isActive && styles.pickerRowActive]} onPress={() => selectLeague(lg)}>
-                    <View style={[styles.pickerDot, { backgroundColor: color }]} />
+                  <TouchableOpacity key={i} style={[s.pickerRow, isActive && s.pickerRowActive]} onPress={() => selectLeague(lg)}>
+                    <View style={[s.pickerDot, { backgroundColor: color }]} />
                     <View style={{ flex:1 }}>
-                      <Text style={[styles.pickerRowLabel, isActive && { color }]} numberOfLines={1}>{lg.name}</Text>
-                      <Text style={styles.pickerRowSub}>{lg.platform} · {lg.format} · {lg.record} · Rank {lg.rank}</Text>
+                      <Text style={[s.pickerRowLabel, isActive && { color }]} numberOfLines={1}>{lg.name}</Text>
+                      <Text style={s.pickerRowSub}>{lg.platform} · {lg.format} · {lg.record} · Rank {lg.rank}</Text>
                     </View>
                     {isActive && <Ionicons name="checkmark" size={18} color={color} />}
                   </TouchableOpacity>
@@ -1676,8 +1696,8 @@ Capture rookies and veterans exactly.`,
               })}
             </ScrollView>
 
-            <TouchableOpacity style={styles.pickerClose} onPress={() => setPickerVisible(false)}>
-              <Text style={styles.pickerCloseTxt}>CANCEL</Text>
+            <TouchableOpacity style={s.pickerClose} onPress={() => setPickerVisible(false)}>
+              <Text style={s.pickerCloseTxt}>CANCEL</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -1686,14 +1706,14 @@ Capture rookies and veterans exactly.`,
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   wrap:     { flex:1, paddingHorizontal: SP[3] },
 
   // Header
   hdr:      { flexDirection:'row', alignItems:'center', gap:10, marginBottom:10 },
-  logoAvatar: { width:44, height:44, borderRadius:12, backgroundColor: C.goldS, borderWidth:1.5, borderColor: C.goldBorder, alignItems:'center', justifyContent:'center', overflow:'hidden' },
-  title:    { fontSize:SZ.xl, fontFamily:F.bold, color:'#f0f4f5' },
-  subtitle: { fontSize:SZ.xs-1, fontFamily:F.mono, color:C.dim2, letterSpacing:0.8 },
+  logoAvatar: { width:44, height:44, borderRadius:12, backgroundColor: palette.aqua + '22', borderWidth:1.5, borderColor: palette.aqua + '50', alignItems:'center', justifyContent:'center', overflow:'hidden' },
+  title:    { fontSize:SZ.xl, fontFamily:F.bold, color:t.text },
+  subtitle: { fontSize:SZ.xs-1, fontFamily:F.mono, color:t.textMuted, letterSpacing:0.8 },
   rightHdr: { flexDirection:'row', alignItems:'center', gap:6 },
   gearBtn:  { padding:4 },
 
@@ -1701,31 +1721,31 @@ const styles = StyleSheet.create({
   promptCountNum: { fontSize:SZ.sm, fontFamily:F.bold },
   promptCountLbl: { fontSize:SZ.xs-1, fontFamily:F.mono, opacity:0.7 },
   liveDot:  { flexDirection:'row', alignItems:'center', gap:4, backgroundColor:'rgba(30,140,66,0.12)', borderWidth:1, borderColor:'rgba(30,140,66,0.3)', borderRadius:20, paddingHorizontal:8, paddingVertical:3 },
-  livePulse:{ width:5, height:5, borderRadius:3, backgroundColor:C.mint },
-  liveTxt:  { fontSize:SZ.xs-1, fontFamily:F.mono, color:C.mint, letterSpacing:1 },
+  livePulse:{ width:5, height:5, borderRadius:3, backgroundColor:palette.green },
+  liveTxt:  { fontSize:SZ.xs-1, fontFamily:F.mono, color:t.successText, letterSpacing:1 },
 
   leaguePicker:     { flexDirection:'row', alignItems:'center', alignSelf:'flex-start', gap:6, borderWidth:1.5, borderRadius:20, paddingHorizontal:12, paddingVertical:6, marginBottom:10, maxWidth:'70%' },
   leaguePickerDot:  { width:6, height:6, borderRadius:3 },
   leaguePickerLabel:{ fontFamily:F.mono, fontSize:SZ.xs, letterSpacing:0.8, fontWeight:'700', flex:1 },
 
   promptScroll: { maxHeight:36, marginBottom:10 },
-  promptChip:   { paddingHorizontal:11, paddingVertical:5, borderRadius:20, backgroundColor:C.goldS, borderWidth:1.5, borderColor:C.goldBorder },
-  promptTxt:    { fontSize:SZ.sm, color:C.blueDeep, fontFamily:F.mono },
+  promptChip:   { paddingHorizontal:11, paddingVertical:5, borderRadius:20, backgroundColor:palette.aqua + '22', borderWidth:1.5, borderColor:palette.aqua + '50' },
+  promptTxt:    { fontSize:SZ.sm, color:t.accentText, fontFamily:F.mono },
 
-  loadingSub: { color:C.dim2, fontFamily:F.mono, fontSize:SZ.sm },
+  loadingSub: { color:t.textMuted, fontFamily:F.mono, fontSize:SZ.sm },
 
   // AI bubble — cream bevel (matches mockup card system)
   aiRow:   { flexDirection:'row', gap:8, alignItems:'flex-start' },
   aiBubbleAvatar: {
     width:30, height:30, borderRadius:9,
-    backgroundColor: C.goldS, borderWidth:1.5, borderColor: C.goldBorder,
+    backgroundColor: palette.aqua + '22', borderWidth:1.5, borderColor: palette.aqua + '50',
     alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:2,
   },
   aiBubble: {
-    backgroundColor: '#12252e',
+    backgroundColor: t.card,
     borderWidth: 1.5,
-    borderColor: '#1a3542',
-    borderTopColor: '#12252e',
+    borderColor: t.border,
+    borderTopColor: t.card,
     
     
     
@@ -1740,7 +1760,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  bevelShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
+  bevelShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:t.card, zIndex:6 },
 
   // User bubble — gold card (matches mockup)
   userRow:    { flexDirection:'row', justifyContent:'flex-end' },
@@ -1767,24 +1787,24 @@ const styles = StyleSheet.create({
   userBubbleShine: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:'#1a3542', zIndex:6 },
   userTxt:    { fontSize:SZ.md, color:'#0a1214', lineHeight:20, fontFamily:F.body },
 
-  aiTxt:    { fontSize:SZ.md, color:'#f0f4f5', lineHeight:20, fontFamily:F.outfit },
-  aiBold:   { fontSize:SZ.md, fontFamily:F.semibold, color:'#1be7ff', lineHeight:20 },
+  aiTxt:    { fontSize:SZ.md, color:t.text, lineHeight:20, fontFamily:F.outfit },
+  aiBold:   { fontSize:SZ.md, fontFamily:F.semibold, color:t.accentText, lineHeight:20 },
 
   // Verdict card
   verdict:    { borderLeftWidth:2, borderRadius:9, padding:9, marginTop:7 },
   verdictEye: { fontSize:SZ.xs-2, fontFamily:F.mono, letterSpacing:1, marginBottom:2 },
-  verdictTxt: { fontSize:SZ.sm+1, fontFamily:F.semibold, color:'#f0f4f5' },
+  verdictTxt: { fontSize:SZ.sm+1, fontFamily:F.semibold, color:t.text },
 
   // Recommendation card — blue (matches mockup)
   recoCard: {
-    backgroundColor: '#0f1c22',
+    backgroundColor: t.surface,
     borderRadius: 12,
     borderTopLeftRadius: 4,
     padding: 11,
     marginTop: 7,
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.35)',
-    borderTopColor: '#0f1c22',
+    borderTopColor: t.surface,
     borderBottomColor: 'rgba(20,45,100,0.5)',
     shadowColor: '#1be7ff',
     shadowOffset: { width:0, height:4 },
@@ -1794,44 +1814,46 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
-  recoTitle: { fontSize:SZ.sm, fontFamily:F.bold, color:'#ffb800', letterSpacing:0.5 },
-  recoBody:  { fontSize:SZ.sm, fontFamily:F.outfit, color:'#7a9eaa', lineHeight:18, marginTop:2 },
+  recoTitle: { fontSize:SZ.sm, fontFamily:F.bold, color:t.warnText, letterSpacing:0.5 },
+  recoBody:  { fontSize:SZ.sm, fontFamily:F.outfit, color:t.textSub, lineHeight:18, marginTop:2 },
 
   // Add player card
-  addCard:   { flexDirection:'row', alignItems:'center', gap:8, backgroundColor:'#12252e', borderWidth:1.5, borderColor:BORDER, borderRadius:10, padding:8, marginTop:7 },
-  addName:   { fontSize:SZ.md, fontFamily:F.bold, color:'#f0f4f5' },
-  addSub:    { fontSize:SZ.sm, fontFamily:F.mono, color:C.dim2 },
-  addBtn:    { backgroundColor:C.sageS, borderWidth:1.5, borderColor:C.sageBorder, borderRadius:7, paddingHorizontal:8, paddingVertical:4 },
-  addBtnTxt: { fontSize:SZ.sm, fontFamily:F.mono, color:C.blueDeep, fontWeight:'700' },
+  addCard:   { flexDirection:'row', alignItems:'center', gap:8, backgroundColor:t.card, borderWidth:1.5, borderColor:t.border, borderRadius:10, padding:8, marginTop:7 },
+  addName:   { fontSize:SZ.md, fontFamily:F.bold, color:t.text },
+  addSub:    { fontSize:SZ.sm, fontFamily:F.mono, color:t.textMuted },
+  addBtn:    { backgroundColor:t.greenTint, borderWidth:1.5, borderColor:palette.green + '28', borderRadius:7, paddingHorizontal:8, paddingVertical:4 },
+  addBtnTxt: { fontSize:SZ.sm, fontFamily:F.mono, color:t.accentText, fontWeight:'700' },
 
   // Input
   inputWrap: { paddingTop:8 },
-  inputRow:  { flexDirection:'row', alignItems:'center', gap:7, backgroundColor:'#12252e', borderWidth:1.5, borderColor:BORDER, borderTopColor:'#12252e', borderRadius:18, paddingLeft:5, paddingRight:4, paddingVertical:4 },
-  input:     { flex:1, fontSize:SZ.md, color:'#f0f4f5', paddingVertical:8, fontFamily:F.outfit },
+  inputRow:  { flexDirection:'row', alignItems:'center', gap:7, backgroundColor:t.card, borderWidth:1.5, borderColor:t.border, borderTopColor:t.card, borderRadius:18, paddingLeft:5, paddingRight:4, paddingVertical:4 },
+  input:     { flex:1, fontSize:SZ.md, color:t.text, paddingVertical:8, fontFamily:F.outfit },
   attachBtn: { width:34, height:34, borderRadius:10, alignItems:'center', justifyContent:'center' },
-  sendBtn:   { width:34, height:34, backgroundColor:C.gold, borderRadius:10, alignItems:'center', justifyContent:'center' },
-  sendBtnOff:{ backgroundColor:C.goldS },
+  sendBtn:   { width:34, height:34, backgroundColor:palette.aqua, borderRadius:10, alignItems:'center', justifyContent:'center' },
+  sendBtnOff:{ backgroundColor:palette.aqua + '22' },
   sendArrow: { fontSize:14, fontFamily:F.bold, color:'#f0f4f5' },
 
   // Picker modal — cream theme
   pickerOverlay:  { flex:1, backgroundColor:'rgba(10,18,20,0.7)', justifyContent:'flex-end' },
   pickerSheet: {
-    backgroundColor:'#12252e',
+    backgroundColor:t.card,
     borderTopLeftRadius:20, borderTopRightRadius:20,
     paddingTop:12, paddingBottom:32, paddingHorizontal:20,
     borderTopWidth:1.5, borderLeftWidth:1.5, borderRightWidth:1.5,
-    borderColor:BORDER, overflow:'hidden', position:'relative',
+    borderColor:t.border, overflow:'hidden', position:'relative',
   },
-  pickerShineBar: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:BEVEL_HI, zIndex:6 },
-  pickerHandle:   { width:36, height:4, borderRadius:2, backgroundColor:BORDER, alignSelf:'center', marginBottom:20 },
-  pickerTitle:    { fontFamily:F.bold, color:C.blueDeep, fontSize:SZ.sm, letterSpacing:2, marginBottom:6 },
-  pickerSub:      { fontFamily:F.mono, color:C.dim2, fontSize:SZ.sm, lineHeight:18, marginBottom:16 },
-  pickerDivider:  { height:1, backgroundColor:BORDER, marginVertical:8 },
+  pickerShineBar: { position:'absolute', top:0, left:'8%', right:'8%', height:1.5, backgroundColor:t.card, zIndex:6 },
+  pickerHandle:   { width:36, height:4, borderRadius:2, backgroundColor:t.border, alignSelf:'center', marginBottom:20 },
+  pickerTitle:    { fontFamily:F.bold, color:t.accentText, fontSize:SZ.sm, letterSpacing:2, marginBottom:6 },
+  pickerSub:      { fontFamily:F.mono, color:t.textMuted, fontSize:SZ.sm, lineHeight:18, marginBottom:16 },
+  pickerDivider:  { height:1, backgroundColor:t.border, marginVertical:8 },
   pickerRow:      { flexDirection:'row', alignItems:'center', gap:10, paddingVertical:13, paddingHorizontal:12, borderRadius:12, marginBottom:4 },
-  pickerRowActive:{ backgroundColor:'#0f1c22' },
+  pickerRowActive:{ backgroundColor:t.surface },
   pickerDot:      { width:8, height:8, borderRadius:4, flexShrink:0 },
-  pickerRowLabel: { fontFamily:F.bold, color:'#f0f4f5', fontSize:SZ.base },
-  pickerRowSub:   { fontFamily:F.mono, color:C.dim2, fontSize:SZ.xs-1, marginTop:2, letterSpacing:0.4 },
-  pickerClose:    { marginTop:12, alignItems:'center', paddingVertical:14, borderRadius:12, borderWidth:1.5, borderColor:BORDER },
-  pickerCloseTxt: { fontFamily:F.mono, color:C.dim2, fontSize:SZ.sm, letterSpacing:1.5 },
+  pickerRowLabel: { fontFamily:F.bold, color:t.text, fontSize:SZ.base },
+  pickerRowSub:   { fontFamily:F.mono, color:t.textMuted, fontSize:SZ.xs-1, marginTop:2, letterSpacing:0.4 },
+  pickerClose:    { marginTop:12, alignItems:'center', paddingVertical:14, borderRadius:12, borderWidth:1.5, borderColor:t.border },
+  pickerCloseTxt: { fontFamily:F.mono, color:t.textMuted, fontSize:SZ.sm, letterSpacing:1.5 },
 });
+
+type CoachStyles = ReturnType<typeof makeStyles>;

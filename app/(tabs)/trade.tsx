@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, askAIVision, describeAIError, hasAISession } from '../../services/ai';
@@ -13,6 +13,7 @@ import { getCurrentTier } from '../../services/purchases';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
 import { consumePrompt, hasLinkedPlatform } from '../../services/promptQuota';
 import { C, F, R, SP, SZ } from '../constants/tokens';
+import { useTheme, type ThemeTokens } from '../constants/theme';
 import { Icon } from '../components/AIOmniIcons';
 
 type Format = 'redraft' | 'dynasty';
@@ -183,6 +184,8 @@ async function loadEspnRoster(leagueId: string): Promise<string[]> {
 
 export default function TradesScreen() {
   const insets = useSafeAreaInsets();
+  const { t } = useTheme();
+  const styles = useMemo(() => makeStyles(t), [t]);
   const router = useRouter();
   const [format, setFormat] = useState<Format>('redraft');
   const [giving, setGiving] = useState('');
@@ -591,7 +594,7 @@ ${marketMath}${(() => {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0a1214' }}>
+    <View style={{ flex: 1, backgroundColor: t.bg }}>
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: SP[3], paddingBottom: insets.bottom + 16 }}
         showsVerticalScrollIndicator={false}
@@ -609,9 +612,9 @@ ${marketMath}${(() => {
             >
               <View style={{flexDirection:'row', alignItems:'center', gap:4}}>
                 {item === 'redraft' ? (
-                  <Icon name="calendar" size={16} color={format === item ? '#ffffff' : C.blueDeep} />
+                  <Icon name="calendar" size={16} color={format === item ? '#ffffff' : t.accentText} />
                 ) : (
-                  <Icon name="crown" size={16} color={format === item ? '#ffffff' : C.gold} />
+                  <Icon name="crown" size={16} color={format === item ? '#ffffff' : t.accentText} />
                 )}
                 <Text style={[styles.toggleTxt, format === item && styles.toggleTxtOn]}>
                   {item === 'redraft' ? 'REDRAFT' : 'DYNASTY'}
@@ -652,7 +655,7 @@ ${marketMath}${(() => {
           activeOpacity={0.85}
         >
           {extracting
-            ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator color={C.gold} size="small" /><Text style={styles.uploadTxt}>Reading screenshot…</Text></View>
+            ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator color={t.accentText} size="small" /><Text style={styles.uploadTxt}>Reading screenshot…</Text></View>
             : <Text style={styles.uploadTxt}>📷  Upload trade screenshot</Text>}
         </TouchableOpacity>
 
@@ -662,7 +665,7 @@ ${marketMath}${(() => {
             value={giving}
             onChangeText={text => setGiving(text)}
             placeholder="e.g. CeeDee Lamb"
-            placeholderTextColor={C.dim2}
+            placeholderTextColor={t.textMuted}
             style={styles.input}
             multiline
           />
@@ -698,7 +701,7 @@ ${marketMath}${(() => {
             value={getting}
             onChangeText={text => setGetting(text)}
             placeholder="e.g. Saquon Barkley + T. Lockett"
-            placeholderTextColor={C.dim2}
+            placeholderTextColor={t.textMuted}
             style={styles.input}
             multiline
           />
@@ -786,16 +789,16 @@ ${marketMath}${(() => {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   eyebrow: {
-    color: C.blueDeep,
+    color: t.accentText,
     fontFamily: F.mono,
     fontSize: SZ.sm,
     letterSpacing: 2,
     marginBottom: 6,
   },
   headline: {
-    color: '#f0f4f5',
+    color: t.text,
     fontFamily: F.bold,
     fontSize: SZ['3xl'] - 2,
     lineHeight: 36,
@@ -805,9 +808,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 4,
     borderRadius: 16,
-    backgroundColor: '#12252e',
+    backgroundColor: t.card,
     borderWidth: 1.5,
-    borderColor: '#1a3542',
+    borderColor: t.border,
     marginBottom: 16,
   },
   toggleBtn: {
@@ -817,7 +820,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toggleBtnOn: {
-    backgroundColor: '#1a3542',
+    backgroundColor: t.border,
     shadowColor: '#1be7ff',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
@@ -826,13 +829,13 @@ const styles = StyleSheet.create({
   },
   toggleTxt: { fontFamily: 'Audiowide_400Regular',
     fontSize: SZ.xs,
-    color: C.dim2,
+    color: t.textMuted,
   },
   toggleTxtOn: { fontFamily: 'Audiowide_400Regular',
-    color: '#f0f4f5',
+    color: t.text,
   },
   uploadBtn: {
-    backgroundColor: '#12252e',
+    backgroundColor: t.card,
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: C.gold,
@@ -843,21 +846,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   uploadTxt: {
-    color: C.gold,
+    color: t.accentText,
     fontFamily: F.mono,
     fontSize: SZ.sm,
     letterSpacing: 0.5,
   },
   inputCard: {
-    backgroundColor: '#12252e',
+    backgroundColor: t.card,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: '#1a3542',
+    borderColor: t.border,
     padding: 16,
     marginBottom: 12,
   },
   fieldLbl: {
-    color: C.dim2,
+    color: t.textMuted,
     fontFamily: F.mono,
     fontSize: SZ.xs,
     letterSpacing: 1,
@@ -865,7 +868,7 @@ const styles = StyleSheet.create({
   },
   input: {
     minHeight: 110,
-    color: '#f0f4f5',
+    color: t.text,
     fontFamily: F.mono,
     fontSize: SZ.sm,
     lineHeight: 20,
@@ -879,12 +882,12 @@ const styles = StyleSheet.create({
   divLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#12252e',
+    backgroundColor: t.card,
   },
   ctxChip: {
     borderWidth: 1,
-    borderColor: C.glassBorder,
-    backgroundColor: C.glass,
+    borderColor: t.border,
+    backgroundColor: t.card,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 7,
@@ -894,13 +897,13 @@ const styles = StyleSheet.create({
     backgroundColor: C.gold + '16',
   },
   ctxChipTxt: {
-    color: C.dim2,
+    color: t.textMuted,
     fontFamily: F.mono,
     fontSize: SZ.xs,
     letterSpacing: 0.5,
   },
   ctxChipTxtOn: {
-    color: C.gold,
+    color: t.accentText,
   },
   swapBtn: {
     borderWidth: 1,
@@ -912,35 +915,35 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   swapTxt: {
-    color: C.blueDeep,
+    color: t.accentText,
     fontFamily: F.mono,
     fontSize: SZ.xs,
     letterSpacing: 1,
   },
   forTxt: {
-    color: C.dim2,
+    color: t.textMuted,
     fontFamily: F.mono,
     fontSize: SZ.sm,
     letterSpacing: 1.5,
   },
   exLbl: {
-    color: C.dim2,
+    color: t.textMuted,
     fontFamily: F.mono,
     fontSize: SZ.xs,
     letterSpacing: 1.5,
     marginBottom: 8,
   },
   exCard: {
-    backgroundColor: '#12252e',
+    backgroundColor: t.card,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: 1.5,
-    borderColor: '#1a3542',
+    borderColor: t.border,
     marginRight: 8,
   },
   exTxt: {
-    color: '#f0f4f5',
+    color: t.text,
     fontFamily: F.mono,
     fontSize: SZ.sm,
   },
@@ -950,7 +953,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: 'rgba(88,131,191,0.24)',
-    backgroundColor: '#12252e',
+    backgroundColor: t.card,
   },
   analyzeBtnOn: {
     backgroundColor: C.blueDeep,
@@ -965,7 +968,7 @@ const styles = StyleSheet.create({
     fontFamily: F.mono,
   },
   analyzeTxt: {
-    color: C.dim2,
+    color: t.textMuted,
     fontFamily: F.bold,
     fontSize: SZ.base,
   },
@@ -973,11 +976,11 @@ const styles = StyleSheet.create({
     color: "#ffffff",
   },
   resultCard: {
-    backgroundColor: '#12252e',
+    backgroundColor: t.card,
     borderRadius: 16,
     padding: 18,
     borderWidth: 1.5,
-    borderColor: '#1a3542',
+    borderColor: t.border,
     marginTop: 18,
   },
   resultCardShine: {
@@ -986,7 +989,7 @@ const styles = StyleSheet.create({
     left: '10%',
     right: '10%',
     height: 2,
-    backgroundColor: '#12252e',
+    backgroundColor: t.card,
     borderRadius: 2,
   },
   degradedBanner: {
@@ -998,7 +1001,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   degradedTxt: {
-    color: '#ffb800',
+    color: t.warnText,
     fontFamily: F.mono,
     fontSize: SZ.xs,
     lineHeight: 18,
@@ -1009,13 +1012,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   gradeBox: {
-    backgroundColor: '#0f1c22',
+    backgroundColor: t.surface,
     borderRadius: 14,
     padding: 14,
     alignItems: 'center',
   },
   gradeLbl: {
-    color: '#7a9eaa',
+    color: t.textSub,
     fontSize: SZ.xs,
     fontFamily: F.mono,
     letterSpacing: 1.2,
@@ -1026,13 +1029,13 @@ const styles = StyleSheet.create({
     fontFamily: F.bold,
   },
   vs: {
-    color: C.dim2,
+    color: t.textMuted,
     fontFamily: F.mono,
     fontSize: SZ.sm,
     alignSelf: 'center',
   },
   analysis: {
-    color: '#f0f4f5',
+    color: t.text,
     fontSize: SZ.sm,
     lineHeight: 22,
     marginBottom: 12,
@@ -1060,20 +1063,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     marginBottom: 14,
-    color: '#ffb800',
+    color: t.warnText,
     fontFamily: F.bold,
     fontSize: SZ.base,
     lineHeight: 22,
   },
   verdictEye: {
-    color: C.dim2,
+    color: t.textMuted,
     fontSize: SZ.xs,
     fontFamily: F.mono,
     letterSpacing: 1.5,
     marginBottom: 6,
   },
   verdictTxt: {
-    color: '#f0f4f5',
+    color: t.text,
     fontFamily: F.outfit,
     fontSize: SZ.sm,
   },
