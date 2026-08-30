@@ -1,10 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { discoverESPNLeagues, saveESPNCredentials } from '../services/espn';
+import { useTheme, type ThemeTokens } from './constants/theme';
 import { C, F, SP, SZ } from './constants/tokens';
 
 const ESPN_LOGIN_URL = 'https://www.espn.com/fantasy/football/';
@@ -33,6 +34,8 @@ const INJECT_SCRIPT = `
 export default function ESPNLoginScreen() {
   const router     = useRouter();
   const insets     = useSafeAreaInsets();
+  const { t }      = useTheme();
+  const styles     = useMemo(() => makeStyles(t), [t]);
   const webViewRef = useRef<any>(null);
   const [status,     setStatus]     = useState('Log in to ESPN to connect your leagues');
   const [connecting, setConnecting] = useState(false);
@@ -105,7 +108,7 @@ export default function ESPNLoginScreen() {
       </View>
 
       <View style={[styles.statusBar, connected && { backgroundColor: 'rgba(30,140,66,0.18)' }]}>
-        {connecting && !connected && <ActivityIndicator color="#1be7ff" size="small" style={{ marginRight: 8 }} />}
+        {connecting && !connected && <ActivityIndicator color={t.accentText} size="small" style={{ marginRight: 8 }} />}
         {connected && <Text style={{ marginRight: 8, color: '#1e8c42', fontSize: 18 }}>✓</Text>}
         <Text style={[styles.statusText, connected && { color: '#1e8c42' }]}>{status}</Text>
       </View>
@@ -126,30 +129,24 @@ export default function ESPNLoginScreen() {
   );
 }
 
-// Dark theme to match the rest of the app (mirrors mfl-login + fleaflicker-login).
-const BG     = '#0a1214';
-const CARD   = '#12252e';
-const BORDER = '#1a3542';
-const TEXT   = '#f0f4f5';
-const AQUA   = '#1be7ff';
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+// Themed to match the rest of the app (mirrors mfl-login + fleaflicker-login).
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: t.bg },
   header: {
     paddingHorizontal: SP[3], paddingVertical: 14,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderBottomWidth: 1, borderBottomColor: BORDER,
-    backgroundColor: BG,
+    borderBottomWidth: 1, borderBottomColor: t.border,
+    backgroundColor: t.bg,
   },
   backBtn: {},
-  backText: { fontFamily: F.mono, color: AQUA, fontSize: SZ.base, letterSpacing: 0.3 },
-  title: { fontFamily: F.bold, color: TEXT, fontSize: SZ.lg, letterSpacing: 0.5 },
+  backText: { fontFamily: F.mono, color: t.accentText, fontSize: SZ.base, letterSpacing: 0.3 },
+  title: { fontFamily: F.bold, color: t.text, fontSize: SZ.lg, letterSpacing: 0.5 },
   statusBar: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SP[3], paddingVertical: 12,
-    backgroundColor: CARD,
-    borderBottomWidth: 1, borderBottomColor: BORDER,
+    backgroundColor: t.card,
+    borderBottomWidth: 1, borderBottomColor: t.border,
   },
-  statusText: { fontFamily: F.mono, color: TEXT, fontSize: SZ.base - 1, flex: 1, lineHeight: 18 },
+  statusText: { fontFamily: F.mono, color: t.text, fontSize: SZ.base - 1, flex: 1, lineHeight: 18 },
   webview: { flex: 1, backgroundColor: '#ffffff' },
 });

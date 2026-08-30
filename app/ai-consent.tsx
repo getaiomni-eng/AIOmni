@@ -4,22 +4,20 @@
 // Declining is a real choice: the app still works, AI features stay locked and
 // can be enabled later from Settings.
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AI_DISCLOSURE, setAIConsent } from '../services/aiConsent';
+import { useTheme, type ThemeTokens } from './constants/theme';
 
-const BG = '#0a1214';
-const CARD = '#12252e';
-const BORDER = '#1a3542';
-const TEXT = '#f0f4f5';
-const SUB = '#7a9eaa';
 const AQUA = '#1be7ff';
 
 export default function AIConsentScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
+  const { t } = useTheme();
+  const styles = useMemo(() => makeStyles(t), [t]);
 
   const decide = async (value: 'granted' | 'declined') => {
     setBusy(true);
@@ -42,7 +40,7 @@ export default function AIConsentScreen() {
           <Text style={styles.cardTitle}>What gets sent to {AI_DISCLOSURE.recipient}</Text>
           {AI_DISCLOSURE.sent.map((line, i) => (
             <View key={i} style={styles.row}>
-              <Text style={[styles.bullet, { color: AQUA }]}>•</Text>
+              <Text style={[styles.bullet, { color: t.accentText }]}>•</Text>
               <Text style={styles.rowText}>{line}</Text>
             </View>
           ))}
@@ -52,7 +50,7 @@ export default function AIConsentScreen() {
           <Text style={styles.cardTitle}>What never gets sent to {AI_DISCLOSURE.recipient}</Text>
           {AI_DISCLOSURE.notSent.map((line, i) => (
             <View key={i} style={styles.row}>
-              <Text style={[styles.bullet, { color: SUB }]}>•</Text>
+              <Text style={[styles.bullet, { color: t.textSub }]}>•</Text>
               <Text style={styles.rowText}>{line}</Text>
             </View>
           ))}
@@ -87,19 +85,19 @@ export default function AIConsentScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root:         { flex: 1, backgroundColor: BG, paddingHorizontal: 20 },
-  title:        { fontFamily: 'BebasNeue', fontSize: 30, color: TEXT, letterSpacing: 1, marginBottom: 10 },
-  lede:         { fontSize: 15, lineHeight: 22, color: SUB, marginBottom: 20 },
-  card:         { backgroundColor: CARD, borderRadius: 14, borderWidth: 1, borderColor: BORDER, padding: 16, marginBottom: 14 },
-  cardTitle:    { fontSize: 15, fontWeight: '700', color: TEXT, marginBottom: 10 },
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
+  root:         { flex: 1, backgroundColor: t.bg, paddingHorizontal: 20 },
+  title:        { fontFamily: 'BebasNeue', fontSize: 30, color: t.text, letterSpacing: 1, marginBottom: 10 },
+  lede:         { fontSize: 15, lineHeight: 22, color: t.textSub, marginBottom: 20 },
+  card:         { backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.border, padding: 16, marginBottom: 14 },
+  cardTitle:    { fontSize: 15, fontWeight: '700', color: t.text, marginBottom: 10 },
   row:          { flexDirection: 'row', marginBottom: 8 },
   bullet:       { fontSize: 15, marginRight: 8, lineHeight: 20 },
-  rowText:      { flex: 1, fontSize: 14, lineHeight: 20, color: TEXT },
-  fine:         { fontSize: 13, lineHeight: 19, color: SUB, marginBottom: 12 },
-  link:         { fontSize: 14, color: AQUA, marginBottom: 24 },
+  rowText:      { flex: 1, fontSize: 14, lineHeight: 20, color: t.text },
+  fine:         { fontSize: 13, lineHeight: 19, color: t.textSub, marginBottom: 12 },
+  link:         { fontSize: 14, color: t.accentText, marginBottom: 24 },
   primaryBtn:   { backgroundColor: AQUA, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginBottom: 12 },
   primaryText:  { fontFamily: 'BebasNeue', fontSize: 18, letterSpacing: 1, color: '#0a1214' },
   secondaryBtn: { paddingVertical: 14, alignItems: 'center' },
-  secondaryText:{ fontSize: 14, color: SUB },
+  secondaryText:{ fontSize: 14, color: t.textSub },
 });

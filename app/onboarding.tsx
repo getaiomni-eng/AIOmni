@@ -1,17 +1,18 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Animated, Dimensions, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AIOmniLogo, AIOmniWordmark } from './components/AIOmniLogo';
 import { F, SP } from './constants/tokens';
+import { useTheme, type ThemeTokens } from './constants/theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const SURFACE = '#12252e';
-const BORDER  = '#1a3542';
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTheme();
+  const styles = useMemo(() => makeStyles(t), [t]);
 
   // Animation values
   const logoScale    = useRef(new Animated.Value(0.3)).current;
@@ -86,7 +87,7 @@ export default function OnboardingScreen() {
   });
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0a1214' }}>
+    <View style={{ flex: 1, backgroundColor: t.bg }}>
       <View style={[styles.inner, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }]}>
 
         {/* Logo + tagline */}
@@ -96,7 +97,7 @@ export default function OnboardingScreen() {
           </Animated.View>
 
           <Animated.View style={{ marginTop: 16, opacity: wordFade }}>
-            <AIOmniWordmark fontSize={32} color='#f0f4f5' />
+            <AIOmniWordmark fontSize={32} color={t.text} />
           </Animated.View>
 
           <Animated.View style={[styles.logoDivider, { opacity: tagFade }]} />
@@ -156,16 +157,16 @@ export default function OnboardingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   inner: { flex: 1, justifyContent: 'center', paddingHorizontal: SP[4] },
 
   logoBlock:   { alignItems: 'center', marginBottom: 32 },
   logoDivider: { width: 36, height: 2, backgroundColor: '#ffb800', marginVertical: 12, opacity: 0.6 },
-  tagline:     { fontFamily: F.mono, fontSize: 9, color: '#4a6a76', letterSpacing: 2, textAlign: 'center' },
+  tagline:     { fontFamily: F.mono, fontSize: 9, color: t.textMuted, letterSpacing: 2, textAlign: 'center' },
 
   propsBlock: { alignItems: 'center', marginBottom: 32 },
-  propLine:   { fontFamily: F.bold, fontSize: 18, color: '#f0f4f5', letterSpacing: 2, textAlign: 'center', marginBottom: 8 },
-  propSub:    { fontFamily: F.body, fontSize: 14, color: '#4a6a76', textAlign: 'center', lineHeight: 20, paddingHorizontal: 16 },
+  propLine:   { fontFamily: F.bold, fontSize: 18, color: t.text, letterSpacing: 2, textAlign: 'center', marginBottom: 8 },
+  propSub:    { fontFamily: F.body, fontSize: 14, color: t.textMuted, textAlign: 'center', lineHeight: 20, paddingHorizontal: 16 },
 
   ctaBlock: { marginBottom: 28 },
 
@@ -179,25 +180,25 @@ const styles = StyleSheet.create({
   primaryBtnText: { fontFamily: F.bold, color: '#0a1214', fontSize: 16, letterSpacing: 2 },
 
   secondaryBtn: {
-    backgroundColor: SURFACE, borderRadius: 14,
+    backgroundColor: t.card, borderRadius: 14,
     padding: 16, alignItems: 'center', marginBottom: 12,
-    borderWidth: 1.5, borderColor: BORDER,
+    borderWidth: 1.5, borderColor: t.border,
   },
-  secondaryBtnText: { fontFamily: F.bold, color: '#6eeb83', fontSize: 14, letterSpacing: 2 },
+  secondaryBtnText: { fontFamily: F.bold, color: t.successText, fontSize: 14, letterSpacing: 2 },
 
   skipBtn: { alignItems: 'center', paddingVertical: 12 },
-  skipBtnText: { fontFamily: F.mono, color: '#4a6a76', fontSize: 11, letterSpacing: 1.5 },
+  skipBtnText: { fontFamily: F.mono, color: t.textMuted, fontSize: 11, letterSpacing: 1.5 },
 
   platformStrip: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'center', gap: 8, marginBottom: 12,
   },
   platformDot:   { width: 6, height: 6, borderRadius: 3 },
-  platformLabel: { fontFamily: F.mono, fontSize: 10, color: '#4a6a76', letterSpacing: 2 },
-  platformSep:   { width: 1, height: 10, backgroundColor: BORDER, marginHorizontal: 4 },
+  platformLabel: { fontFamily: F.mono, fontSize: 10, color: t.textMuted, letterSpacing: 2 },
+  platformSep:   { width: 1, height: 10, backgroundColor: t.border, marginHorizontal: 4 },
 
   legalNote: {
-    fontFamily: F.mono, color: '#4a6a76',
+    fontFamily: F.mono, color: t.textMuted,
     fontSize: 10, letterSpacing: 1,
     textAlign: 'center', opacity: 0.6, marginBottom: 4,
   },

@@ -1,14 +1,17 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { AIOmniLogo } from '../components/AIOmniLogo';
 import { supabase } from '../../services/supabase';
-import { C, F, SZ, R, SP } from '../constants/tokens';
+import { F, SZ, R, SP } from '../constants/tokens';
+import { useTheme, type ThemeTokens } from '../constants/theme';
 
 const BEVEL_HI = 'transparent';
 
 export default function ResetPasswordScreen() {
+  const { t } = useTheme();
+  const styles = useMemo(() => makeStyles(t), [t]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   // PKCE flow puts the recovery token in the query string as ?code=xyz.
@@ -86,7 +89,7 @@ export default function ResetPasswordScreen() {
   const submitDisabled = !sessionReady || loading;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0a1214' }}>
+    <View style={{ flex: 1, backgroundColor: t.bg }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={[styles.wrap, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]}>
 
@@ -109,7 +112,7 @@ export default function ResetPasswordScreen() {
               value={password}
               onChangeText={(t: string) => { setPassword(t); setError(''); }}
               placeholder="At least 6 characters"
-              placeholderTextColor={C.dim2}
+              placeholderTextColor={t.textMuted}
               secureTextEntry
               autoCapitalize="none"
               editable={sessionReady}
@@ -122,7 +125,7 @@ export default function ResetPasswordScreen() {
               value={confirm}
               onChangeText={(t: string) => { setConfirm(t); setError(''); }}
               placeholder="Re-enter password"
-              placeholderTextColor={C.dim2}
+              placeholderTextColor={t.textMuted}
               secureTextEntry
               autoCapitalize="none"
               editable={sessionReady}
@@ -136,7 +139,7 @@ export default function ResetPasswordScreen() {
               disabled={submitDisabled}
             >
               {loading
-                ? <ActivityIndicator color={C.ink} />
+                ? <ActivityIndicator color="#f0f4f5" />
                 : <Text style={styles.submitTxt}>UPDATE PASSWORD →</Text>
               }
             </TouchableOpacity>
@@ -152,17 +155,17 @@ export default function ResetPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   wrap: { flex: 1, paddingHorizontal: SP[3], justifyContent: 'center' },
   logoBlock: { alignItems: 'center', marginBottom: 36 },
-  logoSub:   { fontFamily: F.mono, color: '#4a6a76', fontSize: SZ.sm, textAlign: 'center', letterSpacing: 0.5, marginTop: 12 },
+  logoSub:   { fontFamily: F.mono, color: t.textMuted, fontSize: SZ.sm, textAlign: 'center', letterSpacing: 0.5, marginTop: 12 },
 
   card: {
-    backgroundColor: '#12252e',
+    backgroundColor: t.card,
     borderRadius: R.lg,
     padding: 24,
     borderWidth: 1.5,
-    borderColor: '#1a3542',
+    borderColor: t.border,
     overflow: 'hidden',
     position: 'relative',
     shadowColor: '#000',
@@ -173,22 +176,22 @@ const styles = StyleSheet.create({
   },
   cardShine:  { position: 'absolute', top: 0, left: '8%', right: '8%', height: 1.5, backgroundColor: BEVEL_HI, zIndex: 6 },
   cardAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, backgroundColor: '#ffb800' },
-  cardTitle:  { fontFamily: F.bold, fontSize: SZ['2xl'], color: '#f0f4f5', letterSpacing: 2, marginBottom: 20, marginTop: 8 },
+  cardTitle:  { fontFamily: F.bold, fontSize: SZ['2xl'], color: t.text, letterSpacing: 2, marginBottom: 20, marginTop: 8 },
 
-  label: { fontFamily: F.mono, fontSize: SZ.xs, color: '#4a6a76', letterSpacing: 1.5, marginBottom: 6 },
+  label: { fontFamily: F.mono, fontSize: SZ.xs, color: t.textMuted, letterSpacing: 1.5, marginBottom: 6 },
   input: {
-    backgroundColor: '#0f1c22',
+    backgroundColor: t.surface,
     borderWidth: 1.5,
-    borderColor: '#1a3542',
+    borderColor: t.border,
     borderRadius: R.sm,
     paddingHorizontal: 14,
     paddingVertical: 13,
     fontFamily: F.outfit,
     fontSize: SZ.base,
-    color: '#f0f4f5',
+    color: t.text,
     marginBottom: 16,
   },
-  errorTxt: { fontFamily: F.mono, color: '#ff5714', fontSize: SZ.sm, marginBottom: 12, lineHeight: 18 },
+  errorTxt: { fontFamily: F.mono, color: t.dangerText, fontSize: SZ.sm, marginBottom: 12, lineHeight: 18 },
 
   submitBtn: {
     backgroundColor: '#ffb800',
@@ -199,5 +202,5 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   submitTxt: { fontFamily: F.mono, color: '#0a1214', fontSize: SZ.base, letterSpacing: 2 },
-  cancelTxt: { fontFamily: F.mono, color: '#6eeb83', fontSize: SZ.sm, textAlign: 'center', paddingVertical: 4 },
+  cancelTxt: { fontFamily: F.mono, color: t.successText, fontSize: SZ.sm, textAlign: 'center', paddingVertical: 4 },
 });

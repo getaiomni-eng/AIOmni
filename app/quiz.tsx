@@ -31,6 +31,7 @@ import type { RankedPlayer } from '../services/rankingsData';
 import PlayerPicker from './components/PlayerPicker';
 import QuizSlot from './components/QuizSlot';
 import { dark, F, palette } from './constants/tokens';
+import { useTheme, type ThemeTokens } from './constants/theme';
 
 // Kickers excluded from quiz Phase 2 — engine doesn't rank K (decision
 // 2026-05-06). User ranks the four scoring positions only.
@@ -45,6 +46,8 @@ type PlayerLookup = Record<string, RankedPlayer>;
 export default function QuizScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, QuizAnswer>>({});
@@ -186,7 +189,7 @@ export default function QuizScreen() {
       <View style={s.topBar}>
         <Text style={s.topTitle}>CUSTOM RANKINGS QUIZ</Text>
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="close" size={24} color={dark.textSub} />
+          <Ionicons name="close" size={24} color={t.textSub} />
         </TouchableOpacity>
       </View>
 
@@ -228,8 +231,8 @@ export default function QuizScreen() {
           onPress={goBack}
           disabled={currentStep === 0}
         >
-          <Ionicons name="chevron-back" size={18} color={currentStep === 0 ? dark.textMuted : dark.text} />
-          <Text style={[s.navBtnTxt, currentStep === 0 && { color: dark.textMuted }]}>BACK</Text>
+          <Ionicons name="chevron-back" size={18} color={currentStep === 0 ? t.textMuted : t.text} />
+          <Text style={[s.navBtnTxt, currentStep === 0 && { color: t.textMuted }]}>BACK</Text>
         </TouchableOpacity>
 
         <Text style={s.stepCounter}>{currentStep + 1} / {TOTAL_STEPS}</Text>
@@ -239,10 +242,10 @@ export default function QuizScreen() {
           onPress={goNext}
           disabled={!canAdvance}
         >
-          <Text style={[s.navBtnPrimaryTxt, !canAdvance && { color: dark.textMuted }]}>
+          <Text style={[s.navBtnPrimaryTxt, !canAdvance && { color: t.textMuted }]}>
             {currentStep === TOTAL_STEPS - 1 ? 'REVEAL' : 'NEXT'}
           </Text>
-          <Ionicons name="chevron-forward" size={18} color={!canAdvance ? dark.textMuted : dark.bg} />
+          <Ionicons name="chevron-forward" size={18} color={!canAdvance ? t.textMuted : dark.bg} />
         </TouchableOpacity>
       </View>
 
@@ -271,6 +274,8 @@ function QuestionRenderer({
   onRank: (ids: string[]) => void;
   onSlider: (v: number) => void;
 }) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   return (
     <View>
       <Text style={s.prompt}>{question.prompt}</Text>
@@ -291,6 +296,8 @@ function QuestionRenderer({
 function BinaryChoices({
   question, answer, onBinary,
 }: { question: QuizQuestion; answer?: QuizAnswer; onBinary: (v: 'A' | 'B') => void }) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   const selected = answer?.value as 'A' | 'B' | undefined;
   return (
     <View style={{ marginTop: 12 }}>
@@ -316,6 +323,8 @@ function BinaryChoices({
 function RankList({
   question, answer, onRank,
 }: { question: QuizQuestion; answer?: QuizAnswer; onRank: (ids: string[]) => void }) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   const allIds = (question.rankOptions ?? []).map(o => o.id);
   const initial = (answer?.value as string[] | undefined) ?? allIds;
   const [order, setOrder] = useState<string[]>(initial);
@@ -386,6 +395,8 @@ function RankRow({
   rank: number; label: string; sublabel?: string; inTop: boolean;
   canUp: boolean; canDown: boolean; onUp: () => void; onDown: () => void;
 }) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   return (
     <View style={[s.rankRow, inTop && s.rankRowTop]}>
       <Text style={[s.rankRowNum, inTop && s.rankRowNumTop]}>{rank}</Text>
@@ -394,10 +405,10 @@ function RankRow({
         {sublabel && <Text style={s.rankRowSub} numberOfLines={1}>{sublabel}</Text>}
       </View>
       <TouchableOpacity onPress={onUp} disabled={!canUp} style={s.arrowBtn}>
-        <Ionicons name="chevron-up" size={20} color={canUp ? palette.aqua : dark.textMuted} />
+        <Ionicons name="chevron-up" size={20} color={canUp ? t.accentText : t.textMuted} />
       </TouchableOpacity>
       <TouchableOpacity onPress={onDown} disabled={!canDown} style={s.arrowBtn}>
-        <Ionicons name="chevron-down" size={20} color={canDown ? palette.aqua : dark.textMuted} />
+        <Ionicons name="chevron-down" size={20} color={canDown ? t.accentText : t.textMuted} />
       </TouchableOpacity>
     </View>
   );
@@ -406,6 +417,9 @@ function RankRow({
 function Slider({
   question, answer, onSlider,
 }: { question: QuizQuestion; answer?: QuizAnswer; onSlider: (v: number) => void }) {
+  // `t` is destructured as `th` here — the label maps below already bind `t`.
+  const { t: th } = useTheme();
+  const s = useMemo(() => makeStyles(th), [th]);
   const value = (answer?.value as number | undefined) ?? 50;
   const [trackWidth, setTrackWidth] = useState(0);
   const labels = question.sliderLabels ?? [];
@@ -465,6 +479,8 @@ function PositionPhase({
   onRemove: (idx: number) => void;
   onSkip: () => void;
 }) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   const filledCount = slots.length;
   const remaining = Math.max(0, 10 - filledCount);
   const slotElements: React.ReactElement[] = [];
@@ -508,73 +524,73 @@ function PositionPhase({
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: dark.bg, paddingHorizontal: 20 },
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: t.bg, paddingHorizontal: 20 },
   topBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginBottom: 16,
   },
-  topTitle: { fontFamily: F.bold, fontSize: 13, color: dark.text, letterSpacing: 2 },
-  progressTrack: { height: 4, backgroundColor: dark.card, borderRadius: 2, overflow: 'hidden' },
+  topTitle: { fontFamily: F.bold, fontSize: 13, color: t.text, letterSpacing: 2 },
+  progressTrack: { height: 4, backgroundColor: t.card, borderRadius: 2, overflow: 'hidden' },
   progressFill:  { height: 4, backgroundColor: palette.aqua },
-  progressLabel: { fontFamily: F.bold, fontSize: 10, color: dark.textSub, letterSpacing: 2, marginTop: 8, marginBottom: 16 },
+  progressLabel: { fontFamily: F.bold, fontSize: 10, color: t.textSub, letterSpacing: 2, marginTop: 8, marginBottom: 16 },
   body: { flex: 1 },
-  prompt: { fontFamily: F.bold, fontSize: 18, color: dark.text, lineHeight: 26, marginTop: 4, letterSpacing: 0.5 },
-  helpText: { fontFamily: F.body, fontSize: 12, color: dark.textSub, marginTop: 8, lineHeight: 18 },
+  prompt: { fontFamily: F.bold, fontSize: 18, color: t.text, lineHeight: 26, marginTop: 4, letterSpacing: 0.5 },
+  helpText: { fontFamily: F.body, fontSize: 12, color: t.textSub, marginTop: 8, lineHeight: 18 },
 
   // Binary
-  choiceCard: { backgroundColor: dark.card, borderRadius: 14, borderWidth: 1.5, borderColor: dark.border, padding: 16, marginTop: 10 },
+  choiceCard: { backgroundColor: t.card, borderRadius: 14, borderWidth: 1.5, borderColor: t.border, padding: 16, marginTop: 10 },
   choiceCardActive: { borderColor: palette.aqua, backgroundColor: palette.aqua + '12' },
-  choiceLabel: { fontFamily: F.body, fontSize: 14, color: dark.text, lineHeight: 20 },
-  choiceLabelActive: { color: dark.text },
+  choiceLabel: { fontFamily: F.body, fontSize: 14, color: t.text, lineHeight: 20 },
+  choiceLabelActive: { color: t.text },
 
   // Rank
-  rankSectionLabel: { fontFamily: F.bold, fontSize: 10, color: dark.textSub, letterSpacing: 2, marginTop: 8, marginBottom: 6 },
-  rankDivider: { height: 1, backgroundColor: dark.border, marginVertical: 12 },
+  rankSectionLabel: { fontFamily: F.bold, fontSize: 10, color: t.textSub, letterSpacing: 2, marginTop: 8, marginBottom: 6 },
+  rankDivider: { height: 1, backgroundColor: t.border, marginVertical: 12 },
   rankRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: dark.card, borderRadius: 10,
-    borderWidth: 1, borderColor: dark.border,
+    backgroundColor: t.card, borderRadius: 10,
+    borderWidth: 1, borderColor: t.border,
     paddingHorizontal: 12, paddingVertical: 10, marginBottom: 6,
   },
   rankRowTop: { borderColor: palette.aqua + '40' },
-  rankRowNum: { fontFamily: F.bold, fontSize: 14, color: dark.textMuted, width: 24, textAlign: 'center' },
-  rankRowNumTop: { color: palette.aqua },
-  rankRowLabel: { fontFamily: F.bodyBold, fontSize: 13, color: dark.text },
-  rankRowSub: { fontFamily: F.body, fontSize: 11, color: dark.textSub, marginTop: 2 },
+  rankRowNum: { fontFamily: F.bold, fontSize: 14, color: t.textMuted, width: 24, textAlign: 'center' },
+  rankRowNumTop: { color: t.accentText },
+  rankRowLabel: { fontFamily: F.bodyBold, fontSize: 13, color: t.text },
+  rankRowSub: { fontFamily: F.body, fontSize: 11, color: t.textSub, marginTop: 2 },
   arrowBtn: { padding: 6 },
 
   // Slider
-  sliderValue: { fontFamily: F.bold, fontSize: 22, color: palette.aqua, textAlign: 'center', marginBottom: 12 },
+  sliderValue: { fontFamily: F.bold, fontSize: 22, color: t.accentText, textAlign: 'center', marginBottom: 12 },
   sliderTrack: { height: 32, justifyContent: 'center' },
   sliderFill: { position: 'absolute', left: 0, top: 14, height: 4, backgroundColor: palette.aqua, borderRadius: 2 },
-  sliderTick: { position: 'absolute', top: 12, width: 2, height: 8, backgroundColor: dark.border },
+  sliderTick: { position: 'absolute', top: 12, width: 2, height: 8, backgroundColor: t.border },
   sliderThumb: {
     position: 'absolute', top: 4, width: 24, height: 24, borderRadius: 12,
-    backgroundColor: palette.aqua, borderWidth: 2, borderColor: dark.bg,
+    backgroundColor: palette.aqua, borderWidth: 2, borderColor: t.bg,
   },
   sliderLabelsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
-  sliderLabel: { fontFamily: F.body, fontSize: 9, color: dark.textSub, letterSpacing: 1 },
+  sliderLabel: { fontFamily: F.body, fontSize: 9, color: t.textSub, letterSpacing: 1 },
 
   // Phase 2
   skippedBox: {
-    backgroundColor: dark.card, borderRadius: 12, borderWidth: 1, borderColor: dark.border,
+    backgroundColor: t.card, borderRadius: 12, borderWidth: 1, borderColor: t.border,
     padding: 16, marginTop: 16,
   },
-  skippedText: { fontFamily: F.body, fontSize: 13, color: dark.textSub, lineHeight: 18 },
+  skippedText: { fontFamily: F.body, fontSize: 13, color: t.textSub, lineHeight: 18 },
   skipBtn: { paddingVertical: 12, alignItems: 'center', marginTop: 8 },
-  skipBtnText: { fontFamily: F.bold, fontSize: 11, color: dark.textMuted, letterSpacing: 2 },
+  skipBtnText: { fontFamily: F.bold, fontSize: 11, color: t.textMuted, letterSpacing: 2 },
 
   // Bottom nav
   navBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingTop: 12, paddingHorizontal: 4,
-    borderTopWidth: 1, borderTopColor: dark.border, backgroundColor: dark.bg,
+    borderTopWidth: 1, borderTopColor: t.border, backgroundColor: t.bg,
   },
   navBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14 },
-  navBtnTxt: { fontFamily: F.bold, fontSize: 12, color: dark.text, letterSpacing: 2, marginLeft: 4 },
+  navBtnTxt: { fontFamily: F.bold, fontSize: 12, color: t.text, letterSpacing: 2, marginLeft: 4 },
   navBtnDisabled: { opacity: 0.5 },
-  stepCounter: { fontFamily: F.bold, fontSize: 11, color: dark.textSub, letterSpacing: 2 },
+  stepCounter: { fontFamily: F.bold, fontSize: 11, color: t.textSub, letterSpacing: 2 },
   navBtnPrimary: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: palette.aqua, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 10,

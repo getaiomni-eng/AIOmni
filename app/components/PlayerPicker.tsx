@@ -19,7 +19,8 @@ import {
 import { getFormulaRankings } from '../../services/rankings/aiomniEngineBridge';
 import { fetchRookieRankedPlayers } from '../../services/rankingsData';
 import type { RankedPlayer, ScoringFormat } from '../../services/rankingsData';
-import { dark, F, palette } from '../constants/tokens';
+import { F, palette } from '../constants/tokens';
+import { useTheme, type ThemeTokens } from '../constants/theme';
 
 interface Props {
   visible: boolean;
@@ -31,6 +32,7 @@ interface Props {
 }
 
 function PlayerThumb({ playerId, sleeperId, size = 40 }: { playerId: string; sleeperId?: string; size?: number }) {
+  const { t } = useTheme();
   const [err, setErr] = useState(false);
   const looksLikeGsisId = playerId?.startsWith('00-');
   const effectiveId = sleeperId || (looksLikeGsisId ? null : playerId);
@@ -38,14 +40,14 @@ function PlayerThumb({ playerId, sleeperId, size = 40 }: { playerId: string; sle
     return (
       <Image
         source={{ uri: `https://sleepercdn.com/content/nfl/players/thumb/${effectiveId}.jpg` }}
-        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: dark.surface, borderWidth: 1.5, borderColor: dark.border }}
+        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: t.surface, borderWidth: 1.5, borderColor: t.border }}
         onError={() => setErr(true)}
       />
     );
   }
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: dark.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: dark.border }}>
-      <Text style={{ fontSize: size * 0.4, fontFamily: F.bold, color: dark.textMuted }}>?</Text>
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: t.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: t.border }}>
+      <Text style={{ fontSize: size * 0.4, fontFamily: F.bold, color: t.textMuted }}>?</Text>
     </View>
   );
 }
@@ -53,6 +55,8 @@ function PlayerThumb({ playerId, sleeperId, size = 40 }: { playerId: string; sle
 export default function PlayerPicker({
   visible, position, format, alreadySelectedIds, onSelect, onClose,
 }: Props) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   const [allPlayers, setAllPlayers] = useState<RankedPlayer[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,18 +108,18 @@ export default function PlayerPicker({
       <View style={s.container}>
         <View style={s.header}>
           <TouchableOpacity onPress={onClose} style={s.closeBtn}>
-            <Ionicons name="close" size={24} color={dark.text} />
+            <Ionicons name="close" size={24} color={t.text} />
           </TouchableOpacity>
           <Text style={s.title}>SELECT {position}</Text>
           <View style={s.closeBtn} />
         </View>
 
         <View style={s.searchWrap}>
-          <Ionicons name="search" size={16} color={palette.aqua} style={{ marginRight: 8 }} />
+          <Ionicons name="search" size={16} color={t.accentText} style={{ marginRight: 8 }} />
           <TextInput
             style={s.searchInput}
             placeholder="Search players"
-            placeholderTextColor={dark.textMuted}
+            placeholderTextColor={t.textMuted}
             value={query}
             onChangeText={setQuery}
             autoCapitalize="none"
@@ -126,7 +130,7 @@ export default function PlayerPicker({
 
         {loading ? (
           <View style={s.center}>
-            <ActivityIndicator color={palette.aqua} />
+            <ActivityIndicator color={t.accentText} />
           </View>
         ) : error ? (
           <View style={s.center}>
@@ -170,8 +174,8 @@ export default function PlayerPicker({
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: dark.bg, paddingTop: 50 },
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: t.bg, paddingTop: 50 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -179,42 +183,42 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: dark.border,
+    borderBottomColor: t.border,
   },
-  title: { fontFamily: F.bold, fontSize: 16, color: dark.text, letterSpacing: 2 },
+  title: { fontFamily: F.bold, fontSize: 16, color: t.text, letterSpacing: 2 },
   closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: dark.card,
+    backgroundColor: t.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: dark.border,
+    borderColor: t.border,
     paddingHorizontal: 12,
     margin: 16,
   },
-  searchInput: { flex: 1, fontFamily: F.body, fontSize: 14, color: dark.text, paddingVertical: 12 },
+  searchInput: { flex: 1, fontFamily: F.body, fontSize: 14, color: t.text, paddingVertical: 12 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
-  errorText: { fontFamily: F.body, fontSize: 14, color: palette.flame, marginBottom: 16 },
+  errorText: { fontFamily: F.body, fontSize: 14, color: t.dangerText, marginBottom: 16 },
   retryBtn: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: palette.aqua },
-  retryText: { fontFamily: F.bold, fontSize: 12, color: palette.aqua, letterSpacing: 2 },
-  emptyText: { fontFamily: F.body, fontSize: 14, color: dark.textMuted },
+  retryText: { fontFamily: F.bold, fontSize: 12, color: t.accentText, letterSpacing: 2 },
+  emptyText: { fontFamily: F.body, fontSize: 14, color: t.textMuted },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: dark.borderLight,
+    borderBottomColor: t.borderLight,
   },
   rowTaken: { opacity: 0.4 },
   rowInfo: { flex: 1, marginLeft: 12 },
-  rowName: { fontFamily: F.bodyBold, fontSize: 14, color: dark.text },
-  rowMeta: { fontFamily: F.body, fontSize: 11, color: dark.textSub, letterSpacing: 1, marginTop: 2 },
+  rowName: { fontFamily: F.bodyBold, fontSize: 14, color: t.text },
+  rowMeta: { fontFamily: F.body, fontSize: 11, color: t.textSub, letterSpacing: 1, marginTop: 2 },
   takenBadge: {
     fontFamily: F.bold,
     fontSize: 9,
-    color: palette.aqua,
+    color: t.accentText,
     letterSpacing: 1.5,
     paddingHorizontal: 8,
     paddingVertical: 4,

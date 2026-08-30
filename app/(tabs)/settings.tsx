@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../services/supabase';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signOut } from '../../services/auth';
@@ -11,9 +11,9 @@ import { clearESPNCredentials, loadESPNCredentials } from '../../services/espn';
 import { loadYahooTokens } from '../../services/yahoo';
 import { getNotificationPrefs, setNotificationPrefs } from '../../services/notifications';
 import { clearQuizResult } from '../../services/quiz/engine';
-import { dark, F, palette, SP } from '../constants/tokens';
+import { F, palette, SP } from '../constants/tokens';
 import { AI_DISCLOSURE, getAIConsent, setAIConsent } from '../../services/aiConsent';
-import { useTheme } from '../constants/theme';
+import { useTheme, type ThemeTokens } from '../constants/theme';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -24,7 +24,8 @@ export default function SettingsScreen() {
   const [yahooLinked, setYahooLinked] = useState(false);
   const [mflLinked, setMflLinked] = useState(false);
   const [fleaflickerLinked, setFleaflickerLinked] = useState(false);
-  const { isDark, setMode } = useTheme();
+  const { t, isDark, setMode } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   const [aiConsent, setAiConsent] = useState(false);
 
   useEffect(() => {
@@ -184,7 +185,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: dark.bg }}>
+    <View style={{ flex: 1, backgroundColor: t.bg }}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: SP[3], paddingTop: insets.top + 16, paddingBottom: 100 }}>
         
         <Text style={s.title}>SETTINGS</Text>
@@ -193,12 +194,12 @@ export default function SettingsScreen() {
         <Text style={s.sectionTitle}>ACCOUNT</Text>
         <View style={s.card}>
           <View style={s.row}>
-            <Ionicons name="mail-outline" size={20} color={palette.aqua} />
+            <Ionicons name="mail-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Email</Text>
             <Text style={s.rowValue}>{email || 'Not set'}</Text>
           </View>
           <View style={[s.row, { borderBottomWidth: 0 }]}>
-            <Ionicons name="lock-closed-outline" size={20} color={palette.aqua} />
+            <Ionicons name="lock-closed-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Password</Text>
             <Text style={s.rowValue}>••••••••</Text>
           </View>
@@ -235,12 +236,12 @@ export default function SettingsScreen() {
           }}>
             <View style={[s.dot, { backgroundColor: '#00FFF9' }]} />
             <Text style={s.rowLabel}>Sleeper</Text>
-            <Text style={[s.rowValue, { color: username ? palette.green : palette.amber }]}>{username ? 'Connected' : 'Connect →'}</Text>
+            <Text style={[s.rowValue, { color: username ? t.successText : t.warnText }]}>{username ? 'Connected' : 'Connect →'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.row} onPress={espnLinked ? handleDisconnectESPN : () => router.push('/espn-login' as any)}>
             <View style={[s.dot, { backgroundColor: '#e52534' }]} />
             <Text style={s.rowLabel}>ESPN</Text>
-            <Text style={[s.rowValue, { color: espnLinked ? palette.green : palette.amber }]}>{espnLinked ? 'Connected' : 'Connect →'}</Text>
+            <Text style={[s.rowValue, { color: espnLinked ? t.successText : t.warnText }]}>{espnLinked ? 'Connected' : 'Connect →'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.row} onPress={yahooLinked ? handleDisconnectYahoo : async () => {
               try {
@@ -261,7 +262,7 @@ export default function SettingsScreen() {
             }}>
             <View style={[s.dot, { backgroundColor: '#7c3aed' }]} />
             <Text style={s.rowLabel}>Yahoo</Text>
-            <Text style={[s.rowValue, { color: yahooLinked ? palette.green : palette.amber }]}>{yahooLinked ? 'Connected' : 'Connect →'}</Text>
+            <Text style={[s.rowValue, { color: yahooLinked ? t.successText : t.warnText }]}>{yahooLinked ? 'Connected' : 'Connect →'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.row} onPress={mflLinked
             ? () => Alert.alert('MFL', 'Disconnect MFL?', [
@@ -275,7 +276,7 @@ export default function SettingsScreen() {
             : () => router.push('/mfl-login' as any)}>
             <View style={[s.dot, { backgroundColor: '#e4ff1a' }]} />
             <Text style={s.rowLabel}>MFL</Text>
-            <Text style={[s.rowValue, { color: mflLinked ? palette.green : palette.amber }]}>{mflLinked ? 'Connected' : 'Connect →'}</Text>
+            <Text style={[s.rowValue, { color: mflLinked ? t.successText : t.warnText }]}>{mflLinked ? 'Connected' : 'Connect →'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[s.row, { borderBottomWidth: 0 }]} onPress={fleaflickerLinked
             ? () => Alert.alert('Fleaflicker', 'Disconnect Fleaflicker?', [
@@ -289,7 +290,7 @@ export default function SettingsScreen() {
             : () => router.push('/fleaflicker-login' as any)}>
             <View style={[s.dot, { backgroundColor: '#1be7ff' }]} />
             <Text style={s.rowLabel}>Fleaflicker</Text>
-            <Text style={[s.rowValue, { color: fleaflickerLinked ? palette.green : palette.amber }]}>{fleaflickerLinked ? 'Connected' : 'Connect →'}</Text>
+            <Text style={[s.rowValue, { color: fleaflickerLinked ? t.successText : t.warnText }]}>{fleaflickerLinked ? 'Connected' : 'Connect →'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -297,13 +298,13 @@ export default function SettingsScreen() {
         <Text style={s.sectionTitle}>APPEARANCE</Text>
         <View style={s.card}>
           <View style={[s.row, { borderBottomWidth: 0 }]}>
-            <Ionicons name="moon-outline" size={20} color={palette.aqua} />
+            <Ionicons name="moon-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Dark Mode</Text>
             <Switch
               value={isDark}
               onValueChange={(v) => setMode(v ? 'dark' : 'light')}
-              trackColor={{ false: dark.border, true: palette.aqua }}
-              thumbColor={isDark ? dark.text : dark.textMuted}
+              trackColor={{ false: t.border, true: palette.aqua }}
+              thumbColor={isDark ? t.text : t.textMuted}
             />
           </View>
         </View>
@@ -312,7 +313,7 @@ export default function SettingsScreen() {
         <Text style={s.sectionTitle}>NOTIFICATIONS</Text>
         <View style={s.card}>
           <View style={s.row}>
-            <Ionicons name="newspaper-outline" size={20} color={palette.aqua} />
+            <Ionicons name="newspaper-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Player news on my roster</Text>
             <Switch
               value={prefPlayerNews}
@@ -321,12 +322,12 @@ export default function SettingsScreen() {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) setNotificationPrefs(user.id, { player_news: v });
               }}
-              trackColor={{ false: dark.border, true: palette.aqua }}
-              thumbColor={prefPlayerNews ? dark.text : dark.textMuted}
+              trackColor={{ false: t.border, true: palette.aqua }}
+              thumbColor={prefPlayerNews ? t.text : t.textMuted}
             />
           </View>
           <View style={s.row}>
-            <Ionicons name="alarm-outline" size={20} color={palette.aqua} />
+            <Ionicons name="alarm-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Lineup not set warning</Text>
             <Switch
               value={prefLineupWarning}
@@ -335,12 +336,12 @@ export default function SettingsScreen() {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) setNotificationPrefs(user.id, { lineup_warning: v });
               }}
-              trackColor={{ false: dark.border, true: palette.aqua }}
-              thumbColor={prefLineupWarning ? dark.text : dark.textMuted}
+              trackColor={{ false: t.border, true: palette.aqua }}
+              thumbColor={prefLineupWarning ? t.text : t.textMuted}
             />
           </View>
           <View style={[s.row, { borderBottomWidth: 0 }]}>
-            <Ionicons name="flame-outline" size={20} color={palette.aqua} />
+            <Ionicons name="flame-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Pulse alerts (trending players)</Text>
             <Switch
               value={prefPulseAlerts}
@@ -349,8 +350,8 @@ export default function SettingsScreen() {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) setNotificationPrefs(user.id, { pulse_alerts: v });
               }}
-              trackColor={{ false: dark.border, true: palette.aqua }}
-              thumbColor={prefPulseAlerts ? dark.text : dark.textMuted}
+              trackColor={{ false: t.border, true: palette.aqua }}
+              thumbColor={prefPulseAlerts ? t.text : t.textMuted}
             />
           </View>
         </View>
@@ -360,38 +361,38 @@ export default function SettingsScreen() {
         <Text style={s.sectionTitle}>RANKINGS</Text>
         <View style={s.card}>
           <TouchableOpacity style={[s.row, { borderBottomWidth: 0 }]} onPress={handleRetakeQuiz}>
-            <Ionicons name="refresh-outline" size={20} color={palette.aqua} />
+            <Ionicons name="refresh-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Retake Custom Rankings Quiz</Text>
-            <Ionicons name="chevron-forward" size={16} color={dark.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={t.textMuted} />
           </TouchableOpacity>
         </View>
 
         <Text style={s.sectionTitle}>APP</Text>
         <View style={s.card}>
           <TouchableOpacity style={s.row} onPress={() => router.push('/paywall' as any)}>
-            <Ionicons name="star-outline" size={20} color={palette.amber} />
+            <Ionicons name="star-outline" size={20} color={t.warnText} />
             <Text style={s.rowLabel}>Upgrade Plan</Text>
-            <Text style={[s.rowValue, { color: palette.amber }]}>Free →</Text>
+            <Text style={[s.rowValue, { color: t.warnText }]}>Free →</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.row} onPress={() => Linking.openURL('mailto:aiomni@getaiomni.com')}>
-            <Ionicons name="chatbubble-outline" size={20} color={palette.aqua} />
+            <Ionicons name="chatbubble-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Send Feedback</Text>
-            <Ionicons name="chevron-forward" size={16} color={dark.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={t.textMuted} />
           </TouchableOpacity>
           <TouchableOpacity style={s.row} onPress={() => Linking.openURL('https://getaiomni.com')}>
-            <Ionicons name="globe-outline" size={20} color={palette.aqua} />
+            <Ionicons name="globe-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Website</Text>
-            <Ionicons name="chevron-forward" size={16} color={dark.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={t.textMuted} />
           </TouchableOpacity>
           <TouchableOpacity style={s.row} onPress={() => Linking.openURL('https://getaiomni.com/terms')}>
-            <Ionicons name="document-text-outline" size={20} color={palette.aqua} />
+            <Ionicons name="document-text-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Terms of Service</Text>
-            <Ionicons name="chevron-forward" size={16} color={dark.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={t.textMuted} />
           </TouchableOpacity>
           {/* 5.1.1(i): the consent screen tells the user they can change this
               here, so it has to be revocable — not a one-way switch. */}
           <View style={s.row}>
-            <Ionicons name="sparkles-outline" size={20} color={palette.aqua} />
+            <Ionicons name="sparkles-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Share data with AI service</Text>
             <Switch
               value={aiConsent}
@@ -399,8 +400,8 @@ export default function SettingsScreen() {
                 setAiConsent(v);
                 await setAIConsent(v ? 'granted' : 'declined');
               }}
-              trackColor={{ false: dark.border, true: palette.aqua }}
-              thumbColor={aiConsent ? dark.text : dark.textMuted}
+              trackColor={{ false: t.border, true: palette.aqua }}
+              thumbColor={aiConsent ? t.text : t.textMuted}
             />
           </View>
           {/* 5.1.1(i): the grant surface itself must say what + to whom. */}
@@ -410,12 +411,12 @@ export default function SettingsScreen() {
             AI models.
           </Text>
           <TouchableOpacity style={s.row} onPress={() => Linking.openURL('https://getaiomni.com/privacy')}>
-            <Ionicons name="shield-checkmark-outline" size={20} color={palette.aqua} />
+            <Ionicons name="shield-checkmark-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Privacy Policy</Text>
-            <Ionicons name="chevron-forward" size={16} color={dark.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={t.textMuted} />
           </TouchableOpacity>
           <View style={[s.row, { borderBottomWidth: 0 }]}>
-            <Ionicons name="information-circle-outline" size={20} color={palette.aqua} />
+            <Ionicons name="information-circle-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Version</Text>
             <Text style={s.rowValue}>1.0.0 (beta)</Text>
           </View>
@@ -437,17 +438,17 @@ export default function SettingsScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  title:        { fontFamily: F.bold, fontSize: 32, color: dark.text, letterSpacing: 2, marginBottom: 24 },
-  sectionTitle: { fontFamily: F.bold, fontSize: 11, letterSpacing: 2, color: dark.textMuted, marginBottom: 8, marginTop: 16 },
-  card:         { backgroundColor: dark.card, borderRadius: 14, borderWidth: 1, borderColor: dark.border, marginBottom: 8, overflow: 'hidden' },
-  row:          { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: dark.border },
-  rowLabel:     { flex: 1, fontFamily: F.body, fontSize: 14, color: dark.text },
-  rowCaption:   { fontFamily: F.body, fontSize: 12, lineHeight: 17, color: dark.textMuted, paddingHorizontal: SP[4], paddingBottom: SP[2], marginTop: -4 },
-  rowValue:     { fontFamily: F.body, fontSize: 13, color: dark.textMuted },
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
+  title:        { fontFamily: F.bold, fontSize: 32, color: t.text, letterSpacing: 2, marginBottom: 24 },
+  sectionTitle: { fontFamily: F.bold, fontSize: 11, letterSpacing: 2, color: t.textMuted, marginBottom: 8, marginTop: 16 },
+  card:         { backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.border, marginBottom: 8, overflow: 'hidden' },
+  row:          { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: t.border },
+  rowLabel:     { flex: 1, fontFamily: F.body, fontSize: 14, color: t.text },
+  rowCaption:   { fontFamily: F.body, fontSize: 12, lineHeight: 17, color: t.textMuted, paddingHorizontal: SP[4], paddingBottom: SP[2], marginTop: -4 },
+  rowValue:     { fontFamily: F.body, fontSize: 13, color: t.textMuted },
   dot:          { width: 8, height: 8, borderRadius: 4 },
-  signOutBtn:   { backgroundColor: palette.flame + '15', borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 24, borderWidth: 1, borderColor: palette.flame + '30' },
-  signOutTxt:   { fontFamily: F.bold, fontSize: 14, color: palette.flame, letterSpacing: 2 },
+  signOutBtn:   { backgroundColor: t.flameTint, borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 24, borderWidth: 1, borderColor: palette.flame + '30' },
+  signOutTxt:   { fontFamily: F.bold, fontSize: 14, color: t.dangerText, letterSpacing: 2 },
   deleteAcctBtn:{ backgroundColor: 'transparent', borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 8, borderWidth: 1, borderColor: '#a83040' + '60' },
   deleteAcctTxt:{ fontFamily: F.bold, fontSize: 12, color: '#a83040', letterSpacing: 2 },
 });

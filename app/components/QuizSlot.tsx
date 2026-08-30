@@ -3,11 +3,12 @@
 // Filled: shows rank, photo, name, team, and a remove (X) button.
 
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import type { RankedPlayer } from '../../services/rankingsData';
-import { dark, F, palette } from '../constants/tokens';
+import { useTheme, type ThemeTokens } from '../constants/theme';
+import { F, palette } from '../constants/tokens';
 
 interface Props {
   rank: number;
@@ -17,6 +18,7 @@ interface Props {
 }
 
 function PlayerThumb({ playerId, sleeperId, size = 36 }: { playerId: string; sleeperId?: string; size?: number }) {
+  const { t } = useTheme();
   const [err, setErr] = useState(false);
   const looksLikeGsisId = playerId?.startsWith('00-');
   const effectiveId = sleeperId || (looksLikeGsisId ? null : playerId);
@@ -24,19 +26,21 @@ function PlayerThumb({ playerId, sleeperId, size = 36 }: { playerId: string; sle
     return (
       <Image
         source={{ uri: `https://sleepercdn.com/content/nfl/players/thumb/${effectiveId}.jpg` }}
-        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: dark.surface, borderWidth: 1.5, borderColor: dark.border }}
+        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: t.surface, borderWidth: 1.5, borderColor: t.border }}
         onError={() => setErr(true)}
       />
     );
   }
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: dark.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: dark.border }}>
-      <Text style={{ fontSize: size * 0.4, fontFamily: F.bold, color: dark.textMuted }}>?</Text>
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: t.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: t.border }}>
+      <Text style={{ fontSize: size * 0.4, fontFamily: F.bold, color: t.textMuted }}>?</Text>
     </View>
   );
 }
 
 export default function QuizSlot({ rank, player, onTap, onRemove }: Props) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   const filled = !!player;
 
   return (
@@ -55,7 +59,7 @@ export default function QuizSlot({ rank, player, onTap, onRemove }: Props) {
           </View>
           {onRemove && (
             <TouchableOpacity style={s.removeBtn} onPress={onRemove}>
-              <Ionicons name="close" size={18} color={dark.textMuted} />
+              <Ionicons name="close" size={18} color={t.textMuted} />
             </TouchableOpacity>
           )}
         </>
@@ -66,14 +70,14 @@ export default function QuizSlot({ rank, player, onTap, onRemove }: Props) {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   slot: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: dark.card,
+    backgroundColor: t.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: dark.border,
+    borderColor: t.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 8,
@@ -83,22 +87,22 @@ const s = StyleSheet.create({
   rankNum: {
     fontFamily: F.bold,
     fontSize: 14,
-    color: dark.textMuted,
+    color: t.textMuted,
     width: 28,
     textAlign: 'center',
     letterSpacing: 1,
   },
-  rankNumFilled: { color: palette.aqua },
+  rankNumFilled: { color: t.accentText },
   placeholder: {
     flex: 1,
     fontFamily: F.body,
     fontSize: 13,
-    color: dark.textMuted,
+    color: t.textMuted,
     letterSpacing: 1,
     marginLeft: 8,
   },
   playerInfo: { flex: 1, marginLeft: 12 },
-  playerName: { fontFamily: F.bodyBold, fontSize: 14, color: dark.text },
-  playerMeta: { fontFamily: F.body, fontSize: 11, color: dark.textSub, letterSpacing: 1, marginTop: 2 },
+  playerName: { fontFamily: F.bodyBold, fontSize: 14, color: t.text },
+  playerMeta: { fontFamily: F.body, fontSize: 11, color: t.textSub, letterSpacing: 1, marginTop: 2 },
   removeBtn: { padding: 6 },
 });

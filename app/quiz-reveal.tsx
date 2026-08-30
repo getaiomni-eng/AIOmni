@@ -29,10 +29,13 @@ import { ALL_DIMENSIONS, type Dimension, type QuizResult } from '../services/qui
 import { getFormulaRankings } from '../services/rankings/aiomniEngineBridge';
 import { clearOverrides } from '../services/rankings/userOverrides';
 import { dark, F, palette } from './constants/tokens';
+import { useTheme, type ThemeTokens } from './constants/theme';
 
 export default function QuizRevealScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
 
   const [result, setResult] = useState<QuizResult | null>(null);
   const [showFull, setShowFull] = useState(false);
@@ -95,7 +98,7 @@ export default function QuizRevealScreen() {
   if (!result) {
     return (
       <View style={[s.container, { paddingTop: insets.top + 40 }]}>
-        <ActivityIndicator color={palette.aqua} />
+        <ActivityIndicator color={t.accentText} />
       </View>
     );
   }
@@ -107,7 +110,7 @@ export default function QuizRevealScreen() {
         onPress={() => router.back()}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Ionicons name="close" size={24} color={dark.textSub} />
+        <Ionicons name="close" size={24} color={t.textSub} />
       </TouchableOpacity>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <Text style={s.eyebrow}>YOUR RANKINGS</Text>
@@ -126,7 +129,7 @@ export default function QuizRevealScreen() {
           <Ionicons
             name={showFull ? 'chevron-up' : 'chevron-down'}
             size={16}
-            color={palette.aqua}
+            color={t.accentText}
             style={{ marginLeft: 4 }}
           />
         </TouchableOpacity>
@@ -164,6 +167,8 @@ function DimensionBar({
   index: number; dim: Dimension; score: number;
   label: string; desc: string; compact: boolean;
 }) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   const scaleX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -197,36 +202,36 @@ function DimensionBar({
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: dark.bg, paddingHorizontal: 20 },
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: t.bg, paddingHorizontal: 20 },
   closeBtn: { alignSelf: 'flex-end', paddingBottom: 4 },
-  eyebrow: { fontFamily: F.body, fontSize: 10, letterSpacing: 3, color: dark.textMuted, marginBottom: 2 },
-  title:   { fontFamily: F.bold, fontSize: 42, color: dark.text, letterSpacing: 2, marginBottom: 4 },
+  eyebrow: { fontFamily: F.body, fontSize: 10, letterSpacing: 3, color: t.textMuted, marginBottom: 2 },
+  title:   { fontFamily: F.bold, fontSize: 42, color: t.text, letterSpacing: 2, marginBottom: 4 },
 
   barCard: {
-    backgroundColor: dark.card,
+    backgroundColor: t.card,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: dark.border,
+    borderColor: t.border,
     padding: 14,
     marginTop: 12,
   },
   barCardCompact: { padding: 10, marginTop: 8 },
   barHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 },
-  barLabel: { fontFamily: F.bold, fontSize: 16, color: dark.text, letterSpacing: 1 },
+  barLabel: { fontFamily: F.bold, fontSize: 16, color: t.text, letterSpacing: 1 },
   barLabelCompact: { fontSize: 13 },
-  barScore: { fontFamily: F.bold, fontSize: 18, color: palette.aqua, letterSpacing: 1 },
-  barTrack: { height: 6, backgroundColor: dark.surface, borderRadius: 3, overflow: 'hidden' },
+  barScore: { fontFamily: F.bold, fontSize: 18, color: t.accentText, letterSpacing: 1 },
+  barTrack: { height: 6, backgroundColor: t.surface, borderRadius: 3, overflow: 'hidden' },
   barFill: { height: 6, width: '100%', backgroundColor: palette.aqua, borderRadius: 3 },
-  barDesc: { fontFamily: F.body, fontSize: 12, color: dark.textSub, marginTop: 8, lineHeight: 18 },
+  barDesc: { fontFamily: F.body, fontSize: 12, color: t.textSub, marginTop: 8, lineHeight: 18 },
 
   toggleBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     paddingVertical: 12, marginTop: 8,
   },
-  toggleBtnText: { fontFamily: F.bold, fontSize: 11, color: palette.aqua, letterSpacing: 2 },
+  toggleBtnText: { fontFamily: F.bold, fontSize: 11, color: t.accentText, letterSpacing: 2 },
 
-  errorText: { fontFamily: F.body, fontSize: 12, color: palette.flame, marginTop: 12, textAlign: 'center' },
+  errorText: { fontFamily: F.body, fontSize: 12, color: t.dangerText, marginTop: 12, textAlign: 'center' },
 
   cta: {
     backgroundColor: palette.amber,

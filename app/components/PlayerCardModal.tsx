@@ -2,7 +2,7 @@
 // Unified player card — opens on tap from Waivers/Roster rows.
 // Shows bio data + live Rotowire news. "Ask AI" button fires existing AI flow.
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -15,20 +15,14 @@ import {
 } from 'react-native';
 import { findNewsForPlayer, NewsItem as FeedNewsItem } from '../../services/newsFeed';
 import { getPlayerByPlatformId, NFLPlayer, getPlayerSeasonStats, getLastNGames, getCurrentStatsSeason, PlayerSeason, WeeklyStat } from '../../services/nflPlayers';
+import { useTheme, type ThemeTokens } from '../constants/theme';
 import TabIcon from './TabIcon';
 
 // ─── V7 THEME ───────────────────────────────────────────────
-const C = {
-  bg:      '#0a1214',
-  card:    '#12252e',
-  cardAlt: '#14282f',
-  border:  '#1a3542',
-  muted:   '#0f1c22',
-  amber:   '#ffb800',
-  aqua:    '#1be7ff',
+// Neutrals/accents now come from useTheme(); these two stay literal:
+// the news dot is a FILL, and this red is a local hue with no token.
+const ACCENT = {
   green:   '#6eeb83',
-  text:    '#f0f4f5',
-  textDim: '#7a9eaa',
   red:     '#ff4d6a',
 };
 
@@ -81,6 +75,8 @@ function formatHeight(raw: string | number | null | undefined): string {
 }
 
 export default function PlayerCardModal({ visible, player, platform, onClose, onAskAI }: Props) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   const [bio, setBio] = useState<NFLPlayer | null>(null);
   const [bioLoading, setBioLoading] = useState(false);
   const [seasonStats, setSeasonStats] = useState<PlayerSeason | null>(null);
@@ -140,7 +136,8 @@ export default function PlayerCardModal({ visible, player, platform, onClose, on
 
   if (!player) return null;
 
-  const posColor = POS_COLORS[player.position] ?? C.textDim;
+  // Fallback is a position color (badge FILL + photo border) — stays literal.
+  const posColor = POS_COLORS[player.position] ?? '#7a9eaa';
   const photoUrl = `https://sleepercdn.com/content/nfl/players/thumb/${player.id}.jpg`;
 
   return (
@@ -222,7 +219,7 @@ export default function PlayerCardModal({ visible, player, platform, onClose, on
                   <View key={idx} style={s.gameRow}>
                     <Text style={s.gameWeek}>W{w.week}</Text>
                     <Text style={s.gameOpp}>{w.opponent ? 'vs ' + w.opponent : '—'}</Text>
-                    <Text style={[s.gamePts, isHigh && { color: C.green }, isLow && { color: C.textDim }]}>
+                    <Text style={[s.gamePts, isHigh && { color: t.successText }, isLow && { color: t.textSub }]}>
                       {pts.toFixed(1)}
                     </Text>
                     {isHigh && <Text style={s.gameStar}>★</Text>}
@@ -237,7 +234,7 @@ export default function PlayerCardModal({ visible, player, platform, onClose, on
             <Text style={s.sectionLabel}>PLAYER NEWS</Text>
             {newsLoading ? (
               <View style={s.newsLoading}>
-                <ActivityIndicator color={C.aqua} size="small" />
+                <ActivityIndicator color={t.accentText} size="small" />
               </View>
             ) : news.length === 0 ? (
               <View style={s.newsEmpty}>
@@ -276,12 +273,13 @@ export default function PlayerCardModal({ visible, player, platform, onClose, on
 // ─── SUBCOMPONENTS ─────────────────────────────────────────
 
 function PlayerPhoto({ url, size, borderColor }: { url: string; size: number; borderColor: string }) {
+  const { t } = useTheme();
   const [err, setErr] = useState(false);
   const style = {
     width: size,
     height: size,
     borderRadius: size / 2,
-    backgroundColor: C.muted,
+    backgroundColor: t.surface,
     borderWidth: 2,
     borderColor,
   };
@@ -296,12 +294,14 @@ function PlayerPhoto({ url, size, borderColor }: { url: string; size: number; bo
   }
   return (
     <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
-      <Text style={{ fontSize: size * 0.35, color: C.textDim, fontFamily: F.bodyB }}>?</Text>
+      <Text style={{ fontSize: size * 0.35, color: t.textSub, fontFamily: F.bodyB }}>?</Text>
     </View>
   );
 }
 
 function BioCell({ label, value }: { label: string; value: string }) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   return (
     <View style={s.bioCell}>
       <Text style={s.bioLabel}>{label}</Text>
@@ -311,6 +311,8 @@ function BioCell({ label, value }: { label: string; value: string }) {
 }
 
 function SeasonCell({ label, value }: { label: string; value: string }) {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   return (
     <View style={s.seasonCell}>
       <Text style={s.seasonLabel}>{label}</Text>
@@ -321,28 +323,28 @@ function SeasonCell({ label, value }: { label: string; value: string }) {
 
 // ─── STYLES ─────────────────────────────────────────────────
 
-const s = StyleSheet.create({
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(10,18,20,0.85)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 10,
     paddingHorizontal: 18,
     paddingBottom: 26,
     borderTopWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
     maxHeight: '88%',
   },
   handle: {
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: C.border,
+    backgroundColor: t.border,
     alignSelf: 'center',
     marginBottom: 12,
   },
@@ -356,7 +358,7 @@ const s = StyleSheet.create({
   name: {
     fontFamily: F.bodyB,
     fontSize: 22,
-    color: C.text,
+    color: t.text,
     marginBottom: 6,
   },
   metaRow: {
@@ -378,13 +380,13 @@ const s = StyleSheet.create({
   teamText: {
     fontFamily: F.data,
     fontSize: 12,
-    color: C.textDim,
+    color: t.textSub,
     letterSpacing: 1,
   },
   jerseyText: {
     fontFamily: F.data,
     fontSize: 12,
-    color: C.amber,
+    color: t.warnText,
   },
   injuryPill: {
     marginTop: 6,
@@ -397,34 +399,34 @@ const s = StyleSheet.create({
   injuryText: {
     fontFamily: F.data,
     fontSize: 10,
-    color: C.red,
+    color: ACCENT.red,
     letterSpacing: 0.5,
   },
   closeBtn: {
     width: 34,
     height: 34,
     borderRadius: 8,
-    backgroundColor: C.muted,
+    backgroundColor: t.surface,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   closeTxt: {
     fontFamily: F.bodyB,
     fontSize: 14,
-    color: C.textDim,
+    color: t.textSub,
   },
 
   // Bio strip
   bioStrip: {
     flexDirection: 'row',
-    backgroundColor: C.muted,
+    backgroundColor: t.surface,
     borderRadius: 10,
     padding: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   bioCell: {
     flex: 1,
@@ -433,19 +435,19 @@ const s = StyleSheet.create({
   bioLabel: {
     fontFamily: F.data,
     fontSize: 9,
-    color: C.textDim,
+    color: t.textSub,
     letterSpacing: 1.2,
     marginBottom: 3,
   },
   bioValue: {
     fontFamily: F.bodyB,
     fontSize: 14,
-    color: C.text,
+    color: t.text,
   },
   college: {
     fontFamily: F.data,
     fontSize: 11,
-    color: C.textDim,
+    color: t.textSub,
     marginBottom: 14,
     paddingHorizontal: 4,
   },
@@ -458,7 +460,7 @@ const s = StyleSheet.create({
   sectionLabel: {
     fontFamily: F.data,
     fontSize: 10,
-    color: C.aqua,
+    color: t.accentText,
     letterSpacing: 2,
     marginBottom: 8,
     marginTop: 4,
@@ -469,24 +471,24 @@ const s = StyleSheet.create({
   },
   newsEmpty: {
     padding: 14,
-    backgroundColor: C.muted,
+    backgroundColor: t.surface,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   newsEmptyText: {
     fontFamily: F.body,
     fontSize: 13,
-    color: C.textDim,
+    color: t.textSub,
     textAlign: 'center',
   },
   newsCard: {
-    backgroundColor: C.muted,
+    backgroundColor: t.surface,
     borderRadius: 10,
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   newsHeader: {
     flexDirection: 'row',
@@ -497,38 +499,38 @@ const s = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: C.green,
+    backgroundColor: ACCENT.green,
     marginRight: 6,
   },
   newsSource: {
     fontFamily: F.data,
     fontSize: 9,
-    color: C.green,
+    color: t.successText,
     letterSpacing: 1.5,
     flex: 1,
   },
   newsAge: {
     fontFamily: F.data,
     fontSize: 9,
-    color: C.textDim,
+    color: t.textSub,
   },
   newsHeadline: {
     fontFamily: F.bodyB,
     fontSize: 14,
-    color: C.text,
+    color: t.text,
     marginBottom: 4,
     lineHeight: 19,
   },
   newsBody: {
     fontFamily: F.body,
     fontSize: 12,
-    color: C.textDim,
+    color: t.textSub,
     lineHeight: 17,
   },
 
   // Ask AI
   askAIBtn: {
-    backgroundColor: C.muted,
+    backgroundColor: t.surface,
     borderRadius: 14,
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -558,7 +560,7 @@ const s = StyleSheet.create({
   askAIText: {
     fontFamily: F.bodyB,
     fontSize: 13,
-    color: '#ff5714',
+    color: t.dangerText,
     letterSpacing: 1.2,
     flexShrink: 1,
     flex: 1,
@@ -567,12 +569,12 @@ const s = StyleSheet.create({
 
   // Season stats
   seasonBlock: {
-    backgroundColor: C.muted,
+    backgroundColor: t.surface,
     borderRadius: 10,
     padding: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   seasonStrip: {
     flexDirection: 'row',
@@ -585,25 +587,25 @@ const s = StyleSheet.create({
   seasonLabel: {
     fontFamily: F.data,
     fontSize: 9,
-    color: C.textDim,
+    color: t.textSub,
     letterSpacing: 1.2,
     marginBottom: 3,
   },
   seasonValue: {
     fontFamily: F.bodyB,
     fontSize: 16,
-    color: C.aqua,
+    color: t.accentText,
   },
   seasonTotalsRow: {
     borderTopWidth: 1,
-    borderTopColor: C.border,
+    borderTopColor: t.border,
     paddingTop: 8,
     gap: 3,
   },
   seasonTotal: {
     fontFamily: F.data,
     fontSize: 10,
-    color: C.textDim,
+    color: t.textSub,
     letterSpacing: 0.4,
   },
 
@@ -613,35 +615,35 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 10,
-    backgroundColor: C.muted,
+    backgroundColor: t.surface,
     borderRadius: 8,
     marginBottom: 4,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   gameWeek: {
     fontFamily: F.data,
     fontSize: 11,
-    color: C.textDim,
+    color: t.textSub,
     letterSpacing: 0.5,
     width: 40,
   },
   gameOpp: {
     fontFamily: F.data,
     fontSize: 12,
-    color: C.text,
+    color: t.text,
     flex: 1,
   },
   gamePts: {
     fontFamily: F.bodyB,
     fontSize: 14,
-    color: C.amber,
+    color: t.warnText,
     marginRight: 6,
   },
   gameStar: {
     fontFamily: F.bodyB,
     fontSize: 12,
-    color: C.amber,
+    color: t.warnText,
     width: 14,
   },
 

@@ -19,14 +19,15 @@
 // URL-paste fallback for edge cases remains.
 
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator, Alert, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setMflCredentials, setMflLeagues } from '../services/platform/mfl';
-import { C, F, SP, SZ } from './constants/tokens';
+import { useTheme, type ThemeTokens } from './constants/theme';
+import { F, SP, SZ } from './constants/tokens';
 
 const SEASON = '2026';
 
@@ -37,6 +38,8 @@ type LeagueLite = {
 export default function MflLoginScreen() {
   const router       = useRouter();
   const insets       = useSafeAreaInsets();
+  const { t }        = useTheme();
+  const styles       = useMemo(() => makeStyles(t), [t]);
   const [status,        setStatus]      = useState('Sign in with your MyFantasyLeague account — we’ll find your leagues automatically');
   const [connecting,    setConnecting]  = useState(false);
   const [connected,     setConnected]   = useState(false);
@@ -256,9 +259,9 @@ export default function MflLoginScreen() {
       </View>
 
       <View style={[styles.statusBar, connected && { backgroundColor: 'rgba(30,140,66,0.18)' }]}>
-        {connecting && !connected && <ActivityIndicator color="#1be7ff" size="small" style={{ marginRight: 8 }} />}
-        {connected && <Text style={{ marginRight: 8, color: '#1e8c42', fontSize: 18 }}>✓</Text>}
-        <Text style={[styles.statusText, connected && { color: '#1e8c42' }]}>{status}</Text>
+        {connecting && !connected && <ActivityIndicator color={t.accentText} size="small" style={{ marginRight: 8 }} />}
+        {connected && <Text style={{ marginRight: 8, color: MINT, fontSize: 18 }}>✓</Text>}
+        <Text style={[styles.statusText, connected && { color: MINT }]}>{status}</Text>
       </View>
 
       {leagueOptions && (
@@ -278,7 +281,7 @@ export default function MflLoginScreen() {
           <Text style={styles.fallbackLabel}>Paste your team URL</Text>
           <TextInput value={fallbackURL} onChangeText={setFallbackURL}
             placeholder="https://www43.myfantasyleague.com/2026/options?L=53297&F=0001"
-            placeholderTextColor={C.dim2}
+            placeholderTextColor={t.textMuted}
             autoCapitalize="none" autoCorrect={false} style={styles.fallbackInput}
           />
           <TouchableOpacity style={styles.fallbackBtn} onPress={submitFallback}>
@@ -292,14 +295,14 @@ export default function MflLoginScreen() {
           <Text style={styles.fallbackLabel}>MFL USERNAME OR EMAIL</Text>
           <TextInput
             value={username} onChangeText={setUsername}
-            placeholder="username or email" placeholderTextColor={C.dim2}
+            placeholder="username or email" placeholderTextColor={t.textMuted}
             autoCapitalize="none" autoCorrect={false} autoComplete="username"
             style={styles.fallbackInput}
           />
           <Text style={styles.fallbackLabel}>PASSWORD</Text>
           <TextInput
             value={password} onChangeText={setPassword}
-            placeholder="password" placeholderTextColor={C.dim2}
+            placeholder="password" placeholderTextColor={t.textMuted}
             secureTextEntry autoCapitalize="none" autoComplete="current-password"
             style={styles.fallbackInput}
             onSubmitEditing={handleLogin}
@@ -328,60 +331,59 @@ export default function MflLoginScreen() {
 // Dark theme matches the rest of the app so the login flow doesn't
 // jarringly switch palettes. Bumped text sizes on league name + meta and
 // the success status so they're readable at a glance.
+// AQUA stays literal where it is a FILL (the primary button); BG stays
+// literal where it is ink ON that electric fill. MINT (#1e8c42) is the
+// success green this screen has always used inline.
 const BG       = '#0a1214';
-const CARD     = '#12252e';
-const BORDER   = '#1a3542';
-const TEXT     = '#f0f4f5';
-const SUB      = '#7a9eaa';
 const AQUA     = '#1be7ff';
 const MINT     = '#1e8c42';
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: t.bg },
   header: {
     paddingHorizontal: SP[3], paddingVertical: 14,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderBottomWidth: 1, borderBottomColor: BORDER,
-    backgroundColor: BG,
+    borderBottomWidth: 1, borderBottomColor: t.border,
+    backgroundColor: t.bg,
   },
   backBtn: {},
-  backText: { fontFamily: F.mono, color: AQUA, fontSize: SZ.base, letterSpacing: 0.3 },
-  title: { fontFamily: F.bold, color: TEXT, fontSize: SZ.lg, letterSpacing: 0.5 },
+  backText: { fontFamily: F.mono, color: t.accentText, fontSize: SZ.base, letterSpacing: 0.3 },
+  title: { fontFamily: F.bold, color: t.text, fontSize: SZ.lg, letterSpacing: 0.5 },
   statusBar: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SP[3], paddingVertical: 12,
-    backgroundColor: CARD,
-    borderBottomWidth: 1, borderBottomColor: BORDER,
+    backgroundColor: t.card,
+    borderBottomWidth: 1, borderBottomColor: t.border,
   },
-  statusText: { fontFamily: F.mono, color: TEXT, fontSize: SZ.base - 1, flex: 1, lineHeight: 18 },
+  statusText: { fontFamily: F.mono, color: t.text, fontSize: SZ.base - 1, flex: 1, lineHeight: 18 },
   loginBox: {
     padding: SP[3], gap: 12,
   },
   loginNote: {
-    fontFamily: F.mono, fontSize: SZ.sm, color: SUB,
+    fontFamily: F.mono, fontSize: SZ.sm, color: t.textSub,
     lineHeight: 17, marginTop: 4,
   },
 
-  leagueList: { flex: 1, backgroundColor: BG },
+  leagueList: { flex: 1, backgroundColor: t.bg },
   leagueRow: {
     paddingHorizontal: SP[3], paddingVertical: 18,
-    borderBottomWidth: 1, borderBottomColor: BORDER,
-    backgroundColor: CARD,
+    borderBottomWidth: 1, borderBottomColor: t.border,
+    backgroundColor: t.card,
     marginHorizontal: SP[2], marginTop: 10,
     borderRadius: 12,
   },
-  leagueName: { fontFamily: F.bold, fontSize: SZ.lg, color: TEXT, letterSpacing: 0.3 },
-  leagueId:   { fontFamily: F.mono, fontSize: SZ.sm, color: SUB, marginTop: 6 },
+  leagueName: { fontFamily: F.bold, fontSize: SZ.lg, color: t.text, letterSpacing: 0.3 },
+  leagueId:   { fontFamily: F.mono, fontSize: SZ.sm, color: t.textSub, marginTop: 6 },
 
   fallbackBox: {
-    padding: SP[3], gap: 12, backgroundColor: CARD,
-    borderTopWidth: 1, borderTopColor: BORDER,
+    padding: SP[3], gap: 12, backgroundColor: t.card,
+    borderTopWidth: 1, borderTopColor: t.border,
   },
-  fallbackLabel: { fontFamily: F.mono, fontSize: SZ.sm, color: SUB, letterSpacing: 0.5 },
+  fallbackLabel: { fontFamily: F.mono, fontSize: SZ.sm, color: t.textSub, letterSpacing: 0.5 },
   fallbackInput: {
-    fontFamily: F.mono, fontSize: SZ.base, color: TEXT,
-    borderWidth: 1, borderColor: BORDER,
-    borderRadius: 10, padding: 14, backgroundColor: BG,
+    fontFamily: F.mono, fontSize: SZ.base, color: t.text,
+    borderWidth: 1, borderColor: t.border,
+    borderRadius: 10, padding: 14, backgroundColor: t.bg,
   },
   fallbackBtn: {
     backgroundColor: AQUA, padding: 16, borderRadius: 10, alignItems: 'center',
@@ -390,9 +392,9 @@ const styles = StyleSheet.create({
 
   diagBox: {
     maxHeight: 220, backgroundColor: 'rgba(255,184,0,0.06)',
-    borderTopWidth: 1, borderTopColor: BORDER,
+    borderTopWidth: 1, borderTopColor: t.border,
   },
-  diagTitle: { fontFamily: F.mono, fontSize: SZ.sm, color: '#ffb800', marginBottom: 4, letterSpacing: 0.5 },
-  diagLine:  { fontFamily: F.mono, fontSize: 11, color: TEXT, marginBottom: 2, lineHeight: 15 },
-  diagLink:  { fontFamily: F.mono, fontSize: SZ.sm, color: AQUA, textDecorationLine: 'underline', marginTop: 8 },
+  diagTitle: { fontFamily: F.mono, fontSize: SZ.sm, color: t.warnText, marginBottom: 4, letterSpacing: 0.5 },
+  diagLine:  { fontFamily: F.mono, fontSize: 11, color: t.text, marginBottom: 2, lineHeight: 15 },
+  diagLink:  { fontFamily: F.mono, fontSize: SZ.sm, color: t.accentText, textDecorationLine: 'underline', marginTop: 8 },
 });

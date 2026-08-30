@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { C, F, SZ, SP, R } from '../constants/tokens';
+import { useTheme, type ThemeTokens } from '../constants/theme';
+import { F, SZ, SP, R } from '../constants/tokens';
 import { PositionPill, InjuryTag, ProgressBar } from './Atoms';
 
 export interface Player {
@@ -33,12 +34,15 @@ export const PlayerRow: React.FC<Props> = ({
   showAdd = false, showOwned = false,
   dimmed = false, onAdd, onPress,
 }) => {
+  const { t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
+
   const { slot, pos, name, team, pts = 0, proj = 0,
           injured, injTag, owned, trend, lastWk } = player;
 
   const beating    = showScore && pts > proj && proj > 0;
-  const scoreColor = beating ? C.mint : C.blueDeep;
-  const trendColor = trend === '↑' ? C.mint : trend === '↓' ? C.rose : C.dim2;
+  const scoreColor = beating ? t.successText : t.accentText;
+  const trendColor = trend === '↑' ? t.successText : trend === '↓' ? t.dangerText : t.textMuted;
 
   // Position-based progress bar colors
   const positionBarColors: Record<string, string> = {
@@ -55,27 +59,27 @@ export const PlayerRow: React.FC<Props> = ({
 
   return (
     <TouchableOpacity
-      style={[styles.row, dimmed && { opacity: 0.5 }]}
+      style={[s.row, dimmed && { opacity: 0.5 }]}
       onPress={onPress}
       disabled={!onPress}
       activeOpacity={0.7}
     >
       {/* Slot label */}
-      <Text style={styles.slot}>{slot}</Text>
+      <Text style={s.slot}>{slot}</Text>
 
       {/* Position pill */}
       <PositionPill pos={pos} />
 
       {/* Player info */}
-      <View style={styles.info}>
-        <View style={styles.nameRow}>
-          <Text style={styles.name} numberOfLines={1}>{name}</Text>
+      <View style={s.info}>
+        <View style={s.nameRow}>
+          <Text style={s.name} numberOfLines={1}>{name}</Text>
           {injured && <InjuryTag tag={injTag ?? 'Q'} />}
         </View>
-        <View style={styles.subRow}>
-          <Text style={styles.team}>{team}</Text>
+        <View style={s.subRow}>
+          <Text style={s.team}>{team}</Text>
           {showOwned && owned && (
-            <Text style={styles.owned}>
+            <Text style={s.owned}>
               {' · '}{owned}
               {trend && <Text style={{ color: trendColor }}> {trend}</Text>}
             </Text>
@@ -93,52 +97,52 @@ export const PlayerRow: React.FC<Props> = ({
 
       {/* Score */}
       {showScore && (
-        <View style={styles.scoreCol}>
-          <Text style={[styles.pts, { color: scoreColor }]}>{pts.toFixed(1)}</Text>
-          <Text style={styles.proj}>/{proj}</Text>
+        <View style={s.scoreCol}>
+          <Text style={[s.pts, { color: scoreColor }]}>{pts.toFixed(1)}</Text>
+          <Text style={s.proj}>/{proj}</Text>
         </View>
       )}
 
       {/* Last week (waivers view) */}
       {!showScore && lastWk !== undefined && (
-        <View style={styles.scoreCol}>
-          <Text style={styles.pts}>{lastWk}</Text>
-          <Text style={styles.proj}>last</Text>
+        <View style={s.scoreCol}>
+          <Text style={s.pts}>{lastWk}</Text>
+          <Text style={s.proj}>last</Text>
         </View>
       )}
 
       {/* Add button */}
       {showAdd && (
-        <TouchableOpacity style={styles.addBtn} onPress={onAdd} hitSlop={8}>
-          <Text style={styles.addTxt}>+ADD</Text>
+        <TouchableOpacity style={s.addBtn} onPress={onAdd} hitSlop={8}>
+          <Text style={s.addTxt}>+ADD</Text>
         </TouchableOpacity>
       )}
     </TouchableOpacity>
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: SP[3], paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1a3542',
+    borderBottomColor: t.border,
   },
-  slot:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim2, width: 24, flexShrink: 0 },
+  slot:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: t.textMuted, width: 24, flexShrink: 0 },
   info:     { flex: 1, minWidth: 0, gap: 2 },
   nameRow:  { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  name:     { fontSize: SZ.base - 1, fontFamily: F.bold, color: '#f0f4f5', flex: 1 },
+  name:     { fontSize: SZ.base - 1, fontFamily: F.bold, color: t.text, flex: 1 },
   subRow:   { flexDirection: 'row', alignItems: 'center' },
-  team:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim2 },
-  owned:    { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim2 },
+  team:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: t.textMuted },
+  owned:    { fontSize: SZ.xs - 1, fontFamily: F.mono, color: t.textMuted },
   scoreCol: { alignItems: 'flex-end', width: 40, flexShrink: 0 },
-  pts:      { fontSize: SZ.lg, fontFamily: F.bold, color: '#f0f4f5', lineHeight: 18 },
-  proj:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: C.dim2, marginTop: 1 },
+  pts:      { fontSize: SZ.lg, fontFamily: F.bold, color: t.text, lineHeight: 18 },
+  proj:     { fontSize: SZ.xs - 1, fontFamily: F.mono, color: t.textMuted, marginTop: 1 },
   addBtn: {
-    backgroundColor: '#1a3542',
-    borderWidth: 1.5, borderColor: '#1a3542',
+    backgroundColor: t.border,
+    borderWidth: 1.5, borderColor: t.border,
     borderRadius: R.sm - 2,
     paddingHorizontal: 9, paddingVertical: 5,
   },
-  addTxt: { fontSize: SZ.sm, fontFamily: F.mono, color: '#6eeb83', fontWeight: '700' },
+  addTxt: { fontSize: SZ.sm, fontFamily: F.mono, color: t.successText, fontWeight: '700' },
 });

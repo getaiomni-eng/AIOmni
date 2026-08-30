@@ -10,7 +10,7 @@
 // for prices + features (so future price changes only land there).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -32,16 +32,10 @@ import {
   restorePurchases,
   TIER_INFO,
 } from '../services/purchases';
+import { useTheme, type ThemeTokens } from './constants/theme';
+import { palette } from './constants/tokens';
 
 type BillingCycle = 'monthly' | 'yearly';
-
-const BG = '#0a1214';
-const CARD = '#12252e';
-const BORDER = '#1a3542';
-const TEXT = '#f0f4f5';
-const SUB = '#7a9eaa';
-const AMBER = '#ffb800';
-const AQUA = '#1be7ff';
 
 type PaywallContext = 'rankings_lock' | 'pro_lock' | 'free_prompts_exhausted' | 'weekly_prompts_exhausted';
 
@@ -53,6 +47,8 @@ const CONTEXT_HEADLINES: Record<PaywallContext, { title: string; sub?: string }>
 };
 
 export default function PaywallScreen() {
+  const { t } = useTheme();
+  const styles = useMemo(() => makeStyles(t), [t]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ context?: string }>();
@@ -180,7 +176,7 @@ export default function PaywallScreen() {
 
       {loading ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={AQUA} size="large" />
+          <ActivityIndicator color={t.accentText} size="large" />
         </View>
       ) : (
         <ScrollView
@@ -194,7 +190,8 @@ export default function PaywallScreen() {
             const isUpgrade =
               tierOrder.indexOf(tierKey as any) > tierOrder.indexOf(currentTier as any);
             const isPro = tierKey === 'pro';
-            const accentColor = isPro ? AMBER : tierKey === 'rankings' ? AQUA : SUB;
+            const accentColor = isPro ? t.warnText : tierKey === 'rankings' ? t.accentText : t.textSub;
+            const accentFill = isPro ? palette.amber : tierKey === 'rankings' ? palette.aqua : t.textSub;
 
             const price =
               tierKey === 'free'
@@ -244,8 +241,8 @@ export default function PaywallScreen() {
                 {(() => {
                   if (isCurrent) {
                     return (
-                      <View style={[styles.actionBtn, { backgroundColor: '#1a3542' }]}>
-                        <Text style={[styles.actionText, { color: SUB }]}>Current Plan</Text>
+                      <View style={[styles.actionBtn, { backgroundColor: t.border }]}>
+                        <Text style={[styles.actionText, { color: t.textSub }]}>Current Plan</Text>
                       </View>
                     );
                   }
@@ -257,14 +254,14 @@ export default function PaywallScreen() {
                   const pkg = findPackage(tierKey, billing);
                   if (!pkg) {
                     return (
-                      <View style={[styles.actionBtn, { backgroundColor: '#1a3542' }]}>
-                        <Text style={[styles.actionText, { color: SUB }]}>Unavailable</Text>
+                      <View style={[styles.actionBtn, { backgroundColor: t.border }]}>
+                        <Text style={[styles.actionText, { color: t.textSub }]}>Unavailable</Text>
                       </View>
                     );
                   }
                   return (
                     <TouchableOpacity
-                      style={[styles.actionBtn, { backgroundColor: accentColor }]}
+                      style={[styles.actionBtn, { backgroundColor: accentFill }]}
                       onPress={() => handlePurchase(tierKey)}
                       disabled={purchasing}
                     >
@@ -355,10 +352,10 @@ export default function PaywallScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: t.bg,
   },
   header: {
     flexDirection: 'row',
@@ -369,13 +366,13 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     fontSize: 20,
-    color: SUB,
+    color: t.textSub,
     fontWeight: '600',
   },
   title: {
     fontFamily: 'BebasNeue',
     fontSize: 22,
-    color: TEXT,
+    color: t.text,
     letterSpacing: 1,
     flex: 1,
     textAlign: 'center',
@@ -383,7 +380,7 @@ const styles = StyleSheet.create({
   contextSub: {
     fontFamily: 'SpaceGrotesk_400Regular',
     fontSize: 12,
-    color: SUB,
+    color: t.textSub,
     paddingHorizontal: 24,
     marginTop: -4,
     marginBottom: 12,
@@ -396,7 +393,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: 20,
     marginBottom: 16,
-    backgroundColor: CARD,
+    backgroundColor: t.card,
     borderRadius: 12,
     padding: 3,
   },
@@ -408,21 +405,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toggleActive: {
-    backgroundColor: '#1a3542',
+    backgroundColor: t.border,
   },
   toggleText: {
     fontFamily: 'Barlow',
     fontSize: 14,
-    color: SUB,
+    color: t.textSub,
     fontWeight: '600',
   },
   toggleTextActive: {
-    color: TEXT,
+    color: t.text,
   },
   saveBadge: {
     fontFamily: 'SpaceMono',
     fontSize: 9,
-    color: AMBER,
+    color: t.warnText,
     letterSpacing: 0.5,
     marginTop: 2,
   },
@@ -440,26 +437,26 @@ const styles = StyleSheet.create({
 
   // Cards
   card: {
-    backgroundColor: CARD,
+    backgroundColor: t.card,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: t.border,
     padding: 20,
     marginBottom: 14,
   },
   cardHighlighted: {
-    borderColor: AMBER,
+    borderColor: palette.amber,
     borderWidth: 1.5,
   },
   cardCurrent: {
-    borderColor: AQUA,
+    borderColor: palette.aqua,
     borderWidth: 1.5,
   },
   popularBadge: {
     position: 'absolute',
     top: -10,
     right: 16,
-    backgroundColor: AMBER,
+    backgroundColor: palette.amber,
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 6,
@@ -484,19 +481,19 @@ const styles = StyleSheet.create({
   price: {
     fontFamily: 'SpaceMono',
     fontSize: 24,
-    color: TEXT,
+    color: t.text,
     fontWeight: '700',
   },
   perMonth: {
     fontFamily: 'SpaceMono',
     fontSize: 11,
-    color: SUB,
+    color: t.textSub,
     marginTop: 2,
   },
   promptBadge: {
     fontFamily: 'SpaceMono',
     fontSize: 11,
-    color: AMBER,
+    color: t.warnText,
     backgroundColor: 'rgba(255,184,0,0.1)',
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -523,7 +520,7 @@ const styles = StyleSheet.create({
   featureText: {
     fontFamily: 'Barlow',
     fontSize: 14,
-    color: TEXT,
+    color: t.text,
     flex: 1,
     lineHeight: 20,
   },
@@ -548,7 +545,7 @@ const styles = StyleSheet.create({
   restoreText: {
     fontFamily: 'Barlow',
     fontSize: 14,
-    color: AQUA,
+    color: t.accentText,
     textDecorationLine: 'underline',
   },
   legalRow: {
@@ -561,17 +558,17 @@ const styles = StyleSheet.create({
   legalLink: {
     fontFamily: 'Barlow',
     fontSize: 13,
-    color: AQUA,
+    color: t.accentText,
     textDecorationLine: 'underline',
   },
   legalDot: {
-    color: TEXT,
+    color: t.text,
     opacity: 0.4,
   },
   legalNote: {
     fontFamily: 'Barlow',
     fontSize: 11,
-    color: TEXT,
+    color: t.text,
     opacity: 0.45,
     textAlign: 'center',
     marginTop: 6,
@@ -589,27 +586,27 @@ const styles = StyleSheet.create({
   diagToggle: {
     fontFamily: 'SpaceMono',
     fontSize: 11,
-    color: AMBER,
+    color: t.warnText,
     letterSpacing: 0.3,
   },
   diagLine: {
     fontFamily: 'SpaceMono',
     fontSize: 10,
-    color: TEXT,
+    color: t.text,
     marginTop: 4,
     lineHeight: 14,
   },
   diagLineSmall: {
     fontFamily: 'SpaceMono',
     fontSize: 9,
-    color: SUB,
+    color: t.textSub,
     marginTop: 2,
     lineHeight: 13,
   },
   legal: {
     fontFamily: 'Barlow',
     fontSize: 10,
-    color: SUB,
+    color: t.textSub,
     textAlign: 'center',
     lineHeight: 15,
     marginTop: 8,

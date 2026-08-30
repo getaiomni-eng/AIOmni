@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { C, R, BEVEL } from '../constants/tokens';
+import { useTheme, type ThemeTokens } from '../constants/theme';
 
 interface Props {
   children: React.ReactNode;
@@ -11,42 +12,42 @@ interface Props {
   noShine?: boolean;
 }
 
-const VARIANTS = {
+const makeVariants = (t: ThemeTokens) => ({
   glass: {
-    bg:     C.glass,
-    border: C.glassBorder,
-    borderTop:    C.glassShine,
-    borderLeft:   C.surfShine,
+    bg:     t.card,
+    border: t.border,
+    borderTop:    t.borderLight,
+    borderLeft:   t.borderLight,
     borderBottom: C.sageBorder,
     borderRight:  C.sageBorder,
     shadow: C.blueDeep,
     shadowOpacity: 0.12,
   },
   surface: {
-    bg:     C.surface,
-    border: C.surfBorder,
-    borderTop:    C.surfShine,
-    borderLeft:   C.surfShine,
-    borderBottom: C.surfBorder,
-    borderRight:  C.surfBorder,
+    bg:     t.surface,
+    border: t.border,
+    borderTop:    t.borderLight,
+    borderLeft:   t.borderLight,
+    borderBottom: t.border,
+    borderRight:  t.border,
     shadow: C.blueDeep,
     shadowOpacity: 0.08,
   },
   gold: {
     bg:     C.goldS,
     border: C.goldBorder,
-    borderTop:    C.glassShine,
-    borderLeft:   C.surfShine,
+    borderTop:    t.borderLight,
+    borderLeft:   t.borderLight,
     borderBottom: C.goldG,
     borderRight:  C.goldBorder,
     shadow: C.gold,
     shadowOpacity: 0.20,
   },
   sage: {
-    bg:     C.sageS,
+    bg:     t.greenTint,
     border: C.sageBorder,
-    borderTop:    C.surfShine,
-    borderLeft:   C.surfShine,
+    borderTop:    t.borderLight,
+    borderLeft:   t.borderLight,
     borderBottom: C.sageBorder,
     borderRight:  C.sageBorder,
     shadow: C.blueDeep,
@@ -55,30 +56,32 @@ const VARIANTS = {
   blue: {
     bg:     C.oceanS,
     border: C.blueDeep,
-    borderTop:    C.glassShine,
-    borderLeft:   C.surfShine,
+    borderTop:    t.borderLight,
+    borderLeft:   t.borderLight,
     borderBottom: C.oceanS,
     borderRight:  C.oceanS,
     shadow: C.blueDeep,
     shadowOpacity: 0.18,
   },
   rose: {
-    bg:     C.roseS,
+    bg:     t.flameTint,
     border: C.rose,
-    borderTop:    C.surfShine,
-    borderLeft:   C.surfShine,
+    borderTop:    t.borderLight,
+    borderLeft:   t.borderLight,
     borderBottom: C.roseS,
     borderRight:  C.roseS,
     shadow: C.rose,
     shadowOpacity: 0.12,
   },
-} as const;
+}) as const;
 
 export const GlassCard: React.FC<Props> = ({
   children, style, variant = 'glass',
   padding = 14, radius = R.lg, noShine = false,
 }) => {
-  const v = VARIANTS[variant];
+  const { t } = useTheme();
+  const variants = useMemo(() => makeVariants(t), [t]);
+  const v = variants[variant];
   return (
     <View style={[
       {

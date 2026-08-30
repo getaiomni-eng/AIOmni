@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTheme, type ThemeTokens } from '../constants/theme';
 import { C, F, R, SZ } from '../constants/tokens';
 
 const SURFACE  = 'rgba(255,255,255,0.90)';
@@ -63,6 +64,8 @@ export default function UpsellBanner({ trigger = 'general' }: Props) {
   const [showTrial, setShowTrial] = useState(false);
   const [message,   setMessage]   = useState(UPSELL_MESSAGES[4]);
   const router = useRouter();
+  const { t } = useTheme();
+  const styles = useMemo(() => makeStyles(t), [t]);
 
   useEffect(() => { checkShouldShow(); }, []);
 
@@ -117,7 +120,7 @@ export default function UpsellBanner({ trigger = 'general' }: Props) {
         {showTrial ? (
           <>
             <TouchableOpacity style={[styles.ctaBtn, { backgroundColor: message.color }]} onPress={handleUpgrade}>
-              <Text style={[styles.ctaBtnText, { color: message.trigger === 'coach' || message.trigger === 'trade' ? C.ink : '#ffffff' }]}>
+              <Text style={[styles.ctaBtnText, { color: message.trigger === 'coach' || message.trigger === 'trade' ? t.text : '#ffffff' }]}>
                 🎁 Start 7-Day Free Trial →
               </Text>
             </TouchableOpacity>
@@ -125,7 +128,7 @@ export default function UpsellBanner({ trigger = 'general' }: Props) {
           </>
         ) : (
           <TouchableOpacity style={[styles.ctaBtn, { backgroundColor: message.color }]} onPress={handleUpgrade}>
-            <Text style={[styles.ctaBtnText, { color: message.trigger === 'coach' || message.trigger === 'trade' ? C.ink : '#ffffff' }]}>
+            <Text style={[styles.ctaBtnText, { color: message.trigger === 'coach' || message.trigger === 'trade' ? t.text : '#ffffff' }]}>
               {message.cta} →
             </Text>
           </TouchableOpacity>
@@ -135,7 +138,7 @@ export default function UpsellBanner({ trigger = 'general' }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   container: { paddingHorizontal: 16, marginBottom: 12 },
   banner: {
     backgroundColor: SURFACE,
@@ -154,11 +157,11 @@ const styles = StyleSheet.create({
   shine:     { position: 'absolute', top: 0, left: '8%', right: '8%', height: 1.5, backgroundColor: BEVEL_HI, zIndex: 6 },
   accentBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
   dismissBtn:{ position: 'absolute', top: 12, right: 12, zIndex: 10, padding: 4 },
-  dismissX:  { color: C.dim2, fontSize: 14, fontFamily: F.mono },
+  dismissX:  { color: t.textMuted, fontSize: 14, fontFamily: F.mono },
   emoji:     { fontSize: 26, marginBottom: 8, marginTop: 4 },
-  headline:  { fontFamily: F.bold, color: C.ink, fontSize: SZ.lg, marginBottom: 6, paddingRight: 28, letterSpacing: 0.5 },
-  body:      { fontFamily: F.mono, color: C.dim2, fontSize: SZ.sm, lineHeight: 20, marginBottom: 14 },
+  headline:  { fontFamily: F.bold, color: t.text, fontSize: SZ.lg, marginBottom: 6, paddingRight: 28, letterSpacing: 0.5 },
+  body:      { fontFamily: F.mono, color: t.textMuted, fontSize: SZ.sm, lineHeight: 20, marginBottom: 14 },
   ctaBtn:    { borderRadius: R.sm, padding: 13, alignItems: 'center' },
   ctaBtnText:{ fontFamily: F.bold, fontSize: SZ.base, letterSpacing: 1 },
-  trialNote: { fontFamily: F.mono, color: C.dim2, fontSize: SZ.xs - 1, textAlign: 'center', marginTop: 6 },
+  trialNote: { fontFamily: F.mono, color: t.textMuted, fontSize: SZ.xs - 1, textAlign: 'center', marginTop: 6 },
 });
