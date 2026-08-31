@@ -11,6 +11,7 @@ import {
   getESPNLeague,
   getESPNLeagues,
   loadESPNCredentials,
+  ESPN_SEASON,
 } from '../espn';
 import {
   AvailablePlayer,
@@ -274,7 +275,7 @@ class ESPNPlatform implements FantasyPlatform {
     if (cached) return cached;
 
     const raw = await espnFetch(
-      `/seasons/2025/segments/0/leagues/${leagueId}?view=mTeam&view=mRoster`,
+      `/seasons/${ESPN_SEASON}/segments/0/leagues/${leagueId}?view=mTeam&view=mRoster`,
       creds
     );
 
@@ -386,7 +387,7 @@ class ESPNPlatform implements FantasyPlatform {
         },
       };
       const res = await fetch(
-        `${ESPN_BASE}/seasons/2025/players?view=players_wl`,
+        `${ESPN_BASE}/seasons/${ESPN_SEASON}/players?view=players_wl`,
         {
           headers: {
             'Content-Type': 'application/json',
@@ -434,7 +435,7 @@ class ESPNPlatform implements FantasyPlatform {
     if (cached) return cached;
 
     const raw = await espnFetch(
-      `/seasons/2025/segments/0/leagues/${leagueId}?view=mMatchup&view=mMatchupScore`,
+      `/seasons/${ESPN_SEASON}/segments/0/leagues/${leagueId}?view=mMatchup&view=mMatchupScore`,
       creds
     );
 
@@ -473,7 +474,7 @@ class ESPNPlatform implements FantasyPlatform {
 
     try {
       const raw = await espnFetch(
-        `/seasons/2025/segments/0/leagues/${leagueId}?view=mDraftDetail&view=mSettings`,
+        `/seasons/${ESPN_SEASON}/segments/0/leagues/${leagueId}?view=mDraftDetail&view=mSettings`,
         creds
       );
       const draft = raw.draftDetail;
@@ -511,7 +512,7 @@ class ESPNPlatform implements FantasyPlatform {
 
     // ESPN uses league ID as draft ID
     const raw = await espnFetch(
-      `/seasons/2025/segments/0/leagues/${draftId}?view=mDraftDetail`,
+      `/seasons/${ESPN_SEASON}/segments/0/leagues/${draftId}?view=mDraftDetail`,
       creds
     );
 
@@ -543,7 +544,7 @@ class ESPNPlatform implements FantasyPlatform {
 
     try {
       const raw = await espnFetch(
-        `/seasons/2025/segments/0/leagues/${leagueId}?view=mTransactions2`,
+        `/seasons/${ESPN_SEASON}/segments/0/leagues/${leagueId}?view=mTransactions2`,
         creds
       );
 

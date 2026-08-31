@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, askAIVision, describeAIError } from '../../services/ai';
 import { hasAIConsent } from '../../services/aiConsent';
+import { fetchAllLeagueActivity } from '../../services/leagueActivity';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
 import { pickImagesForVision } from '../../services/util/pickImage';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials, ESPN_SLOTS } from '../../services/espn';
@@ -25,7 +26,6 @@ import { getSeasonContext2026, ROOKIE_BOARD_2026_TEXT } from '../../services/sea
 import { FANTASY_FOOTBALL_KNOWLEDGE } from '../../services/fantasyKnowledge';
 import { getCurrentTier } from '../../services/purchases';
 import { learnFromExchange, getCoachProfile } from '../../services/supabase';
-import { fetchSleeperTransactions } from '../../services/newsFeed';
 import { getPlayerContext } from '../../services/playerIntelligence';
 import { PositionPill } from '../components/Atoms';
 import { AIOmniLogo } from '../components/AIOmniLogo';
@@ -1208,13 +1208,16 @@ export default function CoachScreen() {
 
       liveDataRef.current     = formatLiveDataForPrompt(liveData, rosterLastNames);
 
-      // v2026-06-10: recent league transactions (Sleeper) — who's buying,
-      // selling, and churning waivers. Lets the Coach reference actual league
-      // activity ("the 2-seed just dropped his RB3 — go get him").
+      // v2026-06-10: recent league transactions — who's buying, selling and
+      // churning waivers. Lets the Coach reference actual league activity
+      // ("the 2-seed just dropped his RB3 — go get him").
+      // v2026-08-30: was Sleeper-only despite all five adapters
+      // implementing getTransactions, so MFL/ESPN/Yahoo/Fleaflicker users
+      // had a Coach blind to their league's roster movement.
       try {
-        const txns = await fetchSleeperTransactions(12);
-        if (txns.length) {
-          liveDataRef.current += `\n\nRECENT LEAGUE TRANSACTIONS (your leagues — adds/drops/trades; use to spot trends and targets):\n${txns.map(t => `- [${t.age}] ${t.headline}`).join('\n')}`;
+        const activity = await fetchAllLeagueActivity(18);
+        if (activity.length) {
+          liveDataRef.current += `\n\nRECENT LEAGUE TRANSACTIONS (all your connected leagues — adds/drops/trades, newest first; use to spot trends, targets, and what rivals are doing):\n${activity.map(a => `- ${a.line}`).join('\n')}`;
         }
       } catch { /* best-effort */ }
 
