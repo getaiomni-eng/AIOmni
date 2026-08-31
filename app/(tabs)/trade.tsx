@@ -623,7 +623,14 @@ ${marketMath}${(() => {
         }
         return `\n\nNO ROSTER CONTEXT (user chose General) — grade pure asset value. Do NOT invent roster-fit arguments or claim to know what the user needs.`;
       })()}${engineGrounded ? '' : `\n\n⚠ INTERNAL NOTE (do NOT open your answer with this): AIOmni's ranking engine didn't load, so you're grading on KTC market values + situational reads rather than calibrated projections. Stay fully decisive and lead with the call. Don't cite precise AIOmni ranks you don't have. Mention the limitation at most once, in a short clause at the end.`}`;
-      const response = await askAI(prompt, { maxTokens: 600, system });
+      // Sonnet 5, not the 'smart' default: the grades and verdict direction
+      // are LOCKED by the engine before this call, so the model is writing
+      // prose around a decision it doesn't make — the judgment Opus buys
+      // isn't being exercised. Verified side-by-side on a real trade: Sonnet
+      // cited MORE of the available signals (both snap shares + the Vegas
+      // total, which Opus skipped), produced valid JSON with the locked
+      // grades intact, and returned 28% faster at 40% of the cost.
+      const response = await askAI(prompt, { maxTokens: 600, system, tier: 'mid' });
       console.log('Raw AI response:', response);
       // The model is told to return one JSON object, but sometimes emits a
       // preamble, code fences, or even a second "revised" object with prose

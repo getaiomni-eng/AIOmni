@@ -21,7 +21,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 //   mid   → Sonnet 4.6 ($3/$15 per Mtok). Reserved for future use.
 export const MODELS = {
   fast:  'claude-haiku-4-5',
-  mid:   'claude-sonnet-4-6',
+  mid:   'claude-sonnet-5',
   smart: 'claude-opus-4-8',
 } as const;
 
@@ -76,6 +76,11 @@ export async function askAI(
     const payload: Record<string, unknown> = {
       model,
       max_tokens: maxTokens,
+      // Sonnet 5 runs adaptive thinking when `thinking` is omitted (Opus 4.8
+      // does not). Our max_tokens are sized for short mobile answers, so
+      // thinking consumes the entire budget and the response comes back
+      // EMPTY — verified against the live API before shipping this.
+      ...(model.startsWith('claude-sonnet-5') ? { thinking: { type: 'disabled' } } : {}),
       messages: [{
         role: 'user',
         content: o.system || o.skipDictionary ? prompt : prompt + '\n\n' + NFL_DATA_DICTIONARY,
