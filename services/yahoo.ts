@@ -4,6 +4,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { setSecure, getSecure, deleteSecure, migrateAsyncToSecure } from './util/secureStore';
+import { logCaught } from './util/logCaught';
 
 const YAHOO_CLIENT_ID   = 'dj0yJmk9R3ptbUJaU3FFUFloJmQ9WVdrOWJEZENkRkZVZG5rbWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PTZk';
 
@@ -171,7 +172,13 @@ export async function getValidYahooToken(): Promise<string | null> {
   if (!tokens) return null;
   if (isExpired(tokens)) {
     try { tokens = await refreshYahooToken(tokens.refreshToken); }
-    catch { return null; }
+    catch (e) {
+      // The single most user-visible silent failure in the app: an expired
+      // refresh token means Settings still says "Connected" while every
+      // Yahoo league quietly vanishes from Home.
+      logCaught('yahoo:refresh-failed', e);
+      return null;
+    }
   }
   return tokens.accessToken;
 }

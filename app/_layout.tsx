@@ -8,6 +8,7 @@ import {
 } from '@expo-google-fonts/space-grotesk';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
+import * as Updates from 'expo-updates';
 import { useFonts } from 'expo-font';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
@@ -31,6 +32,18 @@ Sentry.init({
   debug: false,
   // 15% span sampling in prod — 1.0 sent every interaction (cost + overhead).
   tracesSampleRate: 0.15,
+  // Without these, every OTA looks like the same build. runtimeVersion is the
+  // native binary (1.0.1); updateId is the specific JS bundle EAS shipped, so
+  // "did my fix land" and "which bundle is erroring" become answerable.
+  environment: __DEV__ ? 'development' : 'production',
+  release: `com.getaiomni.AIOmni@${Updates.runtimeVersion ?? 'unknown'}`,
+  dist: Updates.updateId ?? 'embedded',
+  // Swallowed data-layer failures are reported as warnings via logCaught();
+  // keep them out of the crash-free-sessions metric.
+  beforeSend: (event: any) => {
+    if (event?.tags?.caught_tag) event.fingerprint = ['{{ default }}', event.tags.caught_tag];
+    return event;
+  },
 });
 
 export default Sentry.wrap(function RootLayout() {

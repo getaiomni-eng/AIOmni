@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchNewsFeed, FeedByTab, NewsTab, NewsItem as FeedNewsItem } from '../../services/newsFeed';
 import { getNFLSeason, getAvailableSeasons } from '../../services/season';
+import { logCaught, logEmpty } from '../../services/util/logCaught';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -313,7 +314,7 @@ export default function HomeScreen() {
   const loadESPNLeagues = async (year: string = String(new Date().getFullYear())): Promise<League[]> => {
     try {
       const creds = await loadESPNCredentials();
-      if (!creds) return [];
+      if (!creds) { logEmpty('espn:no-credentials', { year }); return []; }
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
       const { discoverESPNLeagues } = require('../../services/espn');
       const yr = parseInt(year, 10);
@@ -326,7 +327,7 @@ export default function HomeScreen() {
       try {
         const stored = await AsyncStorage.getItem('espn_leagues_v2');
         if (stored) summaries = JSON.parse(stored);
-      } catch { /* ignore */ }
+      } catch (e) { logCaught('espn:stored-summaries-parse', e); }
 
       let forYear = summaries.filter((s: any) => Number(s.season) === yr);
       if (forYear.length === 0) {
@@ -336,34 +337,60 @@ export default function HomeScreen() {
             await AsyncStorage.setItem('espn_leagues_v2', JSON.stringify(discovered));
             await AsyncStorage.setItem('espn_league_ids', JSON.stringify(discovered.map((l: any) => l.id)));
             forYear = discovered.filter((s: any) => Number(s.season) === yr);
+            // The season filter is the prime suspect for "connected but no
+            // leagues": if discovery returns leagues whose season doesn't
+            // parse to the selected year, every one is dropped silently.
+            if (forYear.length === 0) {
+              logEmpty('espn:season-filter-dropped-all', {
+                wantYear: yr,
+                discoveredCount: discovered.length,
+                seasonsSeen: [...new Set(discovered.map((d: any) => String(d?.season)))],
+              });
+            }
+          } else {
+            logEmpty('espn:discovery-returned-none', { year: yr });
           }
-        } catch { /* discovery failed — fall through to empty */ }
+        } catch (e) { logCaught('espn:discovery', e, { year: yr }); }
       }
-      if (forYear.length === 0) return [];
+      if (forYear.length === 0) {
+        logEmpty('espn:no-leagues-for-year', { year: yr, storedCount: summaries.length });
+        return [];
+      }
 
       // forYear is already active-first; Promise.all preserves order.
       const built = await Promise.all(forYear.map(async (s: any): Promise<League | null> => {
         try {
           const data = await getESPNLeague(Number(s.id), creds, yr);
-          return data ? buildESPNLeague(Number(s.id), data, creds.swid) : null;
-        } catch { return null; }
+          if (!data) { logEmpty('espn:league-fetch-empty', { leagueId: s.id, year: yr }); return null; }
+          return buildESPNLeague(Number(s.id), data, creds.swid);
+        } catch (e) { logCaught('espn:build-league', e, { leagueId: s.id, year: yr }); return null; }
       }));
-      return built.filter((l): l is League => l !== null);
-    } catch (e) { return []; }
+      const ok = built.filter((l): l is League => l !== null);
+      if (ok.length < forYear.length) {
+        logEmpty('espn:partial-load', { wanted: forYear.length, got: ok.length, year: yr });
+      }
+      return ok;
+    } catch (e) { logCaught('espn:load', e, { year }); return []; }
   };
 
   const loadYahooLeagues = async (year: string = String(new Date().getFullYear())): Promise<League[]> => {
     try {
       const token = await getValidYahooToken();
-      if (!token) return [];
+      // getValidYahooToken() returns null both when no tokens are stored AND
+      // when the refresh silently failed (yahoo.ts `catch { return null }`).
+      // Those are very different problems for the user, so say which.
+      if (!token) { logEmpty('yahoo:no-valid-token', { year }); return []; }
       const res = await fetch(
         `https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_codes=nfl;seasons=${year}/leagues?format=json`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (!res.ok) return [];
+      if (!res.ok) { logEmpty('yahoo:leagues-http-error', { year, status: res.status }); return []; }
       const data = await res.json();
       const gamesData = data?.fantasy_content?.users?.[0]?.user?.[1]?.games;
-      if (!gamesData) return [];
+      // A user with zero Yahoo leagues for the year is legitimate (nothing
+      // drafted yet). Still tag it, so "no leagues" and "parse broke" are
+      // distinguishable in Sentry rather than both being an empty screen.
+      if (!gamesData) { logEmpty('yahoo:no-games-for-season', { year }); return []; }
       const leagues: League[] = [];
       const gameCount = gamesData?.count ?? 0;
       for (let g = 0; g < gameCount; g++) {
