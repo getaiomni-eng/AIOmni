@@ -23,17 +23,20 @@
 --  · dynasty_value is not derivable from box scores — it is carried forward
 --    from each player's 2024 row and left NULL for players with no 2024 row.
 --    The formatter already omits it when absent.
---  · 2024 rows are KEPT. They are the only source of dynasty_value, and the
---    edge function now selects the latest season rather than assuming one.
+--  · player_profiles is UNIQUE on player_id alone (player_profiles_player_id_key),
+--    so it holds ONE row per player — a current snapshot, not a per-season
+--    history. This UPSERTS each player's row forward to 2025 rather than
+--    inserting a second row. dynasty_value is deliberately NOT in the DO UPDATE
+--    list: it is not derivable from box scores, so the existing value survives.
+--    A player with no 2025 REG snaps keeps his 2024 row and 2024 season stamp,
+--    which is why the formatter labels the season PER PLAYER.
 --  · age lives in nfl_players, not player_profiles — the formatter was
 --    emitting the literal string "Age undefined" into the Coach prompt for
 --    every player. Add the column and populate it.
 
 ALTER TABLE player_profiles ADD COLUMN IF NOT EXISTS age int;
 
--- Idempotent: re-running replaces the 2025 slice rather than duplicating it.
-DELETE FROM player_profiles WHERE season = 2025;
-
+-- Idempotent via ON CONFLICT: re-running refreshes rather than duplicating.
 INSERT INTO player_profiles (
   player_id, name, position, team, season, games, age,
   targets, receptions, rec_yards, rec_tds,
@@ -62,16 +65,35 @@ SELECT
   ROUND(SUM(w.fantasy_pts_ppr)::numeric, 2),
   ROUND((AVG(NULLIF(w.target_share, 0)) * 100)::numeric, 1),
   SUM(w.receiving_air_yards)::int,
-  MAX(prev.dynasty_value)::int,
+  NULL::int,
   NOW()
 FROM nfl_weekly_stats w
 JOIN nfl_players p
   ON p.gsis_id = w.gsis_id
-LEFT JOIN player_profiles prev
-  ON prev.player_id = w.gsis_id
- AND prev.season    = 2024
 WHERE w.season      = 2025
   AND w.season_type = 'REG'
   AND p.position IN ('QB','RB','WR','TE')
 GROUP BY w.gsis_id, p.full_name, p.display_name, p.position, p.team
-HAVING SUM(w.fantasy_pts_ppr) > 0;
+HAVING SUM(w.fantasy_pts_ppr) > 0
+ON CONFLICT (player_id) DO UPDATE SET
+  name           = EXCLUDED.name,
+  position       = EXCLUDED.position,
+  team           = EXCLUDED.team,
+  season         = EXCLUDED.season,
+  games          = EXCLUDED.games,
+  age            = EXCLUDED.age,
+  targets        = EXCLUDED.targets,
+  receptions     = EXCLUDED.receptions,
+  rec_yards      = EXCLUDED.rec_yards,
+  rec_tds        = EXCLUDED.rec_tds,
+  carries        = EXCLUDED.carries,
+  rush_yards     = EXCLUDED.rush_yards,
+  rush_tds       = EXCLUDED.rush_tds,
+  passing_yards  = EXCLUDED.passing_yards,
+  passing_tds    = EXCLUDED.passing_tds,
+  interceptions  = EXCLUDED.interceptions,
+  total_points   = EXCLUDED.total_points,
+  target_share   = EXCLUDED.target_share,
+  air_yards      = EXCLUDED.air_yards,
+  updated_at     = NOW();
+  -- dynasty_value intentionally absent: preserved from the existing row.

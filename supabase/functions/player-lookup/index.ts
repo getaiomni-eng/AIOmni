@@ -19,23 +19,15 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
     const { players, position, team } = await req.json();
 
-    // player_profiles holds one row per player per season. Without this the
-    // query mixes seasons and returns the same player twice, so resolve the
-    // newest season present and pin the lookup to it.
-    const { data: latest } = await supabase
-      .from('player_profiles')
-      .select('season')
-      .order('season', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const season: number | null = latest?.season ?? null;
-
+    // player_profiles is UNIQUE on player_id — one row per player, a current
+    // snapshot rather than a season history. It holds a MIX of seasons: 2025
+    // for players with REG snaps, 2024 for those without. Do NOT filter by
+    // season (that would hide the 2024 group); stamp it per player instead.
     let query = supabase
       .from('player_profiles')
       .select('*')
       .order('total_points', { ascending: false });
 
-    if (season !== null) query = query.eq('season', season);
 
     // Look up specific players by name
     if (players && players.length > 0) {
@@ -63,7 +55,7 @@ serve(async (req) => {
     if (error) throw error;
 
     // Format as readable AI prompt context
-    const formatted = formatForPrompt(data || [], season);
+    const formatted = formatForPrompt(data || []);
 
     return new Response(
       JSON.stringify({ players: data, formatted }),
@@ -78,7 +70,7 @@ serve(async (req) => {
   }
 });
 
-function formatForPrompt(players: any[], season: number | null): string {
+function formatForPrompt(players: any[]): string {
   if (!players.length) return '';
 
   const lines = players.map(p => {
@@ -97,9 +89,9 @@ function formatForPrompt(players: any[], season: number | null): string {
     const dynVal = p.dynasty_value ? `, Dynasty Value: ${p.dynasty_value}/100` : '';
 
     const age = p.age ? `, Age ${p.age}` : '';
-    return `${p.name} (${p.position}, ${p.team}${age}): ${p.games} games, ${p.total_points} PPR pts — ${statLine}${snap}${dynVal}`;
+    const yr  = p.season ? `${p.season}: ` : '';
+    return `${p.name} (${p.position}, ${p.team}${age}): ${yr}${p.games} games, ${p.total_points} PPR pts — ${statLine}${snap}${dynVal}`;
   });
 
-  const label = season ? `${season} season` : 'season unknown';
-  return `\nPLAYER INTELLIGENCE (${players.length} players, ${label}):\n${lines.join('\n')}`;
+  return `\nPLAYER INTELLIGENCE (${players.length} players; the season each line reports is stamped on that line — most are 2025, a player with no 2025 regular-season snaps still reads 2024):\n${lines.join('\n')}`;
 }
