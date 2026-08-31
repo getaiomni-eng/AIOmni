@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, askAIVision, describeAIError } from '../../services/ai';
 import { hasAIConsent } from '../../services/aiConsent';
 import { fetchAllLeagueActivity } from '../../services/leagueActivity';
+import { fetchKTCValues, type KTCValues } from '../../services/rankingsData';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
 import { pickImagesForVision } from '../../services/util/pickImage';
 import { findMyESPNTeam, getESPNLeague, loadESPNCredentials, ESPN_SLOTS } from '../../services/espn';
@@ -22,7 +23,7 @@ import {
 import { fetchAnalystBuzz, BuzzLine } from '../../services/analystTakes';
 import { normalizePlayerName } from '../../services/util/normalizeName';
 import { fetchAllLiveData, formatLiveDataForPrompt } from '../../services/liveData';
-import { getSeasonContext2026, ROOKIE_BOARD_2026_TEXT } from '../../services/seasonContext2026';
+import { CLASS_OF_2025_TEXT, getSeasonContext2026, ROOKIE_BOARD_2026_TEXT } from '../../services/seasonContext2026';
 import { FANTASY_FOOTBALL_KNOWLEDGE } from '../../services/fantasyKnowledge';
 import { getCurrentTier } from '../../services/purchases';
 import { learnFromExchange, getCoachProfile } from '../../services/supabase';
@@ -40,6 +41,7 @@ import { getValidYahooToken, getYahooLeagues, getMyYahooTeam, getYahooStandings,
 const BASE_SYSTEM = `You are The O — AIOmni's AI fantasy coach. You're the user's sharpest fantasy-football friend: confident, opinionated, a little cocky, occasionally funny — never a hedging corporate robot. You HAVE takes and you back them. Talk like a real fantasy player — "league-winner", "smash", "hard pass", "buy-low", "ship it", "ascending", "RB dead zone", "handcuff", "league-winner". Be decisive; if it's close, still pick a side and tell them why. Open with the verdict, not a preamble.
 You ALWAYS read the league's settings + roster FIRST — advice that ignores their format and roster is worthless. Lean on AIOmni's proprietary rankings as your edge, and flex it when the market's wrong.
 Keep it tight — this is a mobile chat. Never compare players across different leagues (each is scored independently).
+TRADE VALUATION — NON-NEGOTIABLE: roster lines carry KTC market values in brackets, e.g. "Puka Nacua [7204]". Before you propose, endorse or reject ANY trade you MUST total both sides from those numbers and show the math (e.g. "You send 4,100 · You get 4,650"). Price it FIRST — never recommend a deal and then offer to check the value afterwards; that offer is banned. Inside ~10% is a fair deal; past that name the winner and the margin. A player with no bracketed value is unpriced — say so out loud instead of guessing at it, and never invent a number. The values are the market; when AIOmni's rankings disagree with the market, say so explicitly and argue your side — that gap IS the edge.
 FORMATTING (mobile chat renderer): NEVER use markdown tables — they render as raw pipe characters. Use short labeled lists instead. Never show visible self-correction ("wait, no, ...") — verify facts like a player's NFL team BEFORE writing, then state them once, cleanly.`;
 
 // Stable reference block sent as the Anthropic `system` field (prompt-cached).
@@ -47,7 +49,7 @@ FORMATTING (mobile chat renderer): NEVER use markdown tables — they render as 
 // between turns, so they hit the cache instead of being re-billed every prompt.
 // The per-session dynamic context (leagues, memories, live data, conversation)
 // stays in the user message — see buildSystemPrompt + the send handler.
-const STATIC_SYSTEM = `${BASE_SYSTEM}\n${ROOKIE_BOARD_2026_TEXT}\n${FANTASY_FOOTBALL_KNOWLEDGE}`;
+const STATIC_SYSTEM = `${BASE_SYSTEM}\n${ROOKIE_BOARD_2026_TEXT}\n${CLASS_OF_2025_TEXT}\n${FANTASY_FOOTBALL_KNOWLEDGE}`;
 
 type LeagueContext = {
   name: string; platform: string; format: string;
@@ -96,7 +98,7 @@ const SLEEPER_PLAYER_TTL_MS = 24 * 60 * 60 * 1000;
 // rosters/standings don't change minute-to-minute; re-fetching five
 // platforms on every coach visit made the tab feel broken. 10-minute TTL,
 // module-level so it survives remounts but not app restarts.
-let coachCtxCache: { at: number; all: LeagueContext[]; liveData: any; buzz: Map<string, BuzzLine[]> | null } | null = null;
+let coachCtxCache: { at: number; all: LeagueContext[]; liveData: any; buzz: Map<string, BuzzLine[]> | null; ktc: KTCValues | null } | null = null;
 const COACH_CTX_TTL_MS = 10 * 60 * 1000;
 
 async function loadSleeperPlayerMap(): Promise<Record<string, any>> {
@@ -760,7 +762,44 @@ than assuming, and never invent unreleased rookie-class names.`,
   };
 }
 
-function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueContext | null, memories: string, buzz?: Map<string, BuzzLine[]> | null): string {
+// Annotate every name in an ALL LEAGUE ROSTERS block with its KTC market
+// value. Lines are "Owner: Name, Name (POS), ..." across five platforms, so
+// the name is everything before the first " (". Unpriced players are left
+// bare on purpose — the prompt tells the model to flag them rather than
+// guess, which is the whole point of grounding this in real numbers.
+function priceRosterBlock(block: string, ktc: Map<string, number>): string {
+  if (!ktc.size) return block;
+  return block.split('\n').map((line) => {
+    const i = line.indexOf(': ');
+    if (i < 0) return line;
+    const who = line.slice(0, i);
+    const rest = line.slice(i + 2);
+    if (!rest || rest.startsWith('(')) return line;
+    const priced = rest.split(', ').map((entry) => {
+      const v = ktc.get(normalizePlayerName(entry.split(' (')[0].trim()));
+      return v ? `${entry} [${v}]` : entry;
+    });
+    return `${who}: ${priced.join(', ')}`;
+  }).join('\n');
+}
+
+// KTC publishes separate dynasty and redraft boards, each with 1QB and
+// superflex columns. Pick the pair that matches THIS league — a superflex
+// QB priced off the 1QB board is off by thousands.
+function ktcMapFor(l: LeagueContext, ktc: KTCValues | null): Map<string, number> {
+  const out = new Map<string, number>();
+  if (!ktc) return out;
+  const table = l.leagueType === 'dynasty' || l.leagueType === 'keeper' ? ktc.dynasty : ktc.redraft;
+  const isSF = /super|\bsf\b|2qb/i.test(`${l.format} ${l.startingSlots ?? ''}`);
+  for (const [name, v] of Object.entries(table ?? {})) {
+    if (v.pos === 'RDP') continue;                 // picks aren't on rosters
+    const val = isSF ? v.sf : v.oneQB;
+    if (val > 0) out.set(normalizePlayerName(name), val);
+  }
+  return out;
+}
+
+function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueContext | null, memories: string, buzz?: Map<string, BuzzLine[]> | null, ktc?: KTCValues | null): string {
   const targets = selectedLeague ? [selectedLeague] : leagues;
   if (targets.length === 0) return 'No leagues loaded yet.';  // persona is in STATIC_SYSTEM
   // v2026-05-14: emit league type, taxi slots, owned picks (dynasty/keeper) so
@@ -778,8 +817,12 @@ function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueConte
     const avail = l.available && l.available.length > 0
       ? `\nTop available (waiver/FA pool, sample): ${l.available.join(', ')}`
       : '';
+    const ktcMap = ktcMapFor(l, ktc ?? null);
+    const priceNote = ktcMap.size
+      ? ' Bracketed numbers are KTC market values on the board that matches this league (dynasty/redraft, 1QB/superflex) — total both sides before proposing anything.'
+      : ' NOTE: market values are unavailable this session — say so before discussing any trade rather than guessing at value.';
     const allRost = l.leagueRosters
-      ? `\nALL LEAGUE ROSTERS (every team — use this to find who owns a player, spot trade targets, and judge availability; a player NOT listed here is a free agent):\n${l.leagueRosters}`
+      ? `\nALL LEAGUE ROSTERS (every team — use this to find who owns a player, spot trade targets, and judge availability; a player NOT listed here is a free agent).${priceNote}\n${priceRosterBlock(l.leagueRosters, ktcMap)}`
       : '';
     // v2026-08-07: the real scoring rules and starting lineup. Without
     // these the model saw only "PPR"/"STD" and could not distinguish a
@@ -1108,6 +1151,7 @@ export default function CoachScreen() {
   const liveDataRef     = useRef<string>('');
   const memoriesRef     = useRef<string>('');
   const buzzRef         = useRef<Map<string, BuzzLine[]> | null>(null);
+  const ktcRef          = useRef<KTCValues | null>(null);
   const scrollRef       = useRef<ScrollView>(null);
   // Name-only (position-agnostic) set of every player in Sleeper's NFL feed,
   // used to validate vision-extracted draft picks — a "drafted" name absent
@@ -1142,9 +1186,11 @@ export default function CoachScreen() {
       let all: LeagueContext[];
       let liveData: any;
       let buzz: Map<string, BuzzLine[]> | null = null;
+      let ktc: KTCValues | null = null;
       const cachedCtx = coachCtxCache && Date.now() - coachCtxCache.at < COACH_CTX_TTL_MS ? coachCtxCache : null;
       if (cachedCtx) {
-        ({ all, liveData, buzz } = cachedCtx);
+        ({ all, liveData, buzz, ktc } = cachedCtx);
+        ktcRef.current = ktc;
         buzzRef.current = buzz;
       } else {
         // Progressive load: merge each platform's leagues into the UI the
@@ -1158,10 +1204,11 @@ export default function CoachScreen() {
           acc.push(...leagues);
           setAllLeagues([...acc]);
           setContextReady(true);
-          systemPromptRef.current = buildSystemPrompt([...acc], null, memoriesRef.current, buzzRef.current) + liveDataRef.current;
+          systemPromptRef.current = buildSystemPrompt([...acc], null, memoriesRef.current, buzzRef.current, ktcRef.current) + liveDataRef.current;
         };
         let liveDataFresh: any = null;
         let buzzFresh: Map<string, BuzzLine[]> | null = null;
+        let ktcFresh: KTCValues | null = null;
         await Promise.allSettled([
           loadSleeperContext(playerMap).then(merge),
           loadESPNContext(nameIndex).then(merge),
@@ -1169,6 +1216,9 @@ export default function CoachScreen() {
           loadAbstractContext('fleaflicker', 'Fleaflicker', nameIndex).then(merge),
           loadAbstractContext('mfl', 'MFL', nameIndex).then(merge),
           fetchAllLiveData().then((ld) => { liveDataFresh = ld; }),
+          fetchKTCValues()
+            .then((v) => { ktcFresh = v; ktcRef.current = v; })
+            .catch(() => { /* prompt degrades to "values unavailable" */ }),
           // ANALYST BUZZ (v1.1) — Pro-tier enrichment ("gate expensive AI,
           // never visibility"). Failure degrades to no-buzz, never blocks.
           getCurrentTier()
@@ -1179,7 +1229,8 @@ export default function CoachScreen() {
         all = [...acc];
         liveData = liveDataFresh;
         buzz = buzzFresh;
-        coachCtxCache = { at: Date.now(), all, liveData, buzz };
+        ktc = ktcFresh;
+        coachCtxCache = { at: Date.now(), all, liveData, buzz, ktc };
       }
 
       try {
@@ -1221,7 +1272,7 @@ export default function CoachScreen() {
         }
       } catch { /* best-effort */ }
 
-      systemPromptRef.current = buildSystemPrompt(all, null, memoriesRef.current, buzzRef.current) + liveDataRef.current;
+      systemPromptRef.current = buildSystemPrompt(all, null, memoriesRef.current, buzzRef.current, ktcRef.current) + liveDataRef.current;
       setAllLeagues(all);
       setContextReady(true);
 
@@ -1243,7 +1294,7 @@ export default function CoachScreen() {
 
   useEffect(() => {
     if (allLeagues.length > 0) {
-      systemPromptRef.current = buildSystemPrompt(allLeagues, selectedLeague, memoriesRef.current, buzzRef.current) + liveDataRef.current;
+      systemPromptRef.current = buildSystemPrompt(allLeagues, selectedLeague, memoriesRef.current, buzzRef.current, ktcRef.current) + liveDataRef.current;
     }
   }, [selectedLeague, allLeagues]);
 

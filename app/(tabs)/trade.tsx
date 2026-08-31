@@ -8,6 +8,7 @@ import { askAI, askAIVision, describeAIError, hasAISession } from '../../service
 import { pickImageForVision } from '../../services/util/pickImage';
 import { hasAIConsent } from '../../services/aiConsent';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CLASS_OF_2025_TEXT } from '../../services/seasonContext2026';
 import { fetchAIOmniFormula, fetchKTCValues, fetchNFLInjuries, fetchSnapCounts, fetchVegasLines, type InjuryInfo, type RankedPlayer, type ScoringFormat } from '../../services/rankingsData';
 import { getCurrentTier } from '../../services/purchases';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
@@ -630,7 +631,7 @@ ${marketMath}${(() => {
       // cited MORE of the available signals (both snap shares + the Vegas
       // total, which Opus skipped), produced valid JSON with the locked
       // grades intact, and returned 28% faster at 40% of the cost.
-      const response = await askAI(prompt, { maxTokens: 600, system, tier: 'mid' });
+      const response = await askAI(prompt, { maxTokens: 600, system: `${system}\n\n${CLASS_OF_2025_TEXT}`, tier: 'mid' });
       console.log('Raw AI response:', response);
       // The model is told to return one JSON object, but sometimes emits a
       // preamble, code fences, or even a second "revised" object with prose

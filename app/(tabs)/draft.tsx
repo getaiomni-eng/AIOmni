@@ -29,6 +29,7 @@ import { consumePrompt } from '../../services/promptQuota';
 import { useRouter } from 'expo-router';
 import { applyEngineToDraftPool, draftSettingsToUIFormat } from '../../services/rankings/draftPool';
 import { TheOLogo, ApertureO } from '../components/TheOLogo';
+import { CLASS_OF_2025_TEXT } from '../../services/seasonContext2026';
 import {
     DEFAULT_PLAYER_DB,
     loadLivePlayerDB,
@@ -1213,7 +1214,7 @@ function DraftBoard({
     }
     try {
       const prompt = buildDraftPrompt(state, q || undefined);
-      const res = await askAI(prompt);
+      const res = await askAI(prompt, { system: CLASS_OF_2025_TEXT });
       setAiResponse(res);
     } catch (e: any) {
       // Never surface raw internal errors to the sheet — build 197 lesson.

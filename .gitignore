@@ -69,3 +69,12 @@ supabase/.temp/
 AIOmni/
 .obsidian/
 .smart-env/
+
+# Marketing working files: source recordings, ffmpeg segments, QC contact
+# sheets. Large binaries and regenerable. Finished cuts live in marketing/final.
+marketing/recordings/
+marketing/seg/
+marketing/qc*/
+marketing/qc*.png
+marketing/audio/
+marketing/cuts/

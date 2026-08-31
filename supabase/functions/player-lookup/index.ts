@@ -1,112 +1,105 @@
+// supabase/functions/player-lookup/index.ts
+// Returns compiled player intelligence for AI Coach prompt injection
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const CLAUDE_API_KEY = Deno.env.get('CLAUDE_API_KEY')!;
-const SUPABASE_URL   = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_KEY   = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SERVICE_KEY  = Deno.env.get('SERVICE_ROLE_KEY')!;
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const LIMITS: Record<string, number> = {
-  free: 25, rankings: 25, pro: 75, premium: 125, dynasty_elite: 999999,
-};
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-    let tier = 'free';
+    const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+    const { players, position, team } = await req.json();
 
-    // ── Auth check (optional — anonymous users get free tier) ──
-    const authHeader = req.headers.get('Authorization');
-    const token = authHeader?.replace('Bearer ', '').trim();
+    // player_profiles holds one row per player per season. Without this the
+    // query mixes seasons and returns the same player twice, so resolve the
+    // newest season present and pin the lookup to it.
+    const { data: latest } = await supabase
+      .from('player_profiles')
+      .select('season')
+      .order('season', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const season: number | null = latest?.season ?? null;
 
-    if (token && token.length > 10) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser(token);
-        if (user) {
-          const { data: userRow } = await supabase
-            .from('users')
-            .select('id, tier, prompts_used, prompts_reset')
-            .eq('auth_id', user.id)
-            .single();
+    let query = supabase
+      .from('player_profiles')
+      .select('*')
+      .order('total_points', { ascending: false });
 
-          if (userRow) {
-            tier = userRow.tier ?? 'free';
-            const limit = LIMITS[tier] ?? 25;
-            const now = new Date();
-            const resetAt = userRow.prompts_reset ? new Date(userRow.prompts_reset) : new Date(0);
+    if (season !== null) query = query.eq('season', season);
 
-            if (now >= resetAt) {
-              const next = new Date(now);
-              const d = next.getDay() === 0 ? 7 : 7 - next.getDay();
-              next.setDate(next.getDate() + d);
-              next.setHours(12, 0, 0, 0);
-              await supabase.from('users').update({
-                prompts_used: 0,
-                prompts_reset: next.toISOString(),
-              }).eq('auth_id', user.id);
-              userRow.prompts_used = 0;
-            }
-
-            if (userRow.prompts_used >= limit) {
-              return new Response(
-                JSON.stringify({ error: 'prompt_limit_reached', limit, tier }),
-                { status: 429, headers: { ...CORS, 'Content-Type': 'application/json' } }
-              );
-            }
-
-            await supabase.from('users').update({
-              prompts_used: (userRow.prompts_used ?? 0) + 1,
-            }).eq('auth_id', user.id);
-          }
-        }
-      } catch (authErr) {
-        // Auth failed — continue as free tier, don't block the request
-        console.error('Auth check failed, continuing as free tier:', authErr);
-      }
+    // Look up specific players by name
+    if (players && players.length > 0) {
+      // Search by name fragments
+      const nameFilters = players.map((n: string) =>
+        `name.ilike.%${n}%`
+      ).join(',');
+      query = query.or(nameFilters);
     }
 
-    // ── Forward to Claude ──
-    const body = await req.json();
-
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model:      body.model      ?? 'claude-sonnet-4-20250514',
-        max_tokens: body.max_tokens ?? 512,
-        messages:   body.messages   ?? [{ role: 'user', content: body.prompt ?? '' }],
-        system:     body.system,
-      }),
-    });
-
-    const claudeData = await claudeRes.json();
-
-    if (!claudeRes.ok) {
-      console.error('Claude API error:', JSON.stringify(claudeData));
-      return new Response(
-        JSON.stringify({ error: claudeData?.error?.message ?? 'Claude API error' }),
-        { status: claudeRes.status, headers: { ...CORS, 'Content-Type': 'application/json' } }
-      );
+    // Filter by position
+    if (position) {
+      query = query.eq('position', position.toUpperCase());
     }
 
-    return new Response(JSON.stringify(claudeData), {
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
-  } catch (err) {
-    console.error('Proxy error:', err);
+    // Filter by team
+    if (team) {
+      query = query.eq('team', team.toUpperCase());
+    }
+
+    // Limit results
+    query = query.limit(players?.length > 0 ? 20 : 50);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Format as readable AI prompt context
+    const formatted = formatForPrompt(data || [], season);
+
     return new Response(
-      JSON.stringify({ error: 'Internal proxy error' }),
+      JSON.stringify({ players: data, formatted }),
+      { headers: { ...CORS, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (e: any) {
+    return new Response(
+      JSON.stringify({ error: e.message }),
       { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } }
     );
   }
 });
+
+function formatForPrompt(players: any[], season: number | null): string {
+  if (!players.length) return '';
+
+  const lines = players.map(p => {
+    const pos = p.position;
+    let statLine = '';
+
+    if (pos === 'QB') {
+      statLine = `${p.passing_yards} pass yds, ${p.passing_tds} TDs, ${p.interceptions} INTs`;
+    } else if (pos === 'RB') {
+      statLine = `${p.carries} car/${p.rush_yards} rush yds/${p.rush_tds} TDs, ${p.targets} tgts/${p.receptions} rec/${p.rec_yards} rec yds`;
+    } else if (pos === 'WR' || pos === 'TE') {
+      statLine = `${p.targets} tgts/${p.receptions} rec/${p.rec_yards} yds/${p.rec_tds} TDs, ${p.target_share}% target share`;
+    }
+
+    const snap  = p.snap_pct ? `, ${p.snap_pct}% snaps` : '';
+    const dynVal = p.dynasty_value ? `, Dynasty Value: ${p.dynasty_value}/100` : '';
+
+    const age = p.age ? `, Age ${p.age}` : '';
+    return `${p.name} (${p.position}, ${p.team}${age}): ${p.games} games, ${p.total_points} PPR pts — ${statLine}${snap}${dynVal}`;
+  });
+
+  const label = season ? `${season} season` : 'season unknown';
+  return `\nPLAYER INTELLIGENCE (${players.length} players, ${label}):\n${lines.join('\n')}`;
+}

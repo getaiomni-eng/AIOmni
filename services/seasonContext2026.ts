@@ -102,6 +102,37 @@ Rookies of note (R1 picks affecting depth charts):
   Bryce Young (CAR) — Year-3 development
 `.trim();
 
+// The single source of truth for "who is a rookie in 2026". Derived from
+// nfl_players.draft_year — not from model memory, which is exactly what was
+// getting this wrong. The 2025 draft happened BEFORE the training cutoff, so
+// the model knows these names but keeps their rookie framing attached and
+// calls them rookies a year late (observed: Luther Burden III, 2025 R2 #39,
+// described as a rookie-pick asset in a 2026 trade grade).
+//
+// Every screen that asks the model about players must ship this block.
+export const CLASS_OF_2025_TEXT = `
+=== CLASS YEARS — 2026 SEASON (CANONICAL) ===
+
+"Rookie" in 2026 means the 2026 NFL Draft class ONLY.
+
+The 2025 NFL Draft class are SECOND-YEAR pros. Never call them rookies,
+never call them "this year's rookie class", never treat them as rookie-draft
+picks or unproven prospects. They have a full NFL season of tape. Referring
+to any name below as a rookie is a factual error.
+
+2025 draft class (2nd-year in 2026), fantasy-relevant:
+QB — Cam Ward, Jaxson Dart, Tyler Shough, Jalen Milroe, Dillon Gabriel
+RB — Ashton Jeanty, Omarion Hampton, Quinshon Judkins, TreVeyon Henderson,
+     RJ Harvey, Kaleb Johnson, Bhayshul Tuten, Cam Skattebo, Trevor Etienne,
+     Woody Marks, Jarquez Hunter
+WR — Travis Hunter, Tetairoa McMillan, Emeka Egbuka, Matthew Golden,
+     Jayden Higgins, Luther Burden III, Tre Harris, Jack Bech, Kyle Williams,
+     Isaac TeSlaa, Pat Bryant, Jaylin Noel, Savion Williams, Tai Felton,
+     Chimere Dike, Dont'e Thornton Jr., Arian Smith
+TE — Colston Loveland, Tyler Warren, Mason Taylor, Terrance Ferguson,
+     Elijah Arroyo, Harold Fannin Jr.
+`.trim();
+
 // Standalone export of just the 2026 rookie list so the Coach
 // system prompt can hoist it to the top — the AI was burying the
 // list inside the larger season-context block and hallucinating
@@ -122,10 +153,9 @@ Fernando Mendoza (LV, R1 QB)
 
 If the user asks about a rookie not on this list, say "I'd need to
 check the live rookie board for that name" rather than guessing.
-2025-NFL-Draft players (Cam Ward, Ashton Jeanty, Travis Hunter,
-Tetairoa McMillan, Omarion Hampton, Emeka Egbuka, Tyler Warren,
-Colston Loveland, Jaxson Dart, etc.) are NOT 2026 rookies — they
-are 2nd-year pros.
+Players from the 2025 NFL Draft are NOT 2026 rookies — they are
+2nd-year pros. The full list is in CLASS YEARS below; that list is
+canonical and complete, so do not extend it from memory.
 `.trim();
 
 export const INJURY_NOTES_2026_TEXT = `
