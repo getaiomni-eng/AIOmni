@@ -131,6 +131,20 @@ export async function exchangeYahooCode(code: string): Promise<YahooTokens> {
   }
 
   const data = await res.json();
+
+  // Yahoo can hand back a perfectly valid token that was NOT granted fspt-r.
+  // Such a token authenticates fine and then 403s on every fantasy endpoint,
+  // which is indistinguishable from a bad token unless you look at the scope
+  // actually returned. Nothing here logs a secret: scope is a capability
+  // string, and the guid is only reported as present/absent.
+  logCaught('yahoo:exchange-scope', new Error('token exchange completed'), {
+    grantedScope: data.scope ?? '(none returned)',
+    requestedScope: 'fspt-r',
+    hasGuid: Boolean(data.xoauth_yahoo_guid),
+    expiresInSec: data.expires_in ?? null,
+    hasRefresh: Boolean(data.refresh_token),
+  });
+
   const tokens: YahooTokens = {
     accessToken:  data.access_token,
     refreshToken: data.refresh_token,
