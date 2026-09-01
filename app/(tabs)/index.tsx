@@ -384,7 +384,21 @@ export default function HomeScreen() {
         `https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_codes=nfl;seasons=${year}/leagues?format=json`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (!res.ok) { logEmpty('yahoo:leagues-http-error', { year, status: res.status }); return []; }
+      if (!res.ok) {
+        // Status alone never explained this. Yahoo puts the actual reason in
+        // the body ("Please provide valid credentials", "token does not have
+        // permission", "invalid resource"), so capture it — truncated, and it
+        // contains no credentials since the token travels in the header.
+        let detail = '';
+        try { detail = (await res.text()).slice(0, 400); } catch { detail = '(body unreadable)'; }
+        logEmpty('yahoo:leagues-http-error', {
+          year,
+          status: res.status,
+          body: detail,
+          wwwAuthenticate: res.headers.get('www-authenticate') ?? '(none)',
+        });
+        return [];
+      }
       const data = await res.json();
       const gamesData = data?.fantasy_content?.users?.[0]?.user?.[1]?.games;
       // A user with zero Yahoo leagues for the year is legitimate (nothing
