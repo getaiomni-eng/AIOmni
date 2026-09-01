@@ -30,6 +30,7 @@ import { useRouter } from 'expo-router';
 import { applyEngineToDraftPool, draftSettingsToUIFormat } from '../../services/rankings/draftPool';
 import { TheOLogo, ApertureO } from '../components/TheOLogo';
 import { CLASS_OF_2025_TEXT } from '../../services/seasonContext2026';
+import { readableText, useTheme, type ThemeTokens } from '../constants/theme';
 import {
     DEFAULT_PLAYER_DB,
     loadLivePlayerDB,
@@ -179,6 +180,9 @@ interface SetupData {
 // ─── MAIN COMPONENT ────────────────────────────────────────
 
 export default function DraftCopilotScreen() {
+  const { t } = useTheme();
+  const sty = useMemo(() => makeStyles(t), [t]);
+
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<'setup' | 'draft' | 'loading'>('setup');
   const [setupStep, setSetupStep] = useState<SetupStep>('platform');
@@ -560,7 +564,7 @@ export default function DraftCopilotScreen() {
 
   if (phase === 'setup') {
     return (
-      <SafeAreaView style={[styles.container, { paddingBottom: insets.bottom }]}>
+      <SafeAreaView style={[sty.container, { paddingBottom: insets.bottom }]}>
         <SetupWizard
           step={setupStep}
           data={setupData}
@@ -627,7 +631,7 @@ export default function DraftCopilotScreen() {
   if (!draftState) return null;
 
   return (
-    <SafeAreaView style={[styles.container, { paddingBottom: insets.bottom }]}>
+    <SafeAreaView style={[sty.container, { paddingBottom: insets.bottom }]}>
       <DraftBoard
         state={draftState}
         onStateChange={(s) => { setDraftState(s); saveDraftState(s); }}
@@ -656,12 +660,15 @@ function SetupWizard({
   onBack: () => void;
   onStart: () => void;
 }) {
+  const { t } = useTheme();
+  const sty = useMemo(() => makeStyles(t), [t]);
+
   return (
-    <ScrollView style={styles.setupScroll} contentContainerStyle={styles.setupContent}>
+    <ScrollView style={sty.setupScroll} contentContainerStyle={sty.setupContent}>
       {/* Header */}
-      <View style={styles.setupHeader}>
+      <View style={sty.setupHeader}>
         <TheOLogo fontSize={36} color="#f0f4f5" />
-        <Text style={styles.setupSub}>
+        <Text style={sty.setupSub}>
           {step === 'platform' && (
             <>
               {'Runs alongside your real draft'}
@@ -674,12 +681,12 @@ function SetupWizard({
           {step === 'confirm' && 'Ready to draft'}
         </Text>
         {/* Step indicator */}
-        <View style={styles.stepRow}>
+        <View style={sty.stepRow}>
           {['platform', 'league', 'position', 'confirm'].map((s, i) => (
             <View key={s} style={[
-              styles.stepDot,
-              s === step && styles.stepDotActive,
-              (['platform', 'league', 'position', 'confirm'].indexOf(step) > i) && styles.stepDotDone,
+              sty.stepDot,
+              s === step && sty.stepDotActive,
+              (['platform', 'league', 'position', 'confirm'].indexOf(step) > i) && sty.stepDotDone,
             ]} />
           ))}
         </View>
@@ -687,18 +694,18 @@ function SetupWizard({
 
       {/* ── PLATFORM ── */}
       {step === 'platform' && (
-        <View style={styles.setupSection}>
+        <View style={sty.setupSection}>
           {([
             { key: 'sleeper', label: 'SLEEPER', desc: 'Live auto-sync — picks update automatically', color: '#00FFF9', live: true },
             { key: 'espn', label: 'ESPN', desc: 'Open ESPN to draft — tap picks here as they happen', color: '#e52534', live: false },
             { key: 'yahoo', label: 'YAHOO', desc: 'Open Yahoo to draft — tap picks here as they happen', color: '#7c3aed', live: false },
             { key: 'fleaflicker', label: 'FLEAFLICKER', desc: 'Open Fleaflicker to draft — tap picks here as they happen', color: '#ff7a00', live: false },
             { key: 'mfl', label: 'MFL', desc: 'Open MyFantasyLeague to draft — tap picks here as they happen', color: '#e4ff1a', live: false },
-            { key: 'offline', label: 'OFFLINE / LIVE', desc: 'In-person draft — track picks on your phone', color: C.amber, live: false },
+            { key: 'offline', label: 'OFFLINE / LIVE', desc: 'In-person draft — track picks on your phone', color: t.warnText, live: false },
           ] as const).map(p => (
             <TouchableOpacity
               key={p.key}
-              style={[styles.platformCard, data.platform === p.key && { borderColor: p.color }]}
+              style={[sty.platformCard, data.platform === p.key && { borderColor: p.color }]}
               onPress={() => {
                 // Auto-advance: with 6 platform tiles the CONTINUE button gets
                 // pushed below the fold on a 6.1" screen. One-tap-to-advance is
@@ -709,12 +716,12 @@ function SetupWizard({
                 onNext(p.key as Platform);
               }}
             >
-              <View style={styles.platformRow}>
-                <View style={[styles.platformDot, { backgroundColor: p.color }]} />
-                <Text style={styles.platformLabel}>{p.label}</Text>
-                {p.live && <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE SYNC</Text></View>}
+              <View style={sty.platformRow}>
+                <View style={[sty.platformDot, { backgroundColor: p.color }]} />
+                <Text style={sty.platformLabel}>{p.label}</Text>
+                {p.live && <View style={sty.liveBadge}><Text style={sty.liveBadgeText}>LIVE SYNC</Text></View>}
               </View>
-              <Text style={styles.platformDesc}>{p.desc}</Text>
+              <Text style={sty.platformDesc}>{p.desc}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -722,13 +729,13 @@ function SetupWizard({
 
       {/* ── LEAGUE ── */}
       {step === 'league' && (
-        <View style={styles.setupSection}>
+        <View style={sty.setupSection}>
           {data.platform === 'sleeper' && sleeperLeagues.length > 0 ? (
             <>
               {sleeperLeagues.map((lg: any) => (
                 <TouchableOpacity
                   key={lg.league_id}
-                  style={[styles.leagueCard, data.leagueId === lg.league_id && { borderColor: C.aqua }]}
+                  style={[sty.leagueCard, data.leagueId === lg.league_id && { borderColor: t.accentText }]}
                   onPress={async () => {
                     onUpdate({
                       leagueId: lg.league_id,
@@ -770,21 +777,21 @@ function SetupWizard({
                     onFetchPicks(lg.league_id);
                   }}
                 >
-                  <Text style={styles.leagueName}>{lg.name}</Text>
-                  <Text style={styles.leagueMeta}>{lg.total_rosters} teams · {lg.season} · {lg.scoring_settings?.rec === 1 ? 'PPR' : lg.scoring_settings?.rec === 0.5 ? 'Half PPR' : 'Standard'}</Text>
+                  <Text style={sty.leagueName}>{lg.name}</Text>
+                  <Text style={sty.leagueMeta}>{lg.total_rosters} teams · {lg.season} · {lg.scoring_settings?.rec === 1 ? 'PPR' : lg.scoring_settings?.rec === 0.5 ? 'Half PPR' : 'Standard'}</Text>
                 </TouchableOpacity>
               ))}
             </>
           ) : data.platform === 'sleeper' ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No Sleeper leagues found. Make sure your Sleeper username is set in Settings.</Text>
+            <View style={sty.emptyState}>
+              <Text style={sty.emptyText}>No Sleeper leagues found. Make sure your Sleeper username is set in Settings.</Text>
             </View>
           ) : data.platform === 'fleaflicker' && fleaflickerLeagues.length > 0 ? (
             <>
               {fleaflickerLeagues.map((lg: any) => (
                 <TouchableOpacity
                   key={lg.id}
-                  style={[styles.leagueCard, data.leagueId === lg.id && { borderColor: C.aqua }]}
+                  style={[sty.leagueCard, data.leagueId === lg.id && { borderColor: t.accentText }]}
                   onPress={async () => {
                     onUpdate({
                       leagueId:      lg.id,
@@ -811,23 +818,23 @@ function SetupWizard({
                     } catch (e) { console.log('FF getDraft error:', e); }
                   }}
                 >
-                  <Text style={styles.leagueName}>{lg.name}</Text>
-                  <Text style={styles.leagueMeta}>
+                  <Text style={sty.leagueName}>{lg.name}</Text>
+                  <Text style={sty.leagueMeta}>
                     {lg.teamCount} teams · {lg.season} · {lg.scoringFormat === 'ppr' ? 'PPR' : lg.scoringFormat === 'half' ? 'Half PPR' : 'Standard'}{lg.leagueType === 'dynasty' ? ' · Dynasty' : ''}
                   </Text>
                 </TouchableOpacity>
               ))}
             </>
           ) : data.platform === 'fleaflicker' ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No Fleaflicker leagues found. Connect Fleaflicker in Settings first.</Text>
+            <View style={sty.emptyState}>
+              <Text style={sty.emptyText}>No Fleaflicker leagues found. Connect Fleaflicker in Settings first.</Text>
             </View>
           ) : data.platform === 'mfl' && mflLeagues.length > 0 ? (
             <>
               {mflLeagues.map((lg: any) => (
                 <TouchableOpacity
                   key={lg.id}
-                  style={[styles.leagueCard, data.leagueId === lg.id && { borderColor: C.aqua }]}
+                  style={[sty.leagueCard, data.leagueId === lg.id && { borderColor: t.accentText }]}
                   onPress={() => onUpdate({
                     leagueId:      lg.id,
                     leagueName:    lg.name,
@@ -836,64 +843,64 @@ function SetupWizard({
                     isDynasty:     lg.leagueType === 'dynasty',
                   } as any)}
                 >
-                  <Text style={styles.leagueName}>{lg.name}</Text>
-                  <Text style={styles.leagueMeta}>
+                  <Text style={sty.leagueName}>{lg.name}</Text>
+                  <Text style={sty.leagueMeta}>
                     {lg.teamCount} teams · {lg.season} · {lg.scoringFormat === 'ppr' ? 'PPR' : lg.scoringFormat === 'half' ? 'Half PPR' : 'Standard'}{lg.leagueType === 'dynasty' ? ' · Dynasty' : ''}
                   </Text>
                 </TouchableOpacity>
               ))}
             </>
           ) : data.platform === 'mfl' ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No MFL leagues found. Connect MFL in Settings first.</Text>
+            <View style={sty.emptyState}>
+              <Text style={sty.emptyText}>No MFL leagues found. Connect MFL in Settings first.</Text>
             </View>
           ) : (
-            <View style={styles.manualLeague}>
-              <Text style={styles.inputLabel}>League Name</Text>
+            <View style={sty.manualLeague}>
+              <Text style={sty.inputLabel}>League Name</Text>
               <TextInput
-                style={styles.textInput}
+                style={sty.textInput}
                 value={data.leagueName || ''}
                 onChangeText={(t) => onUpdate({ leagueName: t })}
                 placeholder="My Fantasy League"
-                placeholderTextColor={C.textDim}
+                placeholderTextColor={t.textSub}
               />
-              <Text style={styles.inputLabel}>Number of Teams</Text>
-              <View style={styles.chipRow}>
+              <Text style={sty.inputLabel}>Number of Teams</Text>
+              <View style={sty.chipRow}>
                 {teamOptions(data.teamCount).map(n => (
                   <TouchableOpacity
                     key={n}
-                    style={[styles.chip, data.teamCount === n && styles.chipActive]}
+                    style={[sty.chip, data.teamCount === n && sty.chipActive]}
                     onPress={() => onUpdate({ teamCount: n })}
                   >
-                    <Text style={[styles.chipText, data.teamCount === n && styles.chipTextActive]}>{n}</Text>
+                    <Text style={[sty.chipText, data.teamCount === n && sty.chipTextActive]}>{n}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={styles.inputLabel}>Scoring Format</Text>
-              <View style={styles.chipRow}>
+              <Text style={sty.inputLabel}>Scoring Format</Text>
+              <View style={sty.chipRow}>
                 {([['ppr', 'PPR'], ['half', 'HALF'], ['standard', 'STD']] as const).map(([val, label]) => (
                   <TouchableOpacity
                     key={val}
-                    style={[styles.chip, data.scoringFormat === val && styles.chipActive]}
+                    style={[sty.chip, data.scoringFormat === val && sty.chipActive]}
                     onPress={() => onUpdate({ scoringFormat: val })}
                   >
-                    <Text style={[styles.chipText, data.scoringFormat === val && styles.chipTextActive]}>{label}</Text>
+                    <Text style={[sty.chipText, data.scoringFormat === val && sty.chipTextActive]}>{label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
           )}
 
-          <View style={styles.navRow}>
-            <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-              <Text style={styles.backBtnText}>BACK</Text>
+          <View style={sty.navRow}>
+            <TouchableOpacity style={sty.backBtn} onPress={onBack}>
+              <Text style={sty.backBtnText}>BACK</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.nextBtn, styles.nextBtnFlex, !data.leagueName && !data.leagueId && styles.nextBtnDisabled]}
+              style={[sty.nextBtn, sty.nextBtnFlex, !data.leagueName && !data.leagueId && sty.nextBtnDisabled]}
               onPress={() => onNext()}
               disabled={!data.leagueName && !data.leagueId}
             >
-              <Text style={styles.nextBtnText}>CONTINUE</Text>
+              <Text style={sty.nextBtnText}>CONTINUE</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -901,73 +908,73 @@ function SetupWizard({
 
       {/* ── POSITION / SETTINGS ── */}
       {step === 'position' && (
-        <View style={styles.setupSection}>
+        <View style={sty.setupSection}>
           {/* v2026-08-09: team count was silently fixed at 12 — it drives
               the position chips AND every pick number in the preview, so
               10/14-team drafters got wrong math with no way to fix it.
               Platform-linked leagues prefill this from the league. */}
-          <Text style={styles.inputLabel}>Teams</Text>
-          <View style={styles.chipRow}>
+          <Text style={sty.inputLabel}>Teams</Text>
+          <View style={sty.chipRow}>
             {teamOptions(data.teamCount).map(n => (
               <TouchableOpacity
                 key={n}
-                style={[styles.chip, (data.teamCount || 12) === n && styles.chipActive]}
+                style={[sty.chip, (data.teamCount || 12) === n && sty.chipActive]}
                 onPress={() => onUpdate({
                   teamCount: n,
                   // Keep the selected slot inside the new league size.
                   ...(data.myDraftSlot && data.myDraftSlot > n ? { myDraftSlot: n } : {}),
                 })}
               >
-                <Text style={[styles.chipText, (data.teamCount || 12) === n && styles.chipTextActive]}>{n}</Text>
+                <Text style={[sty.chipText, (data.teamCount || 12) === n && sty.chipTextActive]}>{n}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={styles.inputLabel}>My Draft Position</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.slotScroll}>
-            <View style={styles.chipRow}>
+          <Text style={sty.inputLabel}>My Draft Position</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={sty.slotScroll}>
+            <View style={sty.chipRow}>
               {Array.from({ length: data.teamCount || 12 }, (_, i) => i + 1).map(n => (
                 <TouchableOpacity
                   key={n}
-                  style={[styles.slotChip, data.myDraftSlot === n && styles.slotChipActive]}
+                  style={[sty.slotChip, data.myDraftSlot === n && sty.slotChipActive]}
                   onPress={() => onUpdate({ myDraftSlot: n })}
                 >
-                  <Text style={[styles.slotChipText, data.myDraftSlot === n && styles.slotChipTextActive]}>{n}</Text>
+                  <Text style={[sty.slotChipText, data.myDraftSlot === n && sty.slotChipTextActive]}>{n}</Text>
                 </TouchableOpacity>
               ))}
             </View>
           </ScrollView>
 
-          <Text style={styles.inputLabel}>Draft Type</Text>
-          <View style={styles.chipRow}>
+          <Text style={sty.inputLabel}>Draft Type</Text>
+          <View style={sty.chipRow}>
             {([['snake', 'SNAKE'], ['linear', 'LINEAR'], ['auction', 'AUCTION']] as const).map(([val, label]) => (
               <TouchableOpacity
                 key={val}
-                style={[styles.chip, data.draftType === val && styles.chipActive]}
+                style={[sty.chip, data.draftType === val && sty.chipActive]}
                 onPress={() => onUpdate({ draftType: val })}
               >
-                <Text style={[styles.chipText, data.draftType === val && styles.chipTextActive]}>{label}</Text>
+                <Text style={[sty.chipText, data.draftType === val && sty.chipTextActive]}>{label}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={styles.inputLabel}>Rounds</Text>
-          <View style={styles.chipRow}>
+          <Text style={sty.inputLabel}>Rounds</Text>
+          <View style={sty.chipRow}>
             {roundOptions(data.rounds).map(n => (
               <TouchableOpacity
                 key={n}
-                style={[styles.chip, data.rounds === n && styles.chipActive]}
+                style={[sty.chip, data.rounds === n && sty.chipActive]}
                 onPress={() => onUpdate({ rounds: n })}
               >
-                <Text style={[styles.chipText, data.rounds === n && styles.chipTextActive]}>{n}</Text>
+                <Text style={[sty.chipText, data.rounds === n && sty.chipTextActive]}>{n}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
           {(data.myDraftSlot || sleeperPicks) && (
-            <View style={styles.pickPreview}>
-              <Text style={styles.pickPreviewTitle}>YOUR PICKS</Text>
-              <Text style={styles.pickPreviewText}>
+            <View style={sty.pickPreview}>
+              <Text style={sty.pickPreviewTitle}>YOUR PICKS</Text>
+              <Text style={sty.pickPreviewText}>
                 {sleeperPicks
                   ? sleeperPicks.join('  ·  ')
                   : getAllPicksForSlot(
@@ -981,12 +988,12 @@ function SetupWizard({
             </View>
           )}
 
-          <View style={styles.navRow}>
-            <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-              <Text style={styles.backBtnText}>BACK</Text>
+          <View style={sty.navRow}>
+            <TouchableOpacity style={sty.backBtn} onPress={onBack}>
+              <Text style={sty.backBtnText}>BACK</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.nextBtn, styles.nextBtnFlex]} onPress={() => onNext()}>
-              <Text style={styles.nextBtnText}>CONTINUE</Text>
+            <TouchableOpacity style={[sty.nextBtn, sty.nextBtnFlex]} onPress={() => onNext()}>
+              <Text style={sty.nextBtnText}>CONTINUE</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -994,8 +1001,8 @@ function SetupWizard({
 
       {/* ── CONFIRM ── */}
       {step === 'confirm' && (
-        <View style={styles.setupSection}>
-          <View style={styles.confirmCard}>
+        <View style={sty.setupSection}>
+          <View style={sty.confirmCard}>
             <ConfirmRow label="Platform" value={(data.platform || '').toUpperCase()} />
             <ConfirmRow label="League" value={data.leagueName || '—'} />
             <ConfirmRow label="Teams" value={String(data.teamCount || 12)} />
@@ -1008,12 +1015,12 @@ function SetupWizard({
             )}
           </View>
 
-          <View style={styles.navRow}>
-            <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-              <Text style={styles.backBtnText}>BACK</Text>
+          <View style={sty.navRow}>
+            <TouchableOpacity style={sty.backBtn} onPress={onBack}>
+              <Text style={sty.backBtnText}>BACK</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.startBtn, styles.nextBtnFlex]} onPress={onStart}>
-              <Text style={styles.startBtnText}>START DRAFT</Text>
+            <TouchableOpacity style={[sty.startBtn, sty.nextBtnFlex]} onPress={onStart}>
+              <Text style={sty.startBtnText}>START DRAFT</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1023,10 +1030,13 @@ function SetupWizard({
 }
 
 function ConfirmRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  const { t } = useTheme();
+  const sty = useMemo(() => makeStyles(t), [t]);
+
   return (
-    <View style={styles.confirmRow}>
-      <Text style={styles.confirmLabel}>{label}</Text>
-      <Text style={[styles.confirmValue, highlight && { color: C.aqua }]}>{value}</Text>
+    <View style={sty.confirmRow}>
+      <Text style={sty.confirmLabel}>{label}</Text>
+      <Text style={[sty.confirmValue, highlight && { color: t.accentText }]}>{value}</Text>
     </View>
   );
 }
@@ -1042,6 +1052,9 @@ function DraftBoard({
   onStateChange: (s: DraftState) => void;
   onReset: () => void;
 }) {
+  const { t } = useTheme();
+  const sty = useMemo(() => makeStyles(t), [t]);
+
   const router = useRouter();
   // Positions this league can actually start. Drives both the chip row and the
   // available-player list, so a league with no DEF/K slot shows neither the
@@ -1230,90 +1243,90 @@ function DraftBoard({
   const isSleeperLive = state.settings.platform === 'sleeper' && !!state.settings.draftId;
 
   return (
-    <View style={styles.draftContainer}>
+    <View style={sty.draftContainer}>
       {/* ── TOP BAR ── */}
-      <View style={styles.draftHeader}>
-        <View style={styles.draftHeaderLeft}>
+      <View style={sty.draftHeader}>
+        <View style={sty.draftHeaderLeft}>
           <TheOLogo fontSize={22} color="#f0f4f5" />
-          <Text style={styles.draftHeaderSub}>
+          <Text style={sty.draftHeaderSub}>
             {state.settings.leagueName} · {state.settings.scoringFormat.toUpperCase()}
           </Text>
         </View>
-        <View style={styles.draftHeaderRight}>
+        <View style={sty.draftHeaderRight}>
           {isSleeperLive && (
-            <View style={styles.liveIndicator}>
-              <View style={styles.livePulse} />
-              <Text style={styles.liveText}>LIVE</Text>
+            <View style={sty.liveIndicator}>
+              <View style={sty.livePulse} />
+              <Text style={sty.liveText}>LIVE</Text>
             </View>
           )}
-          <TouchableOpacity style={styles.headerBtn} onPress={onReset}>
-            <Text style={styles.headerBtnText}>EXIT</Text>
+          <TouchableOpacity style={sty.headerBtn} onPress={onReset}>
+            <Text style={sty.headerBtnText}>EXIT</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* ── PICK STATUS BAR ── */}
-      <View style={styles.pickStatusBar}>
-        <View style={styles.pickStatusItem}>
-          <Text style={styles.pickStatusLabel}>ROUND</Text>
-          <Text style={styles.pickStatusValue}>{state.currentRound}/{state.settings.rounds}</Text>
+      <View style={sty.pickStatusBar}>
+        <View style={sty.pickStatusItem}>
+          <Text style={sty.pickStatusLabel}>ROUND</Text>
+          <Text style={sty.pickStatusValue}>{state.currentRound}/{state.settings.rounds}</Text>
         </View>
-        <View style={styles.pickStatusDivider} />
-        <View style={styles.pickStatusItem}>
-          <Text style={styles.pickStatusLabel}>PICK</Text>
-          <Text style={styles.pickStatusValue}>#{state.currentPick}</Text>
+        <View style={sty.pickStatusDivider} />
+        <View style={sty.pickStatusItem}>
+          <Text style={sty.pickStatusLabel}>PICK</Text>
+          <Text style={sty.pickStatusValue}>#{state.currentPick}</Text>
         </View>
-        <View style={styles.pickStatusDivider} />
-        <View style={styles.pickStatusItem}>
-          <Text style={styles.pickStatusLabel}>NEXT MINE</Text>
-          <Text style={[styles.pickStatusValue, state.isMyTurn && { color: C.amber }]}>
+        <View style={sty.pickStatusDivider} />
+        <View style={sty.pickStatusItem}>
+          <Text style={sty.pickStatusLabel}>NEXT MINE</Text>
+          <Text style={[sty.pickStatusValue, state.isMyTurn && { color: t.warnText }]}>
             {state.isMyTurn ? 'NOW!' : `#${state.nextMyPick}`}
           </Text>
         </View>
-        <View style={styles.pickStatusDivider} />
-        <View style={styles.pickStatusItem}>
-          <Text style={styles.pickStatusLabel}>MY PICKS</Text>
-          <Text style={styles.pickStatusValue}>{state.myRoster.length}</Text>
+        <View style={sty.pickStatusDivider} />
+        <View style={sty.pickStatusItem}>
+          <Text style={sty.pickStatusLabel}>MY PICKS</Text>
+          <Text style={sty.pickStatusValue}>{state.myRoster.length}</Text>
         </View>
       </View>
 
       {/* ── MY TURN BANNER ── */}
       {state.isMyTurn && (
-        <View style={styles.myTurnBanner}>
-          <Text style={styles.myTurnText}>YOUR PICK — Round {state.currentRound}, Pick #{state.currentPick}</Text>
+        <View style={sty.myTurnBanner}>
+          <Text style={sty.myTurnText}>YOUR PICK — Round {state.currentRound}, Pick #{state.currentPick}</Text>
         </View>
       )}
 
       {/* ── POSITION FILTER ── */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.posScroll} contentContainerStyle={styles.posScrollContent}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={sty.posScroll} contentContainerStyle={sty.posScrollContent}>
         {positionChips.map(pos => (
           <TouchableOpacity
             key={pos}
-            style={[styles.posChip, posFilter === pos && { backgroundColor: POS_COLORS[pos] || C.aqua }]}
+            style={[sty.posChip, posFilter === pos && { backgroundColor: POS_COLORS[pos] || t.accentText }]}
             onPress={() => setPosFilter(pos)}
           >
-            <Text style={[styles.posChipText, posFilter === pos && { color: '#000' }]}>{pos}</Text>
+            <Text style={[sty.posChipText, posFilter === pos && { color: '#000' }]}>{pos}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
       {/* ── SEARCH ── */}
-      <View style={styles.searchRow}>
+      <View style={sty.searchRow}>
         <TextInput
-          style={styles.searchInput}
+          style={sty.searchInput}
           value={search}
           onChangeText={setSearch}
           placeholder="Search players..."
-          placeholderTextColor={C.textDim}
+          placeholderTextColor={t.textSub}
         />
-        <Text style={styles.availCount}>{filtered.length} avail</Text>
+        <Text style={sty.availCount}>{filtered.length} avail</Text>
       </View>
 
       {/* ── PLAYER BOARD ── */}
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        style={styles.playerList}
+        style={sty.playerList}
         contentContainerStyle={{ paddingBottom: 160 }}
         renderItem={({ item }) => (
           <PlayerRow
@@ -1336,48 +1349,48 @@ function DraftBoard({
       />
 
       {/* ── BOTTOM ACTION BAR ── */}
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
-        <TouchableOpacity style={styles.bottomBtn} onPress={() => setShowRoster(true)}>
-          <Text style={styles.bottomBtnText}>MY TEAM ({state.myRoster.length})</Text>
+      <View style={[sty.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
+        <TouchableOpacity style={sty.bottomBtn} onPress={() => setShowRoster(true)}>
+          <Text style={sty.bottomBtnText}>MY TEAM ({state.myRoster.length})</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.bottomBtnAI} onPress={() => handleAskAI()}>
+        <TouchableOpacity style={sty.bottomBtnAI} onPress={() => handleAskAI()}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={styles.bottomBtnAIText}>ASK THE </Text>
+                <Text style={sty.bottomBtnAIText}>ASK THE </Text>
                 <ApertureO size={18} color="#000" pupilColor="#000" />
               </View>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.bottomBtn} onPress={() => setShowPickLog(true)}>
-          <Text style={styles.bottomBtnText}>LOG</Text>
+        <TouchableOpacity style={sty.bottomBtn} onPress={() => setShowPickLog(true)}>
+          <Text style={sty.bottomBtnText}>LOG</Text>
         </TouchableOpacity>
         {!isSleeperLive && (
-          <TouchableOpacity style={styles.bottomBtnUndo} onPress={handleUndo}>
-            <Text style={styles.bottomBtnText}>UNDO</Text>
+          <TouchableOpacity style={sty.bottomBtnUndo} onPress={handleUndo}>
+            <Text style={sty.bottomBtnText}>UNDO</Text>
           </TouchableOpacity>
         )}
       </View>
 
       {/* ── MY ROSTER MODAL ── */}
       <Modal visible={showRoster} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>MY ROSTER</Text>
+        <View style={sty.modalOverlay}>
+          <View style={sty.modalContent}>
+            <View style={sty.modalHeader}>
+              <Text style={sty.modalTitle}>MY ROSTER</Text>
               <TouchableOpacity onPress={() => setShowRoster(false)}>
-                <Text style={styles.modalClose}>CLOSE</Text>
+                <Text style={sty.modalClose}>CLOSE</Text>
               </TouchableOpacity>
             </View>
             <ScrollView>
               {state.myRoster.length === 0 ? (
-                <Text style={styles.emptyText}>No picks yet</Text>
+                <Text style={sty.emptyText}>No picks yet</Text>
               ) : (
                 state.myRoster.map((pick, i) => (
-                  <View key={pick.pickNo} style={styles.rosterRow}>
-                    <View style={[styles.rosterPosBadge, { backgroundColor: POS_COLORS[pick.position] || C.textDim }]}>
-                      <Text style={styles.rosterPosText}>{pick.position}</Text>
+                  <View key={pick.pickNo} style={sty.rosterRow}>
+                    <View style={[sty.rosterPosBadge, { backgroundColor: POS_COLORS[pick.position] || t.textSub }]}>
+                      <Text style={sty.rosterPosText}>{pick.position}</Text>
                     </View>
-                    <View style={styles.rosterInfo}>
-                      <Text style={styles.rosterName}>{pick.playerName}</Text>
-                      <Text style={styles.rosterMeta}>{pick.team} · R{pick.round} Pick #{pick.pickNo}</Text>
+                    <View style={sty.rosterInfo}>
+                      <Text style={sty.rosterName}>{pick.playerName}</Text>
+                      <Text style={sty.rosterMeta}>{pick.team} · R{pick.round} Pick #{pick.pickNo}</Text>
                     </View>
                   </View>
                 ))
@@ -1391,35 +1404,35 @@ function DraftBoard({
       <Modal visible={showAI} transparent animationType="slide">
         <KeyboardAvoidingView
           behavior={RNPlatform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
+          style={sty.modalOverlay}
         >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
+          <View style={sty.modalContent}>
+            <View style={sty.modalHeader}>
               <TheOLogo fontSize={22} color="#f0f4f5" />
               <TouchableOpacity onPress={() => setShowAI(false)}>
-                <Text style={styles.modalClose}>CLOSE</Text>
+                <Text style={sty.modalClose}>CLOSE</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.aiScroll}>
+            <ScrollView style={sty.aiScroll}>
               {aiLoading ? (
-                <View style={styles.aiLoadingWrap}>
-                  <ActivityIndicator color={C.amber} size="large" />
-                  <Text style={styles.aiLoadingText}>The O is thinking...</Text>
+                <View style={sty.aiLoadingWrap}>
+                  <ActivityIndicator color={t.warnText} size="large" />
+                  <Text style={sty.aiLoadingText}>The O is thinking...</Text>
                 </View>
               ) : (
-                <Text style={styles.aiResponseText}>{aiResponse}</Text>
+                <Text style={sty.aiResponseText}>{aiResponse}</Text>
               )}
             </ScrollView>
-            <View style={styles.aiInputRow}>
+            <View style={sty.aiInputRow}>
               <TextInput
-                style={styles.aiInput}
+                style={sty.aiInput}
                 value={aiQuestion}
                 onChangeText={setAiQuestion}
                 placeholder="Ask about specific players..."
-                placeholderTextColor={C.textDim}
+                placeholderTextColor={t.textSub}
               />
               <TouchableOpacity
-                style={styles.aiSendBtn}
+                style={sty.aiSendBtn}
                 onPress={() => {
                   if (aiQuestion.trim()) {
                     handleAskAI(aiQuestion.trim());
@@ -1427,7 +1440,7 @@ function DraftBoard({
                   }
                 }}
               >
-                <Text style={styles.aiSendText}>ASK</Text>
+                <Text style={sty.aiSendText}>ASK</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1436,27 +1449,27 @@ function DraftBoard({
 
       {/* ── PICK LOG MODAL ── */}
       <Modal visible={showPickLog} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>PICK LOG</Text>
+        <View style={sty.modalOverlay}>
+          <View style={sty.modalContent}>
+            <View style={sty.modalHeader}>
+              <Text style={sty.modalTitle}>PICK LOG</Text>
               <TouchableOpacity onPress={() => setShowPickLog(false)}>
-                <Text style={styles.modalClose}>CLOSE</Text>
+                <Text style={sty.modalClose}>CLOSE</Text>
               </TouchableOpacity>
             </View>
             <ScrollView>
               {state.picks.length === 0 ? (
-                <Text style={styles.emptyText}>No picks yet</Text>
+                <Text style={sty.emptyText}>No picks yet</Text>
               ) : (
                 [...state.picks].reverse().map(pick => (
-                  <View key={pick.pickNo} style={[styles.logRow, pick.isMyPick && styles.logRowMine]}>
-                    <Text style={styles.logPick}>#{pick.pickNo}</Text>
-                    <View style={[styles.logPosBadge, { backgroundColor: POS_COLORS[pick.position] || C.textDim }]}>
-                      <Text style={styles.logPosText}>{pick.position}</Text>
+                  <View key={pick.pickNo} style={[sty.logRow, pick.isMyPick && sty.logRowMine]}>
+                    <Text style={sty.logPick}>#{pick.pickNo}</Text>
+                    <View style={[sty.logPosBadge, { backgroundColor: POS_COLORS[pick.position] || t.textSub }]}>
+                      <Text style={sty.logPosText}>{pick.position}</Text>
                     </View>
-                    <Text style={styles.logName}>{pick.playerName}</Text>
-                    <Text style={styles.logTeam}>{pick.team}</Text>
-                    {pick.isMyPick && <Text style={styles.logMine}>YOU</Text>}
+                    <Text style={sty.logName}>{pick.playerName}</Text>
+                    <Text style={sty.logTeam}>{pick.team}</Text>
+                    {pick.isMyPick && <Text style={sty.logMine}>YOU</Text>}
                   </View>
                 ))
               )}
@@ -1481,40 +1494,43 @@ function PlayerRow({
   onDraftMe: () => void;
   onDraftOther: () => void;
 }) {
+  const { t } = useTheme();
+  const sty = useMemo(() => makeStyles(t), [t]);
+
   const [expanded, setExpanded] = useState(false);
 
   return (
     <TouchableOpacity
-      style={styles.playerRow}
+      style={sty.playerRow}
       onPress={() => setExpanded(!expanded)}
       activeOpacity={0.7}
     >
-      <View style={styles.playerMain}>
-        <Text style={[styles.playerRank, { color: (player.tier ?? 99) <= 2 ? C.amber : C.textDim }]}>
+      <View style={sty.playerMain}>
+        <Text style={[sty.playerRank, { color: (player.tier ?? 99) <= 2 ? t.warnText : t.textSub }]}>
           {player.rank}
         </Text>
-        <View style={[styles.playerPosBadge, { backgroundColor: POS_COLORS[player.position] || C.textDim }]}>
-          <Text style={styles.playerPosText}>{player.position}</Text>
+        <View style={[sty.playerPosBadge, { backgroundColor: POS_COLORS[player.position] || t.textSub }]}>
+          <Text style={sty.playerPosText}>{player.position}</Text>
         </View>
-        <View style={styles.playerInfo}>
-          <Text style={styles.playerName}>{player.name}</Text>
-          <Text style={styles.playerMeta}>{player.team} · BYE {player.byeWeek} · ADP {player.adp}</Text>
+        <View style={sty.playerInfo}>
+          <Text style={sty.playerName}>{player.name}</Text>
+          <Text style={sty.playerMeta}>{player.team} · BYE {player.byeWeek} · ADP {player.adp}</Text>
         </View>
-        {player.tier === 1 && <Text style={styles.tierStar}>★</Text>}
+        {player.tier === 1 && <Text style={sty.tierStar}>★</Text>}
       </View>
 
       {expanded && (
-        <View style={styles.playerActions}>
+        <View style={sty.playerActions}>
           {isCompanionMode && (
-            <TouchableOpacity style={styles.draftOtherBtn} onPress={onDraftOther}>
-              <Text style={styles.draftOtherText}>DRAFTED (OTHER)</Text>
+            <TouchableOpacity style={sty.draftOtherBtn} onPress={onDraftOther}>
+              <Text style={sty.draftOtherText}>DRAFTED (OTHER)</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity
-            style={[styles.draftMeBtn, isMyTurn && styles.draftMeBtnActive]}
+            style={[sty.draftMeBtn, isMyTurn && sty.draftMeBtnActive]}
             onPress={onDraftMe}
           >
-            <Text style={[styles.draftMeText, isMyTurn && styles.draftMeTextActive]}>
+            <Text style={[sty.draftMeText, isMyTurn && sty.draftMeTextActive]}>
               {isMyTurn ? 'DRAFT THIS PLAYER' : 'I PICKED THIS'}
             </Text>
           </TouchableOpacity>
@@ -1528,10 +1544,10 @@ function PlayerRow({
 // STYLES
 // ═══════════════════════════════════════════════════════════
 
-const styles = StyleSheet.create({
+const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: C.bg,
+    backgroundColor: t.bg,
   },
   draftContainer: {
     flex: 1,
@@ -1544,47 +1560,47 @@ const styles = StyleSheet.create({
   setupTitle: {
     fontFamily: F.heading,
     fontSize: 36,
-    color: C.amber,
+    color: t.warnText,
     letterSpacing: 2,
   },
   setupSub: {
     fontFamily: F.body,
     fontSize: 15,
-    color: C.textDim,
+    color: t.textSub,
     marginTop: 4,
   },
   stepRow: { flexDirection: 'row', gap: 8, marginTop: 16 },
   stepDot: {
     width: 8, height: 8, borderRadius: 4,
-    backgroundColor: C.border,
+    backgroundColor: t.border,
   },
-  stepDotActive: { backgroundColor: C.amber, width: 24 },
-  stepDotDone: { backgroundColor: C.aqua },
+  stepDotActive: { backgroundColor: t.warnText, width: 24 },
+  stepDotDone: { backgroundColor: t.accentText },
   setupSection: { gap: 12 },
 
   // ── Platform cards ──
   platformCard: {
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderRadius: 14,
     padding: 16,
     borderWidth: 2,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   platformRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
   platformDot: { width: 10, height: 10, borderRadius: 5 },
   platformLabel: {
     fontFamily: F.bodyB,
     fontSize: 16,
-    color: C.text,
+    color: t.text,
     letterSpacing: 1,
   },
   platformDesc: {
     fontFamily: F.body,
     fontSize: 13,
-    color: C.textDim,
+    color: t.textSub,
   },
   liveBadge: {
-    backgroundColor: C.aqua,
+    backgroundColor: t.accentText,
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -1599,22 +1615,22 @@ const styles = StyleSheet.create({
 
   // ── League cards ──
   leagueCard: {
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderRadius: 14,
     padding: 16,
     borderWidth: 2,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   leagueName: {
     fontFamily: F.bodyB,
     fontSize: 16,
-    color: C.text,
+    color: t.text,
     marginBottom: 4,
   },
   leagueMeta: {
     fontFamily: F.data,
     fontSize: 12,
-    color: C.textDim,
+    color: t.textSub,
   },
 
   // ── Manual league ──
@@ -1622,18 +1638,18 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontFamily: F.data,
     fontSize: 11,
-    color: C.aqua,
+    color: t.accentText,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
     marginTop: 8,
   },
   textInput: {
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
     padding: 14,
-    color: C.text,
+    color: t.text,
     fontFamily: F.body,
     fontSize: 15,
   },
@@ -1641,74 +1657,74 @@ const styles = StyleSheet.create({
   // ── Chips ──
   chipRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   chip: {
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   chipActive: {
-    backgroundColor: C.amber,
-    borderColor: C.amber,
+    backgroundColor: t.warnText,
+    borderColor: t.warnText,
   },
   chipText: {
     fontFamily: F.data,
     fontSize: 13,
-    color: C.textDim,
+    color: t.textSub,
   },
   chipTextActive: { color: '#000' },
   slotScroll: { maxHeight: 55 },
   slotChip: {
     width: 42, height: 42,
     borderRadius: 21,
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 6,
   },
   slotChipActive: {
-    backgroundColor: C.amber,
-    borderColor: C.amber,
+    backgroundColor: t.warnText,
+    borderColor: t.warnText,
   },
   slotChipText: {
     fontFamily: F.data,
     fontSize: 14,
-    color: C.textDim,
+    color: t.textSub,
   },
   slotChipTextActive: { color: '#000', fontWeight: '700' },
 
   // ── Pick preview ──
   pickPreview: {
-    backgroundColor: C.muted,
+    backgroundColor: t.surface,
     borderRadius: 10,
     padding: 14,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   pickPreviewTitle: {
     fontFamily: F.data,
     fontSize: 10,
-    color: C.aqua,
+    color: t.accentText,
     letterSpacing: 1.5,
     marginBottom: 6,
   },
   pickPreviewText: {
     fontFamily: F.data,
     fontSize: 13,
-    color: C.text,
+    color: t.text,
     lineHeight: 22,
   },
 
   // ── Confirm ──
   confirmCard: {
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
     overflow: 'hidden',
   },
   confirmRow: {
@@ -1717,24 +1733,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: C.border,
+    borderBottomColor: t.border,
   },
   confirmLabel: {
     fontFamily: F.data,
     fontSize: 12,
-    color: C.textDim,
+    color: t.textSub,
     letterSpacing: 0.5,
   },
   confirmValue: {
     fontFamily: F.bodyB,
     fontSize: 14,
-    color: C.text,
+    color: t.text,
   },
 
   // ── Nav buttons ──
   navRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
   nextBtn: {
-    backgroundColor: C.amber,
+    backgroundColor: t.warnText,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
@@ -1748,21 +1764,21 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   backBtn: {
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderRadius: 12,
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   backBtnText: {
     fontFamily: F.bodyB,
     fontSize: 14,
-    color: C.textDim,
+    color: t.textSub,
     letterSpacing: 1,
   },
   startBtn: {
-    backgroundColor: C.aqua,
+    backgroundColor: t.accentText,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
@@ -1779,7 +1795,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontFamily: F.body,
     fontSize: 14,
-    color: C.textDim,
+    color: t.textSub,
     textAlign: 'center',
     paddingVertical: 20,
   },
@@ -1792,19 +1808,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: C.border,
+    borderBottomColor: t.border,
   },
   draftHeaderLeft: {},
   draftHeaderTitle: {
     fontFamily: F.heading,
     fontSize: 22,
-    color: C.amber,
+    color: t.warnText,
     letterSpacing: 1,
   },
   draftHeaderSub: {
     fontFamily: F.data,
     fontSize: 10,
-    color: C.textDim,
+    color: t.textSub,
     letterSpacing: 0.5,
   },
   draftHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -1819,63 +1835,63 @@ const styles = StyleSheet.create({
   },
   livePulse: {
     width: 6, height: 6, borderRadius: 3,
-    backgroundColor: C.aqua,
+    backgroundColor: t.accentText,
   },
   liveText: {
     fontFamily: F.data,
     fontSize: 10,
-    color: C.aqua,
+    color: t.accentText,
     letterSpacing: 1,
   },
   headerBtn: {
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   headerBtnText: {
     fontFamily: F.data,
     fontSize: 11,
-    color: C.textDim,
+    color: t.textSub,
     letterSpacing: 1,
   },
 
   // ── Pick Status ──
   pickStatusBar: {
     flexDirection: 'row',
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     marginHorizontal: 12,
     marginTop: 8,
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   pickStatusItem: { flex: 1, alignItems: 'center' },
   pickStatusLabel: {
     fontFamily: F.data,
     fontSize: 9,
-    color: C.textDim,
+    color: t.textSub,
     letterSpacing: 1,
   },
   pickStatusValue: {
     fontFamily: F.heading,
     fontSize: 18,
-    color: C.text,
+    color: t.text,
     marginTop: 2,
   },
   pickStatusDivider: {
     width: 1,
     height: 28,
-    backgroundColor: C.border,
+    backgroundColor: t.border,
   },
 
   // ── My Turn Banner ──
   myTurnBanner: {
-    backgroundColor: C.amber,
+    backgroundColor: t.warnText,
     marginHorizontal: 12,
     marginTop: 8,
     borderRadius: 10,
@@ -1893,17 +1909,17 @@ const styles = StyleSheet.create({
   posScroll: { marginTop: 10, maxHeight: 40 },
   posScrollContent: { paddingHorizontal: 12, gap: 6, flexDirection: 'row' },
   posChip: {
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   posChipText: {
     fontFamily: F.data,
     fontSize: 12,
-    color: C.textDim,
+    color: t.textSub,
     letterSpacing: 1,
   },
 
@@ -1917,20 +1933,20 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    color: C.text,
+    color: t.text,
     fontFamily: F.body,
     fontSize: 14,
   },
   availCount: {
     fontFamily: F.data,
     fontSize: 11,
-    color: C.textDim,
+    color: t.textSub,
   },
 
   // ── Player List ──
@@ -1942,7 +1958,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: C.border,
+    borderBottomColor: t.border,
   },
   playerMain: {
     flexDirection: 'row',
@@ -1972,18 +1988,18 @@ const styles = StyleSheet.create({
   playerName: {
     fontFamily: F.bodyB,
     fontSize: 15,
-    color: C.text,
+    color: t.text,
   },
   playerMeta: {
     fontFamily: F.data,
     fontSize: 11,
-    color: C.textDim,
+    color: t.textSub,
     marginTop: 1,
   },
   tierStar: {
     fontFamily: F.heading,
     fontSize: 18,
-    color: C.amber,
+    color: t.warnText,
   },
   playerActions: {
     flexDirection: 'row',
@@ -1993,36 +2009,36 @@ const styles = StyleSheet.create({
   },
   draftOtherBtn: {
     flex: 1,
-    backgroundColor: C.muted,
+    backgroundColor: t.surface,
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   draftOtherText: {
     fontFamily: F.data,
     fontSize: 11,
-    color: C.textDim,
+    color: t.textSub,
     letterSpacing: 0.5,
   },
   draftMeBtn: {
     flex: 1,
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: C.aqua,
+    borderColor: t.accentText,
   },
   draftMeBtnActive: {
-    backgroundColor: C.amber,
-    borderColor: C.amber,
+    backgroundColor: t.warnText,
+    borderColor: t.warnText,
   },
   draftMeText: {
     fontFamily: F.data,
     fontSize: 11,
-    color: C.aqua,
+    color: t.accentText,
     letterSpacing: 0.5,
   },
   draftMeTextActive: { color: '#000' },
@@ -2033,32 +2049,32 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingTop: 10,
-    backgroundColor: C.bg,
+    backgroundColor: t.bg,
     borderTopWidth: 1,
-    borderTopColor: C.border,
+    borderTopColor: t.border,
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
   },
   bottomBtn: {
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderRadius: 10,
     paddingVertical: 12,
     paddingHorizontal: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   bottomBtnText: {
     fontFamily: F.data,
     fontSize: 10,
-    color: C.textDim,
+    color: t.textSub,
     letterSpacing: 0.5,
   },
   bottomBtnAI: {
     flex: 1,
-    backgroundColor: C.amber,
+    backgroundColor: t.warnText,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
@@ -2070,13 +2086,13 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   bottomBtnUndo: {
-    backgroundColor: C.muted,
+    backgroundColor: t.surface,
     borderRadius: 10,
     paddingVertical: 12,
     paddingHorizontal: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
 
   // ── Modals ──
@@ -2086,12 +2102,12 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: C.bg,
+    backgroundColor: t.bg,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '80%',
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2100,18 +2116,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: C.border,
+    borderBottomColor: t.border,
   },
   modalTitle: {
     fontFamily: F.heading,
     fontSize: 22,
-    color: C.amber,
+    color: t.warnText,
     letterSpacing: 1,
   },
   modalClose: {
     fontFamily: F.data,
     fontSize: 12,
-    color: C.aqua,
+    color: t.accentText,
     letterSpacing: 1,
   },
 
@@ -2123,7 +2139,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: C.border,
+    borderBottomColor: t.border,
   },
   rosterPosBadge: {
     borderRadius: 4,
@@ -2142,12 +2158,12 @@ const styles = StyleSheet.create({
   rosterName: {
     fontFamily: F.bodyB,
     fontSize: 15,
-    color: C.text,
+    color: t.text,
   },
   rosterMeta: {
     fontFamily: F.data,
     fontSize: 11,
-    color: C.textDim,
+    color: t.textSub,
     marginTop: 1,
   },
 
@@ -2157,12 +2173,12 @@ const styles = StyleSheet.create({
   aiLoadingText: {
     fontFamily: F.body,
     fontSize: 14,
-    color: C.textDim,
+    color: t.textSub,
   },
   aiResponseText: {
     fontFamily: F.body,
     fontSize: 15,
-    color: C.text,
+    color: t.text,
     lineHeight: 24,
   },
   aiInputRow: {
@@ -2171,22 +2187,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: C.border,
+    borderTopColor: t.border,
   },
   aiInput: {
     flex: 1,
-    backgroundColor: C.card,
+    backgroundColor: t.card,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    color: C.text,
+    color: t.text,
     fontFamily: F.body,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: t.border,
   },
   aiSendBtn: {
-    backgroundColor: C.amber,
+    backgroundColor: t.warnText,
     borderRadius: 10,
     paddingHorizontal: 18,
     justifyContent: 'center',
@@ -2206,7 +2222,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: C.border,
+    borderBottomColor: t.border,
   },
   logRowMine: {
     backgroundColor: 'rgba(255,184,0,0.06)',
@@ -2214,7 +2230,7 @@ const styles = StyleSheet.create({
   logPick: {
     fontFamily: F.data,
     fontSize: 12,
-    color: C.textDim,
+    color: t.textSub,
     width: 30,
   },
   logPosBadge: {
@@ -2233,18 +2249,18 @@ const styles = StyleSheet.create({
   logName: {
     fontFamily: F.body,
     fontSize: 14,
-    color: C.text,
+    color: t.text,
     flex: 1,
   },
   logTeam: {
     fontFamily: F.data,
     fontSize: 11,
-    color: C.textDim,
+    color: t.textSub,
   },
   logMine: {
     fontFamily: F.data,
     fontSize: 9,
-    color: C.amber,
+    color: t.warnText,
     letterSpacing: 1,
     marginLeft: 4,
   },
