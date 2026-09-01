@@ -15,6 +15,13 @@ import { F, palette, SP } from '../constants/tokens';
 import { AI_DISCLOSURE, getAIConsent, setAIConsent } from '../../services/aiConsent';
 import { useTheme, type ThemeTokens } from '../constants/theme';
 
+// Yahoo gated their Fantasy Sports API behind manual approval in late July
+// 2026. Every fantasy endpoint 403s ("This application is not authorized to
+// perform this action") for ALL third-party apps pending review — both our
+// client IDs, valid tokens, public endpoints included. Application submitted
+// via sports.yahoo.com/developer/access/. Flip to false on approval.
+const YAHOO_API_AWAITING_APPROVAL = true;
+
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -273,7 +280,7 @@ export default function SettingsScreen() {
             }}>
             <View style={[s.dot, { backgroundColor: '#7c3aed' }]} />
             <Text style={s.rowLabel}>Yahoo</Text>
-            <Text style={[s.rowValue, { color: yahooLinked ? t.successText : t.warnText }]}>{yahooLinked ? 'Connected' : 'Connect →'}</Text>
+            <Text style={[s.rowValue, { color: yahooLinked ? (YAHOO_API_AWAITING_APPROVAL ? t.warnText : t.successText) : t.warnText }]}>{yahooLinked ? (YAHOO_API_AWAITING_APPROVAL ? 'Awaiting Yahoo approval' : 'Connected') : 'Connect →'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.row} onPress={mflLinked
             ? () => Alert.alert('MFL', 'Disconnect MFL?', [
