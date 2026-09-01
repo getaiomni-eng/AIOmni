@@ -248,7 +248,18 @@ export default function SettingsScreen() {
                 const { getYahooAuthURL, exchangeYahooCode, getValidYahooToken } = require('../../services/yahoo');
                 const WebBrowser = require('expo-web-browser');
                 const authUrl = await getYahooAuthURL();
-                const result = await WebBrowser.openAuthSessionAsync(authUrl, 'aiomnifantasy://oauth/yahoo');
+                // preferEphemeralSession: without it the auth sheet shares Safari's
+                // cookies, so a stale Yahoo session gets silently auto-approved and
+                // returns a code bound to the OLD grant. The user sees "Yahoo
+                // Connected!", a token is stored, and then zero leagues load — with
+                // no error anywhere. The only escape was signing out of Yahoo in
+                // mobile Safari first, which nobody will ever guess. An ephemeral
+                // session carries no cookies, so Yahoo always shows a real login.
+                const result = await WebBrowser.openAuthSessionAsync(
+                  authUrl,
+                  'aiomnifantasy://oauth/yahoo',
+                  { preferEphemeralSession: true },
+                );
                 if (result.type === 'success' && result.url) {
                   const parsed = new URL(result.url);
                   const code = parsed.searchParams.get('code');
