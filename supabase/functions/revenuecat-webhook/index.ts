@@ -78,7 +78,14 @@ Deno.serve(async (req) => {
 
   const { error } = await sb
     .from('users')
-    .update({ tier: newTier, updated_at: new Date().toISOString() })
+    .update({
+      tier: newTier,
+      // A real RevenueCat entitlement supersedes any comped grant. Without
+      // this, a user who was comped and then actually subscribed would be
+      // downgraded by the tier-expiry sweep while paying.
+      tier_expires_at: null,
+      updated_at: new Date().toISOString(),
+    })
     .eq('auth_id', appUserId);
 
   if (error) {
