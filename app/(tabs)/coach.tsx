@@ -1526,7 +1526,7 @@ Capture rookies and veterans exactly.`,
         `\nuser: ${safeText}`,
       ].filter(Boolean).join('\n');
 
-      const reply = await askAI(fullPrompt, { maxTokens: 1000, system: STATIC_SYSTEM });
+      const reply = await askAI(fullPrompt, { maxTokens: 1000, system: STATIC_SYSTEM, feature: 'coach' });
       // Only charge a prompt once the model actually responds — connection
       // errors and timeouts shouldn't burn the user's weekly quota.
       await incrementPrompt();

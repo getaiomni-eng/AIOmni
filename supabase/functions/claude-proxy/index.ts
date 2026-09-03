@@ -60,7 +60,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
     : "https://www.getaiomni.com";
   return {
     "Access-Control-Allow-Origin":  allow,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-aiomni-feature",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
@@ -207,6 +207,7 @@ serve(async (req) => {
     }
 
     const body = await req.json();
+    const startedAt = Date.now();
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -218,6 +219,28 @@ serve(async (req) => {
     });
 
     const data = await anthropicRes.json();
+
+    // Judgment-capture (2026-09-02): one metadata row per AI call. Prompt and
+    // completion CONTENT are deliberately not stored here — this is calibration
+    // telemetry (which feature, which model, how many tokens, for which tier),
+    // the substrate for the AI-commissioner dataset. Fire-and-forget: capture
+    // must never delay or fail a user response.
+    try {
+      const u = data?.usage ?? {};
+      void sb.from("ai_response_metadata").insert({
+        user_id:            userId ?? null,
+        feature:            req.headers.get("x-aiomni-feature") ?? null,
+        model:              body?.model ?? "unknown",
+        input_tokens:       u.input_tokens ?? null,
+        output_tokens:      u.output_tokens ?? null,
+        cache_read_tokens:  u.cache_read_input_tokens ?? null,
+        cache_write_tokens: u.cache_creation_input_tokens ?? null,
+        latency_ms:         Date.now() - startedAt,
+        http_status:        anthropicRes.status,
+        tier,
+      }).then(() => {}, () => {});
+    } catch { /* never block the response on telemetry */ }
+
     return new Response(JSON.stringify(data), {
       status: anthropicRes.status,
       headers: { ...corsHeaders(origin), "Content-Type": "application/json" },

@@ -39,6 +39,9 @@ export interface AskAIOptions {
   // `prompt` becomes the dynamic user turn. Identical static blocks across
   // calls hit the prompt cache — big cost win for Coach/Trade/draft.
   system?: string;
+  // Telemetry tag for the judgment-capture pipeline (ai_response_metadata):
+  // which surface made this call. Never affects the response.
+  feature?: string;
 }
 
 export async function askAI(
@@ -68,6 +71,7 @@ export async function askAI(
       'Content-Type':  'application/json',
       'apikey':        SUPABASE_ANON_KEY,
       'Authorization': `Bearer ${userJwt}`,
+      ...(o.feature ? { 'x-aiomni-feature': o.feature } : {}),
     };
 
     // When a `system` block is provided, the dictionary lives there (static →
@@ -222,6 +226,7 @@ export async function askAIVision(
         'Content-Type':  'application/json',
         'apikey':        SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${userJwt}`,
+        ...(opts.feature ? { 'x-aiomni-feature': opts.feature } : {}),
       },
       body: JSON.stringify({
         model,

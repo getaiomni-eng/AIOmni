@@ -1227,7 +1227,7 @@ function DraftBoard({
     }
     try {
       const prompt = buildDraftPrompt(state, q || undefined);
-      const res = await askAI(prompt, { system: CLASS_OF_2025_TEXT });
+      const res = await askAI(prompt, { system: CLASS_OF_2025_TEXT, feature: 'draft' });
       setAiResponse(res);
     } catch (e: any) {
       // Never surface raw internal errors to the sheet — build 197 lesson.

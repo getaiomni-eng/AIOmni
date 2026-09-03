@@ -631,7 +631,7 @@ ${marketMath}${(() => {
       // cited MORE of the available signals (both snap shares + the Vegas
       // total, which Opus skipped), produced valid JSON with the locked
       // grades intact, and returned 28% faster at 40% of the cost.
-      const response = await askAI(prompt, { maxTokens: 600, system: `${system}\n\n${CLASS_OF_2025_TEXT}`, tier: 'mid' });
+      const response = await askAI(prompt, { maxTokens: 600, system: `${system}\n\n${CLASS_OF_2025_TEXT}`, tier: 'mid', feature: 'trade' });
       console.log('Raw AI response:', response);
       // The model is told to return one JSON object, but sometimes emits a
       // preamble, code fences, or even a second "revised" object with prose
