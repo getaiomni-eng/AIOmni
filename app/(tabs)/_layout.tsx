@@ -1,21 +1,41 @@
 import { Tabs } from 'expo-router';
+import { Platform, useWindowDimensions } from 'react-native';
 import TabIcon from '../components/TabIcon';
 import { useTheme } from '../constants/theme';
 
 export default function TabLayout() {
+  const { width } = useWindowDimensions();
+  const sideNav = Platform.OS === 'web' && width >= 900;
   const { t } = useTheme();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: t.navBg,
-          borderTopWidth: 1,
-          borderTopColor: t.border,
-          paddingTop: 8,
-          paddingBottom: 20,
-          height: 72,
-        },
+        // Web at desktop width gets a left navigation rail (bottom-tabs v7);
+        // phones — native and narrow browser windows — keep the bottom bar.
+        ...(sideNav
+          ? {
+              tabBarPosition: 'left' as const,
+              tabBarVariant: 'material' as const,
+              tabBarLabelPosition: 'below-icon' as const,
+              tabBarStyle: {
+                backgroundColor: t.navBg,
+                borderRightWidth: 1,
+                borderRightColor: t.border,
+                paddingTop: 18,
+                minWidth: 96,
+              },
+            }
+          : {
+              tabBarStyle: {
+                backgroundColor: t.navBg,
+                borderTopWidth: 1,
+                borderTopColor: t.border,
+                paddingTop: 8,
+                paddingBottom: 20,
+                height: 72,
+              },
+            }),
         tabBarLabelStyle: {
           fontFamily: 'Audiowide_400Regular',
           fontSize: 9,

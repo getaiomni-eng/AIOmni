@@ -192,7 +192,7 @@ export default Sentry.wrap(function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       {/* web: phone-column layout centered on a page ground (triage item 2) */}
-      <GestureHandlerRootView style={Platform.OS === 'web' ? { flex: 1, width: '100%', maxWidth: 520, alignSelf: 'center' } : { flex: 1 }}>
+      <GestureHandlerRootView style={Platform.OS === 'web' ? { flex: 1, width: '100%', maxWidth: 1180, alignSelf: 'center' } : { flex: 1 }}>
       <ThemeProvider>
       <Stack>
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
