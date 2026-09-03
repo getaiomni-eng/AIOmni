@@ -29,6 +29,14 @@ import { pullCloudDataOnLogin } from '../services/userSync';
 import { dark } from './constants/tokens';
 import { ThemeProvider } from './constants/theme';
 
+// Web page ground. The app renders as a centered phone column; without this
+// the browser paints its default white around it. (+html.tsx would be the
+// clean home for this, but it only applies to static output — we export SPA.)
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  document.documentElement.style.background = '#0a1214';
+  document.body.style.background = '#0a1214';
+}
+
 Sentry.init({
   dsn: 'https://bff368e4055a1f51bda1b9464e0d2a39@o4511046397394944.ingest.us.sentry.io/4511046438158336',
   debug: false,
