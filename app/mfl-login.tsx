@@ -20,14 +20,12 @@
 
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import {
-  ActivityIndicator, Alert, ScrollView, StyleSheet, Text,
-  TextInput, TouchableOpacity, View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setMflCredentials, setMflLeagues } from '../services/platform/mfl';
 import { useTheme, type ThemeTokens } from './constants/theme';
 import { F, SP, SZ } from './constants/tokens';
+import { Alert } from '../services/util/crossAlert';
 
 const SEASON = '2026';
 

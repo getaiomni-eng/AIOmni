@@ -13,15 +13,13 @@
 
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator, Alert, ScrollView, StyleSheet, Text,
-  TextInput, TouchableOpacity, View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { setFleaflickerLeagues, setFleaflickerCredentials } from '../services/platform/fleaflicker';
 import { F, SP, SZ, palette } from './constants/tokens';
 import { useTheme, type ThemeTokens } from './constants/theme';
+import { Alert } from '../services/util/crossAlert';
 
 const FLEAFLICKER_LOGIN_URL = 'https://www.fleaflicker.com/nfl/login';
 const SEASON = 2026;

@@ -1,12 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { discoverESPNLeagues, saveESPNCredentials } from '../services/espn';
 import { useTheme, type ThemeTokens } from './constants/theme';
 import { C, F, SP, SZ } from './constants/tokens';
+import { Alert } from '../services/util/crossAlert';
 
 const ESPN_LOGIN_URL = 'https://www.espn.com/fantasy/football/';
 

@@ -11,16 +11,7 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { PACKAGE_TYPE, PurchasesPackage } from 'react-native-purchases';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -34,6 +25,7 @@ import {
 } from '../services/purchases';
 import { useTheme, type ThemeTokens } from './constants/theme';
 import { palette } from './constants/tokens';
+import { Alert } from '../services/util/crossAlert';
 
 type BillingCycle = 'monthly' | 'yearly';
 

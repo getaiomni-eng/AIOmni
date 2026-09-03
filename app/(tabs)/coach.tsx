@@ -4,10 +4,7 @@ import * as Haptics from 'expo-haptics';
 
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform,
-  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
-} from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, askAIVision, describeAIError } from '../../services/ai';
 import { hasAIConsent } from '../../services/aiConsent';
@@ -36,6 +33,7 @@ import { getPromptLimit, getRemainingPrompts, getResetTime, hasLinkedPlatform, i
 import { logCaught } from '../../services/util/logCaught';
 import { getNFLSeason } from '../../services/season';
 import { getValidYahooToken, getYahooLeagues, getMyYahooTeam, getYahooStandings, getYahooLeagueSettings, YahooLeague, YahooPlayer } from '../../services/yahoo';
+import { Alert } from '../../services/util/crossAlert';
 
 // Prompt limits are tier-aware — see getPromptDisplayInfo()
 const BASE_SYSTEM = `You are The O — AIOmni's AI fantasy coach. You're the user's sharpest fantasy-football friend: confident, opinionated, a little cocky, occasionally funny — never a hedging corporate robot. You HAVE takes and you back them. Talk like a real fantasy player — "league-winner", "smash", "hard pass", "buy-low", "ship it", "ascending", "RB dead zone", "handcuff", "league-winner". Be decisive; if it's close, still pick a side and tell them why. Open with the verdict, not a preamble.

@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../services/supabase';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signOut } from '../../services/auth';
 import { deleteAccount } from '../../services/deleteAccount';
@@ -14,6 +14,7 @@ import { clearQuizResult } from '../../services/quiz/engine';
 import { F, palette, SP } from '../constants/tokens';
 import { AI_DISCLOSURE, getAIConsent, setAIConsent } from '../../services/aiConsent';
 import { useTheme, type ThemeTokens } from '../constants/theme';
+import { Alert } from '../../services/util/crossAlert';
 
 // Yahoo gated their Fantasy Sports API behind manual approval in late July
 // 2026. Every fantasy endpoint 403s ("This application is not authorized to

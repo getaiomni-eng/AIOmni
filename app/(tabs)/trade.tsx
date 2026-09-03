@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, askAIVision, describeAIError, hasAISession } from '../../services/ai';
 import { pickImageForVision } from '../../services/util/pickImage';
@@ -16,6 +16,7 @@ import { consumePrompt, hasLinkedPlatform } from '../../services/promptQuota';
 import { C, F, R, SP, SZ } from '../constants/tokens';
 import { useTheme, type ThemeTokens } from '../constants/theme';
 import { Icon } from '../components/AIOmniIcons';
+import { Alert } from '../../services/util/crossAlert';
 
 type Format = 'redraft' | 'dynasty';
 type Grade = 'A+' | 'A' | 'A-' | 'B+' | 'B' | 'B-' | 'C+' | 'C' | 'C-' | 'D+' | 'D' | 'F';

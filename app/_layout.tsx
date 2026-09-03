@@ -17,6 +17,8 @@ import { supabase } from '../services/supabase';
 import { syncUserBehavioralData } from '../services/behavioralSync';
 import { Alert, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Platform } from 'react-native';
+import { CrossPromptHost } from './components/CrossPromptHost';
 import { getUser, getUserRow } from '../services/supabase';
 import { loadYahooTokens } from '../services/yahoo';
 import { updatePassword } from '../services/auth';
@@ -181,6 +183,8 @@ export default Sentry.wrap(function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      {/* web: phone-column layout centered on a page ground (triage item 2) */}
+      <GestureHandlerRootView style={Platform.OS === 'web' ? { flex: 1, width: '100%', maxWidth: 520, alignSelf: 'center' } : { flex: 1 }}>
       <ThemeProvider>
       <Stack>
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
@@ -197,6 +201,8 @@ export default Sentry.wrap(function RootLayout() {
         <Stack.Screen name="quiz-reveal" options={{ headerShown: false }} />
       </Stack>
       </ThemeProvider>
-    </GestureHandlerRootView>
+    <CrossPromptHost />
+      </GestureHandlerRootView>
+      </GestureHandlerRootView>
   );
 });

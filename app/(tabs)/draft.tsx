@@ -6,21 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getNFLSeason } from '../../services/season';
 import { normalizePlayerName } from '../../services/util/normalizeName';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    FlatList,
-    KeyboardAvoidingView,
-    Modal,
-    Platform as RNPlatform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, KeyboardAvoidingView, Modal, Platform as RNPlatform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, describeAIError, hasAISession } from '../../services/ai';
 import { hasAIConsent } from '../../services/aiConsent';
@@ -31,6 +17,7 @@ import { applyEngineToDraftPool, draftSettingsToUIFormat } from '../../services/
 import { TheOLogo, ApertureO } from '../components/TheOLogo';
 import { CLASS_OF_2025_TEXT } from '../../services/seasonContext2026';
 import { readableText, useTheme, type ThemeTokens } from '../constants/theme';
+import { Alert } from '../../services/util/crossAlert';
 import {
     DEFAULT_PLAYER_DB,
     loadLivePlayerDB,

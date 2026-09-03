@@ -5,11 +5,7 @@ import { getNFLSeason, getAvailableSeasons } from '../../services/season';
 import { logCaught, logEmpty } from '../../services/util/logCaught';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator, Alert, Animated, Dimensions,
-  Linking, Modal, RefreshControl, ScrollView,
-  StyleSheet, Text, TouchableOpacity, View,
-} from 'react-native';
+import { ActivityIndicator, Animated, Dimensions, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, hasAISession } from "../../services/ai";
 import { fetchAnalystBuzz, type BuzzLine } from '../../services/analystTakes';
@@ -23,6 +19,7 @@ import { AIOmniLogo, AIOmniWordmark } from '../components/AIOmniLogo';
 import { readableText, useTheme, type ThemeTokens } from '../constants/theme';
 import { dark, F, palette, SP, SZ } from '../constants/tokens';
 import { consumePrompt } from '../../services/promptQuota';
+import { Alert } from '../../services/util/crossAlert';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W    = SCREEN_W - SP[3] * 2;
