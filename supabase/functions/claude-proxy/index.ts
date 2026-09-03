@@ -173,45 +173,24 @@ serve(async (req) => {
     // Per-user rate enforcement (skip only for tiers explicitly unlimited;
     // currently none, but keeping the guard).
     if (limit < 999) {
-      const { data: usage } = await sb
-        .from("prompt_usage")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      const now = new Date();
-      if (usage) {
-        const resetAt = new Date(usage.reset_at);
-        let currentCount = usage.prompts_used;
-        if (now >= resetAt) {
-          currentCount = 0;
-          await sb
-            .from("prompt_usage")
-            .update({ prompts_used: 0, reset_at: getNextSundayNoon() })
-            .eq("user_id", userId);
-        }
-        if (currentCount >= limit) {
-          // $0.99 AI credit: one analysis past the weekly cap, on any
-          // surface. Atomic RPC — a race here spends real money, so the
-          // decrement-with-guard lives in a single UPDATE server-side.
-          const { data: spent } = await sb.rpc("spend_ai_credit", { p_auth_id: userId });
-          if (spent !== true) {
-            return jsonError(429, "Weekly prompt limit reached", origin);
-          }
-          // Credit consumed: skip the prompts_used increment below by
-          // falling through with the counter untouched.
-        } else {
-        await sb
-          .from("prompt_usage")
-          .update({ prompts_used: currentCount + 1 })
-          .eq("user_id", userId);
-        }
-      } else {
-        await sb.from("prompt_usage").insert({
-          user_id:      userId,
-          prompts_used: 1,
-          reset_at:     getNextSundayNoon(),
-        });
+      // Server-authoritative quota (2026-09-03). The previous block read and
+      // wrote columns that DO NOT EXIST on prompt_usage (prompts_used /
+      // reset_at vs the real count / week_start) — every write erred with the
+      // result ignored, every read gave undefined, and undefined >= limit is
+      // false. The table had ZERO rows in production: the server never blocked
+      // a single prompt, and per-device client counters were the only cap
+      // (a second device meant a second allowance). consume_prompt() is a
+      // race-safe weekly upsert keyed by the real schema, with the $0.99
+      // credit spent atomically as the over-cap fallback.
+      const { data: q, error: qErr } = await sb.rpc("consume_prompt", {
+        p_auth_id: userId,
+        p_limit: limit,
+      });
+      const verdict = Array.isArray(q) ? q[0] : q;
+      // Fail open on infrastructure error (authenticated user, telemetry
+      // below still records the call) — fail CLOSED on a clean "no".
+      if (!qErr && verdict && verdict.allowed !== true) {
+        return jsonError(429, "Weekly prompt limit reached", origin);
       }
     }
 

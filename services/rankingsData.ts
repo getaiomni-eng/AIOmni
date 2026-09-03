@@ -234,9 +234,12 @@ export async function getSleeperPlayers(): Promise<Record<string, any>> {
   try {
     const res = await fetch('https://api.sleeper.app/v1/players/nfl');
     const data = await res.json();
-    await AsyncStorage.setItem(SLEEPER_CACHE_KEY, JSON.stringify(data));
-    await AsyncStorage.setItem(SLEEPER_CACHE_TS, String(Date.now()));
     sleeperCache = data;
+    // Best-effort: setItem throws on web's ~5MB quota; the map stays usable.
+    try {
+      await AsyncStorage.setItem(SLEEPER_CACHE_KEY, JSON.stringify(data));
+      await AsyncStorage.setItem(SLEEPER_CACHE_TS, String(Date.now()));
+    } catch { /* web quota */ }
     return data;
   } catch (e) {
     console.log('getSleeperPlayers error:', e);

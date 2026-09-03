@@ -207,6 +207,12 @@ function ensureMigrated(): Promise<void> {
 // ── public API (unchanged surface — see git history for the old impl) ──
 
 export async function getRemainingPrompts(): Promise<number> {
+  // Server first — every device shows the same number. Local counter only
+  // when the server is unreachable.
+  const tierNow = await getCurrentTier();
+  const srv = await fetchServerPromptState();
+  if (srv) return Math.max(0, (LIMITS[tierNow] ?? LIMITS.free) - srv.used);
+
   await ensureMigrated();
   const tier = await getCurrentTier();
   return counterFor(tier).getRemaining();
@@ -243,6 +249,24 @@ export async function consumePrompt(): Promise<boolean> {
 // Server-authoritative $0.99 credit balance. claude-proxy spends these
 // atomically when the weekly quota is exhausted — the client only needs to
 // know whether to let the request through to the server.
+// Server-authoritative usage. The local SecureStore counter is per-device:
+// a fresh browser showed 50/50 while the phone said 40/50, and BOTH were
+// fiction — enforcement lives in claude-proxy's consume_prompt(). This reads
+// the server's number; the local counter is only the offline fallback.
+let serverStateCache: { at: number; used: number; credits: number } | null = null;
+export async function fetchServerPromptState(force = false): Promise<{ used: number; credits: number } | null> {
+  if (!force && serverStateCache && Date.now() - serverStateCache.at < 30_000) {
+    return { used: serverStateCache.used, credits: serverStateCache.credits };
+  }
+  try {
+    const { data } = await supabase.rpc('my_prompt_state');
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return null;
+    serverStateCache = { at: Date.now(), used: row.used ?? 0, credits: row.ai_credits ?? 0 };
+    return { used: serverStateCache.used, credits: serverStateCache.credits };
+  } catch { return null; }
+}
+
 export async function getAICreditBalance(): Promise<number> {
   try {
     const { data: { user } } = await supabase.auth.getUser();

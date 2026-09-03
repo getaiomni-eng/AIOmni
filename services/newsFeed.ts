@@ -164,7 +164,8 @@ async function getSleeperPlayers() {
     const res = await fetch('https://api.sleeper.app/v1/players/nfl');
     const data = await res.json();
     sleeperPlayersCache = data;
-    await AsyncStorage.setItem('sleeper_players_cache', JSON.stringify(data));
+    // Best-effort: setItem throws on web's ~5MB quota; the map stays usable.
+    try { await AsyncStorage.setItem('sleeper_players_cache', JSON.stringify(data)); } catch { /* web quota */ }
     return data;
   } catch {
     return {};

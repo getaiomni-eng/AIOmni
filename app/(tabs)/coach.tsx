@@ -110,8 +110,15 @@ async function loadSleeperPlayerMap(): Promise<Record<string, any>> {
   try {
     const res = await fetch('https://api.sleeper.app/v1/players/nfl');
     const data = await res.json();
-    await AsyncStorage.setItem('sleeper_players_cache', JSON.stringify(data));
-    await AsyncStorage.setItem('sleeper_players_cache_at', String(Date.now()));
+    // Cache write is best-effort: on web this JSON (~15MB) blows through
+    // localStorage's ~5MB quota and setItem THROWS — which used to discard
+    // the already-fetched map and hand the Coach an empty one (raw player
+    // IDs in prompts, "every manager's team is blank"). Never let the cache
+    // kill the data.
+    try {
+      await AsyncStorage.setItem('sleeper_players_cache', JSON.stringify(data));
+      await AsyncStorage.setItem('sleeper_players_cache_at', String(Date.now()));
+    } catch { /* quota exceeded (web) — serve from memory */ }
     return data;
   } catch {
     if (cachedRaw) { try { return JSON.parse(cachedRaw); } catch { /* */ } }
