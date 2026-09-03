@@ -151,6 +151,7 @@ export default function HomeScreen() {
   const s       = useMemo(() => makeStyles(t), [t]);
 
   const [leagues,        setLeagues]        = useState<League[]>([]);
+  const seasonFallbackRef = useRef(false);
   const [username,       setUsername]       = useState('');
   const [loading,        setLoading]        = useState(true);
   const [refreshing,     setRefreshing]     = useState(false);
@@ -497,6 +498,22 @@ export default function HomeScreen() {
       if (mfl.status         === 'fulfilled') allLeagues.push(...mfl.value);
       if (fleaflicker.status === 'fulfilled') allLeagues.push(...fleaflicker.value);
       setLeagues(allLeagues);
+      // Per-platform counts for Settings' honest connection status
+      // ("Connected · 3 leagues" vs a red "Reconnect"): a stored credential
+      // with zero leagues loading is a broken link, and until now Settings
+      // showed the same green "Connected" for both.
+      try {
+        const counts: Record<string, number> = {};
+        for (const lg of allLeagues) counts[lg.platform] = (counts[lg.platform] ?? 0) + 1;
+        await AsyncStorage.setItem('league_counts_by_platform', JSON.stringify({ at: Date.now(), season: selectedSeason, counts }));
+      } catch { /* display-only */ }
+      // Season-filter blank fix (Sentry: espn:season-filter-dropped-all).
+      // If a non-current season is selected and NOTHING loaded, snap back to
+      // the current year instead of rendering an unexplained empty Home.
+      if (allLeagues.length === 0 && selectedSeason !== String(new Date().getFullYear()) && !seasonFallbackRef.current) {
+        seasonFallbackRef.current = true;
+        setSelectedSeason(String(new Date().getFullYear()));
+      }
       const u = await AsyncStorage.getItem('sleeper_username');
       setUsername(u || '');
     } catch (e) { console.error('Load leagues error:', e); }

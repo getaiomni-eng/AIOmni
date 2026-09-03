@@ -32,6 +32,9 @@ export default function SettingsScreen() {
   const [yahooLinked, setYahooLinked] = useState(false);
   const [mflLinked, setMflLinked] = useState(false);
   const [fleaflickerLinked, setFleaflickerLinked] = useState(false);
+  // Per-platform league counts written by Home after each successful load.
+  // Credential stored + zero leagues = broken link -> red "Reconnect".
+  const [leagueCounts, setLeagueCounts] = useState<Record<string, number>>({});
   const { t, isDark, setMode } = useTheme();
   const s = useMemo(() => makeStyles(t), [t]);
   const [aiConsent, setAiConsent] = useState(false);
@@ -53,6 +56,11 @@ export default function SettingsScreen() {
   useFocusEffect(useCallback(() => { loadSettings(); }, []));
 
   const loadSettings = async () => {
+    try {
+      const raw = await AsyncStorage.getItem('league_counts_by_platform');
+      if (raw) setLeagueCounts(JSON.parse(raw)?.counts ?? {});
+    } catch { /* display-only */ }
+
     // ESPN/Yahoo auth tokens live in SecureStore (keychain) since the
     // 2026-05-26 security hardening — read via their service loaders, not
     // AsyncStorage. MFL/Fleaflicker only stash a league ID (not a token),
@@ -192,6 +200,18 @@ export default function SettingsScreen() {
     ]);
   };
 
+  // "Connected" used to mean only "a credential string exists" — a user with
+  // a broken link and a user with a healthy one saw the same green label
+  // (that ambiguity cost a full support thread to diagnose). Three states now:
+  // healthy (green, with count), stored-but-loading-nothing (red Reconnect),
+  // and not linked (amber Connect).
+  const connLabel = (linked: boolean, platformKey: string): { text: string; color: string } => {
+    if (!linked) return { text: 'Connect →', color: t.warnText };
+    const n = leagueCounts[platformKey] ?? 0;
+    if (n > 0) return { text: `Connected · ${n} league${n === 1 ? '' : 's'}`, color: t.successText };
+    return { text: 'Reconnect →', color: t.dangerText };
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: SP[3], paddingTop: insets.top + 16, paddingBottom: 100 }}>
@@ -244,12 +264,12 @@ export default function SettingsScreen() {
           }}>
             <View style={[s.dot, { backgroundColor: '#00FFF9' }]} />
             <Text style={s.rowLabel}>Sleeper</Text>
-            <Text style={[s.rowValue, { color: username ? t.successText : t.warnText }]}>{username ? 'Connected' : 'Connect →'}</Text>
+            <Text style={[s.rowValue, { color: connLabel(!!username, 'sleeper').color }]}>{connLabel(!!username, 'sleeper').text}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.row} onPress={espnLinked ? handleDisconnectESPN : () => router.push('/espn-login' as any)}>
             <View style={[s.dot, { backgroundColor: '#e52534' }]} />
             <Text style={s.rowLabel}>ESPN</Text>
-            <Text style={[s.rowValue, { color: espnLinked ? t.successText : t.warnText }]}>{espnLinked ? 'Connected' : 'Connect →'}</Text>
+            <Text style={[s.rowValue, { color: connLabel(espnLinked, 'espn').color }]}>{connLabel(espnLinked, 'espn').text}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.row} onPress={yahooLinked ? handleDisconnectYahoo : async () => {
               try {
@@ -295,7 +315,7 @@ export default function SettingsScreen() {
             : () => router.push('/mfl-login' as any)}>
             <View style={[s.dot, { backgroundColor: '#e4ff1a' }]} />
             <Text style={s.rowLabel}>MFL</Text>
-            <Text style={[s.rowValue, { color: mflLinked ? t.successText : t.warnText }]}>{mflLinked ? 'Connected' : 'Connect →'}</Text>
+            <Text style={[s.rowValue, { color: connLabel(mflLinked, 'mfl').color }]}>{connLabel(mflLinked, 'mfl').text}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[s.row, { borderBottomWidth: 0 }]} onPress={fleaflickerLinked
             ? () => Alert.alert('Fleaflicker', 'Disconnect Fleaflicker?', [
@@ -309,7 +329,7 @@ export default function SettingsScreen() {
             : () => router.push('/fleaflicker-login' as any)}>
             <View style={[s.dot, { backgroundColor: '#1be7ff' }]} />
             <Text style={s.rowLabel}>Fleaflicker</Text>
-            <Text style={[s.rowValue, { color: fleaflickerLinked ? t.successText : t.warnText }]}>{fleaflickerLinked ? 'Connected' : 'Connect →'}</Text>
+            <Text style={[s.rowValue, { color: connLabel(fleaflickerLinked, 'fleaflicker').color }]}>{connLabel(fleaflickerLinked, 'fleaflicker').text}</Text>
           </TouchableOpacity>
         </View>
 
