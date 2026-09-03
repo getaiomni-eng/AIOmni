@@ -311,7 +311,10 @@ export default function HomeScreen() {
   const loadESPNLeagues = async (year: string = String(new Date().getFullYear())): Promise<League[]> => {
     try {
       const creds = await loadESPNCredentials();
-      if (!creds) { logEmpty('espn:no-credentials', { year }); return []; }
+      // Not an anomaly: every user who simply hasn't connected ESPN lands here
+      // on every Home load. Reporting it to Sentry flooded the project within
+      // a day of shipping (first live event was a fresh install, not a bug).
+      if (!creds) return [];
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
       const { discoverESPNLeagues } = require('../../services/espn');
       const yr = parseInt(year, 10);

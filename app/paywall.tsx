@@ -295,7 +295,11 @@ export default function PaywallScreen() {
           })}
 
           {/* Restore */}
-          {/* One-off credit: for the user who won't subscribe but wants ONE answer. */}
+          {/* One-off credit: for the user who won't subscribe but wants ONE answer.
+              Rendered only when StoreKit actually offers the product — until
+              Apple approves the IAP, getProducts returns nothing and a visible
+              card would just fail on tap. */}
+          {(creditPrice !== null || creditBalance > 0) && (
           <TouchableOpacity style={[styles.card, { borderColor: t.warnText }]} onPress={handleBuyCredit} disabled={purchasing}>
             <View style={styles.cardHeader}>
               <Text style={[styles.tierName, { color: t.warnText }]}>AI CREDIT</Text>
@@ -306,6 +310,7 @@ export default function PaywallScreen() {
               <Text style={[styles.featureText, { color: t.successText, marginTop: 6 }]}>You have {creditBalance} unused credit{creditBalance === 1 ? '' : 's'}.</Text>
             )}
           </TouchableOpacity>
+          )}
 
           <TouchableOpacity style={styles.restoreBtn} onPress={handleRestore}>
             <Text style={styles.restoreText}>Restore Purchases</Text>
