@@ -29,7 +29,7 @@ import { PositionPill } from '../components/Atoms';
 import { AIOmniLogo } from '../components/AIOmniLogo';
 import { C, F, R, SP, SZ, palette } from '../constants/tokens';
 import { readableText, useTheme, type ThemeTokens } from '../constants/theme';
-import { getPromptLimit, getRemainingPrompts, getResetTime, hasLinkedPlatform, incrementPrompt, LIMITS } from '../../services/promptQuota';
+import { getAICreditBalance, getPromptLimit, getRemainingPrompts, getResetTime, hasLinkedPlatform, incrementPrompt, LIMITS } from '../../services/promptQuota';
 import { logCaught } from '../../services/util/logCaught';
 import { getNFLSeason } from '../../services/season';
 import { getValidYahooToken, getYahooLeagues, getMyYahooTeam, getYahooStandings, getYahooLeagueSettings, YahooLeague, YahooPlayer } from '../../services/yahoo';
@@ -1341,6 +1341,8 @@ export default function CoachScreen() {
   const readDraftBoard = async () => {
     if (reading || loading) return;
     const rem = await getRemainingPrompts();
+    // A purchased AI credit covers one analysis past the cap (server spends it).
+    if (rem <= 0 && (await getAICreditBalance()) > 0) { /* fall through */ } else
     if (rem <= 0) {
       const currentTier = await getCurrentTier();
       if (currentTier === 'pro') {
@@ -1466,6 +1468,8 @@ Capture rookies and veterans exactly.`,
       return;
     }
     const rem = await getRemainingPrompts();
+    // A purchased AI credit covers one analysis past the cap (server spends it).
+    if (rem <= 0 && (await getAICreditBalance()) > 0) { /* fall through */ } else
     if (rem <= 0) {
       const currentTier = await getCurrentTier();
       // Pro users at weekly cap get a friendly inline message — no upsell

@@ -18,6 +18,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCachedTier, getCurrentTier, type Tier } from './purchases';
+import { supabase } from './supabase';
 import { syncPromptUsageToCloud } from './userSync';
 import {
   LIFETIME_STORAGE_KEY,
@@ -229,7 +230,27 @@ export async function consumePrompt(): Promise<boolean> {
   if (result.ok && tier === 'free') {
     syncPromptUsageToCloud(LIMITS.free - result.remaining); // fire-and-forget
   }
+  if (!result.ok) {
+    // Weekly quota exhausted — a purchased AI credit covers one analysis on
+    // any surface. The SERVER decrements it (atomic RPC in claude-proxy);
+    // letting the request through without touching the local counter is all
+    // the client must do.
+    if ((await getAICreditBalance()) > 0) return true;
+  }
   return result.ok;
+}
+
+// Server-authoritative $0.99 credit balance. claude-proxy spends these
+// atomically when the weekly quota is exhausted — the client only needs to
+// know whether to let the request through to the server.
+export async function getAICreditBalance(): Promise<number> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return 0;
+    const { data } = await supabase
+      .from('users').select('ai_credits').eq('auth_id', user.id).maybeSingle();
+    return data?.ai_credits ?? 0;
+  } catch { return 0; }
 }
 
 export async function canSendPrompt(): Promise<boolean> {

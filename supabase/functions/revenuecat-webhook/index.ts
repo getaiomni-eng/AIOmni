@@ -58,13 +58,43 @@ Deno.serve(async (req) => {
     return new Response('ok (unmapped user)', { status: 200 });
   }
 
+  const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+  // ── Consumable: $0.99 AI credit ─────────────────────────────────────
+  // Handled BEFORE tier resolution: NON_RENEWING_PURCHASE is in ACTIVATING,
+  // and a consumable carries no entitlement, so falling through would
+  // resolve no tier and no-op — or worse, misclassify. product_id is the
+  // whole signal here.
+  const productId: string = event.product_id ?? '';
+  if (type === 'NON_RENEWING_PURCHASE' && productId === 'com.getaiomni.ai.credit.v1') {
+    // RC retries webhooks: dedupe on event id or one purchase credits twice.
+    const evtId = String(event.id ?? `${appUserId}:${event.purchased_at_ms ?? Date.now()}`);
+    const { error: dupErr, data: dupRow } = await sb
+      .from('processed_rc_events')
+      .insert({ event_id: evtId })
+      .select('event_id')
+      .maybeSingle();
+    if (dupErr) return new Response('ok (duplicate credit event)', { status: 200 });
+
+    const { data: u } = await sb.from('users').select('id, ai_credits').eq('auth_id', appUserId).maybeSingle();
+    if (!u) return new Response('ok (no user row yet)', { status: 200 });
+    const { error: incErr } = await sb
+      .from('users')
+      .update({ ai_credits: (u.ai_credits ?? 0) + 1, updated_at: new Date().toISOString() })
+      .eq('auth_id', appUserId);
+    if (incErr) {
+      // Roll back the dedupe marker so RC's retry can succeed.
+      await sb.from('processed_rc_events').delete().eq('event_id', evtId);
+      return new Response('credit grant failed', { status: 500 });
+    }
+    return new Response('ok (+1 ai credit)', { status: 200 });
+  }
+
   let newTier: 'free' | 'rankings' | 'pro' | null = null;
   if (ACTIVATING.has(type)) newTier = tierFromEntitlements(entitlements);
   else if (DEACTIVATING.has(type)) newTier = 'free';
 
   if (!newTier) return new Response(`ok (no-op for ${type})`, { status: 200 });
-
-  const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
 
   // Never downgrade a manual grant on EXPIRATION of something else:
   // only write 'free' if the current tier matches what just expired.

@@ -340,3 +340,32 @@ export const TIER_INFO: Record<Tier, {
 };
 
 export { ENTITLEMENTS, PRODUCT_IDS };
+
+
+// ── $0.99 AI credit (consumable) ────────────────────────────────────────────
+// Deliberately NOT part of offerings/entitlements: fetched by product id, so
+// no RevenueCat dashboard configuration is required. RC still observes the
+// StoreKit purchase and fires NON_RENEWING_PURCHASE at our webhook, which
+// grants the credit server-side (users.ai_credits).
+export const AI_CREDIT_PRODUCT_ID = 'com.getaiomni.ai.credit.v1';
+
+export async function getAICreditPrice(): Promise<string | null> {
+  try {
+    const products = await Purchases.getProducts([AI_CREDIT_PRODUCT_ID]);
+    return products?.[0]?.priceString ?? null;
+  } catch { return null; }
+}
+
+export async function buyAICredit(): Promise<{ success: boolean; cancelled?: boolean }> {
+  try {
+    const products = await Purchases.getProducts([AI_CREDIT_PRODUCT_ID]);
+    const product = products?.[0];
+    if (!product) return { success: false };
+    await Purchases.purchaseStoreProduct(product);
+    return { success: true };
+  } catch (e: any) {
+    if (e?.userCancelled) return { success: false, cancelled: true };
+    console.log('buyAICredit error:', e?.message ?? e);
+    return { success: false };
+  }
+}

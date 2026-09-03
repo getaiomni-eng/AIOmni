@@ -191,12 +191,21 @@ serve(async (req) => {
             .eq("user_id", userId);
         }
         if (currentCount >= limit) {
-          return jsonError(429, "Weekly prompt limit reached", origin);
-        }
+          // $0.99 AI credit: one analysis past the weekly cap, on any
+          // surface. Atomic RPC — a race here spends real money, so the
+          // decrement-with-guard lives in a single UPDATE server-side.
+          const { data: spent } = await sb.rpc("spend_ai_credit", { p_auth_id: userId });
+          if (spent !== true) {
+            return jsonError(429, "Weekly prompt limit reached", origin);
+          }
+          // Credit consumed: skip the prompts_used increment below by
+          // falling through with the counter untouched.
+        } else {
         await sb
           .from("prompt_usage")
           .update({ prompts_used: currentCount + 1 })
           .eq("user_id", userId);
+        }
       } else {
         await sb.from("prompt_usage").insert({
           user_id:      userId,

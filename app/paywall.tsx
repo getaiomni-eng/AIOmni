@@ -15,6 +15,8 @@ import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TouchableOpac
 import { PACKAGE_TYPE, PurchasesPackage } from 'react-native-purchases';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  buyAICredit,
+  getAICreditPrice,
   getCurrentTier,
   getPackagesWithDiagnostic,
   PackagesDiagnostic,
@@ -24,6 +26,7 @@ import {
   TIER_INFO,
 } from '../services/purchases';
 import { useTheme, type ThemeTokens } from './constants/theme';
+import { getAICreditBalance } from '../services/promptQuota';
 import { palette } from './constants/tokens';
 import { Alert } from '../services/util/crossAlert';
 
@@ -111,6 +114,26 @@ export default function PaywallScreen() {
       Alert.alert('Welcome!', `You're now on the ${TIER_INFO[refreshed]?.label ?? refreshed} plan.`, [
         { text: 'OK', onPress: () => router.back() },
       ]);
+    }
+  };
+
+  // ── $0.99 one-off AI credit ────────────────────────────────────────────
+  const [creditPrice, setCreditPrice] = useState<string | null>(null);
+  const [creditBalance, setCreditBalance] = useState<number>(0);
+  useEffect(() => {
+    getAICreditPrice().then(setCreditPrice).catch(() => {});
+    getAICreditBalance().then(setCreditBalance).catch(() => {});
+  }, []);
+  const handleBuyCredit = async () => {
+    setPurchasing(true);
+    const res = await buyAICredit();
+    setPurchasing(false);
+    if (res.success) {
+      // The webhook grants the credit within a few seconds; refresh shortly.
+      setTimeout(() => { getAICreditBalance().then(setCreditBalance).catch(() => {}); }, 4000);
+      Alert.alert('Credit added', 'Your next AI analysis is covered — trade grade, Coach question, or start/sit call.');
+    } else if (!res.cancelled) {
+      Alert.alert('Purchase failed', 'Nothing was charged. Please try again.');
     }
   };
 
@@ -272,6 +295,18 @@ export default function PaywallScreen() {
           })}
 
           {/* Restore */}
+          {/* One-off credit: for the user who won't subscribe but wants ONE answer. */}
+          <TouchableOpacity style={[styles.card, { borderColor: t.warnText }]} onPress={handleBuyCredit} disabled={purchasing}>
+            <View style={styles.cardHeader}>
+              <Text style={[styles.tierName, { color: t.warnText }]}>AI CREDIT</Text>
+              <Text style={styles.price}>{creditPrice ?? '$0.99'}</Text>
+            </View>
+            <Text style={styles.featureText}>One AI analysis, no subscription — grade a trade, ask the Coach, or get a start/sit call. Works even after your weekly limit.</Text>
+            {creditBalance > 0 && (
+              <Text style={[styles.featureText, { color: t.successText, marginTop: 6 }]}>You have {creditBalance} unused credit{creditBalance === 1 ? '' : 's'}.</Text>
+            )}
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.restoreBtn} onPress={handleRestore}>
             <Text style={styles.restoreText}>Restore Purchases</Text>
           </TouchableOpacity>
