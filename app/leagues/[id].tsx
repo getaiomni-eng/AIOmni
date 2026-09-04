@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { hostedStandings, myAppId, myHostedLeagues, setLeagueDuesUrl, type HostedLeague } from '../../services/hostedLeagues';
+import { hostedStandings, myAppId, myHostedLeagues, setLeagueDuesUrl, startHostedDraft, type HostedLeague } from '../../services/hostedLeagues';
 import { supabase } from '../../services/supabase';
 import { useTheme, type ThemeTokens } from '../constants/theme';
 
@@ -75,8 +75,22 @@ export default function LeagueDetail() {
               <TouchableOpacity style={s.cta} onPress={invite}>
                 <Text style={s.ctaText}>Share invite {'\u00b7'} code {league.invite_code}</Text>
               </TouchableOpacity>
-              <Text style={s.fine}>Drafting opens in the app this month — everyone who has joined will be in the room.</Text>
+              {meId === league.creator_id && (
+                <TouchableOpacity style={[s.cta, { backgroundColor: t.chartreuseText }]} onPress={async () => {
+                  const res = await startHostedDraft(league.id);
+                  if (res.error) { if (Platform.OS === 'web') window.alert(res.error); return; }
+                  router.push(('/leagues/draft/' + league.id) as any);
+                }}>
+                  <Text style={s.ctaText}>Start the draft</Text>
+                </TouchableOpacity>
+              )}
+              <Text style={s.fine}>Snake order is randomized at start. Everyone who has joined drafts live from their own phone.</Text>
             </>
+          )}
+          {league.draft_status === 'drafting' && (
+            <TouchableOpacity style={s.cta} onPress={() => router.push(('/leagues/draft/' + league.id) as any)}>
+              <Text style={s.ctaText}>Enter the draft room</Text>
+            </TouchableOpacity>
           )}
         </View>
 

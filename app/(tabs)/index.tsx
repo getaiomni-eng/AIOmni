@@ -867,8 +867,8 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
         >
           <Text style={{ fontSize: 20 }}>🏟️</Text>
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={s.aiCoachLabel}>AIOMNI LEAGUES <Text style={{ color: t.chartreuseText }}>BETA</Text></Text>
-            <Text style={s.aiCoachHint}>Best ball run by the AI — create or join with a code</Text>
+            <Text style={s.aiCoachLabel}>AIOMNI LEAGUES <Text style={{ color: t.chartreuseText }}>NEW</Text></Text>
+            <Text style={s.aiCoachHint}>Best ball run by the AI — draft live from your phones</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={t.textMuted} />
         </TouchableOpacity>

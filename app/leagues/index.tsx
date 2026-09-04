@@ -64,7 +64,7 @@ export default function LeaguesHub() {
           <Text style={[s.back, { color: t.textSub }]}>‹ Back</Text>
         </TouchableOpacity>
         <Text style={s.title}>AIOMNI LEAGUES</Text>
-        <Text style={s.beta}>BETA</Text>
+        <Text style={s.beta}>NEW</Text>
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 14 }}>
         <Text style={s.tagline}>
@@ -102,9 +102,9 @@ export default function LeaguesHub() {
                 value={name} onChangeText={setName} maxLength={40}
               />
               <TouchableOpacity style={s.cta} onPress={onCreate} disabled={busy}>
-                <Text style={s.ctaText}>{busy ? '…' : 'Create — free in beta'}</Text>
+                <Text style={s.ctaText}>{busy ? '…' : 'Create a league — free'}</Text>
               </TouchableOpacity>
-              <Text style={s.fine}>12 teams · 18 rounds · PPR · drafting opens in the app this month</Text>
+              <Text style={s.fine}>18 rounds · PPR · snake draft live from your phones · free while new</Text>
             </View>
 
             <Text style={s.section}>JOIN WITH A CODE</Text>

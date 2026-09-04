@@ -65,3 +65,53 @@ export async function myAppId(): Promise<string | null> {
   const { data } = await supabase.from('users').select('id').eq('auth_id', user.id).maybeSingle();
   return data?.id ?? null;
 }
+
+// ── Draft room ──────────────────────────────────────────────────────────────
+export interface DraftPickRow { overall: number; round: number; user_id: string; gsis_id: string }
+export interface DraftMember { user_id: string; team_name: string; draft_slot: number | null }
+
+export async function startHostedDraft(leagueId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc('start_hosted_draft', { p_league: leagueId });
+  return error ? { error: error.message } : {};
+}
+
+export async function makeHostedPick(leagueId: string, sleeperId: string):
+  Promise<{ overall: number; playerName: string; nextSlot: number; complete: boolean } | { error: string }> {
+  const { data, error } = await supabase.rpc('make_hosted_pick', { p_league: leagueId, p_sleeper_id: sleeperId });
+  if (error) return { error: error.message };
+  const r = Array.isArray(data) ? data[0] : data;
+  return { overall: r.overall, playerName: r.player_name, nextSlot: r.next_slot, complete: r.complete };
+}
+
+export async function draftRoomState(leagueId: string): Promise<{
+  league: HostedLeague | null; members: DraftMember[]; picks: DraftPickRow[];
+}> {
+  const [{ data: lgs }, { data: members }, { data: picks }] = await Promise.all([
+    supabase.from('hosted_leagues').select('*').eq('id', leagueId),
+    supabase.from('hosted_members').select('user_id, team_name, draft_slot').eq('league_id', leagueId),
+    supabase.from('hosted_picks').select('overall, round, user_id, gsis_id').eq('league_id', leagueId).order('overall'),
+  ]);
+  return {
+    league: (lgs?.[0] as HostedLeague) ?? null,
+    members: (members as DraftMember[]) ?? [],
+    picks: (picks as DraftPickRow[]) ?? [],
+  };
+}
+
+// Realtime: fire onChange on every new pick or league status flip.
+// postgres_changes is RLS-scoped — only members receive a league's events.
+export function subscribeDraft(leagueId: string, onChange: () => void): () => void {
+  const ch = supabase
+    .channel(`draft:${leagueId}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'hosted_picks', filter: `league_id=eq.${leagueId}` }, onChange)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'hosted_leagues', filter: `id=eq.${leagueId}` }, onChange)
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+
+// Snake math mirrored client-side for the on-the-clock banner.
+export function snakeSlot(overall: number, teams: number): number {
+  const r = Math.floor((overall - 1) / teams);
+  const i = (overall - 1) % teams;
+  return r % 2 === 0 ? i + 1 : teams - i;
+}
