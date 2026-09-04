@@ -22,6 +22,7 @@ import { getActiveSleeperIds } from '../../services/nflPlayers';
 import { C, F, R, SZ, BEVEL } from '../constants/tokens';
 import { readableText, useTheme, type ThemeTokens } from '../constants/theme';
 import { CLASS_OF_2025_TEXT } from '../../services/seasonContext2026';
+import { getPlayerWeekContext } from '../../services/weekContext';
 
 const POS_COLORS: Record<string, string> = {
   QB: '#7b5ea7', RB: '#1e8c42', WR: '#2a7aaa', TE: '#b85a1a',
@@ -662,7 +663,10 @@ export default function LeagueScreen() {
     // signal, so its 15s "deadline" was dead code.)
     try {
       const isPPR = leagueSettings?.scoring_settings?.rec > 0;
-      const text  = await askAI(`You are AIOmni, expert fantasy football analyst.\nLeague: ${leagueName} (${platformStr.toUpperCase()}) | Scoring: ${isPPR ? 'PPR' : 'Standard'}\nPlayer: ${player.name} | ${player.position} | ${player.team}${player.injuryStatus ? ` | Injury: ${player.injuryStatus}` : ''}\n${isWaiver ? 'Should I add off waivers?' : 'Should I start or sit?'} Be sharp, direct, under 80 words. No intros.`, { tier: 'fast', maxTokens: 256, system: CLASS_OF_2025_TEXT, feature: 'league' });
+      // Matchup line: opponent, implied total, DvP rank, snap share — the
+      // things a person would check first. Empty string when unavailable.
+      const weekCtx = await getPlayerWeekContext(player.name, player.position, player.team).catch(() => '');
+      const text  = await askAI(`You are AIOmni, expert fantasy football analyst.\nLeague: ${leagueName} (${platformStr.toUpperCase()}) | Scoring: ${isPPR ? 'PPR' : 'Standard'}\nPlayer: ${player.name} | ${player.position} | ${player.team}${player.injuryStatus ? ` | Injury: ${player.injuryStatus}` : ''}\n${weekCtx ? weekCtx + '\n' : ''}${isWaiver ? 'Should I add off waivers?' : 'Should I start or sit?'} Be sharp, direct, under 80 words. No intros.`, { tier: 'fast', maxTokens: 256, system: CLASS_OF_2025_TEXT, feature: 'league' });
       setAdvice(text);
     } catch (e: any) {
       const message = e?.message === 'prompt_limit_reached'

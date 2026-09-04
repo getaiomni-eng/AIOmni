@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchNewsFeed, FeedByTab, NewsTab, NewsItem as FeedNewsItem } from '../../services/newsFeed';
 import { getNFLSeason, getAvailableSeasons } from '../../services/season';
 import { logCaught, logEmpty } from '../../services/util/logCaught';
+import { CoachMarks } from '../components/CoachMarks';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Dimensions, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -691,6 +692,7 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
+      <CoachMarks />
       <ScrollView
         contentContainerStyle={[s.scroll, { paddingTop: insets.top + 8 }]}
         showsVerticalScrollIndicator={false}
