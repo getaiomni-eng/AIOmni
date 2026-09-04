@@ -9,6 +9,7 @@ export interface HostedLeague {
   id: string; name: string; invite_code: string; season: number;
   format: string; team_count: number; rounds: number;
   starts: Record<string, number>; draft_status: 'open' | 'drafting' | 'complete';
+  creator_id: string; dues_url: string | null;
 }
 
 export async function createHostedLeague(name: string, teamCount = 12):
@@ -51,4 +52,16 @@ export async function hostedStandings(leagueId: string): Promise<
   return (members ?? [])
     .map(m => ({ user_id: m.user_id, team_name: m.team_name, ...(agg.get(m.user_id) ?? { total: 0, weeks: 0 }) }))
     .sort((a, b) => b.total - a.total);
+}
+
+export async function setLeagueDuesUrl(leagueId: string, url: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc('set_league_dues_url', { p_league: leagueId, p_url: url });
+  return error ? { error: error.message } : {};
+}
+
+export async function myAppId(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase.from('users').select('id').eq('auth_id', user.id).maybeSingle();
+  return data?.id ?? null;
 }

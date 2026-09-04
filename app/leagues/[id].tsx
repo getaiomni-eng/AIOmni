@@ -1,9 +1,9 @@
 // Hosted league detail: members, standings, invite, my weekly lineups.
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { hostedStandings, myHostedLeagues, type HostedLeague } from '../../services/hostedLeagues';
+import { hostedStandings, myAppId, myHostedLeagues, setLeagueDuesUrl, type HostedLeague } from '../../services/hostedLeagues';
 import { supabase } from '../../services/supabase';
 import { useTheme, type ThemeTokens } from '../constants/theme';
 
@@ -20,6 +20,8 @@ export default function LeagueDetail() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [myWeeks, setMyWeeks] = useState<WeekScore[]>([]);
   const [openWeek, setOpenWeek] = useState<number | null>(null);
+  const [meId, setMeId] = useState<string | null>(null);
+  const [duesDraft, setDuesDraft] = useState('');
 
   const load = useCallback(async () => {
     const all = await myHostedLeagues();
@@ -38,7 +40,7 @@ export default function LeagueDetail() {
       }
     }
   }, [id]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); myAppId().then(setMeId); }, [load]);
 
   const invite = async () => {
     if (!league) return;
@@ -77,6 +79,32 @@ export default function LeagueDetail() {
             </>
           )}
         </View>
+
+
+        {/* Dues live at LeagueSafe — AIOmni never holds money. Creator pastes
+            the pot link once; every member gets a pay button. */}
+        {league.dues_url ? (
+          <TouchableOpacity style={s.cta} onPress={() => Linking.openURL(league.dues_url!)}>
+            <Text style={s.ctaText}>Pay dues on LeagueSafe</Text>
+          </TouchableOpacity>
+        ) : meId === league.creator_id ? (
+          <View style={{ gap: 8 }}>
+            <TextInput
+              style={s.duesInput}
+              placeholder="Paste your LeagueSafe league link"
+              placeholderTextColor={t.textMuted}
+              value={duesDraft} onChangeText={setDuesDraft} autoCapitalize="none"
+            />
+            <TouchableOpacity style={s.cta} onPress={async () => {
+              const res = await setLeagueDuesUrl(league.id, duesDraft.trim());
+              if (res.error) { if (Platform.OS === 'web') window.alert(res.error); return; }
+              setDuesDraft(''); load();
+            }}>
+              <Text style={s.ctaText}>Attach LeagueSafe link</Text>
+            </TouchableOpacity>
+            <Text style={s.fine}>No LeagueSafe pot yet? Create one at leaguesafe.com/createleague, then paste its link here.</Text>
+          </View>
+        ) : null}
 
         <Text style={s.section}>STANDINGS</Text>
         {rows === null && <ActivityIndicator color={t.accentText} />}
@@ -122,6 +150,7 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   cta: { backgroundColor: t.accentText, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
   ctaText: { color: '#0a1214', fontWeight: '700', fontSize: 13.5 },
   fine: { color: t.textMuted, fontSize: 11.5 },
+  duesInput: { borderWidth: 1, borderColor: t.border, backgroundColor: t.inputBg, color: t.text, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13 },
   slot: { color: t.textSub, fontSize: 12.5 },
   slotPts: { color: t.textSub, fontSize: 12.5, fontVariant: ['tabular-nums'] },
 });
