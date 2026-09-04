@@ -199,6 +199,8 @@ export default Sentry.wrap(function RootLayout() {
         <Stack.Screen name="(tabs)"     options={{ headerShown: false }} />
         <Stack.Screen name="auth"       options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="paywall"    options={{ headerShown: false, presentation: 'modal' }} />
+        <Stack.Screen name="leagues/index" options={{ headerShown: false }} />
+        <Stack.Screen name="leagues/[id]"  options={{ headerShown: false }} />
         <Stack.Screen name="ai-consent" options={{ headerShown: false }} />
         <Stack.Screen name="espn-login" options={{ headerShown: false }} />
         <Stack.Screen name="mfl-login" options={{ headerShown: false }} />

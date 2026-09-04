@@ -859,6 +859,20 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
           </FlatCard>
         )}
 
+        {/* ── AIOmni Leagues (BETA) ── */}
+        <TouchableOpacity
+          style={[s.aiCoachBar, { marginBottom: 10 }]}
+          onPress={() => router.push('/leagues' as any)}
+          activeOpacity={0.8}
+        >
+          <Text style={{ fontSize: 20 }}>🏟️</Text>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={s.aiCoachLabel}>AIOMNI LEAGUES <Text style={{ color: t.chartreuseText }}>BETA</Text></Text>
+            <Text style={s.aiCoachHint}>Best ball run by the AI — create or join with a code</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={t.textMuted} />
+        </TouchableOpacity>
+
         {/* ── AI Coach Bar ── */}
         <TouchableOpacity
           style={[s.aiCoachBar, aiCoachActive && s.aiCoachBarActive]}
