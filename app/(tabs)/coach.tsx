@@ -1529,13 +1529,15 @@ Capture rookies and veterans exactly.`,
 
       const safeText = sanitizeCoachMsg(text);
       const fullPrompt = [
-        systemPromptRef.current,
+        // League context moved to a cached system block (systemExtra below):
+        // ~25k tokens that every message used to pay full price for now read
+        // from cache on consecutive turns.
         playerContext ? `\nPLAYER INTELLIGENCE FROM DATABASE:\n${playerContext}` : '',
         `\nConversation history:\n${historyForPrompt(history)}`,
         `\nuser: ${safeText}`,
       ].filter(Boolean).join('\n');
 
-      const reply = await askAI(fullPrompt, { maxTokens: 1000, system: STATIC_SYSTEM, feature: 'coach' });
+      const reply = await askAI(fullPrompt, { maxTokens: 1000, system: STATIC_SYSTEM, systemExtra: systemPromptRef.current, feature: 'coach' });
       // Only charge a prompt once the model actually responds — connection
       // errors and timeouts shouldn't burn the user's weekly quota.
       await incrementPrompt();

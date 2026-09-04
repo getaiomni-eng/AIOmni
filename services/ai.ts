@@ -42,6 +42,14 @@ export interface AskAIOptions {
   // Telemetry tag for the judgment-capture pipeline (ai_response_metadata):
   // which surface made this call. Never affects the response.
   feature?: string;
+  // A SECOND system block with its own cache breakpoint. For content that is
+  // large and stable across consecutive calls but not across sessions — the
+  // Coach's league context (~25k tokens of rosters, KTC values, live data)
+  // was riding the user turn at full price on EVERY message. As a cached
+  // block, consecutive messages inside Anthropic's cache window read it at
+  // ~0.1x. Telemetry (ai_response_metadata cache_read vs input_tokens) is
+  // the proof either way.
+  systemExtra?: string;
 }
 
 export async function askAI(
@@ -92,7 +100,13 @@ export async function askAI(
     };
     if (o.system) {
       const systemText = o.skipDictionary ? o.system : `${o.system}\n\n${NFL_DATA_DICTIONARY}`;
-      payload.system = [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }];
+      // Block order matters for prefix caching: the long-lived static block
+      // first, the per-session dynamic block second. Each carries its own
+      // breakpoint (Anthropic allows four).
+      payload.system = [
+        { type: 'text', text: systemText, cache_control: { type: 'ephemeral' } },
+        ...(o.systemExtra ? [{ type: 'text', text: o.systemExtra, cache_control: { type: 'ephemeral' as const } }] : []),
+      ];
     }
 
     // Explicit deadline. Without one, iOS's ~60s URLSession default was the
