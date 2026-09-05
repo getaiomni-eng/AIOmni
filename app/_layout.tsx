@@ -204,6 +204,7 @@ export default Sentry.wrap(function RootLayout() {
         <Stack.Screen name="leagues/index" options={{ headerShown: false }} />
         <Stack.Screen name="leagues/[id]"  options={{ headerShown: false }} />
         <Stack.Screen name="leagues/draft/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="join/[code]" options={{ headerShown: false }} />
         <Stack.Screen name="ai-consent" options={{ headerShown: false }} />
         <Stack.Screen name="espn-login" options={{ headerShown: false }} />
         <Stack.Screen name="mfl-login" options={{ headerShown: false }} />

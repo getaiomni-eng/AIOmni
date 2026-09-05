@@ -27,6 +27,7 @@ export default function LeaguesHub() {
   const [code, setCode] = useState('');
   const [teamName, setTeamName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useState<'season' | 'weekly'>('season');
 
   const load = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -38,7 +39,7 @@ export default function LeaguesHub() {
   const onCreate = async () => {
     if (!name.trim()) { Alert.alert('Name your league', 'Give it a name first.'); return; }
     setBusy(true);
-    const res = await createHostedLeague(name.trim());
+    const res = await createHostedLeague(name.trim(), 12, kind);
     setBusy(false);
     if ('error' in res) { Alert.alert('Could not create league', res.error); return; }
     setName('');
@@ -97,6 +98,14 @@ export default function LeaguesHub() {
 
             <Text style={s.section}>CREATE A LEAGUE</Text>
             <View style={s.card}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity style={[s.kindChip, kind === 'season' && { backgroundColor: t.accentText }]} onPress={() => setKind('season')}>
+                  <Text style={[s.kindText, kind === 'season' && { color: '#0a1214' }]}>SEASON</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.kindChip, kind === 'weekly' && { backgroundColor: t.accentText }]} onPress={() => setKind('weekly')}>
+                  <Text style={[s.kindText, kind === 'weekly' && { color: '#0a1214' }]}>WEEKLY RUN</Text>
+                </TouchableOpacity>
+              </View>
               <TextInput
                 style={s.input} placeholder="League name" placeholderTextColor={t.textMuted}
                 value={name} onChangeText={setName} maxLength={40}
@@ -104,7 +113,7 @@ export default function LeaguesHub() {
               <TouchableOpacity style={s.cta} onPress={onCreate} disabled={busy}>
                 <Text style={s.ctaText}>{busy ? '…' : 'Create a league — free'}</Text>
               </TouchableOpacity>
-              <Text style={s.fine}>18 rounds · PPR · snake draft live from your phones · free while new</Text>
+              <Text style={s.fine}>Season: 18 rounds, weeks 1-18. Weekly run: 9 rounds, one week, done. PPR · live snake draft · free while new</Text>
             </View>
 
             <Text style={s.section}>JOIN WITH A CODE</Text>
@@ -145,4 +154,6 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   cta: { backgroundColor: t.accentText, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   ctaText: { color: '#0a1214', fontWeight: '700', fontSize: 14 },
   fine: { color: t.textMuted, fontSize: 11.5 },
+  kindChip: { borderWidth: 1, borderColor: t.border, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: t.inputBg },
+  kindText: { color: t.textSub, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
 });

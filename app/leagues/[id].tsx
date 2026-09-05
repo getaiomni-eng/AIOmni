@@ -23,6 +23,7 @@ export default function LeagueDetail() {
   const [openWeek, setOpenWeek] = useState<number | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
   const [duesDraft, setDuesDraft] = useState('');
+  const [recap, setRecap] = useState<{ week: number; content: string } | null>(null);
 
   const load = useCallback(async () => {
     const all = await myHostedLeagues();
@@ -30,6 +31,10 @@ export default function LeagueDetail() {
     setLeague(lg);
     if (!lg) return;
     setRows(await hostedStandings(lg.id));
+    const { data: rc } = await supabase.from('hosted_recaps')
+      .select('week, content').eq('league_id', lg.id)
+      .order('week', { ascending: false }).limit(1);
+    setRecap((rc?.[0] as any) ?? null);
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: me } = await supabase.from('users').select('id').eq('auth_id', user.id).maybeSingle();
@@ -48,7 +53,7 @@ export default function LeagueDetail() {
 
   const invite = async () => {
     if (!league) return;
-    const msg = `Join my AIOmni best ball league "${league.name}" — code ${league.invite_code}. Free in the AIOmni app: https://apps.apple.com/app/id6760617627`;
+    const msg = `Join my AIOmni best ball league "${league.name}" — tap https://app.getaiomni.com/join/${league.invite_code} (code ${league.invite_code}). Free, and the app is at https://apps.apple.com/app/id6760617627`;
     if (Platform.OS === 'web') {
       try { await navigator.clipboard.writeText(msg); } catch {}
       window.alert('Invite copied to clipboard.');
@@ -128,6 +133,13 @@ export default function LeagueDetail() {
           </View>
         ) : null}
 
+        {recap && (
+          <>
+            <Text style={s.section}>THE COMMISSIONER · WEEK {recap.week}</Text>
+            <View style={s.card}><Text style={[s.body, { color: t.text }]}>{recap.content}</Text></View>
+          </>
+        )}
+
         <Text style={s.section}>STANDINGS</Text>
         {rows === null && <ActivityIndicator color={t.accentText} />}
         {rows?.map((r, i) => (
@@ -195,6 +207,7 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   team: { color: t.text, fontSize: 14, fontWeight: '600', flex: 1 },
   pts: { color: t.text, fontSize: 14, fontVariant: ['tabular-nums'] },
   meta: { color: t.textMuted, fontSize: 12.5 },
+  body: { color: t.textSub, fontSize: 13.5, lineHeight: 20 },
   cta: { backgroundColor: t.accentText, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
   ctaText: { color: '#0a1214', fontWeight: '700', fontSize: 13.5 },
   fine: { color: t.textMuted, fontSize: 11.5 },

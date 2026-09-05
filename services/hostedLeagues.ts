@@ -9,13 +9,14 @@ export interface HostedLeague {
   id: string; name: string; invite_code: string; season: number;
   format: string; team_count: number; rounds: number;
   starts: Record<string, number>; draft_status: 'open' | 'drafting' | 'complete';
+  league_kind?: 'season' | 'weekly'; start_week?: number; end_week?: number; pick_deadline?: string | null;
   creator_id: string; dues_url: string | null;
 }
 
-export async function createHostedLeague(name: string, teamCount = 12):
+export async function createHostedLeague(name: string, teamCount = 12, kind: 'season' | 'weekly' = 'season'):
   Promise<{ leagueId: string; inviteCode: string } | { error: string }> {
   const { data, error } = await supabase.rpc('create_hosted_league', {
-    p_name: name, p_team_count: teamCount,
+    p_name: name, p_team_count: teamCount, p_kind: kind,
   });
   if (error) return { error: error.message };
   const row = Array.isArray(data) ? data[0] : data;
