@@ -10,6 +10,10 @@ import {
   draftRoomState, forceHostedPick, friendlyDraftError, makeHostedPick, snakeSlot, subscribeDraft,
   type DraftMember, type DraftPickRow, type HostedLeague,
 } from '../../../services/hostedLeagues';
+import { askAI } from '../../../services/ai';
+import { buyAICredit, getAICreditPrice } from '../../../services/purchases';
+import { consumePrompt, getAICreditBalance } from '../../../services/promptQuota';
+import { CLASS_OF_2025_TEXT } from '../../../services/seasonContext2026';
 import { supabase } from '../../../services/supabase';
 import { Alert } from '../../../services/util/crossAlert';
 import { useTheme, type ThemeTokens } from '../../constants/theme';
@@ -34,6 +38,10 @@ export default function HostedDraftRoom() {
   const [pos, setPos] = useState('ALL');
   const [busy, setBusy] = useState(false);
   const gsisBySleeper = useRef(new Map<string, string>());
+  // Ask The O: AI pick advice built from the LIVE draft state.
+  const [oAnswer, setOAnswer] = useState<string | null>(null);
+  const [oAsking, setOAsking] = useState(false);
+  const [creditOffer, setCreditOffer] = useState<string | null>(null); // price string when shown
 
   const refresh = useCallback(async () => {
     const st = await draftRoomState(id!);
@@ -125,6 +133,63 @@ export default function HostedDraftRoom() {
     ]);
   };
 
+  const askTheO = async () => {
+    if (oAsking) return;
+    // Quota gate first — this is also where the 99-cent moment lives. A
+    // drafter on the clock with no prompts left is the single highest-intent
+    // purchase moment in the app, so the offer appears HERE, inline, not on
+    // a paywall three screens away.
+    const ok = await consumePrompt();
+    if (!ok) {
+      const price = await getAICreditPrice();
+      setCreditOffer(price ?? '$0.99');
+      return;
+    }
+    setOAsking(true); setOAnswer(null); setCreditOffer(null);
+    try {
+      const myPicks = picks.filter(pk => pk.user_id === meId)
+        .map(pk => (pool ?? []).find(pl => gsisBySleeper.current.get(pl.sleeperId) === pk.gsis_id))
+        .filter(Boolean).map(pl => `${pl!.name} (${pl!.pos})`);
+      const avail = (pool ?? [])
+        .filter(pl => !taken.has(gsisBySleeper.current.get(pl.sleeperId) ?? '§'))
+        .slice(0, 14).map(pl => `${pl.rank}. ${pl.name} (${pl.pos} ${pl.team})`);
+      const prompt = [
+        `LIVE BEST BALL DRAFT — "${league?.name}". ${teams} teams, ${league?.rounds} rounds, PPR, starts QB/2RB/3WR/TE/FLEX weekly-best automatic (no lineups ever).`,
+        `Pick ${overall} of ${total} (round ${round}). ${myTurn ? 'I AM ON THE CLOCK.' : 'Not my pick yet — help me plan.'}`,
+        `MY ROSTER SO FAR: ${myPicks.length ? myPicks.join(', ') : '(none yet)'}`,
+        `BEST AVAILABLE (market order): ${avail.join(' · ')}`,
+        `Who should I take and why? Name ONE pick, one sentence of why, one alternate. Under 90 words — I'm on a clock.`,
+      ].join('\n');
+      const reply = await askAI(prompt, { maxTokens: 400, system: CLASS_OF_2025_TEXT, feature: 'draft' });
+      setOAnswer(reply);
+    } catch (e: any) {
+      setOAnswer(e?.message === 'prompt_limit_reached'
+        ? 'Out of prompts this week.'
+        : 'The O could not answer — try again.');
+    } finally { setOAsking(false); }
+  };
+
+  const buyCreditInline = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Buy in the app', 'AI credits are purchased in the iOS app — or upgrade to Pro for 50 prompts a week.');
+      return;
+    }
+    const res = await buyAICredit();
+    if (!res.success) {
+      if (!('cancelled' in res && res.cancelled)) Alert.alert('Purchase failed', 'Nothing was charged.');
+      return;
+    }
+    // Webhook grants the credit within a few seconds — wait for it, then
+    // answer the question they were trying to ask.
+    setCreditOffer(null); setOAsking(true);
+    for (let i = 0; i < 6; i++) {
+      await new Promise(r => setTimeout(r, 1500));
+      if ((await getAICreditBalance()) > 0) break;
+    }
+    setOAsking(false);
+    askTheO();
+  };
+
   if (!league) return (
     <View style={[s.container, { paddingTop: insets.top + 24, alignItems: 'center', gap: 14 }]}>
       <ActivityIndicator color={t.accentText} />
@@ -162,8 +227,42 @@ export default function HostedDraftRoom() {
         </View>
       )}
 
+      {oAnswer !== null && (
+        <View style={[s.oPanel, { backgroundColor: t.card, borderColor: t.accentText }]}>
+          <Text style={[s.oPanelTitle, { color: t.accentText }]}>THE O SAYS</Text>
+          <Text style={{ color: t.text, fontSize: 13.5, lineHeight: 19 }}>{oAnswer}</Text>
+          <TouchableOpacity onPress={() => setOAnswer(null)}>
+            <Text style={{ color: t.textMuted, fontSize: 12, marginTop: 6 }}>dismiss</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {creditOffer !== null && (
+        <View style={[s.oPanel, { backgroundColor: t.card, borderColor: t.warnText }]}>
+          <Text style={[s.oPanelTitle, { color: t.warnText }]}>OUT OF PROMPTS</Text>
+          <Text style={{ color: t.textSub, fontSize: 13, lineHeight: 18 }}>
+            One AI Credit gets you this answer right now — no subscription.
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+            <TouchableOpacity style={[s.oBuyBtn, { backgroundColor: t.warnText }]} onPress={buyCreditInline}>
+              <Text style={{ color: '#0a1214', fontWeight: '800', fontSize: 13 }}>AI Credit · {creditOffer}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.oBuyAlt} onPress={() => { setCreditOffer(null); router.push('/paywall?context=weekly_prompts_exhausted' as any); }}>
+              <Text style={{ color: t.textSub, fontSize: 12.5 }}>or upgrade</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       <View style={s.controls}>
-        <TextInput style={s.search} placeholder="Search players" placeholderTextColor={t.textMuted} value={q} onChangeText={setQ} />
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TextInput style={[s.search, { flex: 1 }]} placeholder="Search players" placeholderTextColor={t.textMuted} value={q} onChangeText={setQ} />
+          <TouchableOpacity
+            style={[s.askOBtn, { backgroundColor: t.chartreuseText }, oAsking && { opacity: 0.5 }]}
+            onPress={askTheO} disabled={oAsking}
+          >
+            <Text style={{ color: '#0a1214', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 }}>{oAsking ? 'THINKING…' : 'ASK THE O'}</Text>
+          </TouchableOpacity>
+        </View>
         <View style={s.chips}>
           {POS.map(p => (
             <TouchableOpacity key={p} style={[s.chip, pos === p && { backgroundColor: t.accentText }]} onPress={() => setPos(p)}>
@@ -226,4 +325,9 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   draftBtn: { backgroundColor: t.accentText, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 9 },
   draftBtnText: { color: '#0a1214', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 },
   lastPick: { color: t.textSub, fontSize: 12.5 },
+  askOBtn: { borderRadius: 10, paddingHorizontal: 14, justifyContent: 'center' },
+  oPanel: { marginHorizontal: 14, marginBottom: 8, borderRadius: 12, borderWidth: 1.5, padding: 12, gap: 4 },
+  oPanelTitle: { fontFamily: 'Audiowide_400Regular', fontSize: 11, letterSpacing: 1 },
+  oBuyBtn: { borderRadius: 9, paddingHorizontal: 14, paddingVertical: 9 },
+  oBuyAlt: { justifyContent: 'center' },
 });
