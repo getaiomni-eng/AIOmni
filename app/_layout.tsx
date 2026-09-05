@@ -166,10 +166,12 @@ export default Sentry.wrap(function RootLayout() {
           return;
         }
 
-        if (false && !hasLeagues) {
-        } else {
-          router.replace('/(tabs)');
-        }
+        // Audit fix: this replace() ran on EVERY startup and clobbered deep
+        // links (web /leagues URLs bounced to Home mid-navigation). Only
+        // route to tabs when the user is actually on an entry screen.
+        const path = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.pathname : '/';
+        const onEntry = path === '/' || path.startsWith('/auth') || path.startsWith('/onboarding') || path.startsWith('/index');
+        if (onEntry) router.replace('/(tabs)');
       } catch (err) {
         console.error('Session check error', err);
         router.replace('/auth' as any);

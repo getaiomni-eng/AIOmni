@@ -115,3 +115,27 @@ export function snakeSlot(overall: number, teams: number): number {
   const i = (overall - 1) % teams;
   return r % 2 === 0 ? i + 1 : teams - i;
 }
+
+export async function forceHostedPick(leagueId: string, sleeperId: string):
+  Promise<{ complete: boolean } | { error: string }> {
+  const { data, error } = await supabase.rpc('force_hosted_pick', { p_league: leagueId, p_sleeper_id: sleeperId });
+  if (error) return { error: error.message };
+  const r = Array.isArray(data) ? data[0] : data;
+  return { complete: r.complete };
+}
+export async function leaveHostedLeague(leagueId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc('leave_hosted_league', { p_league: leagueId });
+  return error ? { error: error.message } : {};
+}
+export async function deleteHostedLeague(leagueId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc('delete_hosted_league', { p_league: leagueId });
+  return error ? { error: error.message } : {};
+}
+// Server errors are precise but raw; users get the human version.
+export function friendlyDraftError(msg: string): string {
+  if (/duplicate key|hosted_picks_league_id_gsis/i.test(msg)) return 'Already drafted — someone beat you to him.';
+  if (/not your turn/i.test(msg)) return "Not your turn yet — hold tight.";
+  if (/draft is not live/i.test(msg)) return 'The draft is not live.';
+  if (/draft is complete/i.test(msg)) return 'The draft is over.';
+  return msg;
+}

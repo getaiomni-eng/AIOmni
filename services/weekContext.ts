@@ -33,7 +33,9 @@ const TTL = 30 * 60 * 1000;
 async function load(): Promise<Caches> {
   if (cache && Date.now() - cache.at < TTL) return cache;
   const week = await getNFLWeek().catch(() => 1);
-  const season = new Date().getFullYear();
+  // NFL season, not calendar year (January playoff weeks belong to season-1).
+  const nowD = new Date();
+  const season = nowD.getUTCMonth() + 1 >= 8 ? nowD.getUTCFullYear() : nowD.getUTCFullYear() - 1;
 
   const [schedRes, dvpRes, vegas, snaps] = await Promise.all([
     supabase.from('nfl_schedule').select('home_team, away_team').eq('season', season).eq('week', week),

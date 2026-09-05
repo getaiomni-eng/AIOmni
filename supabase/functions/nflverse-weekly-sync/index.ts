@@ -111,10 +111,16 @@ serve(async (req) => {
     const latestOnly = url.searchParams.get('latest') === 'true';
     const seasonsParam = url.searchParams.get('seasons');
 
-    const currentYear = new Date().getFullYear();
+    // NFL season != calendar year: the season is named for its September,
+    // and weeks 17-18 land in the following January. Audit 2026-09-04 found
+    // the previous hardcoded [2024, 2025]: season 2026 would NEVER have been
+    // ingested — zero weekly stats, zero hosted-league scoring, stale
+    // player_profiles — starting the first Tuesday of the season.
+    const now = new Date();
+    const nflSeason = now.getUTCMonth() + 1 >= 8 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
     const seasons = seasonsParam
       ? seasonsParam.split(',').map(s => parseInt(s.trim()))
-      : latestOnly ? [currentYear - 1] : [2024, 2025];
+      : latestOnly ? [nflSeason] : [nflSeason - 1, nflSeason];
 
     const startedAt = Date.now();
     const stats = { seasons_processed: seasons, rows_fetched: 0, rows_inserted: 0, errors: [] as string[] };

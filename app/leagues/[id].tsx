@@ -1,10 +1,11 @@
 // Hosted league detail: members, standings, invite, my weekly lineups.
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { hostedStandings, myAppId, myHostedLeagues, setLeagueDuesUrl, startHostedDraft, type HostedLeague } from '../../services/hostedLeagues';
+import { deleteHostedLeague, hostedStandings, leaveHostedLeague, myAppId, myHostedLeagues, setLeagueDuesUrl, startHostedDraft, type HostedLeague } from '../../services/hostedLeagues';
 import { supabase } from '../../services/supabase';
+import { Alert } from '../../services/util/crossAlert';
 import { useTheme, type ThemeTokens } from '../constants/theme';
 
 type Row = { user_id: string; team_name: string; total: number; weeks: number };
@@ -40,7 +41,10 @@ export default function LeagueDetail() {
       }
     }
   }, [id]);
-  useEffect(() => { load(); myAppId().then(setMeId); }, [load]);
+  useEffect(() => { myAppId().then(setMeId); }, []);
+  // Audit fix: state went stale after draft-room round trips and background
+  // changes (a second phone never saw the draft start). Reload on focus.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const invite = async () => {
     if (!league) return;
@@ -54,8 +58,11 @@ export default function LeagueDetail() {
   };
 
   if (!league) return (
-    <View style={[s.container, { paddingTop: insets.top + 20, alignItems: 'center' }]}>
+    <View style={[s.container, { paddingTop: insets.top + 20, alignItems: 'center', gap: 14 }]}>
       <ActivityIndicator color={t.accentText} />
+      <TouchableOpacity onPress={() => router.back()}>
+        <Text style={{ color: t.textSub, fontSize: 14 }}>{'\u2039'} Back</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -78,7 +85,7 @@ export default function LeagueDetail() {
               {meId === league.creator_id && (
                 <TouchableOpacity style={[s.cta, { backgroundColor: t.chartreuseText }]} onPress={async () => {
                   const res = await startHostedDraft(league.id);
-                  if (res.error) { if (Platform.OS === 'web') window.alert(res.error); return; }
+                  if (res.error) { Alert.alert('Could not start the draft', res.error); return; }
                   router.push(('/leagues/draft/' + league.id) as any);
                 }}>
                   <Text style={s.ctaText}>Start the draft</Text>
@@ -111,8 +118,9 @@ export default function LeagueDetail() {
             />
             <TouchableOpacity style={s.cta} onPress={async () => {
               const res = await setLeagueDuesUrl(league.id, duesDraft.trim());
-              if (res.error) { if (Platform.OS === 'web') window.alert(res.error); return; }
+              if (res.error) { Alert.alert('Could not attach link', res.error); return; }
               setDuesDraft(''); load();
+              Alert.alert('Dues link attached', 'Members now see a Pay dues button.');
             }}>
               <Text style={s.ctaText}>Attach LeagueSafe link</Text>
             </TouchableOpacity>
@@ -131,6 +139,32 @@ export default function LeagueDetail() {
         ))}
 
         {myWeeks.length > 0 && <Text style={s.section}>MY WEEKS</Text>}
+        {league.draft_status === 'open' && (
+          meId === league.creator_id ? (
+            <TouchableOpacity onPress={() => Alert.alert('Delete this league?', 'This removes the league and all members. It cannot be undone.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete', style: 'destructive', onPress: async () => {
+                const res = await deleteHostedLeague(league.id);
+                if (res.error) { Alert.alert('Could not delete', res.error); return; }
+                router.back();
+              } },
+            ])}>
+              <Text style={[s.fine, { color: t.dangerText, textAlign: 'center', marginTop: 8 }]}>Delete league</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={() => Alert.alert('Leave this league?', undefined, [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Leave', style: 'destructive', onPress: async () => {
+                const res = await leaveHostedLeague(league.id);
+                if (res.error) { Alert.alert('Could not leave', res.error); return; }
+                router.back();
+              } },
+            ])}>
+              <Text style={[s.fine, { color: t.dangerText, textAlign: 'center', marginTop: 8 }]}>Leave league</Text>
+            </TouchableOpacity>
+          )
+        )}
+
         {myWeeks.map(w => (
           <TouchableOpacity key={w.week} style={s.card} onPress={() => setOpenWeek(openWeek === w.week ? null : w.week)}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>

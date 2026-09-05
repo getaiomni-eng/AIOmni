@@ -7,7 +7,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, FlatList, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  draftRoomState, makeHostedPick, snakeSlot, subscribeDraft,
+  draftRoomState, forceHostedPick, friendlyDraftError, makeHostedPick, snakeSlot, subscribeDraft,
   type DraftMember, type DraftPickRow, type HostedLeague,
 } from '../../../services/hostedLeagues';
 import { supabase } from '../../../services/supabase';
@@ -51,8 +51,23 @@ export default function HostedDraftRoom() {
       // Pool: Sleeper live DB by search_rank; gsis mapping via nfl_players
       // (batched) so taken-player greying works against hosted_picks rows.
       try {
-        const res = await fetch('https://api.sleeper.app/v1/players/nfl');
-        const db = await res.json();
+        // Audit fix: this fetched ~15MB on EVERY mount. Reuse the same cache
+        // the Coach maintains; refetch only when absent (cache write is
+        // best-effort — web quota).
+        let db: any = null;
+        try {
+          const cached = await (await import('@react-native-async-storage/async-storage')).default.getItem('sleeper_players_cache');
+          if (cached) db = JSON.parse(cached);
+        } catch {}
+        if (!db) {
+          const res = await fetch('https://api.sleeper.app/v1/players/nfl');
+          db = await res.json();
+          try {
+            const AS = (await import('@react-native-async-storage/async-storage')).default;
+            await AS.setItem('sleeper_players_cache', JSON.stringify(db));
+            await AS.setItem('sleeper_players_cache_at', String(Date.now()));
+          } catch { /* web quota */ }
+        }
         const rows: PoolPlayer[] = [];
         for (const [sid, p] of Object.entries<any>(db)) {
           if (!p?.search_rank || p.search_rank > 400) continue;
@@ -68,7 +83,10 @@ export default function HostedDraftRoom() {
           for (const r of data ?? []) gsisBySleeper.current.set(r.sleeper_id, r.gsis_id);
         }
         setPool(p => (p ? [...p] : p));
-      } catch { setPool([]); }
+      } catch {
+        setPool([]);
+        Alert.alert('Player pool failed to load', 'Check your connection and reopen the draft room.');
+      }
     })();
     const un = subscribeDraft(id!, refresh);
     // Realtime belt-and-suspenders: poll every 5s in case the socket drops.
@@ -88,14 +106,19 @@ export default function HostedDraftRoom() {
 
   const nameByUser = useMemo(() => new Map(members.map(m => [m.user_id, m.team_name])), [members]);
 
+  const iAmCreator = meId != null && league?.creator_id === meId;
   const draftPlayer = (p: PoolPlayer) => {
-    Alert.alert(`Draft ${p.name}?`, `${p.pos} · ${p.team} · pick ${overall} (round ${round})`, [
+    if (busy) return;                                  // stacked-confirm guard
+    const forcing = !myTurn && iAmCreator;
+    const title = forcing ? `Force-pick ${p.name} for ${onClock?.team_name ?? 'the team on the clock'}?` : `Draft ${p.name}?`;
+    Alert.alert(title, `${p.pos} · ${p.team} · pick ${overall} (round ${round})`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Draft', onPress: async () => {
+      { text: forcing ? 'Force pick' : 'Draft', onPress: async () => {
+        if (busy) return;
         setBusy(true);
-        const res = await makeHostedPick(id!, p.sleeperId);
+        const res = forcing ? await forceHostedPick(id!, p.sleeperId) : await makeHostedPick(id!, p.sleeperId);
         setBusy(false);
-        if ('error' in res) { Alert.alert('Pick failed', res.error); refresh(); return; }
+        if ('error' in res) { Alert.alert('Pick failed', friendlyDraftError(res.error)); refresh(); return; }
         refresh();
         if (res.complete) Alert.alert('Draft complete!', 'Rosters are locked — scoring runs automatically every week.');
       } },
@@ -103,8 +126,11 @@ export default function HostedDraftRoom() {
   };
 
   if (!league) return (
-    <View style={[s.container, { paddingTop: insets.top + 24, alignItems: 'center' }]}>
+    <View style={[s.container, { paddingTop: insets.top + 24, alignItems: 'center', gap: 14 }]}>
       <ActivityIndicator color={t.accentText} />
+      <TouchableOpacity onPress={() => router.back()}>
+        <Text style={{ color: t.textSub, fontSize: 14 }}>{'\u2039'} Back</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -160,11 +186,11 @@ export default function HostedDraftRoom() {
                 <Text style={s.pmeta}>{p.pos} · {p.team}</Text>
               </View>
               <TouchableOpacity
-                style={[s.draftBtn, (!myTurn || busy) && { opacity: 0.35 }]}
-                disabled={!myTurn || busy}
+                style={[s.draftBtn, (!(myTurn || (iAmCreator && league?.draft_status === 'drafting')) || busy) && { opacity: 0.35 }]}
+                disabled={!(myTurn || (iAmCreator && league?.draft_status === 'drafting')) || busy}
                 onPress={() => draftPlayer(p)}
               >
-                <Text style={s.draftBtnText}>DRAFT</Text>
+                <Text style={s.draftBtnText}>{myTurn ? 'DRAFT' : iAmCreator ? 'FORCE' : 'DRAFT'}</Text>
               </TouchableOpacity>
             </View>
           )}
