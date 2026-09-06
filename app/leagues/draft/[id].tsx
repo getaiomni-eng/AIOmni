@@ -42,6 +42,7 @@ export default function HostedDraftRoom() {
   const [oAnswer, setOAnswer] = useState<string | null>(null);
   const [oAsking, setOAsking] = useState(false);
   const [creditOffer, setCreditOffer] = useState<string | null>(null); // price string when shown
+  const oAskingRef = useRef(false); // sync guard — state alone leaves an async hole before consumePrompt resolves
 
   const refresh = useCallback(async () => {
     const st = await draftRoomState(id!);
@@ -134,7 +135,8 @@ export default function HostedDraftRoom() {
   };
 
   const askTheO = async () => {
-    if (oAsking) return;
+    if (oAsking || oAskingRef.current) return;
+    oAskingRef.current = true;
     // Quota gate first — this is also where the 99-cent moment lives. A
     // drafter on the clock with no prompts left is the single highest-intent
     // purchase moment in the app, so the offer appears HERE, inline, not on
@@ -143,6 +145,7 @@ export default function HostedDraftRoom() {
     if (!ok) {
       const price = await getAICreditPrice();
       setCreditOffer(price ?? '$0.99');
+      oAskingRef.current = false;
       return;
     }
     setOAsking(true); setOAnswer(null); setCreditOffer(null);
@@ -160,13 +163,13 @@ export default function HostedDraftRoom() {
         `BEST AVAILABLE (market order): ${avail.join(' · ')}`,
         `Who should I take and why? Name ONE pick, one sentence of why, one alternate. Under 90 words — I'm on a clock.`,
       ].join('\n');
-      const reply = await askAI(prompt, { maxTokens: 400, system: CLASS_OF_2025_TEXT, feature: 'draft' });
+      const reply = await askAI(prompt, { maxTokens: 400, system: CLASS_OF_2025_TEXT, feature: 'draft', timeoutMs: 90_000 });
       setOAnswer(reply);
     } catch (e: any) {
       setOAnswer(e?.message === 'prompt_limit_reached'
         ? 'Out of prompts this week.'
         : 'The O could not answer — try again.');
-    } finally { setOAsking(false); }
+    } finally { setOAsking(false); oAskingRef.current = false; }
   };
 
   const buyCreditInline = async () => {

@@ -1459,8 +1459,24 @@ Capture rookies and veterans exactly.`,
     }
   };
 
+  // Synchronous re-entry guard. The `loading` state guard has an async
+  // hole: send() awaits consent + quota BEFORE setLoading(true), so rapid
+  // taps in that window all slipped through — one user tapped three times
+  // and got three concurrent sends, three spinners, three prompt burns
+  // (2026-09-06 screenshot). A ref flips synchronously; nothing re-enters.
+  const sendingRef = useRef(false);
   const send = async (text: string) => {
-    if (!text.trim() || loading) return;
+    if (!text.trim() || loading || sendingRef.current) return;
+    sendingRef.current = true;
+    setLoading(true);   // instant feedback before any await
+    try {
+      await sendInner(text);
+    } finally {
+      sendingRef.current = false;
+      setLoading(false);
+    }
+  };
+  const sendInner = async (text: string) => {
     // 5.1.1(i): the FIRST thing send() may do with the user's text is check
     // consent — getPlayerContext() below fetches question-derived player
     // names to a server that fronts the AI service, so even that must not
@@ -1537,7 +1553,7 @@ Capture rookies and veterans exactly.`,
         `\nuser: ${safeText}`,
       ].filter(Boolean).join('\n');
 
-      const reply = await askAI(fullPrompt, { maxTokens: 1000, system: STATIC_SYSTEM, systemExtra: systemPromptRef.current, feature: 'coach' });
+      const reply = await askAI(fullPrompt, { maxTokens: 1000, system: STATIC_SYSTEM, systemExtra: systemPromptRef.current, feature: 'coach', timeoutMs: 90_000 });
       // Only charge a prompt once the model actually responds — connection
       // errors and timeouts shouldn't burn the user's weekly quota.
       await incrementPrompt();
@@ -1560,6 +1576,8 @@ Capture rookies and veterans exactly.`,
         // that masked an actual failure in production.
         : describeAIError(e, 'Connection error. Try again.');
       setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: errMsg }]);
+      if (e?.message === 'ai_timeout') setInput(text);   // one-tap retry
+
     } finally {
       setLoading(false);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);

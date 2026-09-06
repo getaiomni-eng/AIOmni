@@ -50,6 +50,10 @@ export interface AskAIOptions {
   // ~0.1x. Telemetry (ai_response_metadata cache_read vs input_tokens) is
   // the proof either way.
   systemExtra?: string;
+  // Per-call deadline. Default 50s; the Coach passes 90s — an Opus answer
+  // over 25k context legitimately runs past 50 on a slow network, and the
+  // abort surfaced as a timeout users read as "it didn't send".
+  timeoutMs?: number;
 }
 
 export async function askAI(
@@ -113,7 +117,7 @@ export async function askAI(
     // real timeout, and a slow Claude call surfaced as a bare TypeError that
     // the UI rendered as "Connection error" with no cause.
     const controller = new AbortController();
-    const deadline = setTimeout(() => controller.abort(), 50_000);
+    const deadline = setTimeout(() => controller.abort(), o.timeoutMs ?? 50_000);
     let res: Response;
     try {
       res = await fetch(PROXY_URL, {
