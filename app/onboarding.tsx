@@ -147,7 +147,7 @@ export default function OnboardingScreen() {
         </Animated.View>
 
         <Animated.Text style={[styles.legalNote, { opacity: stripFade }]}>
-          Free · 25 AI prompts per week · No credit card required
+          Free · 10 AI prompts to start · No credit card required
         </Animated.Text>
         <Animated.Text style={[styles.legalNote, { opacity: stripFade }]}>
           Connect your platforms anytime in Settings → My Platforms

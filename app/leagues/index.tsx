@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  createHostedLeague, joinHostedLeague, myHostedLeagues, type HostedLeague,
+  createHostedLeague, joinHostedLeague, myHostedLeagues, PICK_CLOCKS, type HostedLeague,
 } from '../../services/hostedLeagues';
 import { supabase } from '../../services/supabase';
 import { Alert } from '../../services/util/crossAlert';
@@ -28,6 +28,9 @@ export default function LeaguesHub() {
   const [teamName, setTeamName] = useState('');
   const [busy, setBusy] = useState(false);
   const [kind, setKind] = useState<'season' | 'weekly'>('season');
+  // The pick clock was a hardcoded, invisible 8 hours with no way to change it.
+  // Default stays 8h so nobody's slow draft starts autopicking on them.
+  const [pickSecs, setPickSecs] = useState<number>(28800);
 
   const load = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -39,7 +42,7 @@ export default function LeaguesHub() {
   const onCreate = async () => {
     if (!name.trim()) { Alert.alert('Name your league', 'Give it a name first.'); return; }
     setBusy(true);
-    const res = await createHostedLeague(name.trim(), 12, kind);
+    const res = await createHostedLeague(name.trim(), 12, kind, pickSecs);
     setBusy(false);
     if ('error' in res) { Alert.alert('Could not create league', res.error); return; }
     setName('');
@@ -106,6 +109,21 @@ export default function LeaguesHub() {
                   <Text style={[s.kindText, kind === 'weekly' && { color: '#0a1214' }]}>WEEKLY RUN</Text>
                 </TouchableOpacity>
               </View>
+              <Text style={s.clockLabel}>PICK CLOCK</Text>
+              <View style={s.clockRow}>
+                {PICK_CLOCKS.map(c => (
+                  <TouchableOpacity
+                    key={c.seconds}
+                    style={[s.clockChip, pickSecs === c.seconds && { backgroundColor: t.accentText, borderColor: t.accentText }]}
+                    onPress={() => setPickSecs(c.seconds)}>
+                    <Text style={[s.clockText, pickSecs === c.seconds && { color: '#0a1214' }]}>{c.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={s.clockHint}>
+                {PICK_CLOCKS.find(c => c.seconds === pickSecs)?.hint ?? ''}
+                {'  ·  '}Miss the clock and the best player on the board is picked for you.
+              </Text>
               <TextInput
                 style={s.input} placeholder="League name" placeholderTextColor={t.textMuted}
                 value={name} onChangeText={setName} maxLength={40}
@@ -154,6 +172,11 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   cta: { backgroundColor: t.accentText, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   ctaText: { color: '#0a1214', fontWeight: '700', fontSize: 14 },
   fine: { color: t.textMuted, fontSize: 11.5 },
+  clockLabel: { color: t.textSub, fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginTop: 12, marginBottom: 6 },
+  clockRow:   { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  clockChip:  { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: t.border, backgroundColor: t.inputBg },
+  clockText:  { color: t.textSub, fontSize: 12, fontWeight: '700' },
+  clockHint:  { color: t.textMuted, fontSize: 11, marginTop: 6, lineHeight: 15 },
   kindChip: { borderWidth: 1, borderColor: t.border, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: t.inputBg },
   kindText: { color: t.textSub, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
 });

@@ -55,6 +55,10 @@ Deno.serve(async (req) => {
   // RC uses $RCAnonymousID:… when the app never logged the user in —
   // nothing to map; ack so RC doesn't retry forever.
   if (!appUserId || appUserId.startsWith('$RCAnonymous')) {
+    // Genuinely unrecoverable (no identity to credit), but if this fires on a
+    // PURCHASE it means someone paid and cannot be matched to an account —
+    // worth seeing in the logs rather than acking into silence.
+    console.error('rc-webhook: unmapped app_user_id', { type, productId: event.product_id ?? null });
     return new Response('ok (unmapped user)', { status: 200 });
   }
 
@@ -74,10 +78,27 @@ Deno.serve(async (req) => {
       .insert({ event_id: evtId })
       .select('event_id')
       .maybeSingle();
-    if (dupErr) return new Response('ok (duplicate credit event)', { status: 200 });
+    // 23505 is the ONLY error that means "already processed". Any other
+    // insert failure (RLS, connection, timeout) previously also returned 200,
+    // which told RevenueCat the purchase was handled when no credit had been
+    // granted — paid, nothing delivered, and no retry ever coming.
+    if (dupErr?.code === '23505') {
+      return new Response('ok (duplicate credit event)', { status: 200 });
+    }
+    if (dupErr) {
+      console.error('rc-webhook dedupe insert failed', { evtId, code: dupErr.code, msg: dupErr.message });
+      return new Response('dedupe insert failed', { status: 500 });
+    }
 
     const { data: u } = await sb.from('users').select('id, ai_credits').eq('auth_id', appUserId).maybeSingle();
-    if (!u) return new Response('ok (no user row yet)', { status: 200 });
+    if (!u) {
+      // The dedupe marker is already down. Leaving it would swallow every
+      // retry — including a manual redelivery — so the purchase could never
+      // be recovered. Clear it and make RC try again once the row exists.
+      await sb.from('processed_rc_events').delete().eq('event_id', evtId);
+      console.error('rc-webhook: paid credit with no users row', { appUserId, evtId });
+      return new Response('no user row yet', { status: 500 });
+    }
     const { error: incErr } = await sb
       .from('users')
       .update({ ai_credits: (u.ai_credits ?? 0) + 1, updated_at: new Date().toISOString() })

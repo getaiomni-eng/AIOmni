@@ -1,6 +1,6 @@
 // Hosted league detail: members, standings, invite, my weekly lineups.
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { deleteHostedLeague, hostedStandings, leaveHostedLeague, myAppId, myHostedLeagues, setLeagueDuesUrl, startHostedDraft, type HostedLeague } from '../../services/hostedLeagues';
@@ -24,6 +24,8 @@ export default function LeagueDetail() {
   const [meId, setMeId] = useState<string | null>(null);
   const [duesDraft, setDuesDraft] = useState('');
   const [recap, setRecap] = useState<{ week: number; content: string } | null>(null);
+  const [starting, setStarting] = useState(false);
+  const startingRef = useRef(false);   // sync twin — state alone leaves an async hole
 
   const load = useCallback(async () => {
     const all = await myHostedLeagues();
@@ -88,12 +90,27 @@ export default function LeagueDetail() {
                 <Text style={s.ctaText}>Share invite {'\u00b7'} code {league.invite_code}</Text>
               </TouchableOpacity>
               {meId === league.creator_id && (
-                <TouchableOpacity style={[s.cta, { backgroundColor: t.chartreuseText }]} onPress={async () => {
-                  const res = await startHostedDraft(league.id);
-                  if (res.error) { Alert.alert('Could not start the draft', res.error); return; }
-                  router.push(('/leagues/draft/' + league.id) as any);
-                }}>
-                  <Text style={s.ctaText}>Start the draft</Text>
+                <TouchableOpacity
+                  style={[s.cta, { backgroundColor: t.chartreuseText }, starting && { opacity: 0.5 }]}
+                  disabled={starting}
+                  onPress={async () => {
+                    // The server serializes on SELECT ... FOR UPDATE, so a
+                    // double tap used to raise 'draft already started' and put
+                    // a red "Could not start the draft" alert in front of the
+                    // commissioner for a draft that had, in fact, started.
+                    if (starting || startingRef.current) return;
+                    startingRef.current = true;
+                    setStarting(true);
+                    try {
+                      const res = await startHostedDraft(league.id);
+                      if (res.error) { Alert.alert('Could not start the draft', res.error); return; }
+                      router.push(('/leagues/draft/' + league.id) as any);
+                    } finally {
+                      setStarting(false);
+                      startingRef.current = false;
+                    }
+                  }}>
+                  <Text style={s.ctaText}>{starting ? 'Starting…' : 'Start the draft'}</Text>
                 </TouchableOpacity>
               )}
               <Text style={s.fine}>Snake order is randomized at start. Everyone who has joined drafts live from their own phone.</Text>

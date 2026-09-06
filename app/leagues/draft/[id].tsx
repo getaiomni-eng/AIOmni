@@ -22,6 +22,13 @@ type PoolPlayer = { sleeperId: string; gsis?: string; name: string; pos: string;
 
 const POS = ['ALL', 'QB', 'RB', 'WR', 'TE'];
 
+// h/m above an hour, m:ss below — an 8h clock rendered as "28800s" tells
+// nobody anything.
+function fmtClock(sec: number): string {
+  if (sec >= 3600) return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+}
+
 export default function HostedDraftRoom() {
   const { t } = useTheme();
   const s = useMemo(() => makeStyles(t), [t]);
@@ -91,7 +98,17 @@ export default function HostedDraftRoom() {
           const { data } = await supabase.from('nfl_players').select('gsis_id, sleeper_id').in('sleeper_id', sids.slice(i, i + 200));
           for (const r of data ?? []) gsisBySleeper.current.set(r.sleeper_id, r.gsis_id);
         }
-        setPool(p => (p ? [...p] : p));
+        // Unmapped players (mostly 2026 rookies with no sleeper_id link yet)
+        // are rejected by make_hosted_pick as 'unknown or undraftable player'
+        // — visible on the board, impossible to draft, on the clock. Drop
+        // them. Guarded on a non-empty map: if the lookup itself failed,
+        // showing the full board beats showing an empty one.
+        const mappedCount = gsisBySleeper.current.size;
+        setPool(p => (
+          p && mappedCount > 0
+            ? p.filter(r => gsisBySleeper.current.has(r.sleeperId))
+            : (p ? [...p] : p)
+        ));
       } catch {
         setPool([]);
         Alert.alert('Player pool failed to load', 'Check your connection and reopen the draft room.');
@@ -102,6 +119,20 @@ export default function HostedDraftRoom() {
     const iv = setInterval(refresh, 5000);
     return () => { un(); clearInterval(iv); };
   }, [id, refresh]);
+
+  // The pick deadline existed in the DB from day one and was never rendered,
+  // so a stalled draft looked identical to a broken one: no timer, no push,
+  // no explanation for eleven other people.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (league?.draft_status !== 'drafting') return;
+    const iv = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, [league?.draft_status]);
+  const secsLeft = useMemo(() => {
+    if (league?.draft_status !== 'drafting' || !league?.pick_deadline) return null;
+    return Math.max(0, Math.round((new Date(league.pick_deadline).getTime() - nowMs) / 1000));
+  }, [league?.draft_status, league?.pick_deadline, nowMs]);
 
   const taken = useMemo(() => new Set(picks.map(p => p.gsis_id)), [picks]);
   const teams = league?.team_count ?? 0;
@@ -227,6 +258,13 @@ export default function HostedDraftRoom() {
           <Text style={[s.bannerText, { color: myTurn ? '#0a1214' : t.text }]}>
             {myTurn ? "YOU'RE ON THE CLOCK — round " + round : 'On the clock: ' + (onClock?.team_name ?? '…') + ' (round ' + round + ')'}
           </Text>
+          {secsLeft !== null && (
+            <Text style={[s.bannerClock, { color: myTurn ? '#0a1214' : t.textMuted }]}>
+              {secsLeft > 0
+                ? (myTurn ? 'Autopick in ' : 'Autopicks in ') + fmtClock(secsLeft)
+                : 'Autopicking now…'}
+            </Text>
+          )}
         </View>
       )}
 
@@ -315,6 +353,7 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   title: { fontFamily: 'Audiowide_400Regular', fontSize: 14, color: t.text, letterSpacing: 1, flex: 1 },
   pickCounter: { fontFamily: 'Audiowide_400Regular', fontSize: 12, color: t.accentText },
   banner: { marginHorizontal: 14, borderRadius: 12, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 8 },
+  bannerClock: { fontSize: 12, fontWeight: '600', marginTop: 3, letterSpacing: 0.3 },
   bannerText: { fontFamily: 'Audiowide_400Regular', fontSize: 12, letterSpacing: 0.5, textAlign: 'center' },
   controls: { paddingHorizontal: 14, gap: 8, marginBottom: 6 },
   search: { borderWidth: 1, borderColor: t.border, backgroundColor: t.inputBg, color: t.text, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14 },

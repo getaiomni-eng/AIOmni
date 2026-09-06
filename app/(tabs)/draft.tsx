@@ -1185,20 +1185,28 @@ function DraftBoard({
   }, [state, onStateChange]);
 
   // ── AI Advice ──
+  // Synchronous re-entry guard. `aiLoading` was set here but never READ, and
+  // the ASK button had no disabled state, so a second tap during a 50-90s Opus
+  // call started a whole second charged request — and because both flows end in
+  // an unsequenced setAiResponse, a slower first answer could land last and sit
+  // under the newer question. Same async hole as coach.tsx send() (2026-09-06).
+  const askingRef = useRef(false);
   const handleAskAI = useCallback(async (q?: string) => {
+    if (aiLoading || askingRef.current) return;
+    askingRef.current = true;
     setShowAI(true);
     setAiLoading(true);
     setAiResponse('');
     // 5.1.1(i): never charge a prompt for a call the consent gate will refuse.
     if (!(await hasAIConsent())) {
       setAiResponse('AI features are turned off. To use the Draft Copilot, enable “Share data with AI service” in Settings.');
-      setAiLoading(false);
+      setAiLoading(false); askingRef.current = false;
       return;
     }
     // Guests can't reach the AI proxy — don't burn a lifetime prompt trying.
     if (!(await hasAISession())) {
       setAiResponse('Sign in to use AI features — create a free account from Settings.');
-      setAiLoading(false);
+      setAiLoading(false); askingRef.current = false;
       return;
     }
     // Atomic charge — if over cap, close the AI sheet and send the user
@@ -1208,13 +1216,13 @@ function DraftBoard({
       const tier = await getCurrentTier();
       const ctx = tier === 'free' ? 'free_prompts_exhausted' : 'weekly_prompts_exhausted';
       setShowAI(false);
-      setAiLoading(false);
+      setAiLoading(false); askingRef.current = false;
       router.push(`/paywall?context=${ctx}` as any);
       return;
     }
     try {
       const prompt = buildDraftPrompt(state, q || undefined);
-      const res = await askAI(prompt, { system: CLASS_OF_2025_TEXT, feature: 'draft' });
+      const res = await askAI(prompt, { system: CLASS_OF_2025_TEXT, feature: 'draft', timeoutMs: 90_000 });
       setAiResponse(res);
     } catch (e: any) {
       // Never surface raw internal errors to the sheet — build 197 lesson.
@@ -1224,8 +1232,9 @@ function DraftBoard({
       setAiResponse(msg);
     } finally {
       setAiLoading(false);
+      askingRef.current = false;
     }
-  }, [state, router]);
+  }, [state, router, aiLoading]);
 
   const isSleeperLive = state.settings.platform === 'sleeper' && !!state.settings.draftId;
 
@@ -1417,9 +1426,11 @@ function DraftBoard({
                 onChangeText={setAiQuestion}
                 placeholder="Ask about specific players..."
                 placeholderTextColor={t.textSub}
+                editable={!aiLoading}
               />
               <TouchableOpacity
-                style={sty.aiSendBtn}
+                style={[sty.aiSendBtn, (aiLoading || !aiQuestion.trim()) && { opacity: 0.4 }]}
+                disabled={aiLoading || !aiQuestion.trim()}
                 onPress={() => {
                   if (aiQuestion.trim()) {
                     handleAskAI(aiQuestion.trim());

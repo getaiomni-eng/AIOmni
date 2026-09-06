@@ -172,6 +172,14 @@ serve(async (req) => {
 
     // Per-user rate enforcement (skip only for tiers explicitly unlimited;
     // currently none, but keeping the guard).
+    // Parsed BEFORE the quota charge on purpose: a throw here after charging
+    // would bill the user for a request that never left the building.
+    const body = await req.json();
+
+    // What this request spent, if anything. Set by the quota block below and
+    // consumed by refund() when the upstream call fails.
+    let spent: { credit: boolean; lifetime: boolean } | null = null;
+
     if (limit < 999) {
       // Server-authoritative quota (2026-09-03). The previous block read and
       // wrote columns that DO NOT EXIST on prompt_usage (prompts_used /
@@ -185,6 +193,10 @@ serve(async (req) => {
       const { data: q, error: qErr } = await sb.rpc("consume_prompt", {
         p_auth_id: userId,
         p_limit: limit,
+        // Free tier is a LIFETIME trial, not a weekly allowance (2026-09-06).
+        // consume_prompt bucketed every tier by week and nothing ever read
+        // free_lifetime_used, so free accounts renewed their trial each Sunday.
+        p_lifetime: tier === "free",
       });
       const verdict = Array.isArray(q) ? q[0] : q;
       // Fail open on infrastructure error (authenticated user, telemetry
@@ -192,21 +204,55 @@ serve(async (req) => {
       if (!qErr && verdict && verdict.allowed !== true) {
         return jsonError(429, "Weekly prompt limit reached", origin);
       }
+      // Remember WHAT was spent so a failed upstream call can give it back.
+      if (!qErr && verdict?.allowed === true) {
+        spent = { credit: verdict.credit_spent === true, lifetime: tier === "free" };
+      }
     }
 
-    const body = await req.json();
-    const startedAt = Date.now();
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type":      "application/json",
-        "x-api-key":         ANTHROPIC_KEY!,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify(body),
-    });
+    // The charge lands BEFORE the upstream call, so every failure past this
+    // point has to return it. Anthropic 429/529 peaks at 1pm ET Sunday —
+    // exactly when this app is busiest — and users were being billed a prompt,
+    // or a real $0.99 credit, for calls that never produced a token.
+    // Best-effort by design: a refund must never mask the original error.
+    const refund = async () => {
+      if (!spent || !userId) return;
+      const s = spent;
+      spent = null;
+      try {
+        await sb.rpc("refund_prompt", {
+          p_auth_id:  userId,
+          p_credit:   s.credit,
+          p_lifetime: s.lifetime,
+        });
+      } catch { /* nothing further to do — the user keeps the charge */ }
+    };
 
-    const data = await anthropicRes.json();
+    const startedAt = Date.now();
+    let anthropicRes: Response;
+    try {
+      anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type":      "application/json",
+          "x-api-key":         ANTHROPIC_KEY!,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      await refund();
+      throw e;
+    }
+    if (!anthropicRes.ok) await refund();
+
+    let data: unknown;
+    try {
+      data = await anthropicRes.json();
+    } catch {
+      await refund();
+      return jsonError(502, "ai_bad_response", origin);
+    }
 
     // Judgment-capture (2026-09-02): one metadata row per AI call. Prompt and
     // completion CONTENT are deliberately not stored here — this is calibration
@@ -214,7 +260,7 @@ serve(async (req) => {
     // the substrate for the AI-commissioner dataset. Fire-and-forget: capture
     // must never delay or fail a user response.
     try {
-      const u = data?.usage ?? {};
+      const u = (data as any)?.usage ?? {};
       void sb.from("ai_response_metadata").insert({
         user_id:            userId ?? null,
         feature:            req.headers.get("x-aiomni-feature") ?? null,

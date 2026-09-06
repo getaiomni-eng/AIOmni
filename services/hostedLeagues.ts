@@ -13,10 +13,21 @@ export interface HostedLeague {
   creator_id: string; dues_url: string | null;
 }
 
-export async function createHostedLeague(name: string, teamCount = 12, kind: 'season' | 'weekly' = 'season'):
+// Pick-clock presets. The 8h default is deliberate: these drafts are mostly
+// asynchronous, and silently dropping everyone to 90s would autopick for people
+// who expected to draft over an evening. The commissioner picks explicitly.
+export const PICK_CLOCKS = [
+  { label: '90 seconds', seconds: 90,    hint: 'Live draft, everyone in the room' },
+  { label: '10 minutes', seconds: 600,   hint: 'Live-ish, phones in hand' },
+  { label: '2 hours',    seconds: 7200,  hint: 'Same evening' },
+  { label: '8 hours',    seconds: 28800, hint: 'Take your time (default)' },
+] as const;
+
+export async function createHostedLeague(
+  name: string, teamCount = 12, kind: 'season' | 'weekly' = 'season', pickSeconds = 28800):
   Promise<{ leagueId: string; inviteCode: string } | { error: string }> {
   const { data, error } = await supabase.rpc('create_hosted_league', {
-    p_name: name, p_team_count: teamCount, p_kind: kind,
+    p_name: name, p_team_count: teamCount, p_kind: kind, p_pick_seconds: pickSeconds,
   });
   if (error) return { error: error.message };
   const row = Array.isArray(data) ? data[0] : data;
@@ -138,5 +149,11 @@ export function friendlyDraftError(msg: string): string {
   if (/not your turn/i.test(msg)) return "Not your turn yet — hold tight.";
   if (/draft is not live/i.test(msg)) return 'The draft is not live.';
   if (/draft is complete/i.test(msg)) return 'The draft is over.';
+  // Raised by make_hosted_pick when the player has no gsis mapping — mostly
+  // unmapped rookies, which the board now filters out. Kept as a backstop so
+  // nobody on the clock ever sees a raw Postgres string.
+  if (/unknown or undraftable/i.test(msg)) return "That player isn't draftable yet — pick someone else.";
+  if (/pick clock must be/i.test(msg)) return 'Pick clock must be between 30 seconds and 24 hours.';
+  if (/regular season is over/i.test(msg)) return 'The regular season is over — weekly runs return next year.';
   return msg;
 }

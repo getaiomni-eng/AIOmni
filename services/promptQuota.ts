@@ -211,7 +211,13 @@ export async function getRemainingPrompts(): Promise<number> {
   // when the server is unreachable.
   const tierNow = await getCurrentTier();
   const srv = await fetchServerPromptState();
-  if (srv) return Math.max(0, (LIMITS[tierNow] ?? LIMITS.free) - srv.used);
+  // Free is a LIFETIME trial and reads a different counter than the paid
+  // weekly buckets — reading `used` for a free user showed a full allowance
+  // again every Sunday (2026-09-06).
+  if (srv) {
+    const used = tierNow === 'free' ? srv.lifetimeUsed : srv.used;
+    return Math.max(0, (LIMITS[tierNow] ?? LIMITS.free) - used);
+  }
 
   await ensureMigrated();
   const tier = await getCurrentTier();
@@ -253,17 +259,20 @@ export async function consumePrompt(): Promise<boolean> {
 // a fresh browser showed 50/50 while the phone said 40/50, and BOTH were
 // fiction — enforcement lives in claude-proxy's consume_prompt(). This reads
 // the server's number; the local counter is only the offline fallback.
-let serverStateCache: { at: number; used: number; credits: number } | null = null;
-export async function fetchServerPromptState(force = false): Promise<{ used: number; credits: number } | null> {
+let serverStateCache: { at: number; used: number; credits: number; lifetimeUsed: number } | null = null;
+export async function fetchServerPromptState(force = false): Promise<{ used: number; credits: number; lifetimeUsed: number } | null> {
   if (!force && serverStateCache && Date.now() - serverStateCache.at < 30_000) {
-    return { used: serverStateCache.used, credits: serverStateCache.credits };
+    return { used: serverStateCache.used, credits: serverStateCache.credits, lifetimeUsed: serverStateCache.lifetimeUsed };
   }
   try {
     const { data } = await supabase.rpc('my_prompt_state');
     const row = Array.isArray(data) ? data[0] : data;
     if (!row) return null;
-    serverStateCache = { at: Date.now(), used: row.used ?? 0, credits: row.ai_credits ?? 0 };
-    return { used: serverStateCache.used, credits: serverStateCache.credits };
+    serverStateCache = {
+      at: Date.now(), used: row.used ?? 0, credits: row.ai_credits ?? 0,
+      lifetimeUsed: row.lifetime_used ?? 0,
+    };
+    return { used: serverStateCache.used, credits: serverStateCache.credits, lifetimeUsed: serverStateCache.lifetimeUsed };
   } catch { return null; }
 }
 

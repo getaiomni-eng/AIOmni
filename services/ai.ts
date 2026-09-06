@@ -185,7 +185,7 @@ export function describeAIError(e: any, fallback: string): string {
   if (m.includes('session_expired'))     return 'Your session expired — sign in again in Settings to keep using AI features.';
   if (m.includes('ai_prompt_too_large')) return 'This conversation has grown too large for one request. Start a fresh chat (your leagues reload automatically).';
   if (m.includes('ai_image_too_large'))  return 'That image was too large to process. Try a screenshot instead of a full-resolution photo.';
-  if (m.includes('ai_overloaded'))       return 'The AI service is briefly overloaded. Give it a minute and try again.';
+  if (m.includes('ai_overloaded'))       return 'The AI service is briefly overloaded. Give it a minute and try again. (You were not charged.)';
   if (m.includes('ai_rate_limited'))     return 'Too many requests right now — wait a minute and try again. (Your prompt was not charged.)';
   if (m.includes('ai_timeout'))          return 'That request took too long and was cancelled. Try again — shorter questions come back faster.';
   if (m.includes('ai_bad_response'))     return 'The AI returned an unreadable response. Try again.';
