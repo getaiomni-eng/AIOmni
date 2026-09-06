@@ -6,6 +6,7 @@
 // dedupes by similar headlines, returns tagged items.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { textMentionsPlayer } from './util/playerNewsMatch';
 
 export type NewsTab = 'SLEEPER' | 'NEWS' | 'INJURIES' | 'TRADES';
 
@@ -329,18 +330,21 @@ export async function fetchNewsFeed(forceRefresh: boolean = false): Promise<Feed
  * Find news items mentioning a given player.
  * Used by PlayerCardModal to populate the PLAYER NEWS section.
  */
-export async function findNewsForPlayer(playerName: string, limit: number = 3): Promise<NewsItem[]> {
+export async function findNewsForPlayer(playerName: string, limit: number = 3, team?: string | null): Promise<NewsItem[]> {
   const feed = await fetchNewsFeed();
   const lower = playerName.toLowerCase();
-  const lastName = playerName.split(' ').pop()?.toLowerCase() ?? '';
   const matches: NewsItem[] = [];
 
   for (const item of feed.all) {
     if (matches.length >= limit) break;
-    const hay = (item.headline + ' ' + (item.body ?? '')).toLowerCase();
+    // Audit 2026-09-05: the old substring matcher put Cleveland BROWNS news
+    // on Amon-Ra St. BROWN's card and a Quinnen Williams article on Caleb's.
+    // textMentionsPlayer requires the full name, a distinctive multi-token
+    // surname, or a whole-word surname corroborated by first name or team.
+    const hay = item.headline + ' ' + (item.body ?? '');
     if (item.playerNames?.some(n => n.toLowerCase() === lower)) {
       matches.push(item);
-    } else if (hay.includes(lower) || (lastName.length > 3 && hay.includes(lastName))) {
+    } else if (textMentionsPlayer(hay, playerName, team)) {
       matches.push(item);
     }
   }

@@ -1,5 +1,6 @@
 // services/liveData.ts
 // Live data layer — NFL injuries, weather, Vegas lines, advanced stats, college prospects, news
+import { sameNameLoose } from './util/playerNewsMatch';
 // Injected into every AI Coach prompt before Claude responds.
 //
 // Third-party API keys (Odds API, OpenWeather, CFBD) used to be
@@ -452,9 +453,8 @@ export function formatLiveDataForPrompt(
 }
 
 export function findPlayerInjury(injuries: InjuryReport[], playerName: string): InjuryReport | null {
-  const name = playerName.toLowerCase();
-  return injuries.find(inj =>
-    inj.playerName.toLowerCase().includes(name) ||
-    name.includes(inj.playerName.toLowerCase().split(' ').pop() || '')
-  ) || null;
+  // Audit 2026-09-05: substring matching here could hang the WRONG player's
+  // injury on a card (any shared surname). Normalized-equality or
+  // surname+first-initial only.
+  return injuries.find(inj => sameNameLoose(inj.playerName, playerName)) || null;
 }

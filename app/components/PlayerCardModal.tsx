@@ -100,7 +100,7 @@ export default function PlayerCardModal({ visible, player, platform, onClose, on
 
     // News — pulls from all 6 RSS sources via consolidated news feed
     setNewsLoading(true);
-    findNewsForPlayer(player.name, 3)
+    findNewsForPlayer(player.name, 3, player.team)
       .then(items => { if (!cancelled) setNews(items); })
       .catch(() => { if (!cancelled) setNews([]); })
       .finally(() => { if (!cancelled) setNewsLoading(false); });

@@ -1,3 +1,4 @@
+import { sameNameLoose } from './util/playerNewsMatch';
 // services/rotowire.ts
 // Rotowire RSS feed parser — NFL news and injury updates
 
@@ -59,11 +60,8 @@ export async function fetchRotoWireNFL(): Promise<RotoWireItem[]> {
 
 export function findNewsForPlayer(items: RotoWireItem[], playerName: string): RotoWireItem | null {
   if (!playerName || items.length === 0) return null;
-  const name = playerName.toLowerCase();
-  return items.find(item =>
-    item.player.toLowerCase().includes(name) ||
-    name.includes(item.player.toLowerCase().split(' ').pop() ?? '')
-  ) ?? null;
+  // Audit 2026-09-05: same substring disease as the headline matcher.
+  return items.find(item => sameNameLoose(item.player, playerName)) ?? null;
 }
 
 export function formatNewsAge(pubDate: string): string {
