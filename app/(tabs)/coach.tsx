@@ -1589,7 +1589,7 @@ Capture rookies and veterans exactly.`,
     } catch (e: any) {
       const errMsg = e?.message?.includes('prompt_limit_reached')
         ? (tier === 'free'
-            ? "This device has used its 10 free prompts. Upgrade for 25–50 prompts every week."
+            ? "You’ve used your 10 free prompts. Upgrade for 25–50 prompts every week."
             : "You've hit your weekly prompt limit. Upgrade to Pro for 50 prompts/week.")
         // Everything else goes through the shared taxonomy — expired
         // sessions, oversized prompts, overload, and timeouts each get a
@@ -1747,7 +1747,7 @@ Capture rookies and veterans exactly.`,
                     : remaining > 0
                       ? 'Ask, or 📷 up to 3 draft-board shots…'
                       : tier === 'free'
-                        ? 'This device has used its free prompts — upgrade to keep going'
+                        ? 'You’ve used your free prompts — upgrade to keep going'
                         : 'Out of prompts — upgrade for more'
                 }
                 placeholderTextColor={t.textMuted}

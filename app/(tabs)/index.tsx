@@ -4,6 +4,7 @@ import { fetchNewsFeed, FeedByTab, NewsTab, NewsItem as FeedNewsItem } from '../
 import { getNFLSeason, getAvailableSeasons } from '../../services/season';
 import { logCaught, logEmpty } from '../../services/util/logCaught';
 import { pruneRosteredLeagues } from '../../services/rosterSync';
+import { claimAllLocal, restorePlatformLinks } from '../../services/platformLinks';
 import { CoachMarks } from '../components/CoachMarks';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -491,6 +492,11 @@ export default function HomeScreen() {
   const loadLeagues = useCallback(async () => {
     setLoading(true);
     try {
+      // Pull any platform links this account already has before reading local
+      // storage. This is what makes the web app and a second phone work
+      // without reconnecting everything by hand. Local values win when
+      // present, so a link set up on THIS device is never overwritten.
+      await restorePlatformLinks();
       const [sleeper, espn, yahoo, mfl, fleaflicker] = await Promise.allSettled([
         loadSleeperLeagues(selectedSeason),
         loadESPNLeagues(selectedSeason),
@@ -523,6 +529,9 @@ export default function HomeScreen() {
       if (mfl.status         === 'fulfilled') loadedPlatforms.push('mfl');
       if (fleaflicker.status === 'fulfilled') loadedPlatforms.push('fleaflicker');
       void pruneRosteredLeagues(allLeagues.map(l => String(l.id)), loadedPlatforms);
+      // Register this account's claim on the league identities it is using.
+      // First account to claim one owns the free trial for it.
+      void claimAllLocal();
 
       // Per-platform counts for Settings' honest connection status
       // ("Connected · 3 leagues" vs a red "Reconnect"): a stored credential
