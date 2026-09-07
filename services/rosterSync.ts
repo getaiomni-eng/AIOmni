@@ -10,6 +10,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { normalizePlayerName as normalize } from './util/normalizeName';
+import { logCaught } from './util/logCaught';
 
 const LAST_SYNC_KEY = 'roster_sync_last_at';
 const MIN_INTERVAL_MS = 60 * 60 * 1000; // 1h
@@ -102,5 +103,60 @@ export async function syncRosteredPlayers(
     }
   } catch (e: any) {
     console.log('[rosterSync] error:', e?.message);
+  }
+}
+
+/**
+ * Drop server-side roster rows for leagues the user is no longer in.
+ *
+ * syncRosteredPlayers deliberately only ever touches the leagues it is given,
+ * which is right for a sync but means a league the user LEAVES is never
+ * revisited and its rows live on forever. Those rows feed the server-side
+ * "does this user roster this player" match behind the analyst-buzz insight
+ * cards, so a departed league keeps generating buzz about players the user no
+ * longer owns, permanently, with nothing on screen explaining why.
+ *
+ * Scoped by platform on purpose. The home screen loads platforms with
+ * Promise.allSettled, so one adapter timing out yields an EMPTY league list
+ * for that platform — indistinguishable from "left every league there". Only
+ * platforms that genuinely answered are pruned, so a flaky Sleeper request
+ * can never wipe a user's Sleeper rows.
+ */
+export async function pruneRosteredLeagues(
+  activeLeagueIds: string[],
+  loadedPlatforms: string[],
+): Promise<void> {
+  try {
+    if (!loadedPlatforms.length) return;   // nothing answered; prune nothing
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: existing, error } = await supabase
+      .from('user_rostered_players')
+      .select('league_id, platform')
+      .eq('user_id', user.id)
+      .in('platform', loadedPlatforms);
+    if (error || !existing?.length) return;
+
+    const keep  = new Set(activeLeagueIds.map(String));
+    const stale = Array.from(new Set(
+      existing
+        .map(r => r.league_id as string | null)
+        .filter((lid): lid is string => !!lid && !keep.has(String(lid))),
+    ));
+    if (!stale.length) return;
+
+    const { error: delErr } = await supabase
+      .from('user_rostered_players')
+      .delete()
+      .eq('user_id', user.id)
+      .in('league_id', stale);
+    if (delErr) { logCaught('rosterSync.prune', delErr); return; }
+
+    // Clear the per-league coalescing stamps so a rejoin re-syncs at once
+    // rather than waiting out the hour.
+    await Promise.all(stale.map(lid => AsyncStorage.removeItem(`${LAST_SYNC_KEY}:${lid}`)));
+  } catch (e) {
+    logCaught('rosterSync.prune', e);
   }
 }

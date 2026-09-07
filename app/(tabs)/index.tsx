@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchNewsFeed, FeedByTab, NewsTab, NewsItem as FeedNewsItem } from '../../services/newsFeed';
 import { getNFLSeason, getAvailableSeasons } from '../../services/season';
 import { logCaught, logEmpty } from '../../services/util/logCaught';
+import { pruneRosteredLeagues } from '../../services/rosterSync';
 import { CoachMarks } from '../components/CoachMarks';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -504,6 +505,25 @@ export default function HomeScreen() {
       if (mfl.status         === 'fulfilled') allLeagues.push(...mfl.value);
       if (fleaflicker.status === 'fulfilled') allLeagues.push(...fleaflicker.value);
       setLeagues(allLeagues);
+
+      // Drop server-side roster rows for leagues the user has left. This is
+      // the only place with the complete league list — rosterSync is called
+      // per-league from the league tab and deliberately never touches leagues
+      // it was not given, so a departed league's rows would otherwise live in
+      // user_rostered_players forever and keep feeding buzz cards about
+      // players the user no longer owns.
+      //
+      // Only platforms that actually answered are pruned: allSettled turns a
+      // timeout into an empty list, which is indistinguishable from "left
+      // every league there".
+      const loadedPlatforms: string[] = [];
+      if (sleeper.status     === 'fulfilled') loadedPlatforms.push('sleeper');
+      if (espn.status        === 'fulfilled') loadedPlatforms.push('espn');
+      if (yahoo.status       === 'fulfilled') loadedPlatforms.push('yahoo');
+      if (mfl.status         === 'fulfilled') loadedPlatforms.push('mfl');
+      if (fleaflicker.status === 'fulfilled') loadedPlatforms.push('fleaflicker');
+      void pruneRosteredLeagues(allLeagues.map(l => String(l.id)), loadedPlatforms);
+
       // Per-platform counts for Settings' honest connection status
       // ("Connected · 3 leagues" vs a red "Reconnect"): a stored credential
       // with zero leagues loading is a broken link, and until now Settings
