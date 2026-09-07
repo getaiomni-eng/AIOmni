@@ -45,3 +45,9 @@ user = "resend"
 pass = "env(RESEND_API_KEY)"
 admin_email = "no-reply@getaiomni.com"
 sender_name = "AIOmni"
+
+# Public, unauthenticated: getaiomni.com fetches this for the live panel.
+# Returns weather and public headlines only -- no rankings, no scores, no
+# analyst content. API keys stay server-side.
+[functions.site-live]
+verify_jwt = false

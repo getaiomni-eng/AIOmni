@@ -1,0 +1,11 @@
+/privacy   /privacy.html   200
+/terms     /terms.html     200
+/features  /features.html  200
+/leagues   /leagues.html   200
+/rankings  /rankings.html  200
+/pricing   /pricing.html   200
+
+# Anything else is genuinely missing. Without this the host's catch-all
+# served the homepage with a 200 for every mistyped URL -- a soft 404 on an
+# unbounded number of paths, which tells search engines those pages exist.
+/*         /404.html       404

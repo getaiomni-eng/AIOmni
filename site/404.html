@@ -1,65 +1,135 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0a1214">
-  <title>404 — AIOmni</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/aiomni.css">
-  <style>
-    .err-wrap {
-      min-height: 80vh; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; text-align: center; padding: 0 24px;
-    }
-    .err-code {
-      font-family: 'Bebas Neue', 'Impact', sans-serif;
-      font-size: clamp(120px, 22vw, 240px);
-      line-height: 1; letter-spacing: 0.04em;
-      background: linear-gradient(135deg, var(--aqua), var(--amber), var(--flame));
-      -webkit-background-clip: text; background-clip: text;
-      -webkit-text-fill-color: transparent;
-      margin-bottom: 20px;
-    }
-    .err-title { font-size: clamp(28px, 4vw, 42px); margin: 0 0 14px; }
-    .err-body { color: var(--ink-2); max-width: 480px; margin: 0 auto 32px; font-size: 17px; }
-  
-@keyframes spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
-.spec-spin { animation: spin 5s linear infinite; transform-origin: center; }
-@media (prefers-reduced-motion: reduce) { .spec-spin { animation: none; } }
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Not found — AIOmni</title>
+<meta name="description" content="Start free. Rankings $4.99 a month, Pro $12.99 a month. Connect your leagues without entering a card.">
+<link rel="canonical" href="https://getaiomni.com/pricing">
+<meta property="og:type" content="website"><meta property="og:site_name" content="AIOmni">
+<meta property="og:url" content="https://getaiomni.com/pricing"><meta property="og:title" content="Pricing — AIOmni">
+<meta property="og:description" content="Start free. Rankings $4.99 a month, Pro $12.99 a month. Connect your leagues without entering a card.">
+<meta property="og:image" content="https://getaiomni.com/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Pricing — AIOmni"><meta name="twitter:description" content="Start free. Rankings $4.99 a month, Pro $12.99 a month. Connect your leagues without entering a card.">
+<meta name="twitter:image" content="https://getaiomni.com/og.png">
+<link rel="icon" href="/favicon.png" type="image/png"><link rel="apple-touch-icon" href="/favicon.png">
+<meta name="theme-color" content="#070D0E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Barlow:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/site.css">
+<style>
+/* ── broadcast ticker ─────────────────────────────────────────────── */
+.tick{position:sticky;top:0;z-index:70;background:#050A0B;border-bottom:1px solid var(--line);
+  overflow:hidden;height:38px;display:flex;align-items:center;}
+.tick.hide{display:none;}
+.ticklab{flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:0 13px;height:100%;
+  background:var(--volt);color:#050A0B;font-family:'Space Mono',monospace;font-size:10.5px;
+  font-weight:700;letter-spacing:1.4px;z-index:2;}
+.ticklab .pulse{background:#050A0B;box-shadow:none;animation:none;}
+.tickvp{flex:1;overflow:hidden;position:relative;height:100%;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 22px,#000 92%,transparent);
+          mask-image:linear-gradient(90deg,transparent,#000 22px,#000 92%,transparent);}
+.tickrun{display:flex;align-items:center;gap:0;height:100%;width:max-content;
+  animation:tk 64s linear infinite;}
+.tick:hover .tickrun,.tick:focus-within .tickrun{animation-play-state:paused;}
+@keyframes tk{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.ti2{display:flex;align-items:center;gap:8px;padding:0 17px;font-size:12.5px;color:var(--dim);white-space:nowrap;}
+.ti2:after{content:'';width:4px;height:4px;border-radius:50%;background:var(--line2);margin-left:17px;}
+.ti2 .k{font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:1.1px;padding:2px 6px;border-radius:3px;}
+.k.wx{background:rgba(27,231,255,.13);color:var(--aqua);}
+.k.nw{background:rgba(0,255,170,.12);color:var(--wr);}
+.k.al{background:rgba(255,170,0,.15);color:var(--te);}
+.ti2 b{color:var(--ink);font-weight:600;}
+.ti2 a{text-decoration:none;color:inherit;}
+.ti2 a:hover b{color:var(--volt);}
+@media (prefers-reduced-motion:reduce){.tickrun{animation:none;}}
 
+/* ── hero logo ────────────────────────────────────────────────────── */
+.herologo{margin:0 0 26px;}
+.lg svg{display:block;}
+nav .nv .lg{gap:9px;}
 </style>
-</head>
-<body>
-
-<nav class="nav"><div class="wrap nav-inner">
-  <a href="index.html" class="brand">
-    <span class="wm-ai">AI</span>
-    <span class="wm-mark">
-      <svg viewBox="0 0 60 60" width="28" height="28" aria-hidden="true">
-        <defs><linearGradient id="g404" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#ff5714"/>
-          <stop offset="25%" stop-color="#ffb800"/>
-          <stop offset="50%" stop-color="#e4ff1a"/>
-          <stop offset="75%" stop-color="#6eeb83"/>
-          <stop offset="100%" stop-color="#1be7ff"/>
-        </linearGradient></defs>
-        <g class="spec-spin"><circle cx="30" cy="30" r="22.8" fill="none" stroke="url(#g404)" stroke-width="5.4" stroke-linecap="round" stroke-dasharray="121.7 21.5" stroke-dashoffset="89.6"/></g>
-      </svg>
-    </span>
-    <span class="wm-mni">MNI</span>
-  </a>
-  <a class="nav-cta" href="mailto:aiomni@getaiomni.com?subject=Beta%20Access">Get Beta →</a>
+<style>
+/* AIOmni Spectrum C mark — ported from app/components/AIOmniLogo.tsx */
+.wm{display:inline-flex;align-items:center;font-family:'Audiowide',cursive;
+  color:var(--ink);letter-spacing:.5px;line-height:1;white-space:nowrap;}
+.wmt{position:relative;z-index:2;}
+.wmo{position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;}
+.wmo svg{display:block;overflow:visible;}
+.spinO{animation-name:spinO;animation-timing-function:linear;animation-iteration-count:infinite;}
+@keyframes spinO{to{transform:rotate(360deg);}}
+@media (prefers-reduced-motion:reduce){.spinO{animation:none;}}
+.herologo{margin:0 0 24px;filter:drop-shadow(0 0 26px rgba(228,255,26,.13));}
+nav .lg{text-decoration:none;}
+footer .lg{text-decoration:none;margin-bottom:10px;display:inline-block;}
+</style>
+</head><body>
+<div class="tick" id="tick">
+  <span class="ticklab"><span class="pulse"></span>LIVE</span>
+  <div class="tickvp"><div class="tickrun" id="tickrun"></div></div>
+</div>
+<nav><div class="wrap nv">
+  <a class="lg" href="/" aria-label="AIOmni home"><span class="wm" style="font-size:19px"><span class="wmt">AI</span><span class="wmo" style="width:21.849999999999998px;height:21.849999999999998px;margin:0 -3.9px"><svg width="21.849999999999998" height="21.849999999999998" viewBox="0 0 21.849999999999998 21.849999999999998" role="img" aria-label="AIOmni">
+<defs><linearGradient id="gN" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0%" stop-color="#1be7ff"/><stop offset="25%" stop-color="#6eeb83"/>
+<stop offset="50%" stop-color="#e4ff1a"/><stop offset="75%" stop-color="#ffb800"/>
+<stop offset="100%" stop-color="#ff5714"/></linearGradient></defs>
+<circle class="spinO" cx="10.924999999999999" cy="10.924999999999999" r="8.30" fill="none" stroke="url(#gN)"
+ stroke-width="1.97" stroke-linecap="round"
+ stroke-dasharray="44.34 7.83" stroke-dashoffset="32.61"
+ style="transform-origin:10.924999999999999px 10.924999999999999px;animation-duration:11s"/></svg></span><span class="wmt" style="opacity:.45">MNI</span></span></a>
+  <a class="nl" href="/">Home</a><a class="nl" href="/features">Features</a><a class="nl" href="/leagues">Leagues</a><a class="nl" href="/rankings">Rankings</a><a class="nl on" href="/pricing">Pricing</a><span class="sp"></span>
+  <a class="btn bv" href="https://apps.apple.com/app/id6760617627">Download</a>
 </div></nav>
 
-<div class="err-wrap">
-  <div class="err-code">404</div>
-  <h1 class="err-title">Off the route.</h1>
-  <p class="err-body">That play isn't in the playbook. Get back to the line of scrimmage and run something that exists.</p>
-  <a class="btn btn-primary" href="/">Back to Home →</a>
-</div>
+<header class="phead"><div class="wrap"><div class="eyeb">404</div><h1>That page went<br><em>undrafted.</em></h1><p class="sub">The link is broken or the page has moved.</p><div class="cta"><a class="btn bv" href="/">Back to the homepage</a><a class="btn bg2" href="https://apps.apple.com/app/id6760617627">Download the app</a></div></div></header>
+<footer><div class="wrap">
+  <div class="fcols">
+    <div><a class="lg" href="/" aria-label="AIOmni home"><span class="wm" style="font-size:18px"><span class="wmt">AI</span><span class="wmo" style="width:20.7px;height:20.7px;margin:0 -3.7px"><svg width="20.7" height="20.7" viewBox="0 0 20.7 20.7" role="img" aria-label="AIOmni">
+<defs><linearGradient id="gF" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0%" stop-color="#1be7ff"/><stop offset="25%" stop-color="#6eeb83"/>
+<stop offset="50%" stop-color="#e4ff1a"/><stop offset="75%" stop-color="#ffb800"/>
+<stop offset="100%" stop-color="#ff5714"/></linearGradient></defs>
+<circle cx="10.35" cy="10.35" r="7.87" fill="none" stroke="url(#gF)"
+ stroke-width="1.86" stroke-linecap="round"
+ stroke-dasharray="42.01 7.41" stroke-dashoffset="30.89"
+ style="transform-origin:10.35px 10.35px;animation-duration:9s"/></svg></span><span class="wmt" style="opacity:.45">MNI</span></span></a>
+      <p class="fine">Fantasy football tools that read your league before they answer.</p></div>
+    <div><h4>PRODUCT</h4><a href="/features">Features</a><a href="/leagues">Leagues</a>
+      <a href="/rankings">Rankings</a><a href="/pricing">Pricing</a></div>
+    <div><h4>GET IT</h4><a href="https://apps.apple.com/app/id6760617627">iPhone app</a><a href="https://app.getaiomni.com">Web app</a>
+      <a href="mailto:aiomni@getaiomni.com">Support</a></div>
+    <div><h4>LEGAL</h4><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>
+  </div>
+  <p class="fine">AIOmni is not affiliated with the NFL, Sleeper, ESPN, Yahoo, MFL or Fleaflicker.
+  Prices are set in the App Store and shown there at purchase.</p>
+</div></footer>
+<script>
+(async () => {
+  const run = document.getElementById('tickrun'), bar = document.getElementById('tick');
+  if (!run) return;
+  try {
+    const r = await fetch('https://khoruzvsprxyocisuhet.supabase.co/functions/v1/site-live');
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    const items = [];
 
-</body>
-</html>
+    (d.weather || []).sort((a,b) => (b.flag?1:0)-(a.flag?1:0) || b.windMph-a.windMph)
+      .slice(0, 8).forEach(w => items.push(
+        `<span class="ti2"><span class="k wx">WX</span><b>${w.team}</b> ${w.tempF}\u00b0 \u00b7 ${w.windMph}mph${w.flag ? ' \u00b7 ' + w.flag : ''}</span>`));
+
+    (d.headlines || []).slice(0, 10).forEach(h => items.push(
+      `<span class="ti2"><span class="k nw">${h.src.split(' ')[0].toUpperCase()}</span>` +
+      `<a href="${h.link}" target="_blank" rel="noopener noreferrer"><b>${h.title}</b></a></span>`));
+
+    if (d.week) items.unshift(`<span class="ti2"><span class="k al">NFL</span><b>Week ${d.week}</b> \u00b7 ${d.games} games</span>`);
+    if (!items.length) throw 0;
+
+    // Duplicated once so the -50% keyframe loops seamlessly.
+    run.innerHTML = items.join('') + items.join('');
+    // Longer content needs proportionally longer duration or it races.
+    run.style.animationDuration = Math.max(40, items.length * 5.2) + 's';
+  } catch { bar?.classList.add('hide'); }
+})();
+</script>
+</body></html>
