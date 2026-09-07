@@ -1,0 +1,12 @@
+# app.getaiomni.com is the AIOmni web app, not content.
+#
+# It is a single-page app: the _redirects catch-all serves index.html for
+# every path, so any URL a crawler invents returns 200 with the app shell.
+# That is a soft 404 on an unbounded number of URLs. Nothing here is
+# indexable anyway (everything of value sits behind a sign-in), so the
+# correct answer is to keep crawlers out entirely.
+#
+# The marketing site at getaiomni.com is what should be indexed, and it
+# carries its own robots.txt and sitemap.
+User-agent: *
+Disallow: /

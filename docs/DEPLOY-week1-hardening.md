@@ -61,3 +61,20 @@ credits who has no matching RevenueCat transaction set it themselves.
 3. Ask the Draft Copilot something, then tap ASK again immediately. The
    second tap must do nothing (button greys out).
 4. Check the board has no players that error when drafted.
+
+## Web deploys — always run the head injector
+
+`app.json` sets `web.output: "single"`, so Expo generates index.html from its
+own template and `app/+html.tsx` is silently ignored. Metadata has to be
+injected after the export or the page ships with a bare `<title>` and no
+Open Graph, and every shared link renders as a naked URL.
+
+    npx expo export --platform web --output-dir /tmp/webbuild
+    node scripts/web-head.mjs /tmp/webbuild
+    npx netlify deploy --prod --dir /tmp/webbuild --site df0e6fdd-2042-4a13-9d6d-41b6ac059b4c
+
+Marketing site (getaiomni.com) is a separate Netlify site:
+`0c75d22b-56a4-4f22-8ad6-92249612e874`. Its source is `~/aiomni-landing`
+plus the legal pages from `AIOmni/site/`. Do NOT deploy `AIOmni/site/`
+wholesale — it is the pre-launch build whose CTAs all say "Get Beta Access"
+and which advertises two tiers (Premium, Dynasty Elite) that no longer exist.
