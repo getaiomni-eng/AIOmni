@@ -8,7 +8,8 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Dimensions, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { askAI, hasAISession } from "../../services/ai";
+import { askAI, describeAIError, hasAISession } from "../../services/ai";
+import { buildMatchupContext, buildStartSitContext, COACH_PROMPTS, type CoachAction } from '../../services/coachMatchup';
 import { fetchAnalystBuzz, type BuzzLine } from '../../services/analystTakes';
 import { normalizePlayerName } from '../../services/util/normalizeName';
 import { ROOKIE_BOARD_2026_TEXT } from '../../services/seasonContext2026';
@@ -160,12 +161,15 @@ export default function HomeScreen() {
   const [aiInsights,     setAiInsights]     = useState<Insight[]>([]);
   const [insightLoading, setInsightLoading] = useState(false);
   const insightRef = useRef(false);   // sync twin of insightLoading
+  const [insightLeagueId, setInsightLeagueId] = useState<string | null>(null);
   const [scoreIdx,       setScoreIdx]       = useState(0);
   const [feed, setFeed] = useState<FeedByTab>({ SLEEPER: [], NEWS: [], INJURIES: [], TRADES: [], all: [] });
   const [newsTab, setNewsTab] = useState<NewsTab>('NEWS');
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['sleeper', 'espn', 'yahoo', 'mfl', 'fleaflicker']);
   const [selectedSeason,    setSelectedSeason]    = useState(String(new Date().getFullYear()));
   const [aiCoachActive,     setAiCoachActive]     = useState(false);
+  const [aiCoachKind,       setAiCoachKind]       = useState<CoachAction | null>(null);
+  const coachRunRef = useRef(false);   // sync twin of aiCoachLoading
   const [selectedLeague,    setSelectedLeague]    = useState<League | null>(null);
   const [aiCoachLoading,    setAiCoachLoading]    = useState(false);
   const [aiCoachInsight,    setAiCoachInsight]    = useState('');
@@ -636,53 +640,84 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
 
   const ordinal = (n: number) => { const s = ['th','st','nd','rd']; return s[(n % 100 > 3 && n % 100 < 21) ? 0 : Math.min(n % 10, 4)] || 'th'; };
 
-  const openAiCoachModal = async (league: League) => {
+  // Opening the sheet costs nothing now. It used to fire an AI call the
+  // instant you tapped a score card — charging a prompt before you had
+  // chosen anything, for an answer built from four fields (name, platform,
+  // week, two scores) that read the same for any team in any league.
+  const openAiCoachModal = (league: League) => {
     setSelectedLeague(league);
+    setAiCoachInsight('');
+    setAiCoachKind(null);
+  };
+
+  const runCoachAction = async (league: League, kind: CoachAction) => {
+    if (aiCoachLoading || coachRunRef.current) return;
+    coachRunRef.current = true;
+    setAiCoachKind(kind);
     setAiCoachLoading(true);
     setAiCoachInsight('');
+    const release = () => { setAiCoachLoading(false); coachRunRef.current = false; };
+
     // 5.1.1(i): never charge a prompt for a call the consent gate will refuse.
     if (!(await hasAIConsent())) {
-      setAiCoachInsight('AI features are turned off. To get matchup insights, enable “Share data with AI service” in Settings.');
-      setAiCoachLoading(false);
-      return;
+      setAiCoachInsight('AI features are turned off. To get matchup insights, enable \u201cShare data with AI service\u201d in Settings.');
+      return release();
     }
-    // Guests can't reach the AI proxy — don't burn a lifetime prompt trying.
     if (!(await hasAISession())) {
-      setAiCoachInsight('Sign in to use AI features — create a free account from Settings.');
-      setAiCoachLoading(false);
-      return;
+      setAiCoachInsight('Sign in to use AI features \u2014 create a free account from Settings.');
+      return release();
     }
-    // Honor the quota result like every other charged surface — over-cap
-    // users go to the paywall instead of a doomed proxy call.
+
+    // Build the context BEFORE charging. If the roster will not load there is
+    // no answer worth paying for, and the old flow would have charged anyway
+    // and then produced something generic.
+    const ctx = kind === 'matchup'
+      ? await buildMatchupContext(String(league.id), league.platform, league.week)
+      : await buildStartSitContext(String(league.id), league.platform, league.week);
+
+    if (!ctx) {
+      setAiCoachInsight(
+        kind === 'matchup'
+          ? 'Could not load this week\u2019s lineups. Pull to refresh and try again.'
+          : 'Could not load your roster. Pull to refresh and try again.',
+      );
+      return release();
+    }
+
     const ok = await consumePrompt();
     if (!ok) {
-      setAiCoachLoading(false);
+      release();
       setSelectedLeague(null);
       router.push('/paywall?context=weekly_prompts_exhausted' as any);
       return;
     }
+
     try {
-      const prompt = `You are AIOmni AI Coach. Analyze this matchup and give 1 actionable insight in 2 sentences max:\n\nLeague: ${league.name} (${league.platform}, ${league.format})\nWeek: ${league.week}\nYour Score: ${league.pts}\nOpponent Score: ${league.opp}\n\nWhat should I focus on this week?`;
-      const insight = await askAI(prompt, { tier: 'fast', maxTokens: 150 });
-      setAiCoachInsight(insight);
+      const answer = await askAI(COACH_PROMPTS[kind](ctx), {
+        maxTokens: kind === 'startsit' ? 500 : 380,
+        feature: 'home_coach',
+        timeoutMs: 90_000,
+      });
+      setAiCoachInsight(answer);
     } catch (e: any) {
-      setAiCoachInsight(
-        e?.message?.includes('ai_consent_required')
-          ? 'AI features are turned off. Enable “Share data with AI service” in Settings.'
-          : e?.message?.includes('not_authenticated')
-          ? 'Sign in to use AI features — create a free account from Settings.'
-          : 'Could not generate insight at this time.',
-      );
+      setAiCoachInsight(describeAIError(e, 'Could not generate insight at this time.'));
     }
-    setAiCoachLoading(false);
+    release();
   };
 
   // fetchAIInsights had no caller at all — aiInsights stayed [] forever and the
   // card list always fell through to FALLBACK_INSIGHTS. Anchor on the first
   // league so the insights match whatever the user sees at the top of the page.
+  // Anchored on leagues[0] before, so with several leagues the cards always
+  // described the first one while giving no clue which league they were
+  // about. Follow the league the user has actually selected.
+  const insightLeague = useMemo(
+    () => leagues.find(l => l.id === insightLeagueId) ?? leagues[0] ?? null,
+    [leagues, insightLeagueId],
+  );
   useEffect(() => {
-    if (leagues.length > 0 && aiInsights.length === 0) fetchAIInsights(leagues[0]);
-  }, [leagues]);
+    if (insightLeague) { setAiInsights([]); fetchAIInsights(insightLeague); }
+  }, [insightLeague?.id]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -888,16 +923,36 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
           <AIOmniLogo size={28} />
           <View style={{ flex: 1, marginLeft: 10 }}>
             <Text style={s.aiCoachLabel}>AI COACH</Text>
-            <Text style={s.aiCoachHint}>{aiCoachActive ? 'Active — tap any score card' : 'Tap to activate'}</Text>
+            <Text style={s.aiCoachHint}>
+              {aiCoachActive
+                ? 'Active \u2014 now tap any league below'
+                : 'Tap to activate, then tap a league for matchup or start/sit'}
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={t.textMuted} />
         </TouchableOpacity>
 
 
         {/* ── AI Insights ── */}
+        {/* The cards used to be generated from leagues[0] with nothing on
+            screen saying so, which reads as wrong rather than as scoped when
+            you have several leagues. Name the league, and let it be changed. */}
         <View style={s.sectionRow}>
           <Text style={s.sectionLabel}>AI INSIGHTS</Text>
-          <Text style={s.sectionHint}>swipe</Text>
+          {leagues.length > 1 && insightLeague ? (
+            <TouchableOpacity
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              onPress={() => {
+                const i = leagues.findIndex(l => l.id === insightLeague.id);
+                setInsightLeagueId(String(leagues[(i + 1) % leagues.length].id));
+              }}>
+              <Text style={s.insightLeagueSwitch} numberOfLines={1}>
+                {insightLeague.name} {'\u21bb'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={s.sectionHint}>{insightLeague ? insightLeague.name : 'swipe'}</Text>
+          )}
         </View>
         <ScrollView
           horizontal pagingEnabled showsHorizontalScrollIndicator={false}
@@ -956,12 +1011,58 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
               <View style={{ alignItems: 'flex-end' }}><Text style={s.modalLabel}>OPP</Text><Text style={s.modalScore}>{(selectedLeague?.opp ?? 0).toFixed(1)}</Text></View>
             </View>
             {aiCoachLoading ? (
-              <ActivityIndicator color={t.accentText} size="large" style={{ paddingVertical: 24 }} />
+              <View style={{ paddingVertical: 24, alignItems: 'center', gap: 10 }}>
+                <ActivityIndicator color={t.accentText} size="large" />
+                <Text style={s.coachWorking}>
+                  {aiCoachKind === 'matchup'
+                    ? 'Reading both lineups and this week\u2019s projections\u2026'
+                    : 'Reading your roster, the bench and the weather\u2026'}
+                </Text>
+              </View>
+            ) : aiCoachInsight ? (
+              <>
+                <Text style={s.coachAnswerLabel}>
+                  {aiCoachKind === 'matchup' ? 'WHO WINS' : 'START / SIT'}
+                </Text>
+                <ScrollView style={{ maxHeight: 340 }}>
+                  <Text style={s.modalInsight}>{aiCoachInsight}</Text>
+                </ScrollView>
+                {/* The other question is one tap away rather than a reopen. */}
+                <TouchableOpacity
+                  style={s.coachSecondary}
+                  onPress={() => selectedLeague && runCoachAction(
+                    selectedLeague, aiCoachKind === 'matchup' ? 'startsit' : 'matchup')}>
+                  <Text style={s.coachSecondaryTxt}>
+                    {aiCoachKind === 'matchup' ? 'Now check my start/sit' : 'Now call the matchup'}
+                  </Text>
+                </TouchableOpacity>
+              </>
             ) : (
-              <Text style={s.modalInsight}>{aiCoachInsight}</Text>
+              <>
+                <Text style={s.coachPickLabel}>What do you want to know?</Text>
+                <TouchableOpacity
+                  style={s.coachChoice}
+                  onPress={() => selectedLeague && runCoachAction(selectedLeague, 'matchup')}>
+                  <Ionicons name="trophy-outline" size={18} color={t.accentText} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={s.coachChoiceTitle}>Who wins this week</Text>
+                    <Text style={s.coachChoiceHint}>Both lineups, projections, the players who decide it</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={s.coachChoice}
+                  onPress={() => selectedLeague && runCoachAction(selectedLeague, 'startsit')}>
+                  <Ionicons name="swap-vertical-outline" size={18} color={t.accentText} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={s.coachChoiceTitle}>Full start / sit</Text>
+                    <Text style={s.coachChoiceHint}>Starters vs bench, with weather and injury flags</Text>
+                  </View>
+                </TouchableOpacity>
+                <Text style={s.coachCost}>Each answer uses one of your weekly prompts.</Text>
+              </>
             )}
             <TouchableOpacity style={s.modalBtn} onPress={() => setSelectedLeague(null)}>
-              <Text style={s.modalBtnTxt}>GOT IT</Text>
+              <Text style={s.modalBtnTxt}>{aiCoachInsight ? 'GOT IT' : 'CLOSE'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -972,6 +1073,19 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
 
 const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   scroll: { paddingHorizontal: SP[3] },
+
+  insightLeagueSwitch: { color: t.accentText, fontSize: 11.5, fontWeight: '700', maxWidth: 170 },
+
+  // AI Coach sheet
+  coachPickLabel:    { color: t.textSub, fontSize: 12, fontWeight: '700', letterSpacing: 0.6, marginTop: 14, marginBottom: 8 },
+  coachChoice:       { flexDirection: 'row', alignItems: 'center', backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 13, marginBottom: 8 },
+  coachChoiceTitle:  { color: t.text, fontSize: 15, fontWeight: '700' },
+  coachChoiceHint:   { color: t.textMuted, fontSize: 11.5, marginTop: 2, lineHeight: 15 },
+  coachCost:         { color: t.textMuted, fontSize: 11, marginTop: 2, marginBottom: 4 },
+  coachWorking:      { color: t.textMuted, fontSize: 12.5, textAlign: 'center', paddingHorizontal: 20 },
+  coachAnswerLabel:  { color: t.accentText, fontSize: 11, fontWeight: '800', letterSpacing: 0.8, marginTop: 12, marginBottom: 6 },
+  coachSecondary:    { alignSelf: 'center', paddingVertical: 10 },
+  coachSecondaryTxt: { color: t.accentText, fontSize: 13, fontWeight: '600' },
 
   // Header
   headerBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
