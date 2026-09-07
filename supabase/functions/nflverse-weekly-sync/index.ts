@@ -212,7 +212,28 @@ serve(async (req) => {
     }
 
     const duration = Math.round((Date.now() - startedAt) / 1000);
-    console.log(`Weekly sync complete in ${duration}s`, stats);
+
+    // This is the ONLY writer of nfl_weekly_stats, and everything downstream
+    // (compute_all_bestball, every league's standings) silently no-ops when
+    // it writes nothing. It used to answer 200 ok:true even when every URL
+    // missed and zero rows landed, making total failure indistinguishable
+    // from a quiet week — the first anyone would know is leagues showing
+    // 0.0 all week. Fail loudly: a non-2xx shows in the function logs and
+    // in any uptime check pointed at it.
+    const wrote  = stats.rows_inserted;   // what actually landed, not what was fetched
+    const failed = stats.errors.length > 0 && wrote === 0;
+
+    if (failed) {
+      console.error(`Weekly sync WROTE NOTHING in ${duration}s`, stats);
+      return new Response(JSON.stringify({
+        ok: false, error: 'no rows written', duration_seconds: duration, stats,
+      }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } });
+    }
+    if (stats.errors.length > 0) {
+      console.error(`Weekly sync completed WITH ERRORS in ${duration}s`, stats);
+    } else {
+      console.log(`Weekly sync complete in ${duration}s`, stats);
+    }
 
     return new Response(JSON.stringify({
       ok: true,

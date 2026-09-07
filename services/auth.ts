@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 // services/auth.ts
 import { supabase, upsertUser } from './supabase';
 
@@ -41,7 +42,12 @@ export async function signOut(): Promise<void> {
 export async function resetPassword(email: string): Promise<{
   success: boolean; error?: string;
 }> {
-  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: 'aiomnifantasy://auth/reset' });
+  // The app scheme cannot open from a browser, so web users clicking the
+  // reset link landed nowhere and were locked out with no recovery path.
+  const redirectTo = Platform.OS === 'web'
+    ? 'https://app.getaiomni.com/auth/reset'
+    : 'aiomnifantasy://auth/reset';
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) return { success: false, error: error.message };
   return { success: true };
 }

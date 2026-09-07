@@ -159,6 +159,7 @@ export default function HomeScreen() {
   const [insightIdx,     setInsightIdx]     = useState(0);
   const [aiInsights,     setAiInsights]     = useState<Insight[]>([]);
   const [insightLoading, setInsightLoading] = useState(false);
+  const insightRef = useRef(false);   // sync twin of insightLoading
   const [scoreIdx,       setScoreIdx]       = useState(0);
   const [feed, setFeed] = useState<FeedByTab>({ SLEEPER: [], NEWS: [], INJURIES: [], TRADES: [], all: [] });
   const [newsTab, setNewsTab] = useState<NewsTab>('NEWS');
@@ -525,7 +526,11 @@ export default function HomeScreen() {
   // user action, so it deliberately does NOT call incrementPrompt() — it isn't
   // a question the user asked. The daily cache is what bounds the cost.
   const fetchAIInsights = async (league: League) => {
-    if (insightLoading) return;
+    // The state guard sat two awaits ahead of setInsightLoading(true), so a
+    // pull-to-refresh inside that window burned a second prompt. Same async
+    // hole as coach send(); same fix.
+    if (insightLoading || insightRef.current) return;
+    insightRef.current = true;
     const day = new Date().toISOString().slice(0, 10);
     // Cards are grounded in the roster now, so the cache has to notice when
     // the roster changes — otherwise a waiver add wouldn't show up in the
@@ -540,7 +545,7 @@ export default function HomeScreen() {
       const cached = await AsyncStorage.getItem(cacheKey);
       if (cached) {
         const parsed = sanitizeInsights(JSON.parse(cached));
-        if (parsed.length > 0) { setAiInsights(parsed); return; }
+        if (parsed.length > 0) { setAiInsights(parsed); insightRef.current = false; return; }
       }
     } catch { /* cache miss or corrupt entry — fall through to a live fetch */ }
 
@@ -615,8 +620,9 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
         setAiInsights(insights);
         AsyncStorage.setItem(cacheKey, JSON.stringify(insights)).catch(() => {});
       }
-    } catch (e) { console.error('AI insights error:', e); }
+    } catch (e) { logCaught('home.ai-insights', e); }
     setInsightLoading(false);
+    insightRef.current = false;
   };
 
   const loadNewsFeed = async (forceRefresh = false) => {

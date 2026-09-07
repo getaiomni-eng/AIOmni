@@ -1,5 +1,6 @@
 // services/liveData.ts
 // Live data layer — NFL injuries, weather, Vegas lines, advanced stats, college prospects, news
+import { nflSeason, nflWeek } from './util/nflCalendar';
 import { sameNameLoose } from './util/playerNewsMatch';
 // Injected into every AI Coach prompt before Claude responds.
 //
@@ -194,7 +195,7 @@ export async function fetchAdvancedStats(): Promise<string> {
   } catch (e) { console.log('fetchAdvancedStats error:', e); return ''; }
 }
 
-export async function fetchSnapCounts(week: number, season = 2024): Promise<string> {
+export async function fetchSnapCounts(week: number, season = nflSeason()): Promise<string> {
   try {
     const url = `https://github.com/nflverse/nflverse-data/releases/download/snap_counts/snap_counts_${season}.csv`;
     const res = await fetch(url);
@@ -310,7 +311,7 @@ export async function fetchTopCollegeReceivers(year = 2024): Promise<string> {
 export async function fetchAllLiveData(
   rosterTeams: string[] = [],
   includeDynasty = false,
-  currentWeek = 1
+  currentWeek = nflWeek()
 ): Promise<LiveGameContext> {
   const teamList = rosterTeams.length > 0 ? rosterTeams : Object.keys(NFL_STADIUMS);
 
@@ -325,7 +326,14 @@ export async function fetchAllLiveData(
     fetchNFLNews(),
   ]);
 
-  const sources: string[] = ['ESPN Injury API', 'ESPN Stats API', 'ESPN Scoreboard', 'Rotowire RSS', 'CBS Sports RSS'];
+  // Only name a source that actually returned something. The old list was
+  // unconditional, so a prompt could cite five feeds that all came back empty.
+  const sources: string[] = [];
+  if (injuries.length       > 0) sources.push('ESPN Injury API');
+  if (advancedStats)             sources.push('ESPN Stats API');
+  if (nextGenMatchups)           sources.push('ESPN Scoreboard');
+  if (news.some(n => n.source === 'Rotowire')) sources.push('Rotowire RSS');
+  if (news.some(n => n.source === 'CBS'))      sources.push('CBS Sports RSS');
   if (weather.length    > 0) sources.push('OpenWeatherMap');
   if (vegasLines.length > 0) sources.push('The Odds API');
   if (snapCounts)            sources.push('nflverse Snap Counts');

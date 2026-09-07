@@ -63,6 +63,26 @@ async function sendExpoPush(messages: ExpoMessage[]): Promise<void> {
   }
 }
 
+// NFL season label: a season runs Sep -> Feb, so Jan/Feb belong to the
+// previous year's season.
+function nflSeason(d = new Date()): number {
+  const y = d.getUTCFullYear();
+  return d.getUTCMonth() >= 2 ? y : y - 1;   // March onward = new season
+}
+
+// Week 1 opens the Thursday after Labor Day (first Monday on/after Sep 1).
+// Returns 1..18, or null outside the regular season.
+function nflWeek(season: number, now = new Date()): number | null {
+  const sep1 = new Date(Date.UTC(season, 8, 1));
+  const dow  = sep1.getUTCDay();                    // 0 Sun .. 6 Sat
+  const toMonday = (8 - (dow === 0 ? 7 : dow)) % 7; // days to first Monday
+  const opener = new Date(Date.UTC(season, 8, 1 + toMonday + 3)); // Thursday
+  const days = Math.floor((now.getTime() - opener.getTime()) / 86400000);
+  if (days < 0) return null;
+  const wk = Math.floor(days / 7) + 1;
+  return wk >= 1 && wk <= 18 ? wk : null;
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
@@ -77,9 +97,16 @@ serve(async (req: Request) => {
   // run but skip the bye check.
   let byeTeams = new Set<string>();
   try {
-    const { data: state } = await sb.from('nfl_state').select('current_week, season').maybeSingle();
-    const wk = state?.current_week;
-    const season = state?.season ?? new Date().getFullYear();
+    // Was `sb.from('nfl_state')` — a table that has never existed. The query
+    // resolved with no row, `wk` was always undefined, and the entire bye
+    // check below was skipped every single week. Silent no-op since it
+    // shipped.
+    //
+    // The NFL calendar is deterministic, so derive it: the opener is the
+    // Thursday after Labor Day (the first Monday on/after Sep 1) and each
+    // later week starts seven days on. Matches public.nfl_week_kickoff().
+    const season = nflSeason();
+    const wk = nflWeek(season);
     if (wk) {
       const { data: playing } = await sb
         .from('nfl_schedule')
@@ -91,11 +118,18 @@ serve(async (req: Request) => {
         if (g.home_team) playingSet.add(String(g.home_team));
         if (g.away_team) playingSet.add(String(g.away_team));
       }
-      const ALL_TEAMS = ['ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','DET','GB','HOU','IND','JAX','KC','LAC','LAR','LV','MIA','MIN','NE','NO','NYG','NYJ','PHI','PIT','SEA','SF','TB','TEN','WAS'];
-      byeTeams = new Set(ALL_TEAMS.filter(t => !playingSet.has(t)));
+      // A bye is inferred from absence, so an empty or partial schedule
+      // table would mark all 32 teams on bye and notify everybody. Only
+      // trust the inference when the week looks fully populated.
+      if (playingSet.size >= 20) {
+        const ALL_TEAMS = ['ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','DET','GB','HOU','IND','JAX','KC','LAC','LAR','LV','MIA','MIN','NE','NO','NYG','NYJ','PHI','PIT','SEA','SF','TB','TEN','WAS'];
+        byeTeams = new Set(ALL_TEAMS.filter(t => !playingSet.has(t)));
+      } else {
+        console.error(`[lineup-check] schedule for ${season} wk ${wk} has only ${playingSet.size} teams — skipping bye check`);
+      }
     }
   } catch (e) {
-    console.log('[lineup-check] bye lookup failed (continuing without):', (e as any)?.message);
+    console.error('[lineup-check] bye lookup failed (continuing without):', (e as any)?.message);
   }
 
   // ── 2. Pull every user opted in for lineup_warning with a push_token ─

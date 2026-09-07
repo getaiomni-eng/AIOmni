@@ -51,8 +51,17 @@ export default function HostedDraftRoom() {
   const [creditOffer, setCreditOffer] = useState<string | null>(null); // price string when shown
   const oAskingRef = useRef(false); // sync guard — state alone leaves an async hole before consumePrompt resolves
 
+  // Each pick fires TWO realtime events (the hosted_picks insert, plus the
+  // hosted_leagues update from the deadline trigger) on top of a 5s poll, so
+  // three refreshes race per pick. Without sequencing a slow earlier response
+  // can land last and revert `picks`, momentarily un-drafting a player and
+  // handing the clock back to the wrong team. Nothing corrupts (the server is
+  // authoritative) but during a live draft it reads as the app losing picks.
+  const seqRef = useRef(0);
   const refresh = useCallback(async () => {
+    const seq = ++seqRef.current;
     const st = await draftRoomState(id!);
+    if (seq !== seqRef.current) return;   // a newer refresh already landed
     setLeague(st.league); setMembers(st.members); setPicks(st.picks);
   }, [id]);
 

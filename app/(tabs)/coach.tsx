@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, askAIVision, describeAIError } from '../../services/ai';
+import { nflWeek } from '../../services/util/nflCalendar';
 import { hasAIConsent } from '../../services/aiConsent';
 import { fetchAllLeagueActivity } from '../../services/leagueActivity';
 import { fetchKTCValues, type KTCValues } from '../../services/rankingsData';
@@ -96,6 +97,9 @@ const SLEEPER_PLAYER_TTL_MS = 24 * 60 * 60 * 1000;
 // rosters/standings don't change minute-to-minute; re-fetching five
 // platforms on every coach visit made the tab feel broken. 10-minute TTL,
 // module-level so it survives remounts but not app restarts.
+// Set when any league failed to load this pass. A partial context is fine to
+// answer from once; it is not fine to freeze for 10 minutes.
+let coachCtxPartial = false;
 let coachCtxCache: { at: number; all: LeagueContext[]; liveData: any; buzz: Map<string, BuzzLine[]> | null; ktc: KTCValues | null } | null = null;
 const COACH_CTX_TTL_MS = 10 * 60 * 1000;
 
@@ -371,7 +375,17 @@ async function loadESPNContext(nameIndex: Map<string, any> | null): Promise<Leag
     // ceiling, not a curation choice.
     const picked = summaries.slice(0, 16);
     const built = await Promise.all(picked.map((s) => loadOneESPNLeague(s, creds, nameIndex)));
-    return built.filter((c): c is LeagueContext => c !== null);
+    const ok = built.filter((c): c is LeagueContext => c !== null);
+    // A league that fails to load used to vanish with no Sentry event and no
+    // UI signal, and the result was then cached for 10 minutes — so the Coach
+    // would confidently answer about your other leagues while one was simply
+    // missing. Record it, and mark the set partial so it is not cached.
+    if (ok.length < picked.length) {
+      logCaught('coach.espn-league-dropped', new Error(
+        `${picked.length - ok.length} of ${picked.length} ESPN leagues failed to load`));
+      coachCtxPartial = true;
+    }
+    return ok;
   } catch (e) { logCaught('coach.loadESPNContext', e); return []; }
 }
 
@@ -382,7 +396,10 @@ async function loadOneESPNLeague(
 ): Promise<LeagueContext | null> {
   try {
     const leagueData = await getESPNLeague(summary.id, creds);
-    if (!leagueData) return null;
+    if (!leagueData) {
+      logCaught('coach.espn-league-empty', new Error(`ESPN returned nothing for league ${summary.id}`));
+      return null;
+    }
     // findMyESPNTeam matches teams by owner SWID, not display name —
     // passing teamName (usually unset) matched nothing, so the coach saw
     // the league with an empty roster and told the user it wasn't loaded.
@@ -1220,7 +1237,7 @@ export default function CoachScreen() {
           loadYahooContext(nameIndex).then(merge),
           loadAbstractContext('fleaflicker', 'Fleaflicker', nameIndex).then(merge),
           loadAbstractContext('mfl', 'MFL', nameIndex).then(merge),
-          fetchAllLiveData().then((ld) => { liveDataFresh = ld; }),
+          fetchAllLiveData([], false, nflWeek()).then((ld) => { liveDataFresh = ld; }),
           fetchKTCValues()
             .then((v) => { ktcFresh = v; ktcRef.current = v; })
             .catch(() => { /* prompt degrades to "values unavailable" */ }),
@@ -1235,7 +1252,11 @@ export default function CoachScreen() {
         liveData = liveDataFresh;
         buzz = buzzFresh;
         ktc = ktcFresh;
-        coachCtxCache = { at: Date.now(), all, liveData, buzz, ktc };
+        if (coachCtxPartial) {
+          coachCtxPartial = false;   // retry the full load on the next question
+        } else {
+          coachCtxCache = { at: Date.now(), all, liveData, buzz, ktc };
+        }
       }
 
       try {

@@ -1,4 +1,5 @@
 // Hosted league detail: members, standings, invite, my weekly lineups.
+import { logCaught } from '../../services/util/logCaught';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -26,12 +27,29 @@ export default function LeagueDetail() {
   const [recap, setRecap] = useState<{ week: number; content: string } | null>(null);
   const [starting, setStarting] = useState(false);
   const startingRef = useRef(false);   // sync twin — state alone leaves an async hole
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const all = await myHostedLeagues();
+    // myHostedLeagues() resolves to [] on a network failure rather than
+    // throwing, so a dropped connection looked exactly like "league not
+    // found" and the screen sat on a spinner forever with no way out.
+    let all: HostedLeague[];
+    try {
+      all = await myHostedLeagues();
+    } catch (e) {
+      logCaught('league.load', e);
+      setLoadError('Could not reach the server.');
+      return;
+    }
     const lg = all.find(l => l.id === id) ?? null;
     setLeague(lg);
-    if (!lg) return;
+    if (!lg) {
+      setLoadError(all.length === 0
+        ? 'Could not load your leagues.'
+        : 'This league is no longer available.');
+      return;
+    }
+    setLoadError(null);
     setRows(await hostedStandings(lg.id));
     const { data: rc } = await supabase.from('hosted_recaps')
       .select('week, content').eq('league_id', lg.id)
@@ -66,7 +84,16 @@ export default function LeagueDetail() {
 
   if (!league) return (
     <View style={[s.container, { paddingTop: insets.top + 20, alignItems: 'center', gap: 14 }]}>
-      <ActivityIndicator color={t.accentText} />
+      {loadError ? (
+        <>
+          <Text style={{ color: t.text, fontSize: 15, textAlign: 'center', paddingHorizontal: 24 }}>{loadError}</Text>
+          <TouchableOpacity onPress={() => { setLoadError(null); load(); }} style={s.cta}>
+            <Text style={s.ctaText}>Try again</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <ActivityIndicator color={t.accentText} />
+      )}
       <TouchableOpacity onPress={() => router.back()}>
         <Text style={{ color: t.textSub, fontSize: 14 }}>{'\u2039'} Back</Text>
       </TouchableOpacity>
@@ -159,6 +186,13 @@ export default function LeagueDetail() {
 
         <Text style={s.section}>STANDINGS</Text>
         {rows === null && <ActivityIndicator color={t.accentText} />}
+        {rows !== null && rows.every(r => r.total === 0) && (
+          <Text style={s.fine}>
+            {league.draft_status !== 'complete'
+              ? 'Scoring starts once the draft is done.'
+              : `No games scored yet. Week ${league.start_week ?? 1} results post Tuesday morning.`}
+          </Text>
+        )}
         {rows?.map((r, i) => (
           <View key={r.user_id} style={s.row}>
             <Text style={s.rank}>{i + 1}</Text>

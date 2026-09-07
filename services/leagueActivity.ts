@@ -11,6 +11,7 @@
 // during the season. This routes every platform through the shared
 // FantasyPlatform interface instead.
 
+import { nflSeason } from './util/nflCalendar';
 import { getPlatform } from './platform';
 import type { Transaction } from './platform/types';
 
@@ -64,7 +65,9 @@ export async function fetchAllLeagueActivity(limit = 18): Promise<ActivityLine[]
     try {
       const plat = getPlatform(id);
       if (!plat?.getTransactions || !(await plat.isAuthenticated().catch(() => false))) return [];
-      const leagues = await plat.getLeagues().catch(() => []);
+      // No season meant the adapters fell back to '2025' and injected
+      // December-2025 transactions under a "newest first" header.
+      const leagues = await plat.getLeagues(String(nflSeason())).catch(() => []);
       if (!leagues?.length) return [];
 
       // Cap leagues per platform — a user with 6 leagues on 5 platforms
