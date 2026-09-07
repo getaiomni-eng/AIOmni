@@ -23,11 +23,58 @@ export const PICK_CLOCKS = [
   { label: '8 hours',    seconds: 28800, hint: 'Take your time (default)' },
 ] as const;
 
+// Roster shapes. `starts` and `format` were columns from day one and the
+// optimizer already read `starts` generically; nothing wrote them, so every
+// league was standard PPR at 12 teams. Superflex is the important one — it is
+// the most common best-ball format after standard.
+export const ROSTER_PRESETS = [
+  { key: 'standard',  label: 'Standard',  starts: { QB:1, RB:2, WR:3, TE:1, FLEX:1 },
+    hint: '1QB 2RB 3WR 1TE 1FLEX' },
+  { key: 'superflex', label: 'Superflex', starts: { QB:1, RB:2, WR:3, TE:1, FLEX:1, SUPERFLEX:1 },
+    hint: 'Adds a flex that can start a QB' },
+  { key: '2qb',       label: '2QB',       starts: { QB:2, RB:2, WR:3, TE:1, FLEX:1 },
+    hint: 'Two starting quarterbacks' },
+  { key: '2te',       label: '2TE',       starts: { QB:1, RB:2, WR:3, TE:2, FLEX:1 },
+    hint: 'Two starting tight ends' },
+] as const;
+
+export const SCORING_FORMATS = [
+  { key: 'bestball_ppr',  label: 'PPR',      hint: '1 point per reception' },
+  { key: 'bestball_half', label: 'Half PPR', hint: '0.5 per reception' },
+  { key: 'bestball_std',  label: 'Standard', hint: 'No reception points' },
+] as const;
+
+export const TEAM_COUNTS = [6, 8, 10, 12, 14] as const;
+
+// Roster size scales with the lineup so bench depth is constant across
+// formats. Standard (8 starters) gives the original 18 season / 9 weekly.
+// "12-team superflex PPR" — what someone needs to see BEFORE they join.
+export function leagueShapeLabel(l: { team_count: number; format?: string | null; starts?: Record<string, number> | null }): string {
+  const st = l.starts ?? {};
+  const shape =
+    (st.SUPERFLEX ?? 0) > 0 ? 'superflex'
+    : (st.QB ?? 1) >= 2     ? '2QB'
+    : (st.TE ?? 1) >= 2     ? '2TE'
+    : 'best ball';
+  const scoring =
+    l.format === 'bestball_std'  ? 'standard'
+    : l.format === 'bestball_half' ? 'half PPR'
+    : 'PPR';
+  return `${l.team_count}-team ${shape} ${scoring}`;
+}
+
+export function roundsFor(starts: Record<string, number>, kind: 'season' | 'weekly'): number {
+  const total = Object.values(starts).reduce((a, b) => a + b, 0);
+  return total + (kind === 'weekly' ? 1 : 10);
+}
+
 export async function createHostedLeague(
-  name: string, teamCount = 12, kind: 'season' | 'weekly' = 'season', pickSeconds = 28800):
+  name: string, teamCount = 12, kind: 'season' | 'weekly' = 'season', pickSeconds = 28800,
+  starts?: Record<string, number>, format: string = 'bestball_ppr'):
   Promise<{ leagueId: string; inviteCode: string } | { error: string }> {
   const { data, error } = await supabase.rpc('create_hosted_league', {
     p_name: name, p_team_count: teamCount, p_kind: kind, p_pick_seconds: pickSeconds,
+    p_starts: starts ?? null, p_format: format,
   });
   if (error) return { error: error.message };
   const row = Array.isArray(data) ? data[0] : data;
@@ -155,5 +202,9 @@ export function friendlyDraftError(msg: string): string {
   if (/unknown or undraftable/i.test(msg)) return "That player isn't draftable yet — pick someone else.";
   if (/pick clock must be/i.test(msg)) return 'Pick clock must be between 30 seconds and 24 hours.';
   if (/regular season is over/i.test(msg)) return 'The regular season is over — weekly runs return next year.';
+  if (/unknown roster slot/i.test(msg))    return 'That roster setup is not supported yet.';
+  if (/lineup needs between/i.test(msg))   return 'A lineup needs between 4 and 12 starters.';
+  if (/unknown scoring format/i.test(msg)) return 'That scoring format is not supported yet.';
+  if (/leagues run from/i.test(msg))       return 'Leagues run from 2 to 20 teams.';
   return msg;
 }

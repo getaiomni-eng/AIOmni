@@ -3,7 +3,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { deleteHostedLeague, hostedStandings, leaveHostedLeague, myAppId, myHostedLeagues, setLeagueDuesUrl, startHostedDraft, type HostedLeague } from '../../services/hostedLeagues';
+import { deleteHostedLeague, hostedStandings, leagueShapeLabel, leaveHostedLeague, myAppId, myHostedLeagues, setLeagueDuesUrl, startHostedDraft, type HostedLeague } from '../../services/hostedLeagues';
 import { supabase } from '../../services/supabase';
 import { Alert } from '../../services/util/crossAlert';
 import { useTheme, type ThemeTokens } from '../constants/theme';
@@ -83,7 +83,7 @@ export default function LeagueDetail() {
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 14 }}>
         <View style={s.card}>
-          <Text style={s.meta}>{league.team_count}-team best ball {'\u00b7'} {league.season} {'\u00b7'} {league.draft_status === 'complete' ? 'live, scoring weekly' : league.draft_status === 'drafting' ? 'draft in progress' : 'waiting on the draft'}</Text>
+          <Text style={s.meta}>{leagueShapeLabel(league)} {'\u00b7'} {league.season} {'\u00b7'} {league.draft_status === 'complete' ? 'live, scoring weekly' : league.draft_status === 'drafting' ? 'draft in progress' : 'waiting on the draft'}</Text>
           {league.draft_status === 'open' && (
             <>
               <TouchableOpacity style={s.cta} onPress={invite}>

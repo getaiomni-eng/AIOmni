@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  createHostedLeague, joinHostedLeague, myHostedLeagues, PICK_CLOCKS, type HostedLeague,
+  createHostedLeague, joinHostedLeague, myHostedLeagues, PICK_CLOCKS,
+  ROSTER_PRESETS, SCORING_FORMATS, TEAM_COUNTS, roundsFor, leagueShapeLabel, type HostedLeague,
 } from '../../services/hostedLeagues';
 import { supabase } from '../../services/supabase';
 import { Alert } from '../../services/util/crossAlert';
@@ -31,6 +32,9 @@ export default function LeaguesHub() {
   // The pick clock was a hardcoded, invisible 8 hours with no way to change it.
   // Default stays 8h so nobody's slow draft starts autopicking on them.
   const [pickSecs, setPickSecs] = useState<number>(28800);
+  const [roster,   setRoster]   = useState<string>('standard');
+  const [format,   setFormat]   = useState<string>('bestball_ppr');
+  const [teams,    setTeams]    = useState<number>(12);
 
   const load = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -42,7 +46,9 @@ export default function LeaguesHub() {
   const onCreate = async () => {
     if (!name.trim()) { Alert.alert('Name your league', 'Give it a name first.'); return; }
     setBusy(true);
-    const res = await createHostedLeague(name.trim(), 12, kind, pickSecs);
+    const preset = ROSTER_PRESETS.find(r => r.key === roster) ?? ROSTER_PRESETS[0];
+    const res = await createHostedLeague(
+      name.trim(), teams, kind, pickSecs, { ...preset.starts }, format);
     setBusy(false);
     if ('error' in res) { Alert.alert('Could not create league', res.error); return; }
     setName('');
@@ -95,7 +101,7 @@ export default function LeaguesHub() {
                     {l.draft_status === 'complete' ? 'LIVE' : l.draft_status === 'drafting' ? 'DRAFTING' : 'PRE-DRAFT'}
                   </Text>
                 </View>
-                <Text style={s.meta}>{l.team_count}-team best ball · {l.season} · code {l.invite_code}</Text>
+                <Text style={s.meta}>{leagueShapeLabel(l)} · {l.season} · code {l.invite_code}</Text>
               </TouchableOpacity>
             ))}
 
@@ -124,6 +130,44 @@ export default function LeaguesHub() {
                 {PICK_CLOCKS.find(c => c.seconds === pickSecs)?.hint ?? ''}
                 {'  ·  '}Miss the clock and the best player on the board is picked for you.
               </Text>
+              <Text style={s.clockLabel}>ROSTER</Text>
+              <View style={s.clockRow}>
+                {ROSTER_PRESETS.map(r => (
+                  <TouchableOpacity
+                    key={r.key}
+                    style={[s.clockChip, roster === r.key && { backgroundColor: t.accentText, borderColor: t.accentText }]}
+                    onPress={() => setRoster(r.key)}>
+                    <Text style={[s.clockText, roster === r.key && { color: '#0a1214' }]}>{r.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={s.clockHint}>{ROSTER_PRESETS.find(r => r.key === roster)?.hint ?? ''}</Text>
+
+              <Text style={s.clockLabel}>SCORING</Text>
+              <View style={s.clockRow}>
+                {SCORING_FORMATS.map(f => (
+                  <TouchableOpacity
+                    key={f.key}
+                    style={[s.clockChip, format === f.key && { backgroundColor: t.accentText, borderColor: t.accentText }]}
+                    onPress={() => setFormat(f.key)}>
+                    <Text style={[s.clockText, format === f.key && { color: '#0a1214' }]}>{f.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={s.clockHint}>{SCORING_FORMATS.find(f => f.key === format)?.hint ?? ''}</Text>
+
+              <Text style={s.clockLabel}>TEAMS</Text>
+              <View style={s.clockRow}>
+                {TEAM_COUNTS.map(n => (
+                  <TouchableOpacity
+                    key={n}
+                    style={[s.clockChip, teams === n && { backgroundColor: t.accentText, borderColor: t.accentText }]}
+                    onPress={() => setTeams(n)}>
+                    <Text style={[s.clockText, teams === n && { color: '#0a1214' }]}>{n}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               <TextInput
                 style={s.input} placeholder="League name" placeholderTextColor={t.textMuted}
                 value={name} onChangeText={setName} maxLength={40}
@@ -131,7 +175,16 @@ export default function LeaguesHub() {
               <TouchableOpacity style={s.cta} onPress={onCreate} disabled={busy}>
                 <Text style={s.ctaText}>{busy ? '…' : 'Create a league — free'}</Text>
               </TouchableOpacity>
-              <Text style={s.fine}>Season: 18 rounds, weeks 1-18. Weekly run: 9 rounds, one week, done. PPR · live snake draft · free while new</Text>
+              <Text style={s.fine}>
+                {(() => {
+                  const preset = ROSTER_PRESETS.find(r => r.key === roster) ?? ROSTER_PRESETS[0];
+                  const rounds = roundsFor(preset.starts as Record<string, number>, kind);
+                  const scoring = SCORING_FORMATS.find(f => f.key === format)?.label ?? 'PPR';
+                  return kind === 'season'
+                    ? `${rounds} rounds, weeks 1-18. ${scoring} · ${preset.label} · live snake draft · free while new`
+                    : `${rounds} rounds, one week, done. ${scoring} · ${preset.label} · live snake draft · free while new`;
+                })()}
+              </Text>
             </View>
 
             <Text style={s.section}>JOIN WITH A CODE</Text>
