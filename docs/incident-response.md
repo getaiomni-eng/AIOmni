@@ -12,10 +12,31 @@ For every incident, before deep investigation:
 
 1. **Snapshot the state** — `pg_dump` of Supabase + `git log` on the
    currently-shipping commit. You'll want it for the postmortem.
-2. **Pause the cron jobs** if they could amplify the issue:
+2. **Pause the cron jobs** if they could amplify the issue.
+
+   Snapshot what is running FIRST, so you can restore exactly this state:
    ```sql
-   UPDATE cron.job SET active = false;
-   -- Re-enable selectively after fix
+   SELECT jobname, active FROM cron.job ORDER BY jobname;
+   ```
+
+   Then disable only the aiomni jobs, and never the two that users are
+   waiting on in real time — `aiomni-autopick` keeps live drafts moving
+   (without it every drafter stalls at their clock), and
+   `aiomni-bestball-weekly` is the only thing that scores a week:
+   ```sql
+   UPDATE cron.job SET active = false
+    WHERE jobname LIKE 'aiomni-%'
+      AND jobname NOT IN ('aiomni-autopick', 'aiomni-bestball-weekly');
+   ```
+
+   The old version of this step was a bare `UPDATE cron.job SET active =
+   false;` with no WHERE clause. During an incident that would have stopped
+   every draft in the app and skipped that week's scoring, on top of
+   whatever was already wrong.
+
+   Re-enable from the snapshot:
+   ```sql
+   UPDATE cron.job SET active = true WHERE jobname LIKE 'aiomni-%';
    ```
 3. **Drop a "we're aware" message in TestFlight notes** if it's
    user-visible.
@@ -171,17 +192,41 @@ don't own, or notifications spike unexpectedly.
 **Signal**: Sentry issues spike to 100+/hour after a TestFlight push.
 
 **Steps**:
-1. **Identify the crash signature** in Sentry (top of the issues list).
-2. **Revert the last commit** locally:
+
+1. **Roll back the OTA first.** Almost every crash we can cause ships as
+   JS, and this reaches users in minutes instead of the ~24h a build plus
+   App Review takes. Do this before anything else, then diagnose:
+   ```sh
+   eas update:rollback --branch production
+   ```
+   Confirm what users are now on:
+   ```sh
+   eas update:list --branch production --limit 3
+   ```
+   Rolling back is one command and is almost never the wrong first move.
+   A rebuild as step 1 means hours of continued crashing while you wait on
+   Apple, for a fix you could have shipped immediately.
+
+2. **Identify the crash signature** in Sentry (top of the issues list).
+
+3. **Revert the commit** so the repo matches what users are running:
    ```sh
    git revert HEAD --no-edit
    git push origin main
+   ```
+
+4. **Only rebuild the binary if the crash is NOT in JS** — a native module,
+   a config plugin, an entitlement. Anything reachable by OTA does not need
+   a build:
+   ```sh
    eas build --platform ios --profile testflight --auto-submit --non-interactive
    ```
-3. **TestFlight users won't auto-update** until they manually do; the
-   crashing build keeps crashing until they update. Post a quick note
-   in the TestFlight build description.
-4. **Postmortem**: add a test that would have caught it.
+
+5. **Users on a bad binary won't auto-update.** If the crash needed a
+   rebuild, the crashing build keeps crashing until they update manually.
+   Post a note in the build description.
+
+6. **Postmortem**: add a test that would have caught it.
 
 ---
 
