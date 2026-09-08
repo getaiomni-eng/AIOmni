@@ -1,3 +1,5 @@
+import * as Updates from 'expo-updates';
+import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../services/supabase';
@@ -33,6 +35,21 @@ export default function SettingsScreen() {
   // out did nothing visible and delete offered to remove an account that does
   // not exist.
   const [signedIn, setSignedIn] = useState(false);
+
+  // Was hardcoded "1.0.0 (beta)" and had drifted three releases behind while
+  // telling App Store users they were on a beta. Read it from the config that
+  // actually ships, and append the OTA id so a support report identifies the
+  // exact JS bundle, not just the binary.
+  const versionLabel = useMemo(() => {
+    // expo-constants and expo-updates only: expo-application is present in
+    // node_modules as a transitive dep but is NOT in package.json, so a clean
+    // install or an SDK bump could remove it and break this screen.
+    const v = Constants.expoConfig?.version ?? '';
+    const build = (Constants.expoConfig as any)?.ios?.buildNumber ?? null;
+    const ota = Updates.updateId ? Updates.updateId.slice(0, 6) : null;
+    const base = v ? `${v}${build ? ` (${build})` : ''}` : 'unknown';
+    return ota ? `${base} · ${ota}` : base;
+  }, []);
   const [espnLinked, setEspnLinked] = useState(false);
   const [yahooLinked, setYahooLinked] = useState(false);
   const [mflLinked, setMflLinked] = useState(false);
@@ -464,7 +481,7 @@ export default function SettingsScreen() {
           <View style={[s.row, { borderBottomWidth: 0 }]}>
             <Ionicons name="information-circle-outline" size={20} color={t.accentText} />
             <Text style={s.rowLabel}>Version</Text>
-            <Text style={s.rowValue}>1.0.0 (beta)</Text>
+            <Text style={s.rowValue}>{versionLabel}</Text>
           </View>
         </View>
 
