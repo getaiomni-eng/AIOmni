@@ -259,6 +259,12 @@ function getTierFromEntitlements(active: Record<string, any>): Tier | null {
 
 let cachedTier: Tier = 'free';
 
+/**
+ * Drop the in-memory tier so a sign-out cannot leave the next account
+ * showing the previous user's plan until something happens to refresh it.
+ */
+export function resetTierCache(): void { cachedTier = 'free'; }
+
 export function getCachedTier(): Tier {
   return cachedTier;
 }

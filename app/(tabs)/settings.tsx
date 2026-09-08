@@ -28,6 +28,11 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
+  // Guests reach Settings through "continue without an account". SIGN OUT and
+  // DELETE ACCOUNT were rendered unconditionally, so a guest saw both -- sign
+  // out did nothing visible and delete offered to remove an account that does
+  // not exist.
+  const [signedIn, setSignedIn] = useState(false);
   const [espnLinked, setEspnLinked] = useState(false);
   const [yahooLinked, setYahooLinked] = useState(false);
   const [mflLinked, setMflLinked] = useState(false);
@@ -85,6 +90,7 @@ export default function SettingsScreen() {
 
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
+      setSignedIn(!!user);
       if (!user) return;
 
       const { data: row } = await supabase
@@ -124,8 +130,9 @@ export default function SettingsScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign Out', style: 'destructive', onPress: async () => {
+          // signOut() clears the whole device identity now, not just these
+          // two keys — see services/auth.ts.
           await signOut();
-          await AsyncStorage.multiRemove(['sleeper_username', 'user_email']);
           router.replace('/onboarding');
         }
       },
@@ -461,16 +468,24 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Sign Out */}
-        <TouchableOpacity style={s.signOutBtn} onPress={handleSignOut}>
-          <Text style={s.signOutTxt}>SIGN OUT</Text>
-        </TouchableOpacity>
+        {/* Signed in: sign out. Guest: a way in. */}
+        {signedIn ? (
+          <TouchableOpacity style={s.signOutBtn} onPress={handleSignOut}>
+            <Text style={s.signOutTxt}>SIGN OUT</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={s.signOutBtn} onPress={() => router.replace('/onboarding')}>
+            <Text style={s.signOutTxt}>CREATE ACCOUNT OR SIGN IN</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Delete Account — required by Apple guideline 5.1.1(v). Two-tap
             confirmation guards against accidental taps. */}
+        {signedIn && (
         <TouchableOpacity style={s.deleteAcctBtn} onPress={handleDeleteAccount}>
           <Text style={s.deleteAcctTxt}>DELETE ACCOUNT</Text>
         </TouchableOpacity>
+        )}
 
       </ScrollView>
     </View>

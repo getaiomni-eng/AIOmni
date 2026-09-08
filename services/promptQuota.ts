@@ -260,6 +260,12 @@ export async function consumePrompt(): Promise<boolean> {
 // fiction — enforcement lives in claude-proxy's consume_prompt(). This reads
 // the server's number; the local counter is only the offline fallback.
 let serverStateCache: { at: number; used: number; credits: number; lifetimeUsed: number } | null = null;
+
+/**
+ * Drop the cached quota so a sign-out cannot leave the next account looking
+ * at the previous user's prompt count for up to 30 seconds.
+ */
+export function resetPromptStateCache(): void { serverStateCache = null; }
 export async function fetchServerPromptState(force = false): Promise<{ used: number; credits: number; lifetimeUsed: number } | null> {
   if (!force && serverStateCache && Date.now() - serverStateCache.at < 30_000) {
     return { used: serverStateCache.used, credits: serverStateCache.credits, lifetimeUsed: serverStateCache.lifetimeUsed };
