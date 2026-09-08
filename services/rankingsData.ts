@@ -951,7 +951,7 @@ export async function fetchBlendedConsensus(
 }
 
 // ─── AIOmni Formula (proprietary algorithmic engine) ─────────
-// Reads from nfl_proprietary_rankings_v2, populated DAILY by the
+// Reads from public_rankings, populated DAILY by the
 // supabase/functions/aiomni-rankings-engine-v2 edge function.
 // This is the pure stats-based projection -- separate from Pulse.
 //
@@ -961,7 +961,7 @@ export async function fetchBlendedConsensus(
 // so users saw 17-day-stale rankings while fresh ones were generated unseen.
 
 const PROPRIETARY_RANKINGS_URL =
-  'https://khoruzvsprxyocisuhet.supabase.co/rest/v1/nfl_proprietary_rankings_v2';
+  'https://khoruzvsprxyocisuhet.supabase.co/rest/v1/public_rankings';
 
 // ─── KTC MARKET VALUES ──────────────────────────────────────
 // Crowd-sourced trade values from KeepTradeCut via our server-scraped cache
@@ -1051,7 +1051,6 @@ export async function fetchAIOmniFormula(
       trendVal: 0,
       tier: r.tier ?? assignTier(r.rank ?? (i + 1)),
       posRank: r.pos_rank ?? undefined,
-      method: r.method ?? null,
     }) as any);
   } catch (e) {
     console.log('fetchAIOmniFormula error:', e);

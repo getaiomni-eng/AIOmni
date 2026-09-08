@@ -1,45 +1,48 @@
--- Stop publishing the ranking model (2026-09-07).
+-- Stop publishing the ranking model to anonymous callers (2026-09-07).
 --
--- nfl_proprietary_rankings grants anon SELECT on EVERY column, including
--- `method` -- a human-readable derivation carrying the tuned parameters:
--- scarcity multipliers, coaching percentages, stabilizer thresholds,
--- baselines. A single unauthenticated request returns 1,000 rows with a full
--- method string on each. Measured 2026-09-07: 108 distinct parameters
--- readable with the anon key that ships inside the JS bundle.
+-- BOTH ranking tables grant anon SELECT on every column, including `method` --
+-- a readable derivation carrying the tuned parameters. One unauthenticated
+-- request returns the whole board with a method string on every row.
 --
--- The rankings themselves are marketing and are meant to be seen. The
--- parameters are the product. Those are different things and were being
--- served together.
+-- nfl_proprietary_rankings_v2 is the LIVE table (recomputed daily; the app
+-- repointed to it 2026-06-02) and its method strings describe the CURRENT
+-- model, e.g. "3yr v3 blend + 3-qual-vet (+6%) ... [age/exp 1.10x] ...
+-- [role/share 1.03x]". The legacy nfl_proprietary_rankings is stale but
+-- equally exposed. Both are covered here.
 --
--- The public rankings page requests exactly six columns
--- (name, position, team, pos_rank, score, tier) and has never needed the
--- rest, so this costs the site nothing.
+-- The rankings themselves are the product and are meant to be seen. The
+-- parameters are not. They were being served together.
 --
--- ORDER OF OPERATIONS MATTERS. This migration creates and grants the view
--- only. The REVOKE on the base table is deliberately NOT here: revoking
--- before the deployed rankings page is updated to read the view would break
--- the live page. Apply this, ship the page, then run the revoke block at the
--- bottom as a separate step.
+-- The client fetches `method` into a field it never renders (rankingsData.ts
+-- :1054 -- nothing in rankings.tsx or the components reads it), so dropping
+-- it from the public projection costs the app nothing.
+--
+-- TWO STEPS ON PURPOSE. This migration only creates and grants the views.
+-- Revoking on the base tables before the app is shipped against the view
+-- would break the rankings tab for signed-out users, who read as anon.
+-- Run the REVOKE block at the bottom AFTER the OTA has landed.
 
 CREATE OR REPLACE VIEW public.public_rankings AS
-  SELECT format, rank, name, position, team, pos_rank, score, tier
-    FROM public.nfl_proprietary_rankings;
-
--- security_invoker keeps the view honest: it runs with the CALLER's rights,
--- so it can never become a privilege-escalation path back into the base
--- table the way a definer view would.
+  SELECT format, rank, gsis_id, name, position, team, pos_rank, score, tier
+    FROM public.nfl_proprietary_rankings_v2;
 ALTER VIEW public.public_rankings SET (security_invoker = on);
-
 GRANT SELECT ON public.public_rankings TO anon, authenticated;
 
-COMMENT ON VIEW public.public_rankings IS
-  'Public projection of nfl_proprietary_rankings. Deliberately omits method, baseline_2025, age_adj, team_change_adj, rookie_boost, opportunity_adj, floor_protected and computed_at -- the tuned model parameters. Anything added here becomes world-readable via the bundled anon key.';
+CREATE OR REPLACE VIEW public.public_rankings_legacy AS
+  SELECT format, rank, gsis_id, name, position, team, pos_rank, score, tier
+    FROM public.nfl_proprietary_rankings;
+ALTER VIEW public.public_rankings_legacy SET (security_invoker = on);
+GRANT SELECT ON public.public_rankings_legacy TO anon, authenticated;
 
--- ── STEP 2, run only AFTER the rankings page reads the view ─────────────
--- Uncomment and apply once https://getaiomni.com/rankings is confirmed
--- working against public_rankings:
+COMMENT ON VIEW public.public_rankings IS
+  'Public projection of nfl_proprietary_rankings_v2. Deliberately omits method, baseline_2025, age_adj, team_change_adj, rookie_boost, opportunity_adj, floor_protected and computed_at -- the tuned model parameters. Anything added here becomes world-readable via the bundled anon key.';
+
+-- ── STEP 2 — run only AFTER the app ships reading public_rankings ───────
+-- Verify first: open the rankings tab while signed OUT and confirm it loads.
+-- Then:
 --
---   REVOKE SELECT ON public.nfl_proprietary_rankings FROM anon;
+--   REVOKE SELECT ON public.nfl_proprietary_rankings_v2 FROM anon;
+--   REVOKE SELECT ON public.nfl_proprietary_rankings     FROM anon;
 --
--- The app's own authenticated reads and every service_role job keep working;
--- only unauthenticated access to the full column set goes away.
+-- service_role jobs and the rankings engine are unaffected; only
+-- unauthenticated access to the full column set goes away.
