@@ -44,10 +44,17 @@ export default function SettingsScreen() {
     // expo-constants and expo-updates only: expo-application is present in
     // node_modules as a transitive dep but is NOT in package.json, so a clean
     // install or an SDK bump could remove it and break this screen.
+    //
+    // The build number is deliberately NOT shown. eas.json sets
+    // autoIncrement, so EAS bumps it at build time and app.json never catches
+    // up -- it read 178 while the shipped binary was 200. A wrong number is
+    // worse than no number when the point is diagnosing what someone is on.
+    //
+    // The OTA id is the useful half anyway: nearly every fix ships over the
+    // air, so the version alone does not identify the running code.
     const v = Constants.expoConfig?.version ?? '';
-    const build = (Constants.expoConfig as any)?.ios?.buildNumber ?? null;
     const ota = Updates.updateId ? Updates.updateId.slice(0, 6) : null;
-    const base = v ? `${v}${build ? ` (${build})` : ''}` : 'unknown';
+    const base = v || 'unknown';
     return ota ? `${base} · ${ota}` : base;
   }, []);
   const [espnLinked, setEspnLinked] = useState(false);
