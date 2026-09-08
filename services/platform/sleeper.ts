@@ -458,10 +458,10 @@ class SleeperPlatform implements FantasyPlatform {
 
   async getAvailablePlayers(
     leagueId: string,
-    opts: { limit?: number } = {}
+    opts: { limit?: number; balanced?: boolean } = {}
   ): Promise<AvailablePlayer[]> {
     const limit = opts.limit ?? 200;
-    const cacheKey = `sleeper:available:${leagueId}:${limit}`;
+    const cacheKey = `sleeper:available:${leagueId}:${limit}:${opts.balanced ? 'bal' : 'top'}`;
     const cached = hotGet<AvailablePlayer[]>(cacheKey);
     if (cached) return cached;
 
@@ -544,21 +544,43 @@ class SleeperPlatform implements FantasyPlatform {
       candidates.push({ id: pid, raw: p, score });
     }
 
-    // [AIOMNI_DEBUG_v3] BEGIN
-    console.log('[AIOMNI_DEBUG_v3] league:', league.name, 'isDynasty:', isDynasty);
-    console.log('[AIOMNI_DEBUG_v3] rostered:', rostered.size, 'activeIds:', activeIds.size, 'trending.adds:', trending.adds.size);
-    const _rookieCandidates = candidates.filter(c => {
-      const p = c.raw;
-      return (p.years_exp === 0 || p.years_exp == null) && p.search_rank == null;
-    });
-    console.log('[AIOMNI_DEBUG_v3] candidates total:', candidates.length, 'rookies in candidates:', _rookieCandidates.length);
-    console.log('[AIOMNI_DEBUG_v3] sample rookies:', _rookieCandidates.slice(0, 5).map(c => `${c.raw.full_name} score=${c.score}`).join(' | '));
-    // [AIOMNI_DEBUG_v3] END
     candidates.sort((a, b) => b.score - a.score);
-    // [AIOMNI_DEBUG_v3] post-sort top 15:
-    console.log('[AIOMNI_DEBUG_v3] TOP 15:', candidates.slice(0, 15).map(c => `${c.raw.full_name}(${c.raw.position},sr=${c.raw.search_rank},score=${c.score})`).join(' | '));
 
-    const results: AvailablePlayer[] = candidates.slice(0, limit).map(c => {
+    // score = adds*10 - searchRank, so trending adds dominate. That is right
+    // for a waiver UI (people want to see what the league is chasing) and
+    // wrong for the Coach, which needs breadth across positions -- a pure
+    // trending cut returns the popular veterans it then advises against.
+    // `balanced` fills each position from its own ranked queue instead.
+    let picked = candidates;
+    if (opts.balanced) {
+      const byPos = new Map<string, Candidate[]>();
+      for (const c of candidates) {
+        const pos = c.raw.position;
+        if (!byPos.has(pos)) byPos.set(pos, []);
+        byPos.get(pos)!.push(c);
+      }
+      // Kickers and defences are streamed, not analysed. A round-robin gives
+      // them an equal share of the budget, which wastes ~20% of it on players
+      // no one asks the Coach about. Cap them and spend the rest on skill.
+      for (const pos of ['K', 'DEF']) {
+        const q = byPos.get(pos);
+        if (q) byPos.set(pos, q.slice(0, 3));
+      }
+      const order = ['RB', 'WR', 'TE', 'QB', 'DEF', 'K'];
+      const out: Candidate[] = [];
+      // Round-robin so an early position cannot consume the whole budget.
+      for (let i = 0; out.length < limit; i++) {
+        let added = false;
+        for (const pos of order) {
+          const q = byPos.get(pos);
+          if (q && q[i]) { out.push(q[i]); added = true; if (out.length >= limit) break; }
+        }
+        if (!added) break;
+      }
+      picked = out;
+    }
+
+    const results: AvailablePlayer[] = picked.slice(0, limit).map(c => {
       const adds = trending.adds.get(c.id) ?? 0;
       const drops = trending.drops.get(c.id) ?? 0;
       const signals: HeatSignals = {

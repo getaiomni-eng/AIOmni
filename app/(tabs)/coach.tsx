@@ -601,9 +601,13 @@ async function loadAbstractContext(
         const [standings, roster, fas, draft, detail] = await Promise.all([
           plat.getStandings(l.id).catch(() => []),
           plat.getMyRoster(l.id).catch(() => null),
-          // Top 20 free agents so the Coach knows what's actually
-          // available without burning a prompt asking the user.
-          plat.getAvailablePlayers(l.id, { limit: 20 }).catch(() => []),
+          // The wire, spread across positions. 20 was too thin to rank
+          // against -- the Coach would correctly refuse and ask the user to
+          // paste their own list, which is the one thing this is meant to
+          // avoid. Balanced because the default ranking is trending-adds
+          // first, which surfaces exactly the popular veterans the Coach
+          // then advises against in a rebuild.
+          plat.getAvailablePlayers(l.id, { limit: 60, balanced: true }).catch(() => []),
           // Fleaflicker exposes per-cell pick ownership via getDraft —
           // MFL's getDraft is still a stub. For platforms that populate
           // myOwnedPicks we annotate this season's picks as "1.08, 3.08".
@@ -837,14 +841,16 @@ function buildSystemPrompt(leagues: LeagueContext[], selectedLeague: LeagueConte
     const picks = l.ownedPicks ? `\nDraft picks owned — ${l.ownedPicks}` : '';
     const bestBall = l.bestBall ? ' [BEST BALL]' : '';
     const avail = l.available && l.available.length > 0
-      ? `\nTop available (waiver/FA pool, sample): ${l.available.join(', ')}`
+      // Was labelled "sample", which told the model its data was incomplete
+      // and invited it to hedge and ask the user to paste a list instead.
+      ? `\nFREE AGENTS in this league (unrostered, top of the wire by position): ${l.available.join(', ')}`
       : '';
     const ktcMap = ktcMapFor(l, ktc ?? null);
     const priceNote = ktcMap.size
       ? ' Bracketed numbers are KTC market values on the board that matches this league (dynasty/redraft, 1QB/superflex) — total both sides before proposing anything.'
       : ' NOTE: market values are unavailable this session — say so before discussing any trade rather than guessing at value.';
     const allRost = l.leagueRosters
-      ? `\nALL LEAGUE ROSTERS (every team — use this to find who owns a player, spot trade targets, and judge availability; a player NOT listed here is a free agent).${priceNote}\n${priceRosterBlock(l.leagueRosters, ktcMap)}`
+      ? `\nALL LEAGUE ROSTERS (every team — use this to find who owns a player, spot trade targets, and judge availability; a player NOT listed here is a free agent). Between this and the FREE AGENTS list you already know what is available in this league, so answer waiver questions directly instead of asking the user to paste anything.${priceNote}\n${priceRosterBlock(l.leagueRosters, ktcMap)}`
       : '';
     // v2026-08-07: the real scoring rules and starting lineup. Without
     // these the model saw only "PPR"/"STD" and could not distinguish a

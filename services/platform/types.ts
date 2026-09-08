@@ -246,7 +246,12 @@ export interface FantasyPlatform {
 
   // ─── WAIVERS / FREE AGENCY ───
 
-  getAvailablePlayers(leagueId: string, opts?: { limit?: number }): Promise<AvailablePlayer[]>;
+  /**
+   * Players not on any roster. `balanced` spreads the result across
+   * positions instead of returning a pure trending-adds cut -- the Coach
+   * needs breadth, a waiver UI wants what the league is chasing.
+   */
+  getAvailablePlayers(leagueId: string, opts?: { limit?: number; balanced?: boolean }): Promise<AvailablePlayer[]>;
 
   /**
    * Raw Heat signals for a specific player. Returns undefined for signals
