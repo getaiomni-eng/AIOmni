@@ -25,13 +25,19 @@
 CREATE OR REPLACE VIEW public.public_rankings AS
   SELECT format, rank, gsis_id, name, position, team, pos_rank, score, tier
     FROM public.nfl_proprietary_rankings_v2;
-ALTER VIEW public.public_rankings SET (security_invoker = on);
+-- security_invoker = OFF on purpose. The view must run as its owner: that is
+-- what lets anon read these columns WITHOUT holding SELECT on the base table,
+-- which is the entire point. With invoker rights the view breaks the moment
+-- the base-table grant is revoked -- which is exactly what happened on first
+-- deploy (2026-09-08: "permission denied for table
+-- nfl_proprietary_rankings_v2" on signed-out Rankings).
+ALTER VIEW public.public_rankings SET (security_invoker = off);
 GRANT SELECT ON public.public_rankings TO anon, authenticated;
 
 CREATE OR REPLACE VIEW public.public_rankings_legacy AS
   SELECT format, rank, gsis_id, name, position, team, pos_rank, score, tier
     FROM public.nfl_proprietary_rankings;
-ALTER VIEW public.public_rankings_legacy SET (security_invoker = on);
+ALTER VIEW public.public_rankings_legacy SET (security_invoker = off);
 GRANT SELECT ON public.public_rankings_legacy TO anon, authenticated;
 
 COMMENT ON VIEW public.public_rankings IS
