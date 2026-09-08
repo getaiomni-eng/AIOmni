@@ -35,6 +35,14 @@ const TAGS = `
     <meta name="twitter:description" content="${DESC}">
     <meta name="twitter:image" content="https://getaiomni.com/og.png">
     <meta name="theme-color" content="#0a1214">
+    <style>
+      /* Painted before the JS bundle boots. Without this the browser shows a
+         white page until React Native Web mounts and applies the theme --
+         a full-screen white flash on every load and every refresh of a
+         dark-themed app. */
+      html, body, #root { height: 100%; margin: 0; background: #0a1214; }
+      body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
+    </style>
 `;
 
 const p = join(dir, 'index.html');

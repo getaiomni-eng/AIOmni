@@ -23,6 +23,7 @@
 // site triggered it instead of dying opaque.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 
 function crumb(category: string, message: string, level: Sentry.SeverityLevel = 'info', data?: any) {
@@ -34,6 +35,13 @@ function crumb(category: string, message: string, level: Sentry.SeverityLevel = 
 // Native module is loaded lazily so a broken pod link can't crash the
 // app on import. Pattern matches services/notifications.ts.
 function getSecureStore(): any | null {
+  // expo-secure-store has no web implementation. require() SUCCEEDS in the
+  // browser -- the JS shim is there -- but every call reaches for a native
+  // method that does not exist ("getValueWithKeyAsync is not a function").
+  // Because the module was truthy, the AsyncStorage fallback below never
+  // ran, so on the web app every credential read and write failed silently
+  // and ESPN/Yahoo could never stay connected. Bail out explicitly.
+  if (Platform.OS === 'web') return null;
   try {
     return require('expo-secure-store');
   } catch (e: any) {

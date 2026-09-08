@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { discoverESPNLeagues, saveESPNCredentials } from '../services/espn';
@@ -41,6 +41,8 @@ export default function ESPNLoginScreen() {
   const [status,     setStatus]     = useState('Log in to ESPN to connect your leagues');
   const [connecting, setConnecting] = useState(false);
   const [connected,  setConnected]  = useState(false);
+  const [manualS2,   setManualS2]   = useState('');
+  const [manualSwid, setManualSwid] = useState('');
 
   const handleMessage = async (event: any) => {
     try {
@@ -98,6 +100,25 @@ export default function ESPNLoginScreen() {
     }
   };
 
+  // Shares the same persistence path as the WebView flow, so a manually
+  // pasted session behaves identically everywhere else in the app.
+  const submitManual = async () => {
+    const espnS2 = manualS2.trim();
+    const swid = manualSwid.trim();
+    if (!espnS2 || !swid) return;
+    setConnecting(true);
+    setStatus('Connecting…');
+    try {
+      await saveESPNCredentials({ espnS2, swid });
+      setConnected(true);
+      setStatus('ESPN connected');
+      setTimeout(() => router.back(), 900);
+    } catch (e: any) {
+      setConnecting(false);
+      setStatus('Could not save those values. Check for stray spaces and try again.');
+    }
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -114,18 +135,62 @@ export default function ESPNLoginScreen() {
         <Text style={[styles.statusText, connected && { color: '#1e8c42' }]}>{status}</Text>
       </View>
 
-      <WebView
-        ref={webViewRef}
-        source={{ uri: ESPN_LOGIN_URL }}
-        injectedJavaScript={INJECT_SCRIPT}
-        onMessage={handleMessage}
-        style={styles.webview}
-        sharedCookiesEnabled
-        thirdPartyCookiesEnabled
-        javaScriptEnabled
-        domStorageEnabled
-        onNavigationStateChange={() => { webViewRef.current?.injectJavaScript(INJECT_SCRIPT); }}
-      />
+      {Platform.OS === 'web' ? (
+        // A browser cannot read espn.com's cookies for us: react-native-webview
+        // has no web build, and even an iframe is blocked by the same-origin
+        // policy. The WebView path is structurally impossible here, so web gets
+        // the manual route every ESPN fantasy tool uses.
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.manual}>
+          <Text style={styles.mTitle}>Connect ESPN on the web</Text>
+          <Text style={styles.mBody}>
+            ESPN has no public login for third-party apps, so the app normally signs you in inside
+            a secure in-app browser. That is not possible in a web browser, so you can paste the
+            two values yourself. It takes about a minute.
+          </Text>
+
+          <Text style={styles.mStep}>1. Open fantasy.espn.com and sign in</Text>
+          <Text style={styles.mStep}>2. Open developer tools, then Application → Cookies → espn.com</Text>
+          <Text style={styles.mStep}>3. Copy the values of <Text style={styles.mCode}>espn_s2</Text> and <Text style={styles.mCode}>SWID</Text></Text>
+
+          <Text style={styles.mLabel}>espn_s2</Text>
+          <TextInput
+            style={styles.mInput} value={manualS2} onChangeText={setManualS2}
+            placeholder="AEB..." placeholderTextColor={t.textMuted}
+            autoCapitalize="none" autoCorrect={false} multiline
+          />
+          <Text style={styles.mLabel}>SWID</Text>
+          <TextInput
+            style={styles.mInput} value={manualSwid} onChangeText={setManualSwid}
+            placeholder="{XXXXXXXX-XXXX-...}" placeholderTextColor={t.textMuted}
+            autoCapitalize="none" autoCorrect={false}
+          />
+
+          <TouchableOpacity
+            style={[styles.mBtn, (!manualS2.trim() || !manualSwid.trim()) && { opacity: 0.45 }]}
+            disabled={!manualS2.trim() || !manualSwid.trim() || connecting}
+            onPress={submitManual}>
+            <Text style={styles.mBtnTxt}>{connecting ? 'Connecting…' : 'Connect ESPN'}</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.mFine}>
+            These are your ESPN session cookies. They stay in this browser and are sent only to
+            ESPN when loading your leagues. Signing out of ESPN invalidates them.
+          </Text>
+        </ScrollView>
+      ) : (
+        <WebView
+          ref={webViewRef}
+          source={{ uri: ESPN_LOGIN_URL }}
+          injectedJavaScript={INJECT_SCRIPT}
+          onMessage={handleMessage}
+          style={styles.webview}
+          sharedCookiesEnabled
+          thirdPartyCookiesEnabled
+          javaScriptEnabled
+          domStorageEnabled
+          onNavigationStateChange={() => { webViewRef.current?.injectJavaScript(INJECT_SCRIPT); }}
+        />
+      )}
     </View>
   );
 }
@@ -133,6 +198,17 @@ export default function ESPNLoginScreen() {
 // Themed to match the rest of the app (mirrors mfl-login + fleaflicker-login).
 const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   container: { flex: 1, backgroundColor: t.bg },
+  manual:  { padding: 20, paddingBottom: 60 },
+  mTitle:  { color: t.text, fontSize: 20, fontWeight: '700', marginBottom: 10 },
+  mBody:   { color: t.textSub, fontSize: 14.5, lineHeight: 21, marginBottom: 18 },
+  mStep:   { color: t.textSub, fontSize: 14, lineHeight: 22, marginBottom: 4 },
+  mCode:   { color: t.accentText, fontFamily: 'SpaceMono_400Regular' },
+  mLabel:  { color: t.textMuted, fontSize: 11, letterSpacing: 1, marginTop: 18, marginBottom: 6 },
+  mInput:  { backgroundColor: t.inputBg, borderWidth: 1, borderColor: t.border, borderRadius: 10,
+             paddingHorizontal: 12, paddingVertical: 11, color: t.text, fontSize: 13.5, minHeight: 44 },
+  mBtn:    { backgroundColor: t.accentText, borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 22 },
+  mBtnTxt: { color: '#0a1214', fontSize: 15, fontWeight: '700' },
+  mFine:   { color: t.textMuted, fontSize: 12, lineHeight: 17, marginTop: 16 },
   header: {
     paddingHorizontal: SP[3], paddingVertical: 14,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
