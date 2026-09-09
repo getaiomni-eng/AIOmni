@@ -191,6 +191,13 @@ Deno.serve(async (req) => {
   const seen: Record<string, number> = {};
   rows.forEach((r, i) => { r.rank = i + 1; seen[r.position] = (seen[r.position] ?? 0) + 1; r.pos_rank = seen[r.position]; });
 
+  // Replace the week rather than merging into it. An upsert leaves behind
+  // rows that are no longer on the board -- which is exactly how the Justin
+  // Jefferson LINEBACKER survived after the season view stopped emitting him:
+  // his row from an earlier run was never in the new batch, so nothing
+  // removed it. A recomputed board should be the whole board.
+  await sb(`nfl_weekly_board?season=eq.${season}&week=eq.${week}&format=eq.ppr`, { method: "DELETE" });
+
   const ins = await sb("nfl_weekly_board?on_conflict=season,week,format,gsis_id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
@@ -202,6 +209,7 @@ Deno.serve(async (req) => {
 
   // Enter it in the accuracy comparison as a WEEKLY board, so it is judged on
   // the week rather than on cumulative points.
+  await sb(`ranking_snapshots?season=eq.${season}&week=eq.${week}&source=eq.aiomni_weekly&format=eq.ppr`, { method: "DELETE" });
   await sb("ranking_snapshots?on_conflict=season,week,source,format,player_name", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
