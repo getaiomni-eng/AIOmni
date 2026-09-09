@@ -23,6 +23,29 @@
 -- is the question they actually answer and which sharpens as the year goes
 -- on. 'weekly' boards are scored on that week alone.
 
+-- A table called ranking_snapshots already exists in this database. It is in
+-- no migration and referenced by no code -- an ad-hoc leftover -- and it has
+-- no `season` column, so CREATE TABLE IF NOT EXISTS silently skipped it and
+-- the index below failed with "column season does not exist".
+--
+-- Rename rather than drop. It is almost certainly empty, but "almost
+-- certainly" is not a reason to destroy a table; the rename preserves
+-- whatever is in there under an obvious name that can be inspected and
+-- dropped deliberately later.
+DO $rename$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+              WHERE table_schema = 'public' AND table_name = 'ranking_snapshots')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'ranking_snapshots'
+                AND column_name = 'season')
+  THEN
+    EXECUTE 'ALTER TABLE public.ranking_snapshots RENAME TO ranking_snapshots_orphaned_20260908';
+    RAISE NOTICE 'Renamed pre-existing ranking_snapshots (no season column) to ranking_snapshots_orphaned_20260908';
+  END IF;
+END
+$rename$;
+
 CREATE TABLE IF NOT EXISTS public.ranking_snapshots (
   id          bigserial PRIMARY KEY,
   season      int         NOT NULL,

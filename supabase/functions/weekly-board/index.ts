@@ -51,7 +51,19 @@ Deno.serve(async (req) => {
     // DVP is published per season; before week 1 the only real signal is last
     // year's, so take the newest season present rather than assuming this one.
     j(`nfl_dvp?select=season,team,position,rank_vs_pos&order=season.desc&limit=400`),
-    j(`nfl_players?select=gsis_id,full_name&limit=6000`),
+    // Paginated, not `limit=6000`: PostgREST caps a page regardless of the
+    // limit asked for, so the single-request version silently returned 1000
+    // players and only ~40% of the board could be mapped to a gsis_id.
+    (async () => {
+      const all: any[] = [];
+      for (let off = 0; off < 8000; off += 1000) {
+        const page = await j(`nfl_players?select=gsis_id,full_name&limit=1000&offset=${off}`);
+        if (!page.length) break;
+        all.push(...page);
+        if (page.length < 1000) break;
+      }
+      return all;
+    })(),
   ]);
   if (!board.length) return new Response(JSON.stringify({ ok: false, error: "no rankings" }), { status: 500, headers: CORS });
   if (!sched.length) return new Response(JSON.stringify({ ok: false, error: `no schedule for ${season} wk ${week}` }), { status: 500, headers: CORS });
@@ -62,6 +74,10 @@ Deno.serve(async (req) => {
   // opponent for each team this week; a team absent from the schedule is on bye
   const opp = new Map<string, string>();
   for (const g of sched) { opp.set(g.home_team, g.away_team); opp.set(g.away_team, g.home_team); }
+
+  // Bounded so no matchup can outweigh talent by more than a tier or two.
+  const MAX_DVP_SHIFT = 12;
+  const MAX_TOTAL_SHIFT = 6;
 
   const dvpSeason = Math.max(...dvpRows.map((d: any) => d.season));
   const dvp = new Map<string, number>();
@@ -93,26 +109,55 @@ Deno.serve(async (req) => {
     const o = opp.get(p.team);
     if (!o) continue;                      // bye week: not startable, so not ranked
 
-    // rank 1 = toughest defence -> 0.88 ; rank 32 = softest -> 1.12
+    // Adjust in RANK space, not score space.
+    //
+    // The first version multiplied ros_score by the matchup factor. That is
+    // wrong here because Formula scores go NEGATIVE past about rank 105
+    // (rank 150 scores -58.8). Multiplying a negative by 1.12 for a good
+    // matchup makes it MORE negative and ranks the player LOWER -- the logic
+    // inverts exactly where most of the board lives. It sent Josh Jacobs from
+    // 99 to 246 on a matchup that should have moved him a few spots.
+    //
+    // A rank shift is sign-safe, bounded, and easier to defend: the softest
+    // defence is worth about a dozen places, the toughest costs about the
+    // same, and nothing in between can produce a 147-place swing.
     const dr = dvp.get(`${o}:${p.position}`) ?? null;
-    const dvpMult = dr ? 0.88 + ((dr - 1) / 31) * 0.24 : 1.0;
+    const dvpShift = dr ? ((dr - 16.5) / 15.5) * MAX_DVP_SHIFT : 0;
 
-    // A team expected to score more offers more to go round. Clamped so a
-    // shootout cannot outweigh being good at football.
+    // Vegas nudges in the same currency. Neutral when the feed is absent.
     const it = totals.get(p.team) ?? null;
-    const totalMult = it && avgTotal ? Math.max(0.90, Math.min(1.10, it / avgTotal)) : 1.0;
+    const totalShift = it && avgTotal
+      ? Math.max(-MAX_TOTAL_SHIFT, Math.min(MAX_TOTAL_SHIFT,
+          ((it - avgTotal) / Math.max(avgTotal, 1)) * MAX_TOTAL_SHIFT * 4))
+      : 0;
+
+    // Lower is better, so a favourable matchup subtracts.
+    const effective = p.rank - dvpShift - totalShift;
 
     rows.push({
       season, week, format: "ppr", gsis_id: gsis, player_name: p.name,
       position: p.position, team: p.team, opponent: o,
-      ros_score: p.score, dvp_rank: dr, dvp_mult: Number(dvpMult.toFixed(3)),
-      implied_total: it, total_mult: Number(totalMult.toFixed(3)),
-      week_score: Number((Number(p.score) * dvpMult * totalMult).toFixed(3)),
+      ros_score: p.score, dvp_rank: dr,
+      dvp_mult: Number(dvpShift.toFixed(2)),      // stored as a RANK SHIFT now
+      implied_total: it, total_mult: Number(totalShift.toFixed(2)),
+      week_score: Number(effective.toFixed(3)),   // lower = better
       rank: 0, pos_rank: 0,
     });
   }
 
-  rows.sort((a, b) => b.week_score - a.week_score);
+  // The Formula board ships duplicate rows for a handful of rookies (250
+  // rows, 246 distinct players) which collide on gsis_id and make Postgres
+  // reject the whole batch with 21000. Keep the better rest-of-season rank.
+  const byPlayer = new Map<string, any>();
+  for (const r of rows) {
+    const prev = byPlayer.get(r.gsis_id);
+    if (!prev || Number(r.week_score) < Number(prev.week_score)) byPlayer.set(r.gsis_id, r);
+  }
+  const dupesDropped = rows.length - byPlayer.size;
+  rows.length = 0;
+  rows.push(...byPlayer.values());
+
+  rows.sort((a, b) => a.week_score - b.week_score);
   const seen: Record<string, number> = {};
   rows.forEach((r, i) => { r.rank = i + 1; seen[r.position] = (seen[r.position] ?? 0) + 1; r.pos_rank = seen[r.position]; });
 
@@ -138,10 +183,11 @@ Deno.serve(async (req) => {
   });
 
   return new Response(JSON.stringify({
-    ok: true, season, week, players: rows.length,
+    ok: true, season, week, players: rows.length, duplicates_dropped: dupesDropped,
+    player_index_size: players.length,
     dvp_season_used: dvpSeason,
     vegas_totals: totals.size,
     top10: rows.slice(0, 10).map(r =>
-      `${r.rank}. ${r.player_name} ${r.position}${r.pos_rank} vs ${r.opponent} (dvp ${r.dvp_rank ?? "-"}, x${r.dvp_mult})`),
+      `${r.rank}. ${r.player_name} ${r.position}${r.pos_rank} vs ${r.opponent} (dvp ${r.dvp_rank ?? "-"}, shift ${r.dvp_mult > 0 ? "+" : ""}${r.dvp_mult})`),
   }, null, 2), { headers: CORS });
 });

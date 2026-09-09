@@ -55,6 +55,29 @@ async function nameToGsis(): Promise<Map<string, string>> {
   return m;
 }
 
+/**
+ * Collapse duplicate player names, keeping the best (lowest) rank.
+ *
+ * The snapshot key is (season, week, source, format, player_name), so a
+ * repeated name makes Postgres reject the whole batch with 21000: "ON
+ * CONFLICT DO UPDATE cannot affect row a second time".
+ *
+ * This is not hypothetical -- the Formula's own PPR board ships 250 rows for
+ * 246 distinct players, with four rookies (Jadarian Price, Jordyn Tyson,
+ * Chris Brazzell II, Zachariah Branch) each occupying two ranks. That is an
+ * engine bug worth fixing at source; deduping here keeps one bad board from
+ * costing the entire week's comparison.
+ */
+function dedupe(rows: Row[]): Row[] {
+  const best = new Map<string, Row>();
+  for (const r of rows) {
+    const k = norm(r.player_name);
+    const prev = best.get(k);
+    if (!prev || r.rank < prev.rank) best.set(k, r);
+  }
+  return [...best.values()].sort((a, b) => a.rank - b.rank);
+}
+
 function posRanks(rows: Row[]): Row[] {
   const seen: Record<string, number> = {};
   for (const r of rows.sort((a, b) => a.rank - b.rank)) {
@@ -124,7 +147,10 @@ async function yahooADP(season: number, week: number, g: Map<string, string>): P
     headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({}),
   });
-  if (!r.ok) throw new Error(`yahoo ${r.status}`);
+  // Yahoo's Fantasy API has been gated behind manual approval since late
+  // July 2026 and returns errors for every endpoint. Name it so a failure
+  // here reads as the known outage rather than a new bug.
+  if (!r.ok) throw new Error(`yahoo ${r.status} (Yahoo API gating — expected until their approval lands)`);
   const j = await r.json();
   const list = Array.isArray(j) ? j : (j.players ?? j.rankings ?? []);
   const out: Row[] = list.map((p: any, i: number) => ({
@@ -155,7 +181,9 @@ Deno.serve(async (req) => {
   const report: Record<string, any> = {};
   for (const [name, fn] of Object.entries(sources)) {
     try {
-      const rows = await fn(season, week, g);
+      const raw = await fn(season, week, g);
+      const rows = posRanks(dedupe(raw));
+      const dropped = raw.length - rows.length;
       const mapped = rows.filter(r => r.gsis_id).length;
       if (rows.length) {
         const res = await sb("ranking_snapshots?on_conflict=season,week,source,format,player_name", {
@@ -167,7 +195,8 @@ Deno.serve(async (req) => {
       }
       // Unmapped players cannot be scored later, so surface the rate now
       // rather than discovering a thin comparison on Tuesday.
-      report[name] = { rows: rows.length, mapped, unmapped: rows.length - mapped };
+      report[name] = { rows: rows.length, mapped, unmapped: rows.length - mapped,
+                       ...(dropped ? { duplicates_dropped: dropped } : {}) };
     } catch (e) {
       report[name] = { error: String((e as any)?.message ?? e) };
     }
