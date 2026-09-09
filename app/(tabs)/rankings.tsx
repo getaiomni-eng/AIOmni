@@ -569,6 +569,44 @@ export default function RankingsScreen() {
     grouped[grouped.length - 1].players.push({ ...p, rank });
   });
 
+  // THIS WEEK renders through the SAME FlatList + PlayerCard path as the
+  // other tabs. The first version hand-rolled 120 rows with .map() inside a
+  // plain View: unvirtualized, so it froze, and styled from scratch, so it
+  // looked nothing like the rest of Rankings.
+  const weekItems = useMemo(() => {
+    if (!weekBoard) return [];
+    const players: RankedPlayer[] = weekBoard.players
+      .filter(p => position === 'ALL' || p.position === position)
+      .filter(p => !search
+        || p.name.toLowerCase().includes(search.toLowerCase())
+        || (p.team ?? '').toLowerCase().includes(search.toLowerCase()))
+      .map(p => ({
+        id: p.gsis_id,
+        name: p.name,
+        position: p.position,
+        team: p.team ?? '',
+        rank: p.rank,
+        // The ADP column carries the matchup instead: the opponent IS the
+        // reason this board differs from the season one, so it belongs on
+        // the row rather than buried in a legend.
+        adp: p.opponent ? `vs ${p.opponent}` : '—',
+        trend: 'flat' as const,
+        trendVal: 0,
+        tier: Math.min(5, Math.ceil(p.posRank / 6)),
+        posRank: p.posRank,
+      }));
+    const out: MyRanksItem[] = [];
+    let lastTier: number | null = null;
+    players.forEach(pl => {
+      if (pl.tier !== lastTier) {
+        lastTier = pl.tier;
+        out.push({ type: 'divider', tier: pl.tier, key: `wk-tier-${pl.tier}` });
+      }
+      out.push({ type: 'player', player: pl, displayIndex: pl.rank - 1, key: `wk-${pl.id}` });
+    });
+    return out;
+  }, [weekBoard, position, search]);
+
   // Flatten grouped into typed items for FlatList (used in My Rankings).
   // Each item is either a divider or a player. FlatList's virtualization
   // handles both types transparently via the type-tagged renderRow below.
@@ -743,7 +781,18 @@ export default function RankingsScreen() {
         </View>
       )}
 
-      {loading && (
+      {mode === 'week' && (
+        <View style={s.weekBanner}>
+          <Text style={s.weekBannerTitle}>
+            {weekBoard ? `WEEK ${weekBoard.week} — ADJUSTED FOR MATCHUP` : 'THIS WEEK'}
+          </Text>
+          <Text style={s.weekBannerBody}>
+            A tough matchup moves a player a few spots. It does not bench him — read the
+            position rank, not the arrow.
+          </Text>
+        </View>
+      )}
+      {(loading || (mode === 'week' && weekLoading)) && (
         <View style={{ alignItems: 'center', paddingVertical: 20 }}>
           <ActivityIndicator color={palette.green} size="large" />
           <Text style={{ color: th.textMuted, fontFamily: F.body, fontSize: 11, marginTop: 8 }}>LOADING RANKINGS FROM SOURCE...</Text>
@@ -755,7 +804,25 @@ export default function RankingsScreen() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ flex: 1, backgroundColor: th.bg }}>
-        {mode === 'mine' && myRanks.length > 0 ? (
+        {mode === 'week' ? (
+          <FlatList
+            data={weekItems}
+            keyExtractor={item => item.key}
+            renderItem={renderRow}
+            ListHeaderComponent={Header}
+            ListEmptyComponent={
+              <Text style={s.weekEmpty}>
+                {weekLoading ? '' : "This week's board posts Thursday morning, before kickoff."}
+              </Text>
+            }
+            contentContainerStyle={{ paddingHorizontal: SP[3], paddingBottom: 100 }}
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={12}
+            maxToRenderPerBatch={12}
+            windowSize={7}
+            removeClippedSubviews
+          />
+        ) : mode === 'mine' && myRanks.length > 0 ? (
           <>
           <FlatList
             data={flatItems}
@@ -823,47 +890,6 @@ export default function RankingsScreen() {
           </ScrollView>
         ) : null}
 
-
-        {mode === 'week' && (
-          <View>
-            {weekLoading && <ActivityIndicator color={th.accentText} style={{ marginTop: 26 }} />}
-            {!weekLoading && !weekBoard && (
-              <Text style={s.weekEmpty}>This week's board posts Thursday morning, before kickoff.</Text>
-            )}
-            {weekBoard && (
-              <>
-                <Text style={s.weekLead}>
-                  Week {weekBoard.week} · adjusted for the defence each player faces and his
-                  team's expected points.
-                </Text>
-                {/* The rank is context, never a verdict. A player who slides is
-                    still whatever his positional rank says he is -- an RB4 on a
-                    hard matchup is an RB4, not a bench. So the position badge
-                    leads and the opponent explains, and nothing renders an
-                    arrow that could be read as "sit him". */}
-                <Text style={s.weekNote}>
-                  A tough matchup moves a player a few spots. It does not bench him — start by
-                  the position rank.
-                </Text>
-                {weekBoard.players
-                  .filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase())
-                            || (p.team ?? '').toLowerCase().includes(search.toLowerCase()))
-                  .filter(p => position === 'ALL' || p.position === position)
-                  .slice(0, 120)
-                  .map(p => (
-                    <View key={p.gsis_id} style={s.weekRow}>
-                      <Text style={s.weekPos}>{p.position}{p.posRank}</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.weekName} numberOfLines={1}>{p.name}</Text>
-                        <Text style={s.weekMeta}>{p.team ?? ''}{p.opponent ? `  vs ${p.opponent}` : ''}</Text>
-                      </View>
-                      <Text style={s.weekOverall}>#{p.rank}</Text>
-                    </View>
-                  ))}
-              </>
-            )}
-          </View>
-        )}
 
         {mode === 'prospects' && (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: SP[3], paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
@@ -992,15 +1018,12 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   quizBannerTitle: { fontFamily: F.bold, fontSize: 12, color: t.accentText, letterSpacing: 1.5 },
   quizBannerSub:   { fontFamily: F.body, fontSize: 11, color: t.textSub, marginTop: 2 },
   quizBannerArrow: { fontFamily: F.bold, fontSize: 18, color: t.accentText, marginLeft: 8 },
-  weekLead:    { color: t.textSub, fontSize: 13, lineHeight: 18, marginTop: 14, marginBottom: 6, paddingHorizontal: 2 },
-  weekNote:    { color: t.textMuted, fontSize: 11.5, lineHeight: 16, marginBottom: 12, paddingHorizontal: 2 },
-  weekEmpty:   { color: t.textMuted, fontSize: 13.5, textAlign: 'center', marginTop: 30, paddingHorizontal: 24, lineHeight: 19 },
-  weekRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11,
-                 borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border },
-  weekPos:     { color: t.accentText, fontFamily: F.mono, fontSize: 12.5, width: 44 },
-  weekName:    { color: t.text, fontSize: 15, fontWeight: '600' },
-  weekMeta:    { color: t.textMuted, fontSize: 11.5, marginTop: 2, letterSpacing: 0.4 },
-  weekOverall: { color: t.textMuted, fontFamily: F.mono, fontSize: 12.5 },
+  weekBanner:      { backgroundColor: t.card, borderWidth: 1, borderColor: t.border,
+                     borderRadius: 10, padding: 12, marginBottom: 4 },
+  weekBannerTitle: { fontFamily: F.bold, fontSize: 11, letterSpacing: 1.2, color: t.accentText },
+  weekBannerBody:  { fontFamily: F.body, fontSize: 11.5, lineHeight: 16, color: t.textSub, marginTop: 4 },
+  weekEmpty:       { color: t.textMuted, fontFamily: F.body, fontSize: 13, textAlign: 'center',
+                     marginTop: 28, paddingHorizontal: 24, lineHeight: 19 },
 
   searchWrap: { backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, marginBottom: 12 },
   searchIcon: { fontSize: 18, color: t.successText, marginRight: 10 },
