@@ -1,3 +1,4 @@
+import { fetchWeeklyBoard, type WeeklyBoard } from '../../services/weeklyBoard';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -34,7 +35,7 @@ import { HeatAccess, useHeatAccess } from '../hooks/useHeatAccess';
 
 type Format   = 'PPR' | 'HALF' | 'STD' | 'SF';
 type Position = 'ALL' | 'QB' | 'RB' | 'WR' | 'TE' | 'K';
-type Mode     = 'community' | 'mine' | 'prospects';
+type Mode     = 'community' | 'week' | 'mine' | 'prospects';
 
 const POS_COLORS: Record<string, { bg: string; color: string }> = {
   QB: { bg: 'rgba(167,139,250,0.15)', color: '#a78bfa' },
@@ -281,6 +282,14 @@ export default function RankingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<Mode>('community');
+  const [weekBoard, setWeekBoard] = useState<WeeklyBoard | null>(null);
+  const [weekLoading, setWeekLoading] = useState(false);
+
+  useEffect(() => {
+    if (mode !== 'week' || weekBoard || weekLoading) return;
+    setWeekLoading(true);
+    fetchWeeklyBoard().then(b => { setWeekBoard(b); setWeekLoading(false); });
+  }, [mode]);
   const [format, setFormat] = useState<Format>('PPR');
   const [leagueType, setLeagueType] = useState<'redraft' | 'dynasty'>('redraft');
   const [position, setPosition] = useState<Position>('ALL');
@@ -649,6 +658,9 @@ export default function RankingsScreen() {
             />
           </View>
         </TouchableOpacity>
+        <TouchableOpacity onPress={() => setMode('week')} style={[s.toggleBtn, mode === 'week' && s.toggleBtnOn]}>
+          <Text style={[s.toggleText, mode === 'week' && s.toggleTextOn]} numberOfLines={1} adjustsFontSizeToFit>THIS WEEK</Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={handleMyRankingsTab} style={[s.toggleBtn, mode === 'mine' && s.toggleBtnOn]}>
           <Text style={[s.toggleText, mode === 'mine' && s.toggleTextOn]} numberOfLines={1} adjustsFontSizeToFit>
             MY RANKINGS{tier === 'free' ? ' \u{1F512}' : ''}
@@ -812,6 +824,47 @@ export default function RankingsScreen() {
         ) : null}
 
 
+        {mode === 'week' && (
+          <View>
+            {weekLoading && <ActivityIndicator color={th.accentText} style={{ marginTop: 26 }} />}
+            {!weekLoading && !weekBoard && (
+              <Text style={s.weekEmpty}>This week's board posts Thursday morning, before kickoff.</Text>
+            )}
+            {weekBoard && (
+              <>
+                <Text style={s.weekLead}>
+                  Week {weekBoard.week} · adjusted for the defence each player faces and his
+                  team's expected points.
+                </Text>
+                {/* The rank is context, never a verdict. A player who slides is
+                    still whatever his positional rank says he is -- an RB4 on a
+                    hard matchup is an RB4, not a bench. So the position badge
+                    leads and the opponent explains, and nothing renders an
+                    arrow that could be read as "sit him". */}
+                <Text style={s.weekNote}>
+                  A tough matchup moves a player a few spots. It does not bench him — start by
+                  the position rank.
+                </Text>
+                {weekBoard.players
+                  .filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase())
+                            || (p.team ?? '').toLowerCase().includes(search.toLowerCase()))
+                  .filter(p => position === 'ALL' || p.position === position)
+                  .slice(0, 120)
+                  .map(p => (
+                    <View key={p.gsis_id} style={s.weekRow}>
+                      <Text style={s.weekPos}>{p.position}{p.posRank}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.weekName} numberOfLines={1}>{p.name}</Text>
+                        <Text style={s.weekMeta}>{p.team ?? ''}{p.opponent ? `  vs ${p.opponent}` : ''}</Text>
+                      </View>
+                      <Text style={s.weekOverall}>#{p.rank}</Text>
+                    </View>
+                  ))}
+              </>
+            )}
+          </View>
+        )}
+
         {mode === 'prospects' && (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: SP[3], paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
             <Header />
@@ -939,6 +992,16 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
   quizBannerTitle: { fontFamily: F.bold, fontSize: 12, color: t.accentText, letterSpacing: 1.5 },
   quizBannerSub:   { fontFamily: F.body, fontSize: 11, color: t.textSub, marginTop: 2 },
   quizBannerArrow: { fontFamily: F.bold, fontSize: 18, color: t.accentText, marginLeft: 8 },
+  weekLead:    { color: t.textSub, fontSize: 13, lineHeight: 18, marginTop: 14, marginBottom: 6, paddingHorizontal: 2 },
+  weekNote:    { color: t.textMuted, fontSize: 11.5, lineHeight: 16, marginBottom: 12, paddingHorizontal: 2 },
+  weekEmpty:   { color: t.textMuted, fontSize: 13.5, textAlign: 'center', marginTop: 30, paddingHorizontal: 24, lineHeight: 19 },
+  weekRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11,
+                 borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border },
+  weekPos:     { color: t.accentText, fontFamily: F.mono, fontSize: 12.5, width: 44 },
+  weekName:    { color: t.text, fontSize: 15, fontWeight: '600' },
+  weekMeta:    { color: t.textMuted, fontSize: 11.5, marginTop: 2, letterSpacing: 0.4 },
+  weekOverall: { color: t.textMuted, fontFamily: F.mono, fontSize: 12.5 },
+
   searchWrap: { backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, marginBottom: 12 },
   searchIcon: { fontSize: 18, color: t.successText, marginRight: 10 },
   searchInput:{ flex: 1, fontFamily: F.body, fontSize: 11, letterSpacing: 1.5, color: t.text, paddingVertical: 12 },

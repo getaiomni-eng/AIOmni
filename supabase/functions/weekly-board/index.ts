@@ -83,21 +83,51 @@ Deno.serve(async (req) => {
   const dvp = new Map<string, number>();
   for (const d of dvpRows) if (d.season === dvpSeason) dvp.set(`${d.team}:${d.position}`, d.rank_vs_pos);
 
-  // Vegas implied totals, best effort. A missing feed must not stop the board
-  // -- it just means the total multiplier is neutral for everyone.
-  let totals = new Map<string, number>();
+  // Vegas implied totals.
+  //
+  // The first version called external-api-proxy with the anon key. That proxy
+  // requires a USER JWT (services/liveData.ts:proxyFetch reads
+  // session.access_token), so it rejected every request and the failure was
+  // swallowed into an empty map -- reported as "Vegas has no lines", which
+  // was never true. Week 1 lines have been out for months.
+  //
+  // This runs server-side with the same project secrets, so call The Odds API
+  // directly rather than round-tripping through a proxy built for clients.
+  const ODDS_KEY = Deno.env.get("ODDS_API_KEY");
+  const TEAM: Record<string, string> = {
+    "Arizona Cardinals":"ARI","Atlanta Falcons":"ATL","Baltimore Ravens":"BAL","Buffalo Bills":"BUF",
+    "Carolina Panthers":"CAR","Chicago Bears":"CHI","Cincinnati Bengals":"CIN","Cleveland Browns":"CLE",
+    "Dallas Cowboys":"DAL","Denver Broncos":"DEN","Detroit Lions":"DET","Green Bay Packers":"GB",
+    "Houston Texans":"HOU","Indianapolis Colts":"IND","Jacksonville Jaguars":"JAX","Kansas City Chiefs":"KC",
+    "Las Vegas Raiders":"LV","Los Angeles Chargers":"LAC","Los Angeles Rams":"LAR","Miami Dolphins":"MIA",
+    "Minnesota Vikings":"MIN","New England Patriots":"NE","New Orleans Saints":"NO","New York Giants":"NYG",
+    "New York Jets":"NYJ","Philadelphia Eagles":"PHI","Pittsburgh Steelers":"PIT","San Francisco 49ers":"SF",
+    "Seattle Seahawks":"SEA","Tampa Bay Buccaneers":"TB","Tennessee Titans":"TEN","Washington Commanders":"WAS",
+  };
+  const totals = new Map<string, number>();
+  let oddsGames = 0, oddsErr: string | null = null;
   try {
-    const r = await fetch(`${SUPABASE_URL}/functions/v1/external-api-proxy?service=odds`, {
-      headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
-    });
-    if (r.ok) {
-      const odds = await r.json();
-      for (const g of (Array.isArray(odds) ? odds : odds.games ?? [])) {
-        if (g.homeTeam && g.homeImpliedScore) totals.set(g.homeTeam, Number(g.homeImpliedScore));
-        if (g.awayTeam && g.awayImpliedScore) totals.set(g.awayTeam, Number(g.awayImpliedScore));
+    if (!ODDS_KEY) throw new Error("ODDS_API_KEY not set");
+    const r = await fetch(`https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/?apiKey=${ODDS_KEY}&regions=us&markets=spreads,totals&oddsFormat=american`);
+    if (!r.ok) throw new Error(`odds ${r.status}`);
+    const games = await r.json();
+    for (const g of games) {
+      const bk = (g.bookmakers ?? [])[0];
+      if (!bk) continue;
+      const spreads = (bk.markets ?? []).find((m: any) => m.key === "spreads");
+      const tot     = (bk.markets ?? []).find((m: any) => m.key === "totals");
+      const line    = tot?.outcomes?.[0]?.point;
+      if (!spreads || !line) continue;
+      for (const o of spreads.outcomes ?? []) {
+        const abbr = TEAM[o.name];
+        // implied = total/2 - spread/2 ; a favourite's spread is negative,
+        // so this correctly gives them the larger share of the total.
+        if (abbr && typeof o.point === "number") totals.set(abbr, Number((line / 2 - o.point / 2).toFixed(2)));
       }
+      oddsGames++;
     }
-  } catch { /* neutral for everyone */ }
+  } catch (e) { oddsErr = String((e as any)?.message ?? e); }
+
   const avgTotal = totals.size ? [...totals.values()].reduce((a, b) => a + b, 0) / totals.size : null;
 
   // ── adjust ────────────────────────────────────────────────────────────
@@ -138,8 +168,8 @@ Deno.serve(async (req) => {
       season, week, format: "ppr", gsis_id: gsis, player_name: p.name,
       position: p.position, team: p.team, opponent: o,
       ros_score: p.score, dvp_rank: dr,
-      dvp_mult: Number(dvpShift.toFixed(2)),      // stored as a RANK SHIFT now
-      implied_total: it, total_mult: Number(totalShift.toFixed(2)),
+      dvp_shift: Number(dvpShift.toFixed(2)),
+      implied_total: it, total_shift: Number(totalShift.toFixed(2)),
       week_score: Number(effective.toFixed(3)),   // lower = better
       rank: 0, pos_rank: 0,
     });
@@ -186,8 +216,8 @@ Deno.serve(async (req) => {
     ok: true, season, week, players: rows.length, duplicates_dropped: dupesDropped,
     player_index_size: players.length,
     dvp_season_used: dvpSeason,
-    vegas_totals: totals.size,
+    vegas_totals: totals.size, odds_games: oddsGames, odds_error: oddsErr,
     top10: rows.slice(0, 10).map(r =>
-      `${r.rank}. ${r.player_name} ${r.position}${r.pos_rank} vs ${r.opponent} (dvp ${r.dvp_rank ?? "-"}, shift ${r.dvp_mult > 0 ? "+" : ""}${r.dvp_mult})`),
+      `${r.rank}. ${r.player_name} ${r.position}${r.pos_rank} vs ${r.opponent} (dvp ${r.dvp_rank ?? "-"}, shift ${r.dvp_shift > 0 ? "+" : ""}${r.dvp_shift})`),
   }, null, 2), { headers: CORS });
 });
