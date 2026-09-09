@@ -51,3 +51,7 @@ sender_name = "AIOmni"
 # analyst content. API keys stay server-side.
 [functions.site-live]
 verify_jwt = false
+
+# Cron-invoked with the anon key like the other scheduled jobs.
+[functions.snapshot-rankings]
+verify_jwt = false
