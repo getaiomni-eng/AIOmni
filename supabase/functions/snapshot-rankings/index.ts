@@ -71,7 +71,10 @@ async function nameToGsis(): Promise<Map<string, string>> {
 function dedupe(rows: Row[]): Row[] {
   const best = new Map<string, Row>();
   for (const r of rows) {
-    const k = norm(r.player_name);
+    // Key on gsis_id when we have one. Two different people can share a name
+    // -- Justin Jefferson is both a Vikings WR and a Browns linebacker -- and
+    // keying on name would silently drop one of them.
+    const k = r.gsis_id ?? `name:${norm(r.player_name)}`;
     const prev = best.get(k);
     if (!prev || r.rank < prev.rank) best.set(k, r);
   }

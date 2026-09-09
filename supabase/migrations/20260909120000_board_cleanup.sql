@@ -21,14 +21,42 @@
 --    dvp_mult and total_mult were multipliers. They now carry RANK SHIFTS,
 --    because multiplying broke on negative scores. Names should say so.
 
--- ── 1. one row per player per format ────────────────────────────────────
+-- ── 1. one row per real fantasy player, per format ──────────────────────
+--
+-- TWO distinct bugs produce duplicate names on the board, and they need
+-- different fixes:
+--
+--   a) SAME PERSON, TWO IDS. A 2026 rookie is valued as draft capital
+--      (gsis 2026_pick_032, score 33.81) and again as a player once he has a
+--      real id (00-0041512, score 3.20). Both survive onto a REDRAFT board.
+--
+--   b) TWO PEOPLE, SAME NAME. Justin Jefferson the Vikings WR (00-0036322)
+--      and Justin Jefferson the Browns rookie LINEBACKER (00-0041075). The
+--      engine matches identity by name, so it emitted the linebacker as a
+--      WR2 with Minnesota's team attached. Deduping by name alone would have
+--      silently deleted a real player -- and kept the wrong one half the time.
+--
+-- So: filter to genuine fantasy positions FIRST, using the position on the
+-- player record rather than the one the ranking row claims. That removes the
+-- linebacker outright. Only then collapse remaining same-name rows, keeping
+-- the real NFL id over a draft-pick placeholder.
+--
+-- The engine should key identity on gsis_id rather than name; this is the
+-- containment, not the cure.
 CREATE OR REPLACE VIEW public.public_rankings AS
-  SELECT DISTINCT ON (format, name)
-         format, rank, gsis_id, name, position, team, pos_rank, score, tier
-    FROM public.nfl_proprietary_rankings_v2
-   -- Prefer the real NFL id over a draft-pick placeholder; then the better
-   -- rank if a name somehow still collides.
-   ORDER BY format, name, (gsis_id LIKE '00-%') DESC, rank ASC;
+  SELECT DISTINCT ON (r.format, r.name)
+         r.format, r.rank, r.gsis_id, r.name, r.position, r.team,
+         r.pos_rank, r.score, r.tier
+    FROM public.nfl_proprietary_rankings_v2 r
+    LEFT JOIN public.nfl_players p ON p.gsis_id = r.gsis_id
+   WHERE
+     -- Keep pick placeholders (no player record yet) and anyone whose real
+     -- position is fantasy-relevant. Drop players the roster says are not.
+     (p.gsis_id IS NULL OR p.position IN ('QB','RB','WR','TE','K','DEF','DST'))
+     -- And never trust a ranking row whose claimed position contradicts the
+     -- player record; that is the name-collision signature.
+     AND (p.position IS NULL OR r.position = p.position)
+   ORDER BY r.format, r.name, (r.gsis_id LIKE '00-%') DESC, r.rank ASC;
 ALTER VIEW public.public_rankings SET (security_invoker = off);
 GRANT SELECT ON public.public_rankings TO anon, authenticated;
 
