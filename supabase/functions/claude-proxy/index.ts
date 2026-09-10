@@ -97,6 +97,32 @@ async function checkRateLimit(sb: any, scope: string, ip: string): Promise<boole
     return true; // fail-open on rate-limit infrastructure issues
   }
 }
+// True when the bearer is a PROJECT key (anon / service_role) rather than a
+// signed-in user's JWT. Checks the role claim instead of string-matching the
+// anon key, so it keeps working across key rotation and the JWT →
+// publishable-key format change.
+//
+// Deliberately conservative: anything it cannot parse falls through to
+// sb.auth.getUser(), which is the real authority. This function's only job is
+// to reject the obvious case cheaply — never to admit anyone.
+function isProjectKey(token: string): boolean {
+  // Newer non-JWT formats are project keys by construction.
+  if (token.startsWith('sb_publishable_') || token.startsWith('sb_secret_')) return true;
+  if (token === SUPABASE_ANON_KEY) return true;   // fast path, when it matches
+
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  try {
+    // base64url → base64, then pad. atob is available in Deno.
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const role = JSON.parse(atob(padded))?.role;
+    return role === 'anon' || role === 'service_role';
+  } catch {
+    return false;   // unparsable → let getUser decide
+  }
+}
+
 function getRequestIp(req: Request): string {
   // Supabase fronts edge functions with a CDN that sets these headers.
   const xff = req.headers.get('x-forwarded-for');
@@ -137,20 +163,47 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization") || "";
     const token = authHeader.replace(/^Bearer\s+/i, "");
 
-    // Reject if no Authorization header at all, OR if it's just the anon
-    // key with no user JWT. Every call must come from a signed-in user.
-    if (!token || token === SUPABASE_ANON_KEY) {
-      return jsonError(401, "Authentication required", origin);
-    }
-
+    // The client is built BEFORE the anon-key rejection below, and that
+    // ordering is the whole point of this block (2026-09-10).
+    //
+    // Previously the rejection returned 401 above this line, so it never
+    // reached logSecurityEvent — and the anon-key-as-Bearer case is by far
+    // the most common rejection this proxy serves, since every guest who
+    // taps an AI feature produces one. security_events read 0 rows in
+    // production and looked like "no abuse" when it actually meant the
+    // sensor sat downstream of the thing it was built to watch.
     const sb = createClient(SUPABASE_URL!, SUPABASE_SERVICE_KEY!);
 
-    // Per-IP throttle BEFORE auth lookup — stops a flood of bad tokens
-    // from spamming Supabase Auth.
+    // Per-IP throttle FIRST — stops a flood of bad tokens (anon-key or
+    // otherwise) from spamming either Supabase Auth or the events table.
     const ip = getRequestIp(req);
     if (!(await checkRateLimit(sb, 'claude-proxy', ip))) {
       logSecurityEvent(sb, 'rate_limit', null, ip, 'claude-proxy', {});
       return jsonError(429, "Too many requests", origin);
+    }
+
+    // Reject if no Authorization header at all, OR if it carries a
+    // project-level key rather than a user JWT. Every call must come from a
+    // signed-in user.
+    //
+    // The `token === SUPABASE_ANON_KEY` comparison alone was NOT enough, and
+    // had silently never fired (verified 2026-09-10 by calling this endpoint
+    // with the real anon key: it fell through to getUser and came back
+    // "Invalid or expired session" instead of "Authentication required").
+    // Either the env var is unset in the function, or the injected value is
+    // the newer non-JWT publishable format while clients still send the
+    // legacy JWT. Not a hole — getUser rejects the anon key correctly — but
+    // it cost a round trip to Supabase Auth on every rejected call, and it
+    // meant the cheap guard the 2026-05-26 hardening added was decorative.
+    //
+    // Reading the role claim off the token is robust to both causes and to
+    // any future key rotation: a project key says role 'anon' or
+    // 'service_role', a real user JWT says 'authenticated'.
+    if (!token || isProjectKey(token)) {
+      logSecurityEvent(sb, 'unauthorized', null, ip, 'claude-proxy', {
+        reason: token ? 'project_key_as_bearer' : 'no_token',
+      });
+      return jsonError(401, "Authentication required", origin);
     }
 
     const { data: { user }, error: authErr } = await sb.auth.getUser(token);
