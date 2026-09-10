@@ -70,16 +70,31 @@ export async function buildMatchupContext(
 
     const weather = await fetchGameWeather(teamsOf([mine, opp])).catch(() => [] as WeatherReport[]);
 
-    const projTotal = (r: Roster | null) =>
-      (r?.starters ?? []).reduce((sum, s) => sum + (s.projected ?? 0), 0);
+    // Prefer the matchup side's projected total -- the adapter builds it from
+    // Sleeper's projections and refuses to publish a partial sum. Fall back to
+    // summing the roster slots, and if neither exists say so explicitly rather
+    // than printing 0.0, which the model reasonably read as a real projection
+    // of zero and refused to call the game on.
+    const slotSum = (r: Roster | null) => {
+      const st = r?.starters ?? [];
+      const vals = st.map(x => x.projected).filter((v): v is number => typeof v === 'number');
+      return vals.length >= Math.ceil(st.length * 0.6)
+        ? vals.reduce((a, b) => a + b, 0) : null;
+    };
+    const totalLine = (label: string, side: number | undefined, r: Roster | null) => {
+      const v = side ?? slotSum(r);
+      return v != null ? `${label}: ${v.toFixed(1)}\n`
+                       : `${label}: not published by this platform for this week\n`;
+    };
 
     let out = `WEEK ${week} MATCHUP\n\nYOUR TEAM: ${mine.teamName} (${mine.record.wins}-${mine.record.losses}${mine.record.ties ? '-' + mine.record.ties : ''})\n`;
-    out += `Projected total: ${projTotal(mine).toFixed(1)}\n`;
+    const mySide = mm ? (mm.home.isMe ? mm.home : mm.away) : null;
+    out += totalLine('Projected total', mySide?.projected, mine);
     out += mine.starters.map(slotLine).join('\n');
 
     if (opp) {
       out += `\n\nOPPONENT: ${opp.teamName} (${opp.record.wins}-${opp.record.losses}${opp.record.ties ? '-' + opp.record.ties : ''})\n`;
-      out += `Projected total: ${projTotal(opp).toFixed(1)}\n`;
+      out += totalLine('Projected total', oppSide?.projected, opp);
       out += opp.starters.map(slotLine).join('\n');
     } else {
       out += `\n\nOPPONENT: lineup not available this week — do NOT invent their players or their score.`;

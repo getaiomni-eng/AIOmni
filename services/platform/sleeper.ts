@@ -3,6 +3,7 @@
 // All Sleeper API calls live here. No other file in the app should import
 // from api.sleeper.app.
 
+import { fetchWeekProjections, projectionFor, type ProjFormat } from '../sleeperProjections';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getActiveSleeperIds } from '../nflPlayers';
 import {
@@ -675,6 +676,34 @@ class SleeperPlatform implements FantasyPlatform {
       groups.get(m.matchup_id)!.push(m);
     }
 
+    // Projected totals. `projected` was hardcoded undefined, which is why the
+    // Coach answered matchup questions with "both projected totals show 0.0,
+    // so I can't call this on the numbers" -- it had none to call it on.
+    //
+    // Summed over each side's STARTERS only, since a bench player contributes
+    // nothing to a score. Best-effort: if the projections endpoint is down the
+    // totals stay undefined and every caller behaves exactly as it does today.
+    const fmt: ProjFormat =
+      league.scoringFormat === 'standard' ? 'std'
+      : league.scoringFormat === 'half' ? 'half'
+      : 'ppr';
+    const projMap = await fetchWeekProjections(String(league.season ?? new Date().getFullYear()), targetWeek)
+      .catch(() => new Map<string, Record<string, number>>());
+
+    const projectedFor = (m: any): number | undefined => {
+      if (!projMap.size) return undefined;
+      const ids: string[] = m?.starters ?? [];
+      if (!ids.length) return undefined;
+      let total = 0, hit = 0;
+      for (const id of ids) {
+        const v = projectionFor(projMap, id, fmt);
+        if (v != null) { total += v; hit++; }
+      }
+      // A total built from two of nine starters is worse than no total,
+      // because it looks authoritative and is not.
+      return hit >= Math.ceil(ids.length * 0.6) ? Math.round(total * 10) / 10 : undefined;
+    };
+
     const result: Matchup[] = [];
     for (const [matchupId, pair] of groups) {
       if (pair.length !== 2) continue;
@@ -684,7 +713,7 @@ class SleeperPlatform implements FantasyPlatform {
           rosterId: String(p.roster_id),
           teamName: r?.teamName || `Team ${p.roster_id}`,
           points: p.points ?? 0,
-          projected: undefined,
+          projected: projectedFor(p),
           isMe: r?.isMe ?? false,
         };
       });
