@@ -18,7 +18,21 @@ const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE  = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 
-const BATCH_SIZE   = 8;       // articles per run
+// 12 per run, hourly (was 8 per run every 2h — cron changed in
+// 20260910200000_content_reaper.sql). 96 articles/day -> 288/day.
+//
+// Why frequency and not a much bigger batch: the extraction loop below is
+// SEQUENTIAL (fetch page, then one Anthropic call, per item), so batch size
+// maps almost linearly onto wall-clock. 8 items runs ~45s; 24 would be ~150s
+// and start crowding the edge function's request ceiling. Running twice as
+// often triples throughput while a single run only grows by half.
+//
+// 96/day was never a decision — it fell out of a batch size and silently
+// became the sampling rate behind every analyst take in the app. The pending
+// backlog (6,191 articles on 2026-09-10) is what fell off the bottom:
+// ordering is newest-first, so those age out at the 90-day retention sweep
+// having never been read.
+const BATCH_SIZE   = 12;      // articles per run
 const BODY_CAP     = 15_000;  // chars of stripped article text sent to the model
 const MODEL        = 'claude-haiku-4-5-20251001';
 
