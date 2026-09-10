@@ -25,6 +25,7 @@ import { CLASS_OF_2025_TEXT, getSeasonContext2026, ROOKIE_BOARD_2026_TEXT } from
 import { FANTASY_FOOTBALL_KNOWLEDGE } from '../../services/fantasyKnowledge';
 import { getCurrentTier } from '../../services/purchases';
 import { learnFromExchange, getCoachProfile } from '../../services/supabase';
+import { captureRuleQuery } from '../../services/judgmentCapture';
 import { getPlayerContext } from '../../services/playerIntelligence';
 import { PositionPill } from '../components/Atoms';
 import { AIOmniLogo } from '../components/AIOmniLogo';
@@ -1586,6 +1587,21 @@ Capture rookies and veterans exactly.`,
       await incrementPrompt();
       setRemaining(r => Math.max(0, r - 1));
       setMessages(prev => [...prev.slice(0, -1), { role:'ai', text: reply }]);
+
+      // Judgment capture: rules questions ONLY. classifyRuleQuestion drops
+      // the start/sit and waiver-target traffic, which belongs in
+      // ai_response_metadata rather than the rules dataset. Fire-and-forget
+      // by contract — never awaited, swallows its own failures.
+      // Logs safeText, not the raw input: it is what the model actually saw,
+      // and it has already been through sanitizePromptInput.
+      captureRuleQuery({
+        question:  safeText,
+        answer:    reply,
+        // LeagueContext carries no league id, only a display name, so the
+        // ref is platform:name. Good enough to group by league, not enough
+        // to join against a platform's own ids.
+        leagueRef: selectedLeague ? `${selectedLeague.platform}:${selectedLeague.name}` : null,
+      });
 
       if (tier === 'pro' && selectedLeague) {
         // Fire-and-forget the learning loop — coach-learn extracts + consolidates

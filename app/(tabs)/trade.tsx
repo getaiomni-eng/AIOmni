@@ -13,6 +13,7 @@ import { fetchAIOmniFormula, fetchKTCValues, fetchNFLInjuries, fetchSnapCounts, 
 import { getCurrentTier } from '../../services/purchases';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
 import { consumePrompt, hasLinkedPlatform } from '../../services/promptQuota';
+import { captureTradeGrade } from '../../services/judgmentCapture';
 import { C, F, R, SP, SZ } from '../constants/tokens';
 import { useTheme, type ThemeTokens } from '../constants/theme';
 import { Icon } from '../components/AIOmniIcons';
@@ -672,6 +673,33 @@ ${marketMath}${(() => {
         setYouGiveGrade(lockedGive);
         setVerdict(parsed.verdict ?? '');
         setAnalysis(parsed.analysis ?? '');
+
+        // Judgment capture. Only on a successful parse: a trade we failed to
+        // grade is not a graded trade, and logging it would put rows in the
+        // dataset whose ruling never reached the user. Fire-and-forget.
+        (() => {
+          const capSel = ctxChoice !== 'general'
+            ? ctxOptions.find(o => o.key === ctxChoice) : undefined;
+          captureTradeGrade({
+            leagueRef: capSel ? `${capSel.platform}:${capSel.id}` : null,
+            giving:    safeGiving,
+            getting:   safeGetting,
+            ktcGiving:  givingGrounded.ktcTotal,
+            ktcGetting: gettingGrounded.ktcTotal,
+            // netPct is 0 (not null) when market data is missing — passing
+            // that through would read as "dead even" instead of "unknown".
+            netPct: hasMarketData ? netPct : null,
+            gradeReceive: lockedReceive,
+            gradeGive:    lockedGive,
+            format,
+            engineFormat: engineFmt,
+            engineGrounded,
+            hasMarketData,
+            hasRosterContext: myRoster.length > 0,
+            verdict:  parsed.verdict ?? '',
+            analysis: parsed.analysis ?? '',
+          });
+        })();
       } else {
         console.log('Parse error: no valid grade JSON found in response');
         setVerdict('Could not parse response. Try again.');
