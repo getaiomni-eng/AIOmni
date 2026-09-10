@@ -21,7 +21,9 @@ const CORS = { "Access-Control-Allow-Origin": "*", "Content-Type": "application/
 
 // Roster-level absences. Not a week-1 lineup decision -- nobody is weighing
 // whether to start a player on IR -- so these leave the board entirely.
-const ROSTER_OUT = new Set(["Injured Reserve", "Physically Unable to Perform", "Non-Football Injury", "Suspension"]);
+// Sleeper's vocabulary, with ESPN's kept as aliases so either source works.
+const ROSTER_OUT = new Set(["IR", "PUP", "Sus", "NA", "DNR", "COV",
+  "Injured Reserve", "Physically Unable to Perform", "Non-Football Injury", "Suspension"]);
 
 // Week-specific unavailability. These DO belong on the board, because the
 // user is actively wondering about them -- but they must sort below every
@@ -110,17 +112,20 @@ Deno.serve(async (req) => {
   const injury = new Map<string, string>();
   let injCount = 0, injErr: string | null = null;
   try {
-    const r = await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries");
-    if (!r.ok) throw new Error(`espn injuries ${r.status}`);
-    const d = await r.json();
-    for (const t of d.injuries ?? []) {
-      for (const it of t.injuries ?? []) {
-        const nm = it?.athlete?.displayName;
-        const st = it?.status;
-        if (!nm || !st || st === "Active") continue;
-        injury.set(norm(nm), st);
-        injCount++;
-      }
+    // Sleeper, not ESPN. ESPN's site.api returns 200 from a laptop and 403
+    // from a Supabase edge function -- it blocks datacenter IPs -- so the
+    // first version silently listed zero injuries and applied nothing.
+    // Sleeper's player DB carries injury_status on every player, is reachable
+    // from anywhere, and is already fetched elsewhere in this project.
+    const r = await fetch("https://api.sleeper.app/v1/players/nfl");
+    if (!r.ok) throw new Error(`sleeper players ${r.status}`);
+    const db = await r.json();
+    for (const pl of Object.values<any>(db)) {
+      const st = pl?.injury_status;
+      const nm = pl?.full_name ?? (pl?.first_name && pl?.last_name ? `${pl.first_name} ${pl.last_name}` : null);
+      if (!nm || !st) continue;
+      injury.set(norm(nm), st);
+      injCount++;
     }
   } catch (e) { injErr = String((e as any)?.message ?? e); }
 
