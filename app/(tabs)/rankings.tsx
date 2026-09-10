@@ -668,7 +668,11 @@ export default function RankingsScreen() {
       <PlayerCard
         player={item.player}
         index={item.displayIndex}
-        onChangeRank={openMoveModal}
+        // MY RANKINGS only. THIS WEEK and PULSE are computed boards, not
+        // lists you reorder, and the move modal edits myRanks -- so on any
+        // other tab the button both implies something false and would act on
+        // the wrong dataset.
+        onChangeRank={mode === 'mine' ? openMoveModal : undefined}
         onOpenCard={(p) => { setCardPlayer(p); setCardVisible(true); }}
         heatAccess={heatAccess}
       />
@@ -792,10 +796,12 @@ export default function RankingsScreen() {
           </Text>
         </View>
       )}
-      {(loading || (mode === 'week' && weekLoading)) && (
+      {((mode !== 'week' && loading) || (mode === 'week' && weekLoading)) && (
         <View style={{ alignItems: 'center', paddingVertical: 20 }}>
           <ActivityIndicator color={palette.green} size="large" />
-          <Text style={{ color: th.textMuted, fontFamily: F.body, fontSize: 11, marginTop: 8 }}>LOADING RANKINGS FROM SOURCE...</Text>
+          <Text style={{ color: th.textMuted, fontFamily: F.body, fontSize: 11, marginTop: 8 }}>
+            {mode === 'week' ? 'BUILDING THIS WEEK\u2019S BOARD...' : 'LOADING RANKINGS FROM SOURCE...'}
+          </Text>
         </View>
       )}
     </View>
