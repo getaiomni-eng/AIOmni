@@ -16,6 +16,8 @@ import { logCaught } from './util/logCaught';
 
 export interface WeeklyPlayer {
   gsis_id: string;
+  /** Sleeper id, for the headshot. Null for players not yet cross-mapped. */
+  sleeperId?: string;
   name: string;
   position: string;
   team: string | null;
@@ -46,7 +48,7 @@ export async function fetchWeeklyBoard(format = 'ppr'): Promise<WeeklyBoard | nu
     const { season, week } = latest[0] as any;
     const { data, error } = await supabase
       .from('public_weekly_board')
-      .select('gsis_id, player_name, position, team, opponent, rank, pos_rank')
+      .select('gsis_id, sleeper_id, player_name, position, team, opponent, rank, pos_rank, injury_status, weather_note, startable')
       .eq('format', format).eq('season', season).eq('week', week)
       .order('rank', { ascending: true })
       .limit(300);
@@ -55,7 +57,8 @@ export async function fetchWeeklyBoard(format = 'ppr'): Promise<WeeklyBoard | nu
     return {
       season, week,
       players: data.map((r: any) => ({
-        gsis_id: r.gsis_id, name: r.player_name, position: r.position,
+        gsis_id: r.gsis_id, sleeperId: r.sleeper_id ?? undefined,
+        name: r.player_name, position: r.position,
         team: r.team, opponent: r.opponent, rank: r.rank, posRank: r.pos_rank,
       })),
     };

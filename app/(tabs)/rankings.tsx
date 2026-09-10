@@ -582,6 +582,9 @@ export default function RankingsScreen() {
         || (p.team ?? '').toLowerCase().includes(search.toLowerCase()))
       .map(p => ({
         id: p.gsis_id,
+        // PlayerPhoto keys the headshot on this; without it every row shows
+        // the "?" placeholder while PULSE shows real photos on the same screen.
+        sleeperId: p.sleeperId,
         name: p.name,
         position: p.position,
         team: p.team ?? '',

@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     (async () => {
       const all: any[] = [];
       for (let off = 0; off < 8000; off += 1000) {
-        const page = await j(`nfl_players?select=gsis_id,full_name&limit=1000&offset=${off}`);
+        const page = await j(`nfl_players?select=gsis_id,sleeper_id,full_name&limit=1000&offset=${off}`);
         if (!page.length) break;
         all.push(...page);
         if (page.length < 1000) break;
@@ -86,7 +86,12 @@ Deno.serve(async (req) => {
   if (!sched.length) return new Response(JSON.stringify({ ok: false, error: `no schedule for ${season} wk ${week}` }), { status: 500, headers: CORS });
 
   const nameToGsis = new Map<string, string>();
-  for (const p of players) if (p.full_name && p.gsis_id) nameToGsis.set(norm(p.full_name), p.gsis_id);
+  const gsisToSleeper = new Map<string, string>();
+  for (const p of players) {
+    if (p.full_name && p.gsis_id) nameToGsis.set(norm(p.full_name), p.gsis_id);
+    // The headshot needs a Sleeper id; a gsis id 404s on their CDN.
+    if (p.gsis_id && p.sleeper_id) gsisToSleeper.set(p.gsis_id, String(p.sleeper_id));
+  }
 
   // opponent for each team this week; a team absent from the schedule is on bye
   const opp = new Map<string, string>();
@@ -279,7 +284,9 @@ Deno.serve(async (req) => {
       : p.rank - dvpShift - totalShift - injShift - wxShift;
 
     rows.push({
-      season, week, format: "ppr", gsis_id: gsis, player_name: p.name,
+      season, week, format: "ppr", gsis_id: gsis,
+      sleeper_id: gsisToSleeper.get(gsis) ?? null,
+      player_name: p.name,
       position: p.position, team: p.team, opponent: o,
       ros_score: p.score, dvp_rank: dr,
       injury_status: inj, injury_shift: weekOut ? null : injShift,
@@ -347,6 +354,7 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({
     ok: true, season, week, players: rows.length, duplicates_dropped: dupesDropped,
     player_index_size: players.length,
+    with_photo: rows.filter((r: any) => r.sleeper_id).length,
     dvp_season_used: dvpSeason,
     vegas_totals: totals.size, odds_games: oddsGames, odds_error: oddsErr,
     injuries_listed: injCount, injuries_error: injErr, stadiums_with_weather: wxCount,
