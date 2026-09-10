@@ -141,9 +141,15 @@ Deno.serve(async (req) => {
   // "we have him WR6, the market has him WR43".
   const marketRank = new Map<string, number>();
   {
+    // Only players the market actually expects to produce. Sleeper returns a
+    // row for every player alive, most projected 0.0, and ranking those
+    // produced "Tyreek Hill, market WR1016" -- which reads as the market
+    // hating him when it means he is not expected to play at all. A 0.0
+    // projection is information, but it is not a ranking.
     const byPos: Record<string, { id: string; pts: number }[]> = {};
     for (const [id, v] of proj) {
       if (!["QB","RB","WR","TE"].includes(v.pos)) continue;
+      if (!(v.ppr > 0)) continue;
       (byPos[v.pos] ??= []).push({ id, pts: v.ppr });
     }
     for (const list of Object.values(byPos)) {
@@ -333,7 +339,14 @@ Deno.serve(async (req) => {
     rows.push({
       season, week, format: "ppr", gsis_id: gsis,
       sleeper_id: gsisToSleeper.get(gsis) ?? null,
-      proj_pts: (() => { const sid = gsisToSleeper.get(gsis); return sid ? (proj.get(sid)?.ppr ?? null) : null; })(),
+      // A 0.0 projection is stored as null: the app would render "0.0" as a
+      // real forecast of zero, which is what made the Coach refuse to call a
+      // matchup earlier in this same project.
+      proj_pts: (() => {
+        const sid = gsisToSleeper.get(gsis);
+        const v = sid ? proj.get(sid)?.ppr : undefined;
+        return v != null && v > 0 ? v : null;
+      })(),
       market_pos_rank: (() => { const sid = gsisToSleeper.get(gsis); return sid ? (marketRank.get(sid) ?? null) : null; })(),
       player_name: p.name,
       position: p.position, team: p.team, opponent: o,
