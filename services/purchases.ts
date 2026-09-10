@@ -147,11 +147,49 @@ export async function getPackagesWithDiagnostic(): Promise<PackagesDiagnostic> {
   }
 }
 
+// ── Account gate for purchases ────────────────────────────────────────────────
+// A guest CAN reach the paywall (the "Continue without account" path is
+// deliberate — App Review 5.1.1(i) is pointed straight at it, and browsing
+// rankings without an account is the top of the funnel). What a guest must
+// NOT do is BUY, because every downstream step then breaks:
+//
+//   · Purchases.configure ran with appUserID undefined, so RevenueCat books
+//     the sale against $RCAnonymousID:…
+//   · revenuecat-webhook cannot map that to a users row, logs
+//     'unmapped app_user_id' and returns 200 — RC marks it delivered and
+//     never retries.
+//   · getCurrentTier() returns higherTier(dbTier, rcTier), so the APP shows
+//     them Pro off the local RC entitlement…
+//   · …while services/ai.ts throws not_authenticated on every AI call,
+//     because claude-proxy rejects anything without a real user JWT.
+//
+// Net: they pay, the app says Pro, and nothing works. The guard lives here
+// rather than in paywall.tsx because there are three purchase entry points
+// (paywall subscriptions, paywall credit, the inline draft credit button)
+// and a screen-level check leaves the next one someone adds unprotected.
+//
+// Not a hard failure — 'needs_account' is a distinct result so the caller
+// can send them to sign-in and back, which is the conversion we want anyway.
+export type PurchaseBlock = 'needs_account';
+
+async function hasAccount(): Promise<boolean> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return !!session?.access_token;
+  } catch {
+    // Auth infrastructure is down. Fail CLOSED: a purchase we cannot
+    // attribute is worse than a purchase deferred by a minute.
+    return false;
+  }
+}
+
 // ── Purchase ──────────────────────────────────────────────────────────────────
 export async function purchasePackage(pkg: PurchasesPackage): Promise<{
   success: boolean;
   tier?: Tier;
+  blocked?: PurchaseBlock;
 }> {
+  if (!(await hasAccount())) return { success: false, blocked: 'needs_account' };
   try {
     const { customerInfo } = await Purchases.purchasePackage(pkg);
     const tier = getTierFromEntitlements(customerInfo.entitlements.active);
@@ -362,7 +400,16 @@ export async function getAICreditPrice(): Promise<string | null> {
   } catch { return null; }
 }
 
-export async function buyAICredit(): Promise<{ success: boolean; cancelled?: boolean }> {
+export async function buyAICredit(): Promise<{
+  success: boolean;
+  cancelled?: boolean;
+  blocked?: PurchaseBlock;
+}> {
+  // Same gate as purchasePackage, and it matters MORE here: a consumable
+  // credit is granted by the webhook incrementing users.ai_credits. With no
+  // users row there is nothing to increment, so an anonymous credit purchase
+  // is money for a row that cannot exist.
+  if (!(await hasAccount())) return { success: false, blocked: 'needs_account' };
   try {
     const products = await Purchases.getProducts([AI_CREDIT_PRODUCT_ID]);
     const product = products?.[0];

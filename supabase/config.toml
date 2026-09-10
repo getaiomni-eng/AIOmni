@@ -58,3 +58,16 @@ verify_jwt = false
 
 [functions.weekly-board]
 verify_jwt = false
+
+# RevenueCat authenticates with a SHARED SECRET in the Authorization header
+# (checked against REVENUECAT_WEBHOOK_SECRET inside the function), not with a
+# Supabase JWT. verify_jwt MUST stay false or every purchase and renewal
+# webhook 401s and users.tier silently stops syncing.
+#
+# This entry exists because it had none (2026-09-10): the function was
+# originally deployed with a bare `--no-verify-jwt` flag, so the setting lived
+# only in whoever's shell history and any redeploy without the flag would have
+# broken subscriptions. Same failure mode as the cron jobs that lived only in
+# the dashboard -- config that is not in the repo is config nobody can check.
+[functions.revenuecat-webhook]
+verify_jwt = false

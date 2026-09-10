@@ -95,6 +95,22 @@ export default function PaywallScreen() {
     });
   };
 
+  // A guest reached a buy button. Explain WHY the account is needed rather
+  // than just blocking — the subscription is tied to the account, and
+  // without one the purchase cannot be credited to anything. Sending them
+  // to sign-in is the conversion we want anyway; the paywall is still here
+  // when they come back.
+  const promptForAccount = () => {
+    Alert.alert(
+      'Create a free account first',
+      'Your subscription is tied to your AIOmni account, so we need one before you buy. It takes a few seconds, and your purchase carries over.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Continue', onPress: () => router.push('/auth' as any) },
+      ],
+    );
+  };
+
   const handlePurchase = async (tier: 'rankings' | 'pro') => {
     const pkg = findPackage(tier, billing);
     if (!pkg) {
@@ -104,6 +120,7 @@ export default function PaywallScreen() {
     setPurchasing(true);
     const result = await purchasePackage(pkg);
     setPurchasing(false);
+    if (result.blocked === 'needs_account') { promptForAccount(); return; }
     if (result.success) {
       // Force a fresh tier read from RC + DB. purchasePackage already
       // updates the cache, but refreshTier ensures the higherTier blend
@@ -128,6 +145,7 @@ export default function PaywallScreen() {
     setPurchasing(true);
     const res = await buyAICredit();
     setPurchasing(false);
+    if (res.blocked === 'needs_account') { promptForAccount(); return; }
     if (res.success) {
       // The webhook grants the credit within a few seconds; refresh shortly.
       setTimeout(() => { getAICreditBalance().then(setCreditBalance).catch(() => {}); }, 4000);

@@ -218,6 +218,16 @@ export default function HostedDraftRoom() {
       return;
     }
     const res = await buyAICredit();
+    // Guests cannot be credited: the webhook grants the credit by
+    // incrementing users.ai_credits, and there is no users row to increment.
+    // Blocked before the charge, so nothing was taken.
+    if (res.blocked === 'needs_account') {
+      Alert.alert(
+        'Create a free account first',
+        'AI credits are tied to your AIOmni account. Create one in Settings and the credit will be waiting.',
+      );
+      return;
+    }
     if (!res.success) {
       if (!('cancelled' in res && res.cancelled)) Alert.alert('Purchase failed', 'Nothing was charged.');
       return;

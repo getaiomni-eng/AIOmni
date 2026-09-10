@@ -52,14 +52,36 @@ Deno.serve(async (req) => {
   const type: string = event.type ?? '';
   const entitlements: string[] = event.entitlement_ids ?? (event.entitlement_id ? [event.entitlement_id] : []);
 
-  // RC uses $RCAnonymousID:… when the app never logged the user in —
-  // nothing to map; ack so RC doesn't retry forever.
+  // RC uses $RCAnonymousID:… when the app never logged the user in.
+  //
+  // The client now refuses to start a purchase without an account
+  // (services/purchases.ts, hasAccount), so this should stop occurring for
+  // new sales. It still fires for two legitimate cases: purchases made by
+  // guests on builds shipped before that gate, and non-purchase lifecycle
+  // events for anonymous customers.
+  //
+  // Those two need OPPOSITE handling, and the old code gave them the same
+  // 200 — which told RevenueCat "delivered" for a sale that credited
+  // nobody, so it never retried and the money was silently lost.
   if (!appUserId || appUserId.startsWith('$RCAnonymous')) {
-    // Genuinely unrecoverable (no identity to credit), but if this fires on a
-    // PURCHASE it means someone paid and cannot be matched to an account —
-    // worth seeing in the logs rather than acking into silence.
-    console.error('rc-webhook: unmapped app_user_id', { type, productId: event.product_id ?? null });
-    return new Response('ok (unmapped user)', { status: 200 });
+    const isPurchase = ACTIVATING.has(type);
+    if (isPurchase) {
+      // Someone paid and cannot be matched to an account. 500 keeps the
+      // event in RevenueCat's retry queue, so if they sign in during the
+      // retry window Purchases.logIn() aliases the anonymous id to their
+      // real one and the redelivery lands on a users row that now exists.
+      // That window is finite, so this is a recovery chance, not a
+      // guarantee — the actual fix is the client-side gate.
+      console.error('rc-webhook: PAID event with unmapped app_user_id — retrying', {
+        type, productId: event.product_id ?? null, eventId: event.id ?? null,
+      });
+      return new Response('unmapped user on a paid event', { status: 500 });
+    }
+    // Non-purchase lifecycle noise for an anonymous customer. Nothing to
+    // credit and nothing to recover, so ack it and keep the retry queue
+    // clear for events that matter.
+    console.log('rc-webhook: unmapped app_user_id on non-purchase event', { type });
+    return new Response('ok (unmapped user, non-purchase)', { status: 200 });
   }
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
