@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rankings — AIOmni</title>
-<meta name="description" content="Tiered fantasy football rankings built for the format you actually play: PPR, half, standard and superflex.">
+<title>Week 1 Fantasy Football Rankings — AIOmni</title>
+<meta name="description" content="Week 1 fantasy football rankings adjusted for matchup: the defence each player faces, his team's expected points, and injury status. Published before kickoff.">
 <link rel="canonical" href="https://getaiomni.com/rankings">
 <meta property="og:type" content="website"><meta property="og:site_name" content="AIOmni">
 <meta property="og:url" content="https://getaiomni.com/rankings"><meta property="og:title" content="Rankings — AIOmni">
@@ -63,7 +63,32 @@ nav .nv .lg{gap:9px;}
 nav .lg{text-decoration:none;}
 footer .lg{text-decoration:none;margin-bottom:10px;display:inline-block;}
 </style>
-</head><body>
+<style>
+.wk-h{padding:56px 0 30px;border-bottom:1px solid var(--line);}
+.wk-stamp{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:1.6px;color:var(--wr);
+  border:1px solid rgba(0,255,170,.3);border-radius:5px;padding:4px 9px;display:inline-block;margin-bottom:16px;}
+.wk-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:26px 0 18px;}
+.wk-tab{font-family:'Space Mono',monospace;font-size:12.5px;padding:8px 15px;border-radius:7px;
+  border:1px solid var(--line2);background:transparent;color:var(--dim);cursor:pointer;transition:.15s;}
+.wk-tab:hover{color:var(--ink);}
+.wk-tab[aria-pressed="true"]{background:var(--volt);color:#070D0E;border-color:var(--volt);font-weight:700;}
+.wk-board{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);max-width:760px;}
+.wk-row{display:grid;grid-template-columns:52px 1fr auto;gap:12px;align-items:center;
+  padding:11px 15px;border-bottom:1px solid rgba(28,43,46,.55);}
+.wk-row:last-child{border-bottom:none;}
+.wk-rk{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;}
+.wk-nm{font-weight:600;font-size:15px;}
+.wk-sub{display:block;color:var(--mute);font-size:11.5px;margin-top:2px;letter-spacing:.3px;}
+.wk-vs{font-family:'Space Mono',monospace;font-size:11.5px;color:var(--dim);text-align:right;white-space:nowrap;}
+.wk-flag{display:inline-block;font-family:'Space Mono',monospace;font-size:9.5px;padding:1px 5px;
+  border-radius:3px;margin-left:6px;background:rgba(255,170,0,.16);color:var(--te);}
+.rQB{color:var(--qb);} .rRB{color:var(--rb);} .rWR{color:var(--wr);} .rTE{color:var(--te);}
+.wk-more{border:1px solid var(--line);border-radius:10px;padding:20px;margin-top:20px;max-width:760px;}
+.wk-more h3{margin:0 0 6px;font-size:16px;}
+.wk-more p{margin:0 0 14px;color:var(--dim);font-size:14.5px;}
+</style>
+</head>
+<body>
 <div class="tick" id="tick">
   <span class="ticklab"><span class="pulse"></span>LIVE</span>
   <div class="tickvp"><div class="tickrun" id="tickrun"></div></div>
@@ -81,34 +106,35 @@ footer .lg{text-decoration:none;margin-bottom:10px;display:inline-block;}
   <a class="nl" href="/">Home</a><a class="nl" href="/features">Features</a><a class="nl" href="/leagues">Leagues</a><a class="nl on" href="/rankings">Rankings</a><a class="nl" href="/pricing">Pricing</a><span class="sp"></span>
   <a class="btn bv" href="https://apps.apple.com/app/id6760617627">Download</a>
 </div></nav>
-
-<header class="phead"><div class="wrap">
-  <div class="eyeb">Rankings</div>
-  <h1>Tiers, not a list of<br>three hundred names</h1>
-  <p class="sub">The gap between the fourth-best running back and the fifth is usually noise. The
-  gap between tier one and tier two is the decision. Rankings should show you which is which.</p>
-  <div class="cta"><a class="btn bv" href="https://apps.apple.com/app/id6760617627">Open the board</a></div>
+<header class="wk-h"><div class="wrap">
+  <div class="wk-stamp" id="wkweek">LOADING</div>
+  <h1>Week 1 rankings,<br><em>adjusted for the matchup.</em></h1>
+  <p class="sub">Most rankings tell you who is good. These tell you who to start this week: the
+  same players, reordered by the defence each one faces, his team's expected points, and whether
+  he is actually playing.</p>
 </div></header>
 
-<section><div class="wrap row2">
-  <div>
-    <h2>Built for the format you play</h2>
-    <p class="lede">A superflex board and a standard board are not the same board, and half-PPR is
-    not a rounding error. Switch format and the tiers move with it.</p>
-    <div class="fmts">
-      <span class="fmt c">PPR</span><span class="fmt c">HALF PPR</span>
-      <span class="fmt b">STANDARD</span><span class="fmt a">SUPERFLEX</span>
-    </div>
-    <ul class="klist">
-      <li><b>Positional views</b> — <span class="pos pQB">QB</span> <span class="pos pRB">RB</span>
-        <span class="pos pWR">WR</span> <span class="pos pTE">TE</span></li>
-      <li><b>Tier breaks</b> computed, not drawn by hand</li>
-      <li><b>No league connection needed</b> — it works standalone</li>
-    </ul>
+<section><div class="wrap">
+  <div class="wk-tabs">
+    <button class="wk-tab" data-p="RB" aria-pressed="true">RB</button>
+    <button class="wk-tab" data-p="WR" aria-pressed="false">WR</button>
+    <button class="wk-tab" data-p="QB" aria-pressed="false">QB</button>
+    <button class="wk-tab" data-p="TE" aria-pressed="false">TE</button>
   </div>
-  <div><img src="/img/rankings.png" alt="The AIOmni rankings board with players grouped into tiers and position badges."></div>
-</div></section>
+  <div class="wk-board" id="wkboard"></div>
 
+  <div class="wk-more">
+    <h3>This is the top 12</h3>
+    <p>The full board runs 250 deep across PPR, half, standard and superflex, with computed tiers
+    and your own custom order. That lives in the app.</p>
+    <a class="btn bv" href="https://apps.apple.com/app/id6760617627">Get the full board</a>
+  </div>
+
+  <p class="fine" style="margin-top:26px;max-width:70ch">Injury designations come from official
+  team reports. Conditions are shown only where wind is likely to matter. Players who are out,
+  doubtful or on injured reserve are removed rather than ranked, because a ranking you cannot
+  start is not a ranking.</p>
+</div></section>
 <footer><div class="wrap">
   <div class="fcols">
     <div><a class="lg" href="/" aria-label="AIOmni home"><span class="wm" style="font-size:18px"><span class="wmt">AI</span><span class="wmo" style="width:20.7px;height:20.7px;margin:0 -3.7px"><svg width="20.7" height="20.7" viewBox="0 0 20.7 20.7" role="img" aria-label="AIOmni">
@@ -156,6 +182,39 @@ footer .lg{text-decoration:none;margin-bottom:10px;display:inline-block;}
     // Longer content needs proportionally longer duration or it races.
     run.style.animationDuration = Math.max(40, items.length * 5.2) + 's';
   } catch { bar?.classList.add('hide'); }
+})();
+</script>
+<script>
+const ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtob3J1enZzcHJ4eW9jaXN1aGV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDc5MTEsImV4cCI6MjA5MDU4MzkxMX0.YUIDZOJJhUc0ubkQxB_pSyXeE_xjcrqY7jGmbttlfRw';
+const API='https://khoruzvsprxyocisuhet.supabase.co/rest/v1/public_weekly_board';
+let DATA=[],POS='RB';
+const el=id=>document.getElementById(id);
+function render(){
+  const rows=DATA.filter(r=>r.position===POS&&r.startable).slice(0,12);
+  el('wkboard').innerHTML = rows.length ? rows.map(r=>
+    '<div class="wk-row">'
+    + '<span class="wk-rk r'+r.position+'">'+r.position+r.pos_rank+'</span>'
+    + '<span><span class="wk-nm">'+r.player_name+'</span>'
+    + '<span class="wk-sub">'+(r.team||'')+(r.injury_status?(' \u00b7 '+r.injury_status):'')+'</span></span>'
+    + '<span class="wk-vs">vs '+(r.opponent||'-')
+    + ((r.weather_note && parseInt(r.weather_note)>=15) ? '<span class="wk-flag">'+r.weather_note+'</span>' : '')
+    + '</span></div>').join('')
+    : '<div class="wk-row"><span class="wk-nm">Posting shortly.</span></div>';
+  document.querySelectorAll('.wk-tab').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.p===POS)));
+}
+(async()=>{
+  try{
+    const h={apikey:ANON,Authorization:'Bearer '+ANON};
+    const l=await fetch(API+'?select=season,week&order=season.desc,week.desc&limit=1',{headers:h});
+    const latest=await l.json();
+    const season=latest[0].season, week=latest[0].week;
+    el('wkweek').textContent='WEEK '+week+' \u00b7 PUBLISHED BEFORE KICKOFF';
+    const r=await fetch(API+'?season=eq.'+season+'&week=eq.'+week+'&format=eq.ppr'
+      +'&select=player_name,position,team,opponent,pos_rank,injury_status,weather_note,startable'
+      +'&order=rank.asc&limit=300',{headers:h});
+    DATA=await r.json(); render();
+  }catch(e){ el('wkboard').innerHTML='<div class="wk-row"><span class="wk-nm">Rankings load shortly.</span></div>'; }
+  document.querySelectorAll('.wk-tab').forEach(b=>b.addEventListener('click',function(){POS=this.dataset.p;render();}));
 })();
 </script>
 </body></html>
