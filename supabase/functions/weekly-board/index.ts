@@ -19,6 +19,21 @@ const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
 const CORS = { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" };
 
+// Roster-level absences. Not a week-1 lineup decision -- nobody is weighing
+// whether to start a player on IR -- so these leave the board entirely.
+const ROSTER_OUT = new Set(["Injured Reserve", "Physically Unable to Perform", "Non-Football Injury", "Suspension"]);
+
+// Week-specific unavailability. These DO belong on the board, because the
+// user is actively wondering about them -- but they must sort below every
+// healthy player and be labelled, never quietly ranked mid-pack.
+//
+// "Doubtful" is in here on purpose. In NFL usage it means roughly a 25%
+// chance to play, and standard practice is that you do not start a doubtful
+// player. Treating it as a nudge was wrong: a shift applied to OVERALL rank
+// barely moves a thin position group, so a doubtful Brock Bowers still landed
+// TE8 -- a startable slot for someone expected to miss the game.
+const WEEK_OUT = new Set(["Out", "Doubtful"]);
+
 function nflSeason(d = new Date()) { return d.getUTCMonth() >= 2 ? d.getUTCFullYear() : d.getUTCFullYear() - 1; }
 function nflWeek(season: number, now = new Date()): number {
   const sep1 = new Date(Date.UTC(season, 8, 1));
@@ -83,6 +98,66 @@ Deno.serve(async (req) => {
   const dvp = new Map<string, number>();
   for (const d of dvpRows) if (d.season === dvpSeason) dvp.set(`${d.team}:${d.position}`, d.rank_vs_pos);
 
+  // ── injuries ──────────────────────────────────────────────────────────
+  // ESPN's public injury feed, keyless. 800 players listed, with the weekly
+  // designation the roster table does not carry (nfl_players.status has IR
+  // and CUT but not Questionable/Doubtful).
+  //
+  // Out, IR and suspended players are EXCLUDED from the board rather than
+  // demoted. A board that ranks an unavailable player 40th has given the
+  // worst possible answer to "who should I start" -- worse than omitting him,
+  // because it implies he is an option.
+  const injury = new Map<string, string>();
+  let injCount = 0, injErr: string | null = null;
+  try {
+    const r = await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries");
+    if (!r.ok) throw new Error(`espn injuries ${r.status}`);
+    const d = await r.json();
+    for (const t of d.injuries ?? []) {
+      for (const it of t.injuries ?? []) {
+        const nm = it?.athlete?.displayName;
+        const st = it?.status;
+        if (!nm || !st || st === "Active") continue;
+        injury.set(norm(nm), st);
+        injCount++;
+      }
+    }
+  } catch (e) { injErr = String((e as any)?.message ?? e); }
+
+  // ── weather ───────────────────────────────────────────────────────────
+  // Only outdoor stadiums, and only the conditions that actually move a game.
+  // Wind is the one that reliably matters; temperature almost never does
+  // until it is genuinely freezing, and light rain is mostly folklore.
+  const WEATHER_KEY = Deno.env.get("WEATHER_API_KEY");
+  const STADIUM: Record<string, { lat: number; lon: number }> = {
+    BUF:{lat:42.774,lon:-78.787}, MIA:{lat:25.958,lon:-80.239}, NE:{lat:42.091,lon:-71.264},
+    NYJ:{lat:40.814,lon:-74.074}, BAL:{lat:39.278,lon:-76.623}, CIN:{lat:39.095,lon:-84.516},
+    CLE:{lat:41.506,lon:-81.699}, PIT:{lat:40.447,lon:-80.016}, DEN:{lat:39.744,lon:-105.020},
+    KC:{lat:39.049,lon:-94.484},  CHI:{lat:41.862,lon:-87.617}, GB:{lat:44.501,lon:-88.062},
+    PHI:{lat:39.901,lon:-75.168}, WAS:{lat:38.908,lon:-76.864}, NYG:{lat:40.814,lon:-74.074},
+    TB:{lat:27.976,lon:-82.503},  CAR:{lat:35.226,lon:-80.853}, SEA:{lat:47.595,lon:-122.332},
+    SF:{lat:37.403,lon:-121.970}, TEN:{lat:36.166,lon:-86.771}, JAX:{lat:30.324,lon:-81.637},
+  };
+  // Keyed by HOME team, since that is where the game is played.
+  const wx = new Map<string, { wind: number; cond: string; temp: number }>();
+  let wxCount = 0;
+  if (WEATHER_KEY) {
+    const homes = [...new Set(sched.map((g: any) => g.home_team))].filter(t => STADIUM[t]);
+    await Promise.all(homes.map(async (t) => {
+      try {
+        const st = STADIUM[t];
+        const r = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${st.lat}&lon=${st.lon}&units=imperial&appid=${WEATHER_KEY}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        wx.set(t, { wind: Math.round(d.wind?.speed ?? 0), cond: d.weather?.[0]?.main ?? "Clear", temp: Math.round(d.main?.temp ?? 60) });
+        wxCount++;
+      } catch { /* one stadium missing is not worth failing the board */ }
+    }));
+  }
+  // Which home stadium is each team playing in this week?
+  const venue = new Map<string, string>();
+  for (const g of sched) { venue.set(g.home_team, g.home_team); venue.set(g.away_team, g.home_team); }
+
   // Vegas implied totals.
   //
   // The first version called external-api-proxy with the anon key. That proxy
@@ -139,6 +214,13 @@ Deno.serve(async (req) => {
     const o = opp.get(p.team);
     if (!o) continue;                      // bye week: not startable, so not ranked
 
+    // Unavailable players are removed, not demoted. Ranking someone 40th who
+    // cannot play is a worse answer than omitting him, because appearing on
+    // the board implies he is an option.
+    const inj = injury.get(norm(p.name)) ?? null;
+    if (inj && ROSTER_OUT.has(inj)) continue;
+    const weekOut = !!inj && WEEK_OUT.has(inj);
+
     // Adjust in RANK space, not score space.
     //
     // The first version multiplied ros_score by the matchup factor. That is
@@ -161,13 +243,43 @@ Deno.serve(async (req) => {
           ((it - avgTotal) / Math.max(avgTotal, 1)) * MAX_TOTAL_SHIFT * 4))
       : 0;
 
-    // Lower is better, so a favourable matchup subtracts.
-    const effective = p.rank - dvpShift - totalShift;
+    // Questionable is a real cost but not a verdict -- plenty of questionable
+    // players start and produce. Doubtful is close to unavailable without
+    // being official, so it is pushed far enough down to be obvious.
+    // Questionable is a real cost but not a verdict -- questionable players
+    // start and produce every week.
+    const injShift = inj === "Questionable" ? -5 : 0;
+
+    // Weather, only where it genuinely moves a game. Wind is the reliable
+    // signal: over 15mph the passing game suffers and the run game gains a
+    // little. Cold is mostly overstated until it is freezing, and light rain
+    // is folklore, so neither gets much weight.
+    const w = wx.get(venue.get(p.team) ?? "");
+    let wxShift = 0;
+    if (w) {
+      const passer = p.position === "QB" || p.position === "WR" || p.position === "TE";
+      if (w.wind >= 20)      wxShift += passer ? -8 : 3;
+      else if (w.wind >= 15) wxShift += passer ? -4 : 2;
+      if (w.cond === "Snow") wxShift += passer ? -5 : 3;
+      if (w.temp <= 20)      wxShift += passer ? -2 : 0;
+    }
+
+    // Lower is better, so a favourable factor subtracts.
+    // Out and Doubtful sort below every healthy player rather than competing
+    // with them. Their relative order among themselves is preserved so the
+    // list still reads sensibly, but no adjustment can lift one back into a
+    // startable slot.
+    const effective = weekOut
+      ? 10_000 + p.rank
+      : p.rank - dvpShift - totalShift - injShift - wxShift;
 
     rows.push({
       season, week, format: "ppr", gsis_id: gsis, player_name: p.name,
       position: p.position, team: p.team, opponent: o,
       ros_score: p.score, dvp_rank: dr,
+      injury_status: inj, injury_shift: weekOut ? null : injShift,
+      startable: !weekOut,
+      weather_note: w ? `${w.wind}mph ${w.cond}` : null, weather_shift: wxShift,
       dvp_shift: Number(dvpShift.toFixed(2)),
       implied_total: it, total_shift: Number(totalShift.toFixed(2)),
       week_score: Number(effective.toFixed(3)),   // lower = better
@@ -188,8 +300,15 @@ Deno.serve(async (req) => {
   rows.push(...byPlayer.values());
 
   rows.sort((a, b) => a.week_score - b.week_score);
+  // Positional rank counts only startable players, so "TE5" always means the
+  // fifth tight end you could actually play. An unavailable player carries a
+  // pos_rank for ordering but it is not a recommendation.
   const seen: Record<string, number> = {};
-  rows.forEach((r, i) => { r.rank = i + 1; seen[r.position] = (seen[r.position] ?? 0) + 1; r.pos_rank = seen[r.position]; });
+  rows.forEach((r, i) => {
+    r.rank = i + 1;
+    if (r.startable) { seen[r.position] = (seen[r.position] ?? 0) + 1; r.pos_rank = seen[r.position]; }
+    else { r.pos_rank = (seen[r.position] ?? 0) + 99; }
+  });
 
   // Replace the week rather than merging into it. An upsert leaves behind
   // rows that are no longer on the board -- which is exactly how the Justin
@@ -225,6 +344,7 @@ Deno.serve(async (req) => {
     player_index_size: players.length,
     dvp_season_used: dvpSeason,
     vegas_totals: totals.size, odds_games: oddsGames, odds_error: oddsErr,
+    injuries_listed: injCount, injuries_error: injErr, stadiums_with_weather: wxCount,
     top10: rows.slice(0, 10).map(r =>
       `${r.rank}. ${r.player_name} ${r.position}${r.pos_rank} vs ${r.opponent} (dvp ${r.dvp_rank ?? "-"}, shift ${r.dvp_shift > 0 ? "+" : ""}${r.dvp_shift})`),
   }, null, 2), { headers: CORS });
