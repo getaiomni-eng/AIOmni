@@ -589,10 +589,18 @@ export default function RankingsScreen() {
         position: p.position,
         team: p.team ?? '',
         rank: p.rank,
-        // The ADP column carries the matchup instead: the opponent IS the
-        // reason this board differs from the season one, so it belongs on
-        // the row rather than buried in a legend.
-        adp: p.opponent ? `vs ${p.opponent}` : '—',
+        // The ADP column carries the matchup and, where we disagree with the
+        // market, by how much. "vs CLE · 10.5 (mkt WR43)" is the whole pitch
+        // in one line: the projection is theirs, the ranking is ours, and the
+        // gap is the interesting part. Only shown when the disagreement is
+        // real -- flagging a two-spot difference would be noise.
+        adp: (() => {
+          const vs = p.opponent ? `vs ${p.opponent}` : '—';
+          if (p.projPts == null) return vs;
+          const gap = p.marketPosRank != null ? Math.abs(p.marketPosRank - p.posRank) : 0;
+          const mkt = gap >= 8 ? ` (mkt ${p.position}${p.marketPosRank})` : '';
+          return `${vs} · ${p.projPts.toFixed(1)}${mkt}`;
+        })(),
         trend: 'flat' as const,
         trendVal: 0,
         tier: Math.min(5, Math.ceil(p.posRank / 6)),

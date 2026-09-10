@@ -24,6 +24,10 @@ export interface WeeklyPlayer {
   opponent: string | null;
   rank: number;
   posRank: number;
+  /** The market's point projection (Sleeper). Null when unavailable. */
+  projPts?: number | null;
+  /** Where the market ranks him within his position. */
+  marketPosRank?: number | null;
 }
 
 export interface WeeklyBoard {
@@ -48,7 +52,7 @@ export async function fetchWeeklyBoard(format = 'ppr'): Promise<WeeklyBoard | nu
     const { season, week } = latest[0] as any;
     const { data, error } = await supabase
       .from('public_weekly_board')
-      .select('gsis_id, sleeper_id, player_name, position, team, opponent, rank, pos_rank, injury_status, weather_note, startable')
+      .select('gsis_id, sleeper_id, player_name, position, team, opponent, rank, pos_rank, injury_status, weather_note, startable, proj_pts, market_pos_rank')
       .eq('format', format).eq('season', season).eq('week', week)
       .order('rank', { ascending: true })
       .limit(300);
@@ -60,6 +64,7 @@ export async function fetchWeeklyBoard(format = 'ppr'): Promise<WeeklyBoard | nu
         gsis_id: r.gsis_id, sleeperId: r.sleeper_id ?? undefined,
         name: r.player_name, position: r.position,
         team: r.team, opponent: r.opponent, rank: r.rank, posRank: r.pos_rank,
+        projPts: r.proj_pts ?? null, marketPosRank: r.market_pos_rank ?? null,
       })),
     };
   } catch (e) {

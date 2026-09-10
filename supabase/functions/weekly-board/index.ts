@@ -87,10 +87,14 @@ Deno.serve(async (req) => {
 
   const nameToGsis = new Map<string, string>();
   const gsisToSleeper = new Map<string, string>();
+  const sleeperToGsis = new Map<string, string>();
   for (const p of players) {
     if (p.full_name && p.gsis_id) nameToGsis.set(norm(p.full_name), p.gsis_id);
     // The headshot needs a Sleeper id; a gsis id 404s on their CDN.
-    if (p.gsis_id && p.sleeper_id) gsisToSleeper.set(p.gsis_id, String(p.sleeper_id));
+    if (p.gsis_id && p.sleeper_id) {
+      gsisToSleeper.set(p.gsis_id, String(p.sleeper_id));
+      sleeperToGsis.set(String(p.sleeper_id), p.gsis_id);
+    }
   }
 
   // opponent for each team this week; a team absent from the schedule is on bye
@@ -104,6 +108,49 @@ Deno.serve(async (req) => {
   const dvpSeason = Math.max(...dvpRows.map((d: any) => d.season));
   const dvp = new Map<string, number>();
   for (const d of dvpRows) if (d.season === dvpSeason) dvp.set(`${d.team}:${d.position}`, d.rank_vs_pos);
+
+  // ── market projections ────────────────────────────────────────────────
+  // Sleeper publishes these at an endpoint the public v1 API does not mention.
+  // We store them as the MARKET number and keep our rank as the opinion: the
+  // interesting claim is the disagreement, not either figure alone.
+  //
+  // Ingestion starts before we have a model of our own on purpose. A
+  // projection is only meaningful before the game, so history cannot be
+  // back-filled -- by the time there is an AIOmni model there will be weeks of
+  // baseline to beat.
+  const proj = new Map<string, { ppr: number; half: number; std: number; name: string; pos: string; team: string }>();
+  let projErr: string | null = null;
+  try {
+    const qs = ["QB","RB","WR","TE","K","DEF"].map(x => `position[]=${x}`).join("&");
+    const r = await fetch(`https://api.sleeper.app/projections/nfl/${season}/${week}?season_type=regular&${qs}&order_by=pts_ppr`);
+    if (!r.ok) throw new Error(`sleeper projections ${r.status}`);
+    const rows = await r.json();
+    for (const row of rows ?? []) {
+      const id = row?.player_id != null ? String(row.player_id) : null;
+      const st = row?.stats; const pl = row?.player ?? {};
+      if (!id || !st) continue;
+      proj.set(id, {
+        ppr: Number(st.pts_ppr ?? 0), half: Number(st.pts_half_ppr ?? 0), std: Number(st.pts_std ?? 0),
+        name: `${pl.first_name ?? ""} ${pl.last_name ?? ""}`.trim(),
+        pos: pl.position ?? "", team: pl.team ?? pl.team_abbr ?? "",
+      });
+    }
+  } catch (e) { projErr = String((e as any)?.message ?? e); }
+
+  // Where the MARKET ranks each player within his position, so a row can show
+  // "we have him WR6, the market has him WR43".
+  const marketRank = new Map<string, number>();
+  {
+    const byPos: Record<string, { id: string; pts: number }[]> = {};
+    for (const [id, v] of proj) {
+      if (!["QB","RB","WR","TE"].includes(v.pos)) continue;
+      (byPos[v.pos] ??= []).push({ id, pts: v.ppr });
+    }
+    for (const list of Object.values(byPos)) {
+      list.sort((a, b) => b.pts - a.pts);
+      list.forEach((x, i) => marketRank.set(x.id, i + 1));
+    }
+  }
 
   // ── injuries ──────────────────────────────────────────────────────────
   // ESPN's public injury feed, keyless. 800 players listed, with the weekly
@@ -286,6 +333,8 @@ Deno.serve(async (req) => {
     rows.push({
       season, week, format: "ppr", gsis_id: gsis,
       sleeper_id: gsisToSleeper.get(gsis) ?? null,
+      proj_pts: (() => { const sid = gsisToSleeper.get(gsis); return sid ? (proj.get(sid)?.ppr ?? null) : null; })(),
+      market_pos_rank: (() => { const sid = gsisToSleeper.get(gsis); return sid ? (marketRank.get(sid) ?? null) : null; })(),
       player_name: p.name,
       position: p.position, team: p.team, opponent: o,
       ros_score: p.score, dvp_rank: dr,
@@ -351,8 +400,31 @@ Deno.serve(async (req) => {
     }))),
   });
 
+  // Store the market projections themselves, keyed by source, so
+  // score_projections() can grade them against actuals on Tuesday -- and so
+  // an AIOmni model later lands in the same table and the same harness.
+  if (proj.size) {
+    const projRows = [...proj.entries()]
+      .filter(([, v]) => v.name && ["QB","RB","WR","TE"].includes(v.pos))
+      .map(([sid, v]) => ({
+        season, week, source: "sleeper", sleeper_id: sid,
+        gsis_id: sleeperToGsis.get(sid) ?? null,
+        player_name: v.name, position: v.pos, team: v.team,
+        pts_ppr: v.ppr, pts_half: v.half, pts_std: v.std,
+      }));
+    await sb(`nfl_projections?season=eq.${season}&week=eq.${week}&source=eq.sleeper`, { method: "DELETE" });
+    for (let i = 0; i < projRows.length; i += 500) {
+      await sb("nfl_projections?on_conflict=season,week,source,player_name", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify(projRows.slice(i, i + 500)),
+      });
+    }
+  }
+
   return new Response(JSON.stringify({
-    ok: true, season, week, players: rows.length, duplicates_dropped: dupesDropped,
+    ok: true, season, week, players: rows.length,
+    market_projections: proj.size, projections_error: projErr, duplicates_dropped: dupesDropped,
     player_index_size: players.length,
     with_photo: rows.filter((r: any) => r.sleeper_id).length,
     dvp_season_used: dvpSeason,
