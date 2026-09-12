@@ -407,17 +407,55 @@ class SleeperPlatform implements FantasyPlatform {
 
     const rosterSlots = league.rosterSlots;
 
+    // PER-PLAYER projections (2026-09-12). getMatchups already sums these for
+    // a team total; RosterSlot.projected was left undefined, so every roster
+    // built here reached the Coach with no numbers on it.
+    //
+    // That is the same defect fixed one function down at getMatchups, and it
+    // broke the start/sit answer specifically: COACH_PROMPTS.startsit asks for
+    // "Start X over Y with the projection gap" and calls a gap under 1.5
+    // points a coin flip, while forbidding the model from inventing a
+    // projection. Given a roster with no projections, those instructions
+    // cannot all be satisfied at once.
+    //
+    // Best-effort by design: if the projections endpoint is down the map is
+    // empty, every slot stays undefined, and slotLine simply omits "proj" as
+    // it does today.
+    const projFmt: ProjFormat =
+      league.scoringFormat === 'standard' ? 'std'
+      : league.scoringFormat === 'half' ? 'half'
+      : 'ppr';
+    const projMap = await fetchWeekProjections(
+      String(league.season ?? new Date().getFullYear()),
+      league.currentWeek ?? 1,
+    ).catch(() => new Map<string, Record<string, number>>());
+
     const rosters: Roster[] = (rostersRaw || []).map(r => {
       const starterIds = r.starters || [];
       const allIds = r.players || [];
       const reserveIds = r.reserve || [];
       const benchIds = allIds.filter(id => !starterIds.includes(id) && !reserveIds.includes(id));
 
-      const toSlot = (id: string, slotName: string, isStarter: boolean): RosterSlot => ({
-        player: normalizePlayer(playersDB[id], id),
-        slot: slotName,
-        isStarter,
-      });
+      // Coverage gate, mirroring getMatchups. Partial projections are worse
+      // than none here for a different reason than a partial sum: the model
+      // compares players against each other, so a roster where three of nine
+      // starters carry a number invites reading "no projection" as "low
+      // projection" and manufacturing a gap that was never in the data.
+      const realStarters = starterIds.filter((id: string) => id && id !== '0');
+      const projHits = realStarters.filter(
+        (id: string) => projectionFor(projMap, id, projFmt) != null).length;
+      const useProj = projMap.size > 0 && realStarters.length > 0
+        && projHits >= Math.ceil(realStarters.length * 0.6);
+
+      const toSlot = (id: string, slotName: string, isStarter: boolean): RosterSlot => {
+        const proj = useProj ? projectionFor(projMap, id, projFmt) : null;
+        return {
+          player: normalizePlayer(playersDB[id], id),
+          slot: slotName,
+          isStarter,
+          ...(proj != null ? { projected: Math.round(proj * 10) / 10 } : {}),
+        };
+      };
 
       const nonBenchSlots = rosterSlots.filter(s => s !== 'BN' && s !== 'IR');
       const starters: RosterSlot[] = starterIds

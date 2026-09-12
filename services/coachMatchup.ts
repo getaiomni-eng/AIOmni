@@ -118,7 +118,21 @@ export async function buildStartSitContext(
 
     const weather = await fetchGameWeather(teamsOf([mine])).catch(() => [] as WeatherReport[]);
 
-    let out = `WEEK ${week} LINEUP DECISION\n\nTEAM: ${mine.teamName}\n\nCURRENT STARTERS:\n`;
+    let out = `WEEK ${week} LINEUP DECISION\n\nTEAM: ${mine.teamName}\n\n`;
+
+    // The start/sit prompt is built around projection gaps: it asks for
+    // "Start X over Y with the projection gap" and calls anything under 1.5
+    // points a coin flip, while forbidding the model from inventing a
+    // projection. When no projections resolved -- a platform that does not
+    // publish them, or the endpoint being down -- those instructions are
+    // mutually unsatisfiable, and the model either hedges or quietly makes
+    // numbers up. Say so instead, and tell it what to judge on.
+    const hasProj = [...mine.starters, ...mine.bench].some(s => s.projected != null);
+    if (!hasProj) {
+      out += `PROJECTIONS: not available for this league this week. Do not refer to projection gaps or point totals at all — judge on role, snap share, matchup, and injury designation, and say which call is closest.\n\n`;
+    }
+
+    out += `CURRENT STARTERS:\n`;
     out += mine.starters.map(slotLine).join('\n');
     out += `\n\nBENCH:\n` + (mine.bench.length ? mine.bench.map(slotLine).join('\n') : '(empty)');
     if (mine.ir?.length) out += `\n\nIR:\n` + mine.ir.map(slotLine).join('\n');
