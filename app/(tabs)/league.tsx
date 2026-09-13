@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, AppState, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { askAI, describeAIError, hasAISession } from "../../services/ai";
 import { hasAIConsent } from "../../services/aiConsent";
@@ -191,6 +191,43 @@ export default function LeagueScreen() {
     if (activeTab === 'standings' && standings.length === 0)     fetchStandings();
     if (activeTab === 'activity'  && transactions.length === 0)  fetchActivity();
   }, [activeTab]);
+
+  // Live scores. Every platform serves them -- ESPN through mMatchupScore,
+  // MFL through the liveScoring export, Sleeper through its matchups
+  // endpoint -- but the fetch above is guarded by `!matchup`, so it ran once
+  // and the score sat frozen at whatever it was when the tab first opened.
+  // It looked like ESPN and MFL had no live scoring; nothing was asking any
+  // platform a second time.
+  //
+  // 60s matches the adapters' own hot caches (Sleeper and ESPN both 60s), so
+  // a tick that lands inside the window costs nothing and one that lands
+  // outside it gets fresh numbers. MFL is uncached and hits live every time.
+  //
+  // Only while the tab is open and the app is foregrounded: polling a
+  // backgrounded app burns the user's battery and our rate limit to update a
+  // screen nobody is looking at.
+  useEffect(() => {
+    if (activeTab !== 'matchup') return;
+    let alive = true;
+    const tick = () => {
+      if (!alive) return;
+      if (AppState.currentState !== 'active') return;
+      fetchMatchup();
+    };
+    const id = setInterval(tick, 60_000);
+    const sub = AppState.addEventListener('change', st => {
+      // Coming back from the background: refresh immediately rather than
+      // making the user stare at a stale score for up to a minute.
+      if (st === 'active') tick();
+    });
+    return () => { alive = false; clearInterval(id); sub.remove(); };
+  }, [activeTab, leagueId]);
+
+  const [refreshingMatchup, setRefreshingMatchup] = useState(false);
+  const onRefreshMatchup = async () => {
+    setRefreshingMatchup(true);
+    try { await fetchMatchup(); } finally { setRefreshingMatchup(false); }
+  };
 
   const getPlayersDb = async () => {
     if (Object.keys(playersDb).length > 0) return playersDb;
@@ -834,7 +871,14 @@ export default function LeagueScreen() {
         )
 
       ) : activeTab === 'matchup' ? (
-        <ScrollView style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={s.scroll}
+          contentContainerStyle={s.scrollPad}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshingMatchup} onRefresh={onRefreshMatchup} tintColor={t.textMuted} />
+          }
+        >
           {matchup ? (
             <>
               <View style={s.matchupCard}>
