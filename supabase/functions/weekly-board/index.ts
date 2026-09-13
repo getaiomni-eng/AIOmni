@@ -129,8 +129,26 @@ Deno.serve(async (req) => {
       const id = row?.player_id != null ? String(row.player_id) : null;
       const st = row?.stats; const pl = row?.player ?? {};
       if (!id || !st) continue;
+      // `?? 0` here invented projections (fixed 2026-09-13). Sleeper returns
+      // a row for every player alive but publishes pts_ppr for only the
+      // startable subset -- 470 of 3,304 in week 1 -- so the default wrote a
+      // confident 0.0 for the other 2,834 and persisted them to
+      // nfl_projections, where 87% of week 1 rows (2,635 of 3,026) are that
+      // fabricated zero.
+      //
+      // It has already caused two visible bugs: "Tyreek Hill, market WR1016"
+      // (patched downstream by excluding ppr <= 0 rather than here), and a
+      // projected matchup total of 7.6 vs 13.8 summed from mostly-zero
+      // lineups in the client copy of this same code.
+      //
+      // A player with no published projection is now skipped entirely. That
+      // is the honest representation: absent, not worth nothing.
+      const ppr  = typeof st.pts_ppr       === "number" && Number.isFinite(st.pts_ppr)       ? st.pts_ppr       : null;
+      const half = typeof st.pts_half_ppr  === "number" && Number.isFinite(st.pts_half_ppr)  ? st.pts_half_ppr  : null;
+      const std  = typeof st.pts_std       === "number" && Number.isFinite(st.pts_std)       ? st.pts_std       : null;
+      if (ppr === null && half === null && std === null) continue;
       proj.set(id, {
-        ppr: Number(st.pts_ppr ?? 0), half: Number(st.pts_half_ppr ?? 0), std: Number(st.pts_std ?? 0),
+        ppr: ppr ?? 0, half: half ?? 0, std: std ?? 0,
         name: `${pl.first_name ?? ""} ${pl.last_name ?? ""}`.trim(),
         pos: pl.position ?? "", team: pl.team ?? pl.team_abbr ?? "",
       });
