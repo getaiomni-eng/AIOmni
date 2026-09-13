@@ -143,9 +143,15 @@ export default Sentry.wrap(function RootLayout() {
         // without requiring an app restart.
         await refreshTier();
         attachCustomerInfoListener();
-        // Fire-and-forget — don't gate the app behind permission prompts.
-        // If the user denies, registerPushNotifications returns null and
-        // subsequent server-side notification jobs skip them.
+        // Refresh the token for users who have ALREADY granted permission,
+        // and never prompt from here (askIfNeeded defaults false).
+        //
+        // This previously triggered the OS dialog on every sign-in. iOS
+        // shows it once per install and a denial is permanent — so the
+        // single attempt was being spent at sign-in, before the user had
+        // seen anything worth being notified about. The ask now happens in
+        // Settings when someone turns a notification toggle ON, which is
+        // the moment they have said they want one.
         registerPushNotifications(user.id).catch(e => console.log('push register skipped:', e));
         try { await pullCloudDataOnLogin(); } catch (e) { console.log('Cloud sync skipped:', e); }
 

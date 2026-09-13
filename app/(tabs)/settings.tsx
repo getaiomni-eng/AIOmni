@@ -11,7 +11,7 @@ import { signOut } from '../../services/auth';
 import { deleteAccount } from '../../services/deleteAccount';
 import { clearESPNCredentials, loadESPNCredentials } from '../../services/espn';
 import { loadYahooTokens } from '../../services/yahoo';
-import { getNotificationPrefs, setNotificationPrefs } from '../../services/notifications';
+import { getNotificationPrefs, setNotificationPrefs, ensurePushPermission } from '../../services/notifications';
 import { clearQuizResult } from '../../services/quiz/engine';
 import { F, palette, SP } from '../constants/tokens';
 import { AI_DISCLOSURE, getAIConsent, setAIConsent } from '../../services/aiConsent';
@@ -139,6 +139,10 @@ export default function SettingsScreen() {
       }
 
       // Notification opt-in flags (defaults to all-on for a fresh user).
+      //
+      // These are AIOmni preferences, NOT OS permission. A toggle can read
+      // ON while iOS refuses to deliver anything — which is what an account
+      // with prefs enabled and no push_token looks like.
       const prefs = await getNotificationPrefs(user.id);
       setPrefPlayerNews(prefs.player_news);
       setPrefLineupWarning(prefs.lineup_warning);
@@ -147,6 +151,29 @@ export default function SettingsScreen() {
       // Network failure or DB error — AsyncStorage values already shown above
       console.warn('loadSettings: falling back to cached values', e);
     }
+  };
+
+  // Turning a notification toggle ON is the one moment we know the user
+  // wants push, so it is the only place that asks the OS for permission.
+  //
+  // iOS shows that dialog once per install. It used to fire at sign-in,
+  // unprompted, which spent the single attempt before the user had seen
+  // anything worth receiving — and a denial there can never be undone from
+  // inside the app. When we find someone already in that state, the only
+  // honest move is to say so and hand them to the Settings app.
+  const enablePushFor = async (label: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const status = await ensurePushPermission(user.id);
+    if (status === 'granted' || status === 'unavailable') return;
+    Alert.alert(
+      'Notifications are off for AIOmni',
+      `${label} is on, but iOS is blocking AIOmni's notifications, so nothing will arrive. Turn them back on in Settings > Notifications > AIOmni.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => { Linking.openSettings?.(); } },
+      ],
+    );
   };
 
   const handleSignOut = async () => {
@@ -391,6 +418,7 @@ export default function SettingsScreen() {
                 setPrefPlayerNews(v);
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) setNotificationPrefs(user.id, { player_news: v });
+                if (v) await enablePushFor('Player news');
               }}
               trackColor={{ false: t.border, true: palette.aqua }}
               thumbColor={prefPlayerNews ? t.text : t.textMuted}
@@ -405,6 +433,7 @@ export default function SettingsScreen() {
                 setPrefLineupWarning(v);
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) setNotificationPrefs(user.id, { lineup_warning: v });
+                if (v) await enablePushFor('Lineup warnings');
               }}
               trackColor={{ false: t.border, true: palette.aqua }}
               thumbColor={prefLineupWarning ? t.text : t.textMuted}
@@ -419,6 +448,7 @@ export default function SettingsScreen() {
                 setPrefPulseAlerts(v);
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) setNotificationPrefs(user.id, { pulse_alerts: v });
+                if (v) await enablePushFor('Pulse alerts');
               }}
               trackColor={{ false: t.border, true: palette.aqua }}
               thumbColor={prefPulseAlerts ? t.text : t.textMuted}
