@@ -120,18 +120,14 @@ export async function buildStartSitContext(
 
     let out = `WEEK ${week} LINEUP DECISION\n\nTEAM: ${mine.teamName}\n\n`;
 
-    // The start/sit prompt is built around projection gaps: it asks for
-    // "Start X over Y with the projection gap" and calls anything under 1.5
-    // points a coin flip, while forbidding the model from inventing a
-    // projection. When no projections resolved -- a platform that does not
-    // publish them, or the endpoint being down -- those instructions are
-    // mutually unsatisfiable, and the model either hedges or quietly makes
-    // numbers up. Say so instead, and tell it what to judge on.
-    const hasProj = [...mine.starters, ...mine.bench].some(s => s.projected != null);
-    if (!hasProj) {
-      out += `PROJECTIONS: not available for this league this week. Do not refer to projection gaps or point totals at all — judge on role, snap share, matchup, and injury designation, and say which call is closest.\n\n`;
-    }
-
+    // No "projections unavailable" banner here on purpose. An earlier pass
+    // added one, and it made things worse: naming the gap in the CONTEXT
+    // while the PROMPT still demanded a projection gap gave the model two
+    // contradictory instructions, and it spent the whole answer reconciling
+    // them instead of setting a lineup. COACH_PROMPTS now branches on
+    // whether projections are actually present, so the answer shape asked
+    // for always matches the data supplied, and the absence is never
+    // narrated to the user.
     out += `CURRENT STARTERS:\n`;
     out += mine.starters.map(slotLine).join('\n');
     out += `\n\nBENCH:\n` + (mine.bench.length ? mine.bench.map(slotLine).join('\n') : '(empty)');
@@ -143,8 +139,31 @@ export async function buildStartSitContext(
   }
 }
 
+// Does this context actually carry per-player projections? slotLine writes
+// them as " proj 12.3", so their presence is detectable from the built
+// context rather than threaded through as another argument.
+//
+// This matters because an answer FORMAT that demands numbers the context
+// does not have is not a small mismatch: the model spends the whole reply
+// adjudicating the conflict. Observed in production 2026-09-13, where a
+// start/sit answer opened with three paragraphs explaining that the format
+// required a projection gap, the rules forbade inventing one, and no
+// projections were attached -- all correct, and useless to the user.
+//
+// An earlier pass fixed only half of this, adding a line to the CONTEXT
+// saying projections were unavailable while leaving the PROMPT demanding
+// them. That made the contradiction explicit instead of removing it.
+const ctxHasProjections = (ctx: string): boolean => /\bproj \d/.test(ctx);
+
+// Matchup carries TEAM totals rather than per-player numbers, and totalLine
+// writes the miss as "not published by this platform for this week". Treat
+// the matchup as projection-backed only when at least one real total printed.
+const ctxHasTotals = (ctx: string): boolean =>
+  /Projected total: \d/.test(ctx);
+
 export const COACH_PROMPTS: Record<CoachAction, (ctx: string) => string> = {
-  matchup: ctx => `You are AIOmni AI Coach. Call this week's matchup.
+  matchup: ctx => ctxHasTotals(ctx)
+    ? `You are AIOmni AI Coach. Call this week's matchup.
 
 ${ctx}
 
@@ -153,9 +172,24 @@ Answer in this shape, under 130 words total:
 2. The two or three players who actually decide it, and why.
 3. One thing that would flip the result.
 
-Rules: use only the numbers above. If the opponent's lineup was unavailable, say so plainly and call it from your side alone. Never invent a projection, a stat, or an injury. Weather only matters if it is genuinely severe (wind over 15mph, heavy precipitation, or extreme cold) — otherwise do not mention it.`,
+Rules: use only the numbers above. If the opponent's lineup was unavailable, say so plainly and call it from your side alone. Never invent a projection, a stat, or an injury. Weather only matters if it is genuinely severe (wind over 15mph, heavy precipitation, or extreme cold) — otherwise do not mention it.`
 
-  startsit: ctx => `You are AIOmni AI Coach. Give a full start/sit recommendation.
+    // Same fix as startsit: when the platform published no totals, asking
+    // "who is favored and by how much" guarantees an answer about missing
+    // data instead of an answer about football.
+    : `You are AIOmni AI Coach. Call this week's matchup.
+
+${ctx}
+
+Answer in this shape, under 130 words total:
+1. Who you favor and why, based on the two rosters above.
+2. The two or three players who actually decide it, and why.
+3. One thing that would flip the result.
+
+Rules: use only the players above. You do NOT have projected totals for this league, so do not mention projections, point totals, margins or their absence at all -- make the call on roster strength and matchups and commit to it. If the opponent's lineup was unavailable, say so plainly and call it from your side alone. Never invent a stat or an injury. Weather only matters if it is genuinely severe (wind over 15mph, heavy precipitation, or extreme cold) — otherwise do not mention it.`,
+
+  startsit: ctx => ctxHasProjections(ctx)
+    ? `You are AIOmni AI Coach. Give a full start/sit recommendation.
 
 ${ctx}
 
@@ -164,5 +198,20 @@ Answer in this shape, under 180 words total:
 2. The closest call on the roster and why you landed where you did.
 3. Anyone whose weather or injury designation is worth watching before kickoff.
 
-Rules: use only the players and numbers above. Never invent a projection, a stat, or an injury, and never suggest a player who is not on this roster. A projection gap under 1.5 points is a coin flip — say so rather than manufacturing a reason. Weather only matters if it is genuinely severe (wind over 15mph, heavy precipitation, or extreme cold).`,
+Rules: use only the players and numbers above. Never invent a projection, a stat, or an injury, and never suggest a player who is not on this roster. A projection gap under 1.5 points is a coin flip — say so rather than manufacturing a reason. Weather only matters if it is genuinely severe (wind over 15mph, heavy precipitation, or extreme cold).`
+
+    // No projections for this league. Ask for the SAME decision on the
+    // evidence that is actually present, and never mention the absence --
+    // the user asked for a lineup call, not an account of what the app
+    // could not fetch.
+    : `You are AIOmni AI Coach. Give a full start/sit recommendation.
+
+${ctx}
+
+Answer in this shape, under 180 words total:
+1. Any change you would make, written as "Start X over Y" and the reason, drawn from role, usage, matchup and injury designation. If the lineup is already right, say that first and plainly.
+2. The closest call on the roster and why you landed where you did.
+3. Anyone whose weather or injury designation is worth watching before kickoff.
+
+Rules: use only the players above, and never suggest a player who is not on this roster. You do NOT have projected point totals for this league, so do not mention projections, point totals, point margins or their absence at all -- not once, not as a caveat. Make the call on football reasoning and commit to it. Never invent a stat or an injury. Weather only matters if it is genuinely severe (wind over 15mph, heavy precipitation, or extreme cold).`,
 };

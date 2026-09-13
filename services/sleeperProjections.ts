@@ -46,16 +46,44 @@ export async function fetchWeekProjections(season: string, week: number): Promis
     const rows = await res.json();
     if (!Array.isArray(rows)) throw new Error('unexpected projections shape');
 
+    // `?? 0` here was inventing projections (fixed 2026-09-13). Sleeper
+    // returns a row for every rostered player but publishes pts_ppr for only
+    // the startable subset -- 470 of 3,304 in week 1 -- so the old default
+    // wrote a confident 0.0 for the other 2,834.
+    //
+    // That defeated every guard downstream. projectionFor returned 0 rather
+    // than null, so Number.isFinite(0) passed, so getMatchups' "refuse to
+    // publish a partial sum" gate counted a hit for every player and summed
+    // the zeros anyway. A real lineup came out as a 7.6-vs-13.8 projected
+    // matchup, which reads as a live score rather than a broken projection.
+    //
+    // It is exactly the failure this file's own doc comment forbids: showing
+    // zeros as though they were real numbers. An absent key is left absent,
+    // and projectionFor already returns null for it. A genuine 0.0 is still
+    // stored, because Sleeper sends a number there and omits the key
+    // entirely when it has no projection -- the two are distinguishable.
+    const num = (v: unknown): number | null =>
+      typeof v === 'number' && Number.isFinite(v) ? v : null;
+
     const map = new Map<string, Record<string, number>>();
     for (const r of rows) {
       const id = r?.player_id != null ? String(r.player_id) : null;
       const st = r?.stats;
       if (!id || !st) continue;
-      map.set(id, {
-        ppr:  Number(st[KEY.ppr]  ?? 0),
-        half: Number(st[KEY.half] ?? 0),
-        std:  Number(st[KEY.std]  ?? 0),
-      });
+
+      const vals: Record<string, number> = {};
+      const ppr = num(st[KEY.ppr]);
+      const half = num(st[KEY.half]);
+      const std = num(st[KEY.std]);
+      if (ppr  != null) vals.ppr  = ppr;
+      if (half != null) vals.half = half;
+      if (std  != null) vals.std  = std;
+
+      // No published projection in any format: keep the player OUT of the
+      // map entirely rather than storing an empty row that later reads as
+      // "known, and worth nothing".
+      if (Object.keys(vals).length === 0) continue;
+      map.set(id, vals);
     }
     cache = { at: Date.now(), week, season, map };
     return map;
