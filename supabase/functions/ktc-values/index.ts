@@ -19,10 +19,32 @@ const CORS = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
+// KTC changed their page markup at some point before 2026-09-16. The array
+// used to be inlined directly: `var playersArray = [ ... ];`. It is now
+// `var playersArray = JSON.parse(document.getElementById('ktc-players')
+// .textContent);` -- the data itself moved into a separate
+// `<script type="application/json" id="ktc-players">` tag, so the old regex
+// stopped matching anything and every scrape has been throwing
+// "playersArray not found" since. No fallback existed, so every trade grade
+// silently ran with ktcByName empty -- collapsing every letter grade in the
+// app to a flat B/B "too close to call" (fixed separately in trade.tsx with
+// a rank-based fallback, which is the right resilience layer regardless of
+// which of these two regexes matches on a given day; this fixes the actual
+// outage).
+//
+// Verified against the live page 2026-09-16: the new tag parses to 500
+// (dynasty) / 373 (redraft) players in the exact same per-player shape the
+// code below already expects (playerName, oneQBValues.value,
+// superflexValues.value, position, team) -- no downstream change needed.
+//
+// Old format tried second, not removed: cheap insurance if KTC ever reverts
+// or serves a different structure to one of the two pages.
 function parsePage(html: string): Record<string, { oneQB: number; sf: number; pos: string; team: string }> {
-  const m = html.match(/var playersArray\s*=\s*(\[.*?\]);/s);
-  if (!m) throw new Error('playersArray not found');
-  const arr = JSON.parse(m[1]);
+  const tagMatch = html.match(/<script type="application\/json" id="ktc-players">([\s\S]*?)<\/script>/);
+  const inlineMatch = html.match(/var playersArray\s*=\s*(\[.*?\]);/s);
+  const raw = tagMatch?.[1] ?? inlineMatch?.[1];
+  if (!raw) throw new Error('ktc-players data not found (checked both the script-tag and inline-array formats)');
+  const arr = JSON.parse(raw);
   const out: Record<string, { oneQB: number; sf: number; pos: string; team: string }> = {};
   for (const p of arr) {
     if (!p?.playerName) continue;
