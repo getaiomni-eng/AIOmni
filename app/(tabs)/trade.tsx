@@ -148,6 +148,23 @@ function pickTier(slot: number): 'early' | 'mid' | 'late' {
 const pickLabel = (p: ParsedPick) =>
   p.slot ? `${p.year} ${p.round}.${String(p.slot).padStart(2, '0')}` : `${p.year} Round ${p.round}`;
 
+// Rank-only fallback value, used SOLELY to keep a side's gradeValue from
+// collapsing to zero when a player has an AIOmni rank but no KTC crowd
+// price (2026-09-16). Deep/rookie/backfield names routinely miss KTC's
+// published list while still being ranked on our own board -- N. Harris
+// ("unranked" on OUR board too, so this never fires for him) vs. Dontayvion
+// Wicks (WR83, Tier 5 -- IS ranked, but had no KTC entry) is exactly the
+// case that broke a real trade grade to a flat B/B.
+//
+// A smooth exponential decay in the rough shape of a real dynasty value
+// curve (top picks near 9999, fading toward the deep end) -- NOT a claim of
+// precision, and NOT the AIOmni formula. It exists only so one unpriced
+// player can't zero out an entire side's total when three other players on
+// the same trade have real, decisive value data. Never shown to the user;
+// internal to the grade-lock math only.
+const rankValueFallback = (rank: number): number =>
+  Math.round(9999 * Math.exp(-rank / 90));
+
 function groundSide(
   raw: string,
   index: Map<string, RankedPlayer>,
@@ -156,10 +173,17 @@ function groundSide(
   vegasByTeam: Map<string, number>,
   snapByName: Map<string, number>,
   pickValues: Map<string, number>,
-): { lines: string; ktcTotal: number } {
+): { lines: string; ktcTotal: number; gradeValue: number } {
   const tokens = raw.split(/[,\n+&/]|\band\b|\bplus\b/gi).map(s => s.trim()).filter(Boolean);
-  if (!tokens.length) return { lines: '(nothing listed)', ktcTotal: 0 };
+  if (!tokens.length) return { lines: '(nothing listed)', ktcTotal: 0, gradeValue: 0 };
   let ktcTotal = 0;
+  // gradeValue mirrors ktcTotal (same KTC dollars for anything KTC prices)
+  // but ALSO counts AIOmni-ranked players with no KTC entry, via the
+  // fallback curve above. ktcTotal stays pure KTC -- it still drives the
+  // "MARKET MATH (KTC crowd values)" line shown to the model, and that
+  // label must stay honest. gradeValue is what the deterministic grade
+  // lock (hasMarketData / netPct / givePct) actually reads.
+  let gradeValue = 0;
   const lines = tokens.map(tok => {
     // Draft picks first — they carry their own KTC value, not a player rank.
     const pk = parsePick(tok);
@@ -170,6 +194,7 @@ function groundSide(
       const label = pickLabel(pk);
       if (pv) {
         ktcTotal += pv;
+        gradeValue += pv;
         const slotNote = pk.slot
           ? `${pickTier(pk.slot)}-round-${pk.round} slot${pk.slot === 1 && pk.round === 1 ? ' — the 1.01, the most valuable pick on the board' : ''}`
           : 'slot unknown, priced as the round average';
@@ -196,7 +221,8 @@ function groundSide(
     const p = index.get(key);
     const ktc = ktcByName.get(key);
     const inj = injuryByName.get(key);
-    if (ktc) ktcTotal += ktc;
+    if (ktc) { ktcTotal += ktc; gradeValue += ktc; }
+    else if (p) { gradeValue += rankValueFallback(p.rank); }
     const bits: string[] = [];
     if (p) {
       const pr = p.posRank ? `${p.position}${p.posRank}` : p.position;
@@ -215,7 +241,7 @@ function groundSide(
     }
     return `- ${p?.name ?? hint.name} — ${bits.join(' · ')}`;
   }).join('\n');
-  return { lines, ktcTotal };
+  return { lines, ktcTotal, gradeValue };
 }
 
 // Roster-fit context for a USER-SELECTED league. The old loader silently
@@ -552,9 +578,21 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
       // the same trade. Now: same trade → same grades, and analyzing the
       // flip side produces the exact mirror. The model writes ONLY the
       // prose around the locked call.
-      const hasMarketData = givingGrounded.ktcTotal > 0 && gettingGrounded.ktcTotal > 0;
+      //
+      // Reads gradeValue, not ktcTotal (2026-09-16). ktcTotal is pure KTC
+      // and requires EVERY player on a side to have a crowd price, so one
+      // deep/unranked name (a backfield RB, a rookie off KTC's list) zeroed
+      // the whole side and forced a flat B/B "too close to call" even when
+      // the other three players on the trade had decisive real data --
+      // Lamar Jackson (QB7 #25) + Nico Collins (WR13 #39) for Wicks (WR83)
+      // + an unranked RB + a 2029 first came back B/B despite the model's
+      // own analysis calling it a "hard pass." gradeValue blends in
+      // AIOmni-ranked players with no KTC entry via a fallback curve, so a
+      // side only reads as truly data-free when NOTHING on it is priced or
+      // ranked at all -- the honest case for "too close to call."
+      const hasMarketData = givingGrounded.gradeValue > 0 && gettingGrounded.gradeValue > 0;
       const netPct = hasMarketData
-        ? ((gettingGrounded.ktcTotal - givingGrounded.ktcTotal) / givingGrounded.ktcTotal) * 100
+        ? ((gettingGrounded.gradeValue - givingGrounded.gradeValue) / givingGrounded.gradeValue) * 100
         : 0;
       const gradeFromNet = (pct: number): Grade =>
         pct >= 30 ? 'A+' : pct >= 20 ? 'A' : pct >= 12 ? 'A-' :
@@ -564,7 +602,7 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
       // Mirror-symmetric: what you receive is graded by your net; what you
       // give up is graded by the OTHER side's net (their gain is your loss).
       const givePct = hasMarketData
-        ? ((givingGrounded.ktcTotal - gettingGrounded.ktcTotal) / gettingGrounded.ktcTotal) * 100
+        ? ((givingGrounded.gradeValue - gettingGrounded.gradeValue) / gettingGrounded.gradeValue) * 100
         : 0;
       const lockedReceive: Grade = hasMarketData ? gradeFromNet(netPct) : 'B';
       const lockedGive: Grade    = hasMarketData ? gradeFromNet(givePct) : 'B';
