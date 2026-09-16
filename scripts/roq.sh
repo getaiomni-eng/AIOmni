@@ -55,62 +55,12 @@ fi
 [[ -n "${SQL// /}" ]] || { echo "roq: no SQL given" >&2; exit 1; }
 
 # ── Layer 1: syntactic guard ──────────────────────────────────────────
-# Runs in python because doing this in bash means hand-rolling a string and
-# comment stripper, and getting that subtly wrong is how a guard becomes
-# decorative.
-GUARD_OUT="$(printf '%s' "$SQL" | python3 -c '
-import re, sys
-
-sql = sys.stdin.read()
-s = sql
-
-# Strip, in order: block comments, line comments, dollar-quoted bodies,
-# single-quoted literals, double-quoted identifiers. Everything that could
-# legitimately CONTAIN a semicolon or a scary keyword is removed first, so
-# the checks below only ever look at real SQL tokens.
-s = re.sub(r"/\*.*?\*/", " ", s, flags=re.S)
-s = re.sub(r"--[^\n]*", " ", s)
-s = re.sub(r"\$([A-Za-z_]*)\$.*?\$\1\$", " {} ", s, flags=re.S)
-s = re.sub(r"'"'"'(?:[^'"'"']|'"'"''"'"')*'"'"'", " {} ", s)
-s = re.sub(r'"'"'"(?:[^"]|"")*"'"'"', " ident ", s)
-
-s = s.strip().rstrip(";").strip()
-
-def fail(msg):
-    print("REFUSED: " + msg)
-    sys.exit(0)
-
-if not s:
-    fail("empty statement")
-
-if ";" in s:
-    fail("multiple statements are not allowed (found a ; between statements)")
-
-if not re.match(r"^(select|with|table|values|explain|show)\b", s, re.I):
-    fail("must begin with SELECT / WITH / TABLE / VALUES / EXPLAIN / SHOW")
-
-# Write keywords anywhere in the statement. Catches data-modifying CTEs,
-# which is the case a "starts with SELECT" check misses entirely.
-WRITE = (r"\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke|"
-         r"copy|call|do|vacuum|analyze|reindex|refresh|cluster|lock|comment|"
-         r"set|reset|begin|start|commit|rollback|savepoint|prepare|deallocate|"
-         r"discard|listen|notify|unlisten|import|security)\b")
-m = re.search(WRITE, s, re.I)
-if m:
-    fail("statement contains a write/session keyword: " + m.group(0).upper())
-
-# Functions that read the filesystem, execute programs, or disrupt the
-# server. A read-only transaction stops the writes but not all of these.
-DANGER = (r"\b(pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|"
-          r"lo_import|lo_export|dblink|pg_terminate_backend|pg_cancel_backend|"
-          r"pg_sleep|pg_reload_conf|set_config|pg_logical_emit_message)\b")
-m = re.search(DANGER, s, re.I)
-if m:
-    fail("statement calls a restricted function: " + m.group(0))
-
-print("OK")
-')"
-
+# Lives in scripts/roq_guard.js rather than inline bash, because hand-rolling
+# a string and comment stripper in shell is how a guard becomes decorative.
+# It ran in python until an Xcode CLT update on 2026-09-15 made
+# /usr/bin/python3 refuse to run and took this path down mid-incident; there
+# is no other python on this machine. Ported to node, logic unchanged.
+GUARD_OUT="$(printf '%s' "$SQL" | node "$(dirname "$0")/roq_guard.js")"
 if [[ "$GUARD_OUT" != "OK" ]]; then
   echo "roq: $GUARD_OUT" >&2
   exit 2
