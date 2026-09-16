@@ -136,7 +136,7 @@ function getRequestIp(req: Request): string {
 // caller — the security log is a best-effort signal, not a hard control.
 async function logSecurityEvent(
   sb: any,
-  kind: 'auth_fail' | 'rate_limit' | 'unauthorized',
+  kind: 'auth_fail' | 'rate_limit' | 'unauthorized' | 'billing',
   userId: string | null,
   ip: string,
   scope: string,
@@ -315,6 +315,26 @@ serve(async (req) => {
           'feature=', req.headers.get('x-aiomni-feature') ?? 'none',
           'model=', body?.model ?? 'unknown',
           'body=', peek.slice(0, 600));
+
+        // Escalate a low-balance rejection into security_events, not just
+        // the function log. The gap this closes: on 2026-09-16 the org
+        // ran out of Anthropic credit for ~9 minutes and NOBODY knew until
+        // a user hit it and reported "Connection error" — this was the
+        // whole AI product down, invisible to the one person who could fix
+        // it (top up billing) until a screenshot surfaced it. console.error
+        // requires someone to be looking at function logs at the right
+        // moment; security_events is queryable and can be alerted on.
+        //
+        // kind carries a distinct 'billing' value specifically so a query
+        // or a future alert can select on it without parsing log text.
+        if (anthropicRes.status === 400 &&
+            /credit balance|insufficient.*credit|purchase credits/i.test(peek)) {
+          await logSecurityEvent(sb, 'billing', userId ?? null, ip, 'claude-proxy', {
+            status: anthropicRes.status,
+            model: body?.model ?? 'unknown',
+            body: peek.slice(0, 300),
+          });
+        }
       } catch { /* never let diagnostics break the response path */ }
     }
 

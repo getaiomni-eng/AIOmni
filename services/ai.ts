@@ -147,6 +147,17 @@ export async function askAI(
         throw new Error(/weekly prompt limit/i.test(errBody) ? 'prompt_limit_reached' : 'ai_rate_limited');
       }
       if (res.status === 401) throw new Error('session_expired');
+      // Anthropic returns 400 (not 402/429) when the org's credit balance
+      // runs out. Observed live 2026-09-16: three 400s in a row across BOTH
+      // opus and sonnet, resolved nine minutes later with no deploy on our
+      // side — an account-level billing gap, not a request problem. It fell
+      // through to the generic "AI request failed (400)" and every caller's
+      // fallback text, which is why it read as "Connection error." Checked
+      // before the prompt-too-large regex so a billing message is never
+      // misread as a size problem.
+      if (res.status === 400 && /credit balance|insufficient.*credit|purchase credits|billing/i.test(errBody)) {
+        throw new Error('ai_provider_unavailable');
+      }
       // 400 is Anthropic's whole invalid_request class; only map to
       // prompt-too-large when the body says so. 413 is unambiguous.
       if (res.status === 413 || (res.status === 400 && /prompt is too long|too many tokens|max_tokens/i.test(errBody))) {
@@ -189,6 +200,8 @@ export function describeAIError(e: any, fallback: string): string {
   if (m.includes('ai_rate_limited'))     return 'Too many requests right now — wait a minute and try again. (Your prompt was not charged.)';
   if (m.includes('ai_timeout'))          return 'That request took too long and was cancelled. Try again — shorter questions come back faster.';
   if (m.includes('ai_bad_response'))     return 'The AI returned an unreadable response. Try again.';
+  if (m.includes('ai_provider_unavailable'))
+    return "AI is temporarily down on our end — nothing wrong with your question or your connection. We're on it; try again shortly. (You were not charged.)";
   return fallback;
 }
 
@@ -271,6 +284,10 @@ export async function askAIVision(
         throw new Error(/weekly prompt limit/i.test(errBody) ? 'prompt_limit_reached' : 'ai_rate_limited');
       }
       if (res.status === 401) throw new Error('session_expired');
+      // Same billing check as askAI. Checked before the image-size regex.
+      if (res.status === 400 && /credit balance|insufficient.*credit|purchase credits|billing/i.test(errBody)) {
+        throw new Error('ai_provider_unavailable');
+      }
       if (res.status === 413 || (res.status === 400 && /too large|prompt is too long|image/i.test(errBody))) {
         throw new Error('ai_image_too_large');
       }
