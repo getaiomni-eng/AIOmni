@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAI, askAIVision, describeAIError, hasAISession } from '../../services/ai';
 import { pickImageForVision } from '../../services/util/pickImage';
@@ -720,6 +720,20 @@ ${marketMath}${(() => {
     }
   };
 
+  // Growth lever: the app had exactly one Share.share() call anywhere,
+  // buried inside AIOmni-hosted leagues (a handful of leagues, a handful of
+  // people). A graded trade is the best moment nothing was using -- it is
+  // naturally shareable (a verdict, a receipt), and the other side of the
+  // trade is the highest-intent install target there is: someone already
+  // deep in a real league, looking at this exact trade, this week.
+  const shareGrade = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const give = giving.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(', ');
+    const get = getting.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(', ');
+    const msg = `Traded ${give} for ${get} — AIOmni graded it ${youReceiveGrade} for me.\n\n${verdict}\n\nGrade your own trades free: https://apps.apple.com/app/id6760617627`;
+    Share.share({ message: msg }).catch(() => {});
+  };
+
   const canAnalyze = giving.trim().length > 0 && getting.trim().length > 0;
 
   const analyze = async () => {
@@ -922,6 +936,10 @@ ${marketMath}${(() => {
                 </View>
               );
             })()}
+            <TouchableOpacity style={styles.shareBtn} onPress={shareGrade} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Icon name="send" size={14} color={t.textMuted} />
+              <Text style={styles.shareTxt}>Share this grade</Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -1224,6 +1242,23 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 16,
+  },
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: t.border,
+  },
+  shareTxt: {
+    color: t.textMuted,
+    fontFamily: F.mono,
+    fontSize: SZ.sm,
+    letterSpacing: 0.5,
   },
   ctaBtn: {
     flex: 1,
