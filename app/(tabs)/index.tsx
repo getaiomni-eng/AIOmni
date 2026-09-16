@@ -24,6 +24,8 @@ import { readableText, useTheme, type ThemeTokens } from '../constants/theme';
 import { dark, F, palette, SP, SZ } from '../constants/tokens';
 import { consumePrompt } from '../../services/promptQuota';
 import { Alert } from '../../services/util/crossAlert';
+import { supabase } from '../../services/supabase';
+import { getPushPermissionStatus, ensurePushPermission } from '../../services/notifications';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W    = SCREEN_W - SP[3] * 2;
@@ -532,6 +534,40 @@ export default function HomeScreen() {
       // Register this account's claim on the league identities it is using.
       // First account to claim one owns the free trial for it.
       void claimAllLocal();
+
+      // Ask for notification permission HERE, once, and only here.
+      //
+      // The ask used to fire at sign-in, spending the single dialog iOS
+      // allows before the user had seen anything worth being notified about.
+      // Removing it (2026-09-13) stopped that, but left no path at all: four
+      // accounts signed up over the next two days and produced ZERO push
+      // tokens, because the only remaining ask lived behind a Settings
+      // toggle nobody opens.
+      //
+      // A user whose leagues have just loaded is the right moment. They have
+      // a roster we can warn them about, and "your starter is Out" is a real
+      // reason to say yes. Gated on having at least one league, asked at most
+      // once per install, and silent when the OS has already decided.
+      if (allLeagues.length > 0) {
+        void (async () => {
+          try {
+            if (await AsyncStorage.getItem('push_prompt_shown')) return;
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) return;   // guests have no account to attach a token to
+            const status = await getPushPermissionStatus();
+            await AsyncStorage.setItem('push_prompt_shown', '1');
+            if (status !== 'undetermined') return;  // granted, denied, or unavailable
+            Alert.alert(
+              'Know before kickoff',
+              'We can tell you when someone in your starting lineup is ruled out, usually about 90 minutes before kickoff. Turn on notifications?',
+              [
+                { text: 'Not now', style: 'cancel' },
+                { text: 'Turn on', onPress: () => { void ensurePushPermission(session.user.id); } },
+              ],
+            );
+          } catch { /* never block Home on this */ }
+        })();
+      }
 
       // Per-platform counts for Settings' honest connection status
       // ("Connected · 3 leagues" vs a red "Reconnect"): a stored credential

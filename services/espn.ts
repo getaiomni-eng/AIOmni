@@ -1,9 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setSecure, getSecure, deleteSecure, migrateAsyncToSecure } from './util/secureStore';
 import { getNFLSeason } from './season';
+import { nflSeason } from './util/nflCalendar';
 
 export const ESPN_BASE = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl';
-export const ESPN_SEASON = new Date().getFullYear();
+
+// nflSeason(), not getFullYear(). A season runs Sep -> Feb, so on 1 January
+// getFullYear() rolls to a season ESPN has no data for yet and every ESPN
+// request starts asking about next year while the current one is still in
+// its playoffs. getNFLSeason() in ./season is the richer helper but it is
+// async (it reads Sleeper's state endpoint) and cannot back a module const.
+export const ESPN_SEASON = nflSeason();
 
 export interface ESPNCredentials {
   espnS2: string;
