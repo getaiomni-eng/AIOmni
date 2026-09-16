@@ -299,6 +299,25 @@ serve(async (req) => {
     }
     if (!anthropicRes.ok) await refund();
 
+    // Log WHY upstream rejected us (2026-09-16).
+    //
+    // ai_response_metadata records http_status and nothing else, so a 400
+    // arrives as a bare number: no way to tell "prompt is too long" from
+    // "cache_control block too small" from "invalid model", and the client
+    // collapses everything it cannot classify into "Connection error".
+    // Diagnosing a live Coach outage meant guessing between three plausible
+    // causes with no evidence. The request body is deliberately NOT logged --
+    // it carries the user's roster and questions; only the error is.
+    if (!anthropicRes.ok) {
+      try {
+        const peek = await anthropicRes.clone().text();
+        console.error('[upstream-error]', anthropicRes.status,
+          'feature=', req.headers.get('x-aiomni-feature') ?? 'none',
+          'model=', body?.model ?? 'unknown',
+          'body=', peek.slice(0, 600));
+      } catch { /* never let diagnostics break the response path */ }
+    }
+
     let data: unknown;
     try {
       data = await anthropicRes.json();

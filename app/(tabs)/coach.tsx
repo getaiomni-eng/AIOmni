@@ -474,7 +474,10 @@ async function loadOneESPNLeague(
     if (summary.drafted) {
       try {
         const { getESPNFreeAgents } = require('../../services/espn');
-        const fas = await getESPNFreeAgents(summary.id, creds, 20);
+        // 60, not 20 — same reason as the generic loader below. ESPN returns
+        // the wire ordered by ownership, so the top 60 already spreads across
+        // positions without an explicit round-robin.
+        const fas = await getESPNFreeAgents(summary.id, creds, 60);
         if (fas.length) available = fas.map((f: any) => `${f.name} (${f.position} · ${f.team})`);
       } catch { /* non-fatal */ }
     }
@@ -652,7 +655,47 @@ async function loadAbstractContext(
         // rosters (depth chart, injury, real team). Bare names forced the
         // model to treat any pool QB as startable — it recommended a
         // third-string QB as a Week 1 lineup fix.
-        const availableNames: string[] = (fas as any[]).slice(0, 20).map((p: any) => {
+        // Keep the pool BALANCED BY POSITION rather than taking the first 20
+        // off the wire (2026-09-16).
+        //
+        // The fetch above already asks for { limit: 60, balanced: true }, and
+        // that fix never reached this consumer: a hardcoded slice(0, 20) threw
+        // away three quarters of it, in whatever order the platform returned.
+        // MFL ignores the balanced flag entirely and hands back up to 800 in
+        // its own order, so a user asking "what are good waiver bids" got 20
+        // arbitrary names. Observed live: a team whose only real gap was QB
+        // received a sample containing no healthy startable QB, and the model
+        // correctly answered that it could not find one and told the user to
+        // go look at the list themselves -- the exact outcome preloading the
+        // pool exists to prevent.
+        //
+        // Round-robin by position so every slot is represented no matter how
+        // the platform sorted the wire. K and DEF are capped because a wire is
+        // full of them and they are never the interesting answer.
+        const POOL_CAP = 60;
+        const POS_CAP: Record<string, number> = { K: 3, DEF: 3, DST: 3 };
+        const byPos = new Map<string, any[]>();
+        for (const p of (fas as any[])) {
+          const pos = (p?.position ?? 'FLEX').toUpperCase();
+          if (!byPos.has(pos)) byPos.set(pos, []);
+          byPos.get(pos)!.push(p);
+        }
+        const picked: any[] = [];
+        const taken: Record<string, number> = {};
+        let exhausted = false;
+        while (picked.length < POOL_CAP && !exhausted) {
+          exhausted = true;
+          for (const [pos, arr] of byPos) {
+            if (picked.length >= POOL_CAP) break;
+            const n = taken[pos] ?? 0;
+            if (n >= arr.length) continue;
+            if (n >= (POS_CAP[pos] ?? Infinity)) continue;
+            picked.push(arr[n]);
+            taken[pos] = n + 1;
+            exhausted = false;
+          }
+        }
+        const availableNames: string[] = picked.map((p: any) => {
           const nm = p.name ?? 'Unknown';
           const pos = p.position ?? 'FLEX';
           return formatPlayerEntry(nm, pos, p.team, enrichByName(nameIndex, nm, pos));
