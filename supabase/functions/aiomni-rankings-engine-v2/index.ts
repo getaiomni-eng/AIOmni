@@ -1054,10 +1054,14 @@ const TE_FRIENDLY_QBS_2026: Record<string, number> = {
   jaydendaniels:    1.02,
 };
 
+// Keys are normalized name + '|' + POSITION, matching fetchInjuryMap. The
+// position suffix was added 2026-09-15 when the map moved to name+position
+// to stop the two Justin Jeffersons colliding; without it these overrides
+// would silently stop matching anything.
 const INJURY_OVERRIDES_2026: Record<string, InjuryStatus> = {
   // Lingering / chronic 2026 status (multiplier on baseline, severe cases).
-  georgekittle:    { status: 'Out', injury: 'Achilles tear (half-season)', multiplier: 0.45 },
-  michaelpenixjr:  { status: 'Out', injury: 'Significant injury', multiplier: 0.30 },
+  'georgekittle|TE':   { status: 'Out', injury: 'Achilles tear (half-season)', multiplier: 0.45 },
+  'michaelpenixjr|QB': { status: 'Out', injury: 'Significant injury', multiplier: 0.30 },
 };
 
 // v5.3 (2026-05-18): 2025 INJURY CONTEXT for 2026 recovery projection.
@@ -1073,43 +1077,93 @@ type InjuryContext = { games: number; mult: number; note: string };
 // 2026 injury-context map — decrypted at runtime (see ensureSecrets).
 let INJURY_CONTEXT_2026: Record<string, InjuryContext> = {};
 
+// Sleeper's status vocabulary -> the vocabulary injuryMultiplier() knows.
+// Anything unmapped falls through to a 1.0 multiplier, so a status this
+// table does not cover silently means "healthy" -- keep it complete.
+const SLEEPER_STATUS_MAP: Record<string, string> = {
+  'Out':         'Out',
+  'Doubtful':    'Doubtful',
+  'Questionable':'Questionable',
+  'IR':          'Injured Reserve',
+  'Injured Reserve': 'Injured Reserve',
+  'PUP':         'Injured Reserve',   // physically unable to perform
+  'NA':          'Out',
+  'Sus':         'Out',               // suspended: unavailable either way
+  'COV':         'Out',
+  'DNR':         'Out',
+};
+
 async function fetchInjuryMap(): Promise<Map<string, InjuryStatus>> {
   const map = new Map<string, InjuryStatus>();
-  try {
-    const res = await fetch(
-      'https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries',
-      { headers: { 'User-Agent': 'AIOmni/1.0' } }
-    );
-    if (!res.ok) {
-      console.log('ESPN injuries HTTP', res.status);
-      return map;
+
+  // Source changed from ESPN to Sleeper (2026-09-15).
+  //
+  // site.api.espn.com/.../nfl/injuries 403s. weekly-board hit this months ago
+  // and switched to Sleeper for exactly this reason; the rankings engine was
+  // never updated, so it kept calling a blocked endpoint.
+  //
+  // The damage was invisible because the old code did `return map` on a
+  // non-ok response: an empty injury map, the run continuing, and EVERY
+  // injured player silently losing his discount. Observed 2026-09-15 --
+  // Brock Bowers went TE15 -> TE2 on a post-surgical meniscus because the
+  // 0.10x haircut was simply absent, and the run reported success.
+  const res = await fetch('https://api.sleeper.app/v1/players/nfl');
+  if (!res.ok) throw new Error(`sleeper players ${res.status}`);
+  const players = await res.json();
+
+  for (const id of Object.keys(players ?? {})) {
+    const p = players[id];
+    const raw = p?.injury_status;
+    if (!raw) continue;
+    const status = SLEEPER_STATUS_MAP[raw] ?? '';
+    if (!status) continue;
+
+    // detectInjuryFromText / isSeriousFromText were written against ESPN's
+    // short+long comments. Sleeper's equivalent signal is the body part plus
+    // any note, and "Surgery" in a note is exactly the serious-tear case
+    // those helpers look for.
+    const bodyPart = p?.injury_body_part ?? '';
+    const notes    = p?.injury_notes ?? '';
+    const injury   = detectInjuryFromText(bodyPart, notes) || bodyPart || 'Unspecified';
+    const isSerious = isSeriousFromText(bodyPart, notes);
+
+    const mult = injuryMultiplier(status, isSerious);
+    if (mult < 1.0) {
+      const full = p?.full_name ?? [p?.first_name, p?.last_name].filter(Boolean).join(' ');
+      const pos  = p?.position ?? '';
+      if (!full || !pos) continue;
+      // Key on name + POSITION, never name alone.
+      //
+      // "Justin Jefferson" is two active NFL players: a WR in MIN and a LB
+      // in CLE. Sleeper's feed carries both. Keyed on name only, the healthy
+      // receiver inherited the linebacker's Out ("Coach's Decision") and
+      // dropped WR5 -> WR47 on the live board, 2026-09-15. It is the same
+      // collision that once had the linebacker ranked as a WR2, and the
+      // ESPN feed only hid it by not listing the linebacker.
+      const key = full.toLowerCase().replace(/[^a-z]/g, '') + '|' + pos;
+      map.set(key, { status, injury, multiplier: mult });
     }
-    const data = await res.json();
-    for (const team of (data?.injuries ?? [])) {
-      for (const entry of (team?.injuries ?? [])) {
-        const athlete = entry?.athlete;
-        if (!athlete?.displayName) continue;
-        const status = entry?.status ?? '';
-        if (!status) continue;
-        const longC = entry?.longComment ?? '';
-        const shortC = entry?.shortComment ?? '';
-        const injury = detectInjuryFromText(shortC, longC) || 'Unspecified';
-        const isSerious = isSeriousFromText(shortC, longC);
-        const mult = injuryMultiplier(status, isSerious);
-        if (mult < 1.0) {
-          const key = athlete.displayName.toLowerCase().replace(/[^a-z]/g, '');
-          map.set(key, { status, injury, multiplier: mult });
-        }
-      }
-    }
-  } catch (e) {
-    console.log('fetchInjuryMap error:', e);
   }
-  // Merge in manual overrides — these win over the ESPN feed.
+
+  // FAIL CLOSED. This is the real fix, independent of which feed is used.
+  //
+  // An empty injury map is never a legitimate mid-season state, and the
+  // engine writes straight to the live board with no dry run. Publishing a
+  // board with no injury adjustments is far worse than publishing nothing,
+  // because nobody can see that it happened: the run succeeds, the ranks
+  // look plausible, and hurt players quietly climb.
+  //
+  // Throwing here aborts the whole run and leaves yesterday's board in
+  // place, which is the correct failure.
+  if (map.size === 0) {
+    throw new Error('injury map came back empty — refusing to publish a board with no injury adjustments');
+  }
+
+  // Manual overrides win over the feed.
   for (const [key, val] of Object.entries(INJURY_OVERRIDES_2026)) {
     map.set(key, val);
   }
-  console.log(`[injuries] loaded ${map.size} injured players (ESPN + ${Object.keys(INJURY_OVERRIDES_2026).length} overrides)`);
+  console.log(`[injuries] loaded ${map.size} injured players (Sleeper + ${Object.keys(INJURY_OVERRIDES_2026).length} overrides)`);
   return map;
 }
 
@@ -1760,7 +1814,9 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
   const isOut = (gid: string): boolean => {
     const player = rosterById.get(gid);
     if (!player) return false;
-    const key = (player.full_name ?? '').toLowerCase().replace(/[^a-z]/g, '');
+    // name + position, matching how fetchInjuryMap keys the map.
+    const key = (player.full_name ?? '').toLowerCase().replace(/[^a-z]/g, '')
+      + '|' + (player.position ?? '');
     const inj = injuryMap.get(key);
     if (!inj) return false;
     const sev = (inj.status ?? '').toLowerCase();
@@ -1921,7 +1977,9 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     const a21 = agg2021.get(p.gsis_id);
     const isRookie = p.rookie_year === asOfSeason || p.draft_year === asOfSeason;
     // Hoisted (v2.5): injuryNameKey available throughout the loop body
-    const injuryNameKey = (p.full_name || '').toLowerCase().replace(/[^a-z]/g, '');
+    // name + position, matching how fetchInjuryMap keys the map.
+    const injuryNameKey = (p.full_name || '').toLowerCase().replace(/[^a-z]/g, '')
+      + '|' + (p.position || '');
 
     // ═══ v3 (2026-05-16): NEW BASELINE per user spec ═══════════════════
     // - 3yr default blend with NEW weekly weights (W1-6 ×1.5, W7-13 ×1, W14-17 ×2)
@@ -2181,11 +2239,44 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       const boosts:     Record<string, number> = { QB: 1.05, RB: 1.10, WR: 1.10, TE: 1.10 };
       const threshold = thresholds[p.position] ?? 180;
       const boost = boosts[p.position] ?? 1.10;
-      const careerSeasons: number[] = [];
-      if (a25 && a25.games >= 12) careerSeasons.push(a25.ppg * a25.games);
-      if (a24 && a24.games >= 12) careerSeasons.push(a24.ppg * a24.games);
-      const careerBest = careerSeasons.length ? Math.max(...careerSeasons) : 0;
-      if (careerBest >= threshold) {
+      const careerSeasons: Array<{ tot: number; ppg: number; recent: boolean }> = [];
+      if (a25 && a25.games >= 12) careerSeasons.push({ tot: a25.ppg * a25.games, ppg: a25.ppg, recent: true });
+      if (a24 && a24.games >= 12) careerSeasons.push({ tot: a24.ppg * a24.games, ppg: a24.ppg, recent: false });
+      const bestSeason = careerSeasons.length
+        ? careerSeasons.reduce((b, x) => (x.tot > b.tot ? x : b))
+        : null;
+      const careerBest = bestSeason ? bestSeason.tot : 0;
+
+      // v6.6 (2026-09-15): do NOT floor a player whose most recent full
+      // season contradicted the peak.
+      //
+      // The floor had no notion of what happened after the elite year. Brian
+      // Thomas Jr. posted 284 fpts in 2024 (16.7 ppg), then 9.9 ppg across 14
+      // games in 2025, and the floor still pinned his baseline at 17.7 --
+      // worth ~4.4 ppg and the gap between WR7 and roughly WR10, while the
+      // market had him WR57.
+      //
+      // Deliberately keyed on CONTRADICTION, not on the age of the peak. All
+      // 20 floored players were checked first: twelve of them peaked in the
+      // most recent season or beat it (Jeanty, Warren, Loveland, McMillan,
+      // Maye, C. Williams...), so decaying by age would have punished players
+      // the rule is getting right. Only three regressed past the threshold:
+      // James Conner, Brian Thomas Jr., Ladd McConkey.
+      //
+      // 0.75 is a judgement call, not a fitted number. A season at less than
+      // three-quarters of the peak rate is a different player, not noise.
+      const recentSeason = careerSeasons.find(x => x.recent) ?? null;
+      const contradicted = !!(
+        bestSeason && recentSeason && !bestSeason.recent &&
+        recentSeason.ppg < 0.75 * bestSeason.ppg
+      );
+
+      if (careerBest >= threshold && contradicted) {
+        baselineSource += ` + young-elite-floor WITHHELD (peak ${careerBest.toFixed(0)} fpts, ` +
+          `latest ${recentSeason!.ppg.toFixed(1)} ppg < 75% of ${bestSeason!.ppg.toFixed(1)})`;
+      }
+
+      if (careerBest >= threshold && !contradicted) {
         // v6.2: make this an ACTUAL floor, not just a +10% nudge on a recency-
         // depressed baseline. A young player who already posted a top-15 season
         // (Gadsden: 131 TE fpts = TE15) shouldn't project below that season's
