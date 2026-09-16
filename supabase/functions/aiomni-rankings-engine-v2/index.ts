@@ -731,6 +731,9 @@ interface InjuryStatus {
   status: string;
   injury: string;
   multiplier: number;
+  // True only for hand-authored INJURY_OVERRIDES_2026 entries. See the
+  // severity gate below for why this exists.
+  manual?: boolean;
 }
 
 const SERIOUS_INJURY_KEYWORDS = [
@@ -1058,10 +1061,42 @@ const TE_FRIENDLY_QBS_2026: Record<string, number> = {
 // position suffix was added 2026-09-15 when the map moved to name+position
 // to stop the two Justin Jeffersons colliding; without it these overrides
 // would silently stop matching anything.
+// `manual: true` on every entry. The multiplier below is applied only when
+// a downstream severity gate decides the status text is "serious enough" --
+// it string-matches for out/ir/pup/doubtful and SKIPS the multiplier
+// entirely for anything else (Questionable, Probable, Unspecified), because
+// that gate exists to ignore noisy live-feed tags. A hand-authored override
+// is the opposite of noise: a person picked the status AND the multiplier
+// together as one considered judgment, so it must always apply regardless
+// of what the status text says. Found 2026-09-16 when a Bowers override with
+// status 'Questionable' silently no-op'd -- his score came back fully
+// healthy because the gate saw "Questionable" and skipped the 0.85x
+// entirely, not because the multiplier was wrong.
 const INJURY_OVERRIDES_2026: Record<string, InjuryStatus> = {
   // Lingering / chronic 2026 status (multiplier on baseline, severe cases).
-  'georgekittle|TE':   { status: 'Out', injury: 'Achilles tear (half-season)', multiplier: 0.45 },
-  'michaelpenixjr|QB': { status: 'Out', injury: 'Significant injury', multiplier: 0.30 },
+  'georgekittle|TE':   { status: 'Out', injury: 'Achilles tear (half-season)', multiplier: 0.45, manual: true },
+  'michaelpenixjr|QB': { status: 'Out', injury: 'Significant injury', multiplier: 0.30, manual: true },
+
+  // TIME-SENSITIVE, expected temporary. Sleeper's injury_status is only as
+  // fresh as Sleeper's own update cycle, and it lags real reporting during
+  // the week -- Bowers sat at Out/Surgery (news_updated 2026-09-14) while
+  // Schefter and Raiders coach Kubiak had already called him day-to-day with
+  // a real chance to play Week 2 at LAC. That is "Questionable," not "Out
+  // for the year," and the difference is the whole reason his baseline was
+  // floored to -122 instead of ranking as a real TE.
+  //
+  // 0.85 is the existing Questionable-not-serious multiplier from
+  // injuryMultiplier(), not a bespoke number -- this overrides the STATUS
+  // Sleeper reports, then lets the normal taxonomy value apply.
+  //
+  // REMOVE once Sleeper's own feed catches up, expected after the Raiders'
+  // Friday practice report / the real Week 2 designation posts.
+  'brockbowers|TE': {
+    status: 'Questionable',
+    injury: 'Knee (meniscus trim) -- day-to-day per Kubiak/Schefter, real chance to play Wk2 at LAC',
+    multiplier: 0.85,
+    manual: true,
+  },
 };
 
 // v5.3 (2026-05-18): 2025 INJURY CONTEXT for 2026 recovery projection.
@@ -2667,9 +2702,18 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     let injuryNote = '';
     // v2.5.3: only apply injury penalty for severe statuses.
     // Skip "Unspecified", "Questionable", "Probable" -- those are noise.
+    //
+    // EXCEPT for manual overrides (2026-09-16). This text-match gate exists
+    // to ignore noisy live-feed tags, but a hand-authored
+    // INJURY_OVERRIDES_2026 entry is the opposite of noise -- a person chose
+    // the status label AND the multiplier together as one considered call.
+    // Bowers' override (status 'Questionable', multiplier 0.85) silently
+    // no-op'd against this gate: it read "Questionable" and skipped the
+    // discount entirely, so he came back scored as fully healthy.
     if (injInfo && injInfo.multiplier < 1.0) {
       const severity = (injInfo.severity ?? injInfo.status ?? '').toLowerCase();
-      const isSerious = severity.includes('out') ||
+      const isSerious = injInfo.manual === true ||
+                        severity.includes('out') ||
                         severity.includes('ir') ||
                         severity.includes('pup') ||
                         severity.includes('doubtful');

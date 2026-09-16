@@ -203,6 +203,22 @@ Deno.serve(async (req) => {
       injury.set(norm(nm), st);
       injCount++;
     }
+
+    // Manual, time-sensitive corrections. Sleeper's own update cycle lags
+    // real reporting -- Bowers sat at "Out" (news_updated 2026-09-14) after
+    // knee surgery while Schefter and Raiders coach Kubiak had already
+    // called him day-to-day with a real chance to play Wk2 at LAC. "Out"
+    // buries a player entirely (WEEK_OUT -> effective = 10_000 + rank);
+    // "Questionable" applies the existing -5 rank shift instead, which is
+    // the right amount of caution for a real-but-uncertain game-time call.
+    // REMOVE once Sleeper's feed catches up, expected after the Friday
+    // practice report.
+    const WEEKLY_INJURY_OVERRIDES: Record<string, string> = {
+      [norm('Brock Bowers')]: 'Questionable',
+    };
+    for (const [key, status] of Object.entries(WEEKLY_INJURY_OVERRIDES)) {
+      injury.set(key, status);
+    }
   } catch (e) { injErr = String((e as any)?.message ?? e); }
 
   // ── weather ───────────────────────────────────────────────────────────
