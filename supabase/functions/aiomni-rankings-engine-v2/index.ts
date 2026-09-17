@@ -1310,6 +1310,43 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
   const players = playersResult.data ?? [];
   if (!players.length) throw new Error('no active players');
 
+  // ─── v9.1 (2026-09-17): SYNTHETIC DRAFT-PICK DEDUPE ────────────────
+  // nfl_players carries a hand-seeded draft class under synthetic ids
+  // ('2026_pick_008') so incoming rookies can be ranked before they exist
+  // in the nflverse/Sleeper feeds. Those rows are never cleaned up, so once
+  // a rookie's REAL row lands (00-0041029) the engine sees the same human
+  // twice and ranks him twice -- Jordyn Tyson held PPR 126 AND 154,
+  // Jadarian Price 79 AND 103.
+  //
+  // At the time this was written 77 of 82 synthetic skill-position rows
+  // already had a real twin, so this was not an edge case: it was burning
+  // real slots in every format's top 250 and showing users the same rookie
+  // in two places.
+  //
+  // The real row wins, and loses nothing by winning -- it carries the same
+  // draft_round/draft_pick the synthetic row was seeded with, AND its
+  // gsis_id is the one 2026 weekly stats are keyed on, so it is the only
+  // version the in-season layer above can ever match. Self-healing by
+  // design: each synthetic row disappears the moment its real counterpart
+  // syncs, with no dated list to maintain.
+  //
+  // Year-agnostic on purpose -- 2027's seeded class will behave the same.
+  const SYNTH_PICK_ID = /^\d{4}_pick_\d+$/;
+  const isSynth = (id: unknown) => SYNTH_PICK_ID.test(String(id ?? ''));
+  const nameKey = (p: any) => `${(p.full_name ?? '').toLowerCase().trim()}|${p.position}`;
+  const realKeys = new Set<string>();
+  for (const p of players) if (!isSynth(p.gsis_id)) realKeys.add(nameKey(p));
+  let dedupedSynth = 0;
+  for (let i = players.length - 1; i >= 0; i--) {
+    if (isSynth(players[i].gsis_id) && realKeys.has(nameKey(players[i]))) {
+      players.splice(i, 1);
+      dedupedSynth++;
+    }
+  }
+  if (dedupedSynth > 0) {
+    console.log(`[${format}] deduped ${dedupedSynth} synthetic draft-pick rows superseded by real gsis_id rows`);
+  }
+
   // v2026-05-12d: manual player injection for known-missing roster entries.
   // The `nfl_players` sync occasionally drops players (FA limbo, sync gaps).
   // Pitts case: missing from the table entirely, so the engine never ranks him.
