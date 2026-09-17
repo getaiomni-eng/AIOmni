@@ -1276,7 +1276,7 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
   // names kept as-is to avoid mass renames; treat them as "1-yr-ago",
   // "2-yr-ago", etc.
   const isBacktest = asOfSeason !== 2026;
-  const [w2025, w2024, w2023, w2022, w2021, playersResult, rosterResult, injuryMap] = await Promise.all([
+  const [w2025, w2024, w2023, w2022, w2021, playersResult, rosterResult, injuryMap, wCur] = await Promise.all([
     fetchSeason(supabase, asOfSeason - 1, ptsCol),
     fetchSeason(supabase, asOfSeason - 2, ptsCol),
     fetchSeason(supabase, asOfSeason - 3, ptsCol),
@@ -1295,6 +1295,15 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       .select('gsis_id, full_name, position, team, is_active, depth_chart_position, depth_chart_order')
       .in('position', ['QB', 'RB', 'WR', 'TE']),
     isBacktest ? Promise.resolve(new Map()) : fetchInjuryMap(),
+    // v9.0 (2026-09-17): the CURRENT season, partial. Every other fetch above
+    // is asOfSeason-1 .. -5, which is why this engine could not see 2026 at
+    // all. Disabled in backtest on purpose: feeding a COMPLETED asOfSeason
+    // here would be leakage -- the layer would "predict" a season using that
+    // season's own results and score beautifully for no reason. Validating
+    // this properly needs a harness that feeds weeks 1..N and scores
+    // rest-of-season, which does not exist yet. Backtests therefore no
+    // longer reflect production behavior; that is a known, accepted gap.
+    isBacktest ? Promise.resolve([] as any[]) : fetchSeason(supabase, asOfSeason, ptsCol),
   ]);
 
   if (playersResult.error) throw playersResult.error;
@@ -1339,13 +1348,19 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     }
   }
 
-  console.log(`[${format}] players=${players.length} w2025=${w2025.length} w2024=${w2024.length} w2023=${w2023.length} w2022=${w2022.length} w2021=${w2021.length}`);
+  console.log(`[${format}] players=${players.length} w2025=${w2025.length} w2024=${w2024.length} w2023=${w2023.length} w2022=${w2022.length} w2021=${w2021.length} wCur(${asOfSeason})=${wCur.length}`);
 
   const agg2025 = aggregateSeason(w2025, ptsCol);
   const agg2024 = aggregateSeason(w2024, ptsCol);
   const agg2023 = aggregateSeason(w2023, ptsCol);
   const agg2022 = aggregateSeason(w2022, ptsCol);
   const agg2021 = aggregateSeason(w2021, ptsCol);
+  // Current-season aggregate. aggregateSeason is season-agnostic and degrades
+  // correctly on a tiny sample: its weeks-10-17 recency weighting simply never
+  // fires before week 10, and volatility stays 0 below 4 games. Note it drops
+  // any row with 0 pts / 0 targets / 0 carries, so a true DNP does not count
+  // as a game played -- absence produces NO signal rather than a bad one.
+  const aggCur = aggregateSeason(wCur, ptsCol);
 
   // v8.2: prior-season teammate-absence inflation discounts (production-side only).
   const teammateInflation = isBacktest
@@ -3490,6 +3505,65 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       }
     }
 
+    // ─── v9.0 (2026-09-17): IN-SEASON CORRECTION ──────────────────────
+    // Every layer above this line is built from asOfSeason-1 .. -5. Through
+    // Week 1 of 2026 this engine ranked players entirely off 2025-and-earlier
+    // tape, and Week 1's scoreboard showed what that costs: our Spearman
+    // (0.515 formula / 0.464 weekly) trailed BOTH public ADPs (0.611 sleeper,
+    // 0.640 espn), which absorb what actually happened on Sunday. This is the
+    // channel that was missing.
+    //
+    // It is deliberately a SHRINKAGE, not a replacement. It compares what a
+    // player is actually producing per game against what every layer above
+    // predicted, then moves the projection a FRACTION of the way toward
+    // reality -- the fraction growing with sample size:
+    //
+    //     w = games / (games + K)
+    //
+    // K=7 with career history (1g -> 0.13, 4g -> 0.36, 8g -> 0.53, 12g -> 0.63).
+    // K=4 without it, because a player with no prior seasons is carrying a
+    // generic draft-capital guess as his prior, and real tape should displace
+    // that faster than it displaces five years of production.
+    //
+    // SIZING NOTE -- READ BEFORE TUNING: at Week 2 this moves almost nothing.
+    // One game, w=0.13, swing capped near -8%/+19%. That is the correct amount
+    // of confidence to place in one football game, and it is the design, not a
+    // shortfall: the layer earns its weight automatically as weeks accumulate
+    // instead of needing a code change mid-season. Do NOT raise K or widen the
+    // clamps to make an early-season board look more responsive -- that is how
+    // one fluke Sunday starts rewriting a five-year baseline.
+    //
+    // Players with no current-season sample are left ALONE (mult 1.0), not
+    // penalized. Absence is not evidence of decline; aggregateSeason already
+    // ensures a DNP never counts as a game.
+    let inSeasonNote = '';
+    const aCur = aggCur.get(p.gsis_id);
+    if (aCur && aCur.games > 0 && gamesEst.games > 0 && finalSeasonTotal > 0) {
+      const expectedPpg = finalSeasonTotal / gamesEst.games;
+      const actualPpg = aCur.recencyPpg > 0 ? aCur.recencyPpg : aCur.ppg;
+      if (expectedPpg > 0) {
+        const K = priorSeasonCount === 0 ? 4 : 7;
+        const w = aCur.games / (aCur.games + K);
+        // Clamp the RATIO before blending. A 40-point Week 1 from a player
+        // projected at 6 ppg is real signal, but it is not a 6.7x signal, and
+        // an unclamped ratio would let one game dominate the blend outright.
+        const ratio = Math.max(0.40, Math.min(2.50, actualPpg / expectedPpg));
+        let mult = 1 + w * (ratio - 1);
+        mult = Math.max(0.75, Math.min(1.35, mult));
+        // Do not double-charge the injured. The injury layer already discounted
+        // these players, and for someone whose low PPG IS the injury, applying
+        // both bills him twice for one event. In-season production may still
+        // HELP an injured player (he is outproducing his discount) -- it just
+        // may not compound the penalty.
+        if (injuryMult < 1.0 && mult < 1.0) {
+          inSeasonNote = `[in-season ${aCur.games}g ${actualPpg.toFixed(1)} vs ${expectedPpg.toFixed(1)} ppg exp — downgrade WITHHELD, injury layer already applied ${injuryMult.toFixed(2)}x]`;
+        } else {
+          finalSeasonTotal *= mult;
+          inSeasonNote = `[in-season ${aCur.games}g ${actualPpg.toFixed(1)} vs ${expectedPpg.toFixed(1)} ppg exp → ${mult.toFixed(3)}x (w=${w.toFixed(2)}, K=${K})]`;
+        }
+      }
+    }
+
     const score = finalSeasonTotal;
 
     // ─── v2: method string by LAYER (one summary per layer, not per signal) ───
@@ -3553,6 +3627,7 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     if (hybridNote) parts.push(hybridNote);
     if (tmInflNote) parts.push(tmInflNote);
     if (rookieRbNote) parts.push(rookieRbNote);
+    if (inSeasonNote) parts.push(inSeasonNote);
     if (INJURY_CONTEXT_2026[injuryKey]) {
       parts.push(`injury-2026: ${INJURY_CONTEXT_2026[injuryKey].note}`);
     }
