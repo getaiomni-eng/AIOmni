@@ -881,12 +881,34 @@ class SleeperPlatform implements FantasyPlatform {
           }
         }
 
+        // Draft picks in a trade. Verified against a real league trade
+        // (1365836763074953216, week 1): two players one way, THREE 2027
+        // 1sts the other. Dropping these does not shade a grade, it
+        // inverts it.
+        //
+        // Sleeper's shape: owner_id RECEIVES, previous_owner_id SENDS.
+        // `roster_id` is whose pick it originally is (not a party to the
+        // trade), so it is deliberately ignored here -- KTC prices picks by
+        // season and round, which is all the grader can use anyway.
+        const picks: NonNullable<Transaction['picks']> = [];
+        for (const dp of (tx.draft_picks ?? [])) {
+          if (dp?.owner_id == null || dp?.previous_owner_id == null) continue;
+          picks.push({
+            season: String(dp.season ?? ''),
+            round: Number(dp.round ?? 0),
+            toRosterId: String(dp.owner_id),
+            fromRosterId: String(dp.previous_owner_id),
+          });
+        }
+
         all.push({
           id: String(tx.transaction_id),
           type,
           timestamp: tx.status_updated || tx.created || 0,
           adds,
           drops,
+          ...(picks.length ? { picks } : {}),
+          ...(Array.isArray(tx.roster_ids) ? { rosterIds: tx.roster_ids.map((r: any) => String(r)) } : {}),
           faabBid: tx.settings?.waiver_bid,
           status: tx.status === 'complete' ? 'complete' : tx.status === 'failed' ? 'failed' : 'pending',
         });

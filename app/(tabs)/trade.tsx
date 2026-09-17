@@ -14,6 +14,7 @@ import { getCurrentTier } from '../../services/purchases';
 import { sanitizePromptInput } from '../../services/util/promptSafe';
 import { consumePrompt, hasLinkedPlatform } from '../../services/promptQuota';
 import { captureTradeGrade } from '../../services/judgmentCapture';
+import { fetchLeagueTrades, isTradeListSupported, type LeagueTradeOption } from '../../services/leagueTrades';
 import { C, F, R, SP, SZ } from '../constants/tokens';
 import { useTheme, type ThemeTokens } from '../constants/theme';
 import { Icon } from '../components/AIOmniIcons';
@@ -297,6 +298,8 @@ export default function TradesScreen() {
   const router = useRouter();
   const [format, setFormat] = useState<Format>('redraft');
   const [perspective, setPerspective] = useState<Perspective>('mine');
+  const [leagueTrades, setLeagueTrades] = useState<LeagueTradeOption[]>([]);
+  const [loadingTrades, setLoadingTrades] = useState(false);
   // Labels swap wholesale between the two modes. Kept in one place so the
   // inputs, the grade boxes, the prompt and the share text can never drift
   // into disagreeing about which side is which.
@@ -834,6 +837,36 @@ ${marketMath}${(() => {
     Share.share({ message: msg }).catch(() => {});
   };
 
+  // Load real league trades when the user is in LEAGUE mode with a real
+  // league selected. Only fires for platforms whose transaction feed can
+  // actually be reconstructed into two sides (Sleeper) -- see
+  // services/leagueTrades.ts for why the others cannot.
+  useEffect(() => {
+    const sel = ctxChoice !== 'general' ? ctxOptions.find(o => o.key === ctxChoice) : undefined;
+    if (!isLeague || !sel || !isTradeListSupported(sel.platform)) {
+      setLeagueTrades([]);
+      return;
+    }
+    let alive = true;
+    setLoadingTrades(true);
+    fetchLeagueTrades(sel.platform, sel.id)
+      .then(list => { if (alive) setLeagueTrades(list); })
+      .catch(() => { if (alive) setLeagueTrades([]); })
+      .finally(() => { if (alive) setLoadingTrades(false); });
+    return () => { alive = false; };
+  }, [isLeague, ctxChoice, ctxOptions]);
+
+  // Tapping a real trade prefills both sides. Deliberately a PREFILL, not
+  // an auto-grade: the text lands in the visible inputs so the user can see
+  // exactly what was read (and fix it) before spending a prompt on it.
+  const useLeagueTrade = (tr: LeagueTradeOption) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setGiving(tr.aSends);
+    setGetting(tr.bSends);
+    setVerdict('');
+    setAnalysis('');
+  };
+
   const canAnalyze = giving.trim().length > 0 && getting.trim().length > 0;
 
   const analyze = async () => {
@@ -940,6 +973,38 @@ ${marketMath}${(() => {
             ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator color={t.accentText} size="small" /><Text style={styles.uploadTxt}>Reading screenshot…</Text></View>
             : <Text style={styles.uploadTxt}>📷  Upload trade screenshot</Text>}
         </TouchableOpacity>
+
+        {/* Real trades from the league, tappable to prefill. Only rendered
+            in LEAGUE mode with a supported league selected. Absent is the
+            normal state for ESPN/MFL/Fleaflicker and for GENERAL — manual
+            entry still works everywhere. */}
+        {isLeague && (loadingTrades || leagueTrades.length > 0) && (
+          <View style={styles.tradeListCard}>
+            <Text style={styles.fieldLbl}>RECENT TRADES IN THIS LEAGUE</Text>
+            {loadingTrades ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 }}>
+                <ActivityIndicator color={t.accentText} size="small" />
+                <Text style={styles.tradeListHint}>Reading the league…</Text>
+              </View>
+            ) : (
+              <>
+                {leagueTrades.map(tr => (
+                  <TouchableOpacity key={tr.id} style={styles.tradeRow} onPress={() => useLeagueTrade(tr)} activeOpacity={0.7}>
+                    <Text style={styles.tradeTeams} numberOfLines={1}>
+                      {tr.teamA}  ⇄  {tr.teamB}
+                    </Text>
+                    <Text style={styles.tradeDetail} numberOfLines={2}>
+                      {tr.aSends}  →  {tr.bSends}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                <Text style={styles.tradeListHint}>
+                  Tap one to load it. Check the players before grading.
+                </Text>
+              </>
+            )}
+          </View>
+        )}
 
         <View style={styles.inputCard}>
           <Text style={styles.fieldLbl}>{sideALbl}</Text>
@@ -1160,6 +1225,37 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
     borderColor: t.border,
     padding: 16,
     marginBottom: 12,
+  },
+  tradeListCard: {
+    backgroundColor: t.card,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: t.border,
+    padding: 16,
+    marginBottom: 12,
+  },
+  tradeRow: {
+    borderTopWidth: 1,
+    borderTopColor: t.border,
+    paddingVertical: 11,
+  },
+  tradeTeams: {
+    color: t.text,
+    fontFamily: F.mono,
+    fontSize: SZ.sm,
+    letterSpacing: 0.3,
+    marginBottom: 3,
+  },
+  tradeDetail: {
+    color: t.textMuted,
+    fontSize: SZ.sm,
+    lineHeight: 18,
+  },
+  tradeListHint: {
+    color: t.textMuted,
+    fontFamily: F.mono,
+    fontSize: SZ.xs,
+    marginTop: 10,
   },
   fieldLbl: {
     color: t.textMuted,

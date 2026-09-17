@@ -205,6 +205,19 @@ export interface Transaction {
   timestamp: number;
   adds: { player: Player; toRosterId: string }[];
   drops: { player: Player; fromRosterId: string }[];
+  // Draft picks moved by a TRADE. Optional because only some platforms
+  // report them (Sleeper does); absent means "this platform did not tell
+  // us", NOT "no picks were involved".
+  //
+  // Omitting picks produces a badly wrong trade grade, not a slightly wrong
+  // one. A verified real Sleeper trade sent two players one way and THREE
+  // 2027 first-rounders the other; with picks dropped, that whole side
+  // reads as a single player.
+  picks?: { season: string; round: number; toRosterId: string; fromRosterId: string }[];
+  // Rosters party to this transaction, when the platform states them
+  // explicitly (Sleeper's `roster_ids`). Used to detect 3-team trades,
+  // which cannot be rendered as a two-sided A-for-B deal.
+  rosterIds?: string[];
   faabBid?: number;
   status: 'complete' | 'pending' | 'failed';
 }
