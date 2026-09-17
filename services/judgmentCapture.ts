@@ -113,6 +113,13 @@ export type TradeCapture = {
   engineGrounded: boolean;
   hasMarketData:  boolean;
   hasRosterContext: boolean;
+  // 'mine' = the user's own trade, graded as an accept/decline against their
+  // roster. 'league' = two other teams' deal, graded neutrally for who won,
+  // with the user's roster deliberately excluded. Recorded because the two
+  // are different questions and should never be pooled when this dataset is
+  // eventually analyzed -- and because it answers whether league mode gets
+  // used at all.
+  perspective?: 'mine' | 'league';
   verdict?:  string;
   analysis?: string;
 };
@@ -147,6 +154,7 @@ export function captureTradeGrade(t: TradeCapture): void {
     if (!t.hasMarketData)    reasons.push('no_market_data');
     if (!t.engineGrounded)   reasons.push('engine_unavailable');
     if (!t.hasRosterContext) reasons.push('no_roster_context');
+    if (t.perspective === 'league') reasons.push('league_trade');
 
     const lopsided = t.netPct != null && Math.abs(t.netPct) >= FLAG_THRESHOLD_PCT;
     if (lopsided) reasons.push('lopsided');
@@ -163,6 +171,7 @@ export function captureTradeGrade(t: TradeCapture): void {
           engineFormat: t.engineFormat,
           engineGrounded: t.engineGrounded,
           hasMarketData: t.hasMarketData,
+          perspective: t.perspective ?? 'mine',
           verdict: (t.verdict ?? '').slice(0, 400),
         },
         p_reason_codes: reasons,

@@ -20,6 +20,18 @@ import { Icon } from '../components/AIOmniIcons';
 import { Alert } from '../../services/util/crossAlert';
 
 type Format = 'redraft' | 'dynasty';
+
+// Whose trade is being graded.
+//
+// 'mine'   — the original behavior. "Should I accept?" Factors the user's
+//            own roster for positional fit, and the verdict is an
+//            ACCEPT/DECLINE recommendation.
+// 'league' — a trade between two OTHER teams in the league. There is no
+//            "you" in it, so the grade must be neutral (who won) and the
+//            user's roster must NOT leak into the reasoning. Grading a
+//            leaguemate's trade against your own positional needs would be
+//            actively wrong.
+type Perspective = 'mine' | 'league';
 type Grade = 'A+' | 'A' | 'A-' | 'B+' | 'B' | 'B-' | 'C+' | 'C' | 'C-' | 'D+' | 'D' | 'F';
 
 type TradeResult = {
@@ -284,6 +296,23 @@ export default function TradesScreen() {
   const styles = useMemo(() => makeStyles(t), [t]);
   const router = useRouter();
   const [format, setFormat] = useState<Format>('redraft');
+  const [perspective, setPerspective] = useState<Perspective>('mine');
+  // Labels swap wholesale between the two modes. Kept in one place so the
+  // inputs, the grade boxes, the prompt and the share text can never drift
+  // into disagreeing about which side is which.
+  const isLeague = perspective === 'league';
+  // Input fields. `giving` is side A's outgoing players, `getting` is side
+  // B's outgoing players -- unchanged from 'mine' mode, so all the parsing,
+  // grounding and grade math below works identically.
+  const sideALbl = isLeague ? 'TEAM A SENDS' : 'YOU ARE GIVING';
+  const sideBLbl = isLeague ? 'TEAM B SENDS' : 'YOU ARE RECEIVING';
+  // Grade boxes, and the pairing is easy to get backwards:
+  //   box 1 renders lockedReceive = the graded value of `getting`
+  //                                = what B sent = A's haul  -> TEAM A GETS
+  //   box 2 renders lockedGive    = the graded value of `giving`
+  //                                = what A sent = B's haul  -> TEAM B GETS
+  const gradeALbl = isLeague ? 'TEAM A GETS' : 'YOU RECEIVE';
+  const gradeBLbl = isLeague ? 'TEAM B GETS' : 'YOU GIVE UP';
   const [giving, setGiving] = useState('');
   const [getting, setGetting] = useState('');
   const [loading, setLoading] = useState(false);
@@ -567,7 +596,9 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
       const gettingGrounded = groundSide(safeGetting, index, ktcByName, injuryByName, vegasByTeam, snapByName, pickValues);
       // Market math: total KTC value on each side → instant fleece detection.
       const marketMath = (givingGrounded.ktcTotal > 0 && gettingGrounded.ktcTotal > 0)
-        ? `\nMARKET MATH (KTC crowd values): you send ${givingGrounded.ktcTotal} ⇄ you receive ${gettingGrounded.ktcTotal} (${gettingGrounded.ktcTotal >= givingGrounded.ktcTotal ? '+' : ''}${(((gettingGrounded.ktcTotal - givingGrounded.ktcTotal) / givingGrounded.ktcTotal) * 100).toFixed(0)}% for you by market consensus)`
+        ? (isLeague
+            ? `\nMARKET MATH (KTC crowd values): Team A sends ${givingGrounded.ktcTotal} ⇄ Team B sends ${gettingGrounded.ktcTotal} (${gettingGrounded.ktcTotal >= givingGrounded.ktcTotal ? '+' : ''}${(((gettingGrounded.ktcTotal - givingGrounded.ktcTotal) / givingGrounded.ktcTotal) * 100).toFixed(0)}% toward Team A by market consensus)`
+            : `\nMARKET MATH (KTC crowd values): you send ${givingGrounded.ktcTotal} ⇄ you receive ${gettingGrounded.ktcTotal} (${gettingGrounded.ktcTotal >= givingGrounded.ktcTotal ? '+' : ''}${(((gettingGrounded.ktcTotal - givingGrounded.ktcTotal) / givingGrounded.ktcTotal) * 100).toFixed(0)}% for you by market consensus)`)
         : '';
 
       // ── Deterministic grading ─────────────────────────────────────
@@ -606,8 +637,16 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
         : 0;
       const lockedReceive: Grade = hasMarketData ? gradeFromNet(netPct) : 'B';
       const lockedGive: Grade    = hasMarketData ? gradeFromNet(givePct) : 'B';
-      const lockedCall = !hasMarketData ? 'TOO CLOSE TO CALL — insufficient market data'
-        : netPct >= 3 ? 'ACCEPT' : netPct <= -3 ? 'DECLINE' : 'TOSS-UP — value is even; let roster fit decide';
+      // ACCEPT/DECLINE is a recommendation and only makes sense when the
+      // trade is the user's. For a leaguemate's deal the same math answers a
+      // different question -- who won -- so the locked direction is phrased
+      // as a winner. netPct > 0 means side B's outgoing package (what Team A
+      // receives) is worth more, so Team A won.
+      const lockedCall = !hasMarketData
+        ? 'TOO CLOSE TO CALL — insufficient market data'
+        : isLeague
+          ? (netPct >= 3 ? 'TEAM A WON' : netPct <= -3 ? 'TEAM B WON' : 'EVEN — neither side clearly won on value')
+          : (netPct >= 3 ? 'ACCEPT' : netPct <= -3 ? 'DECLINE' : 'TOSS-UP — value is even; let roster fit decide');
 
       const system = `You are The O — AIOmni's AI fantasy coach grading a trade. You're the sharpest, most confident voice in the room: the user's savvy fantasy buddy who's seen it all, not a corporate robot. You have STRONG opinions and you back them. Be decisive, a little cocky, occasionally funny. Talk like a real fantasy player — "smash accept", "hard pass", "that's a fleece", "buy-low", "ship it", "they're robbing you", "ascending", "RB dead zone". NEVER hedge into mush — pick a side and sell it.
 
@@ -616,11 +655,15 @@ Signals per player (use whichever are present): (1) AIOmni's PROPRIETARY rank �
 THE CALL IS ALREADY MADE. AIOmni's grading engine has computed the grades and the verdict direction from market math — they are FINAL and you MUST NOT contradict them. Your job is the WHY: write the verdict line and analysis that explain the locked call with your voice and the signals above. If roster fit cuts against the locked call, say so as a caveat ("value says accept, but…") — the letters don't move.
 
 LOCKED BY THE ENGINE:
-- You receive: ${lockedReceive}  |  You give up: ${lockedGive}
+${isLeague
+  ? `- Team A gets: ${lockedReceive}  |  Team B gets: ${lockedGive}`
+  : `- You receive: ${lockedReceive}  |  You give up: ${lockedGive}`}
 - Verdict direction: ${lockedCall}
 
 Respond with ONLY a single valid JSON object — no markdown, no code fences, no preamble, and do NOT output a second or revised version:
-{"youReceiveGrade":"${lockedReceive}","youGiveGrade":"${lockedGive}","verdict":"<ONE punchy line matching the locked verdict direction — e.g. 'Smash accept — this is a straight-up fleece' or 'Hard pass, they're robbing you blind'>","analysis":"<2-3 sentences with conviction: WHY the locked call is right (cite AIOmni ranks + market values), plus any roster-fit caveat>"}
+${isLeague
+  ? `{"youReceiveGrade":"${lockedReceive}","youGiveGrade":"${lockedGive}","verdict":"<ONE punchy line naming the WINNER and matching the locked verdict direction — e.g. 'Team A robbed him blind' or 'Team B bought low and it will hurt'. Never address the user as a participant and never say accept or decline>","analysis":"<2-3 sentences with conviction: WHY the locked call is right (cite AIOmni ranks + market values). Talk about Team A and Team B, never about the user's roster or needs>"}`
+  : `{"youReceiveGrade":"${lockedReceive}","youGiveGrade":"${lockedGive}","verdict":"<ONE punchy line matching the locked verdict direction — e.g. 'Smash accept — this is a straight-up fleece' or 'Hard pass, they're robbing you blind'>","analysis":"<2-3 sentences with conviction: WHY the locked call is right (cite AIOmni ranks + market values), plus any roster-fit caveat>"}`}
 
 NUMBERS — non-negotiable:
 - Every rank, tier and market value you cite must be copied VERBATIM from
@@ -646,13 +689,22 @@ VOICE — non-negotiable:
       const prompt = `Format: ${format === 'dynasty' ? 'DYNASTY — value = age + multi-year production' : 'REDRAFT PPR — value = rest-of-season'}
 AIOmni board used: ${engineFmt}
 
-YOU ARE GIVING UP:
+${isLeague ? 'TEAM A SENDS (Team B receives these):' : 'YOU ARE GIVING UP:'}
 ${givingGrounded.lines}
 
-YOU ARE RECEIVING:
+${isLeague ? 'TEAM B SENDS (Team A receives these):' : 'YOU ARE RECEIVING:'}
 ${gettingGrounded.lines}
 ${marketMath}${(() => {
         const sel = ctxChoice !== 'general' ? ctxOptions.find(o => o.key === ctxChoice) : undefined;
+        // League mode: this is somebody else's trade. The user's roster is
+        // irrelevant and actively misleading here -- grading a leaguemate's
+        // deal against YOUR positional needs is just wrong. Rules still
+        // matter (superflex changes QB value for everyone), so those are
+        // passed when a league is selected; the roster never is.
+        if (isLeague) {
+          const rules = sel ? ([sel.fmt, sel.ltype].filter(Boolean).join(' · ') || `${format} (per user toggle)`) : null;
+          return `\n\nTHIS IS NOT THE USER'S TRADE. It is a deal between two other teams in the league, and the user is a spectator judging who won. There is no "you" in this trade.${rules ? ` League rules: ${rules} — factor how these rules shift asset value (full PPR lifts target-earning RBs/WRs; superflex/2QB makes QBs premium; dynasty weights age and picks).` : ''} Do NOT reference the user's roster, needs, or timeline. Do NOT recommend accepting or declining — neither side is the user's to accept. Name which team won and by how much.`;
+        }
         if (myRoster.length) {
           return `\n\nYOUR CURRENT ROSTER (${sel?.label ?? 'selected league'} — ranked players; judge positional fit):\n${myRoster.join(', ')}`;
         }
@@ -733,7 +785,11 @@ ${marketMath}${(() => {
             engineFormat: engineFmt,
             engineGrounded,
             hasMarketData,
-            hasRosterContext: myRoster.length > 0,
+            // League mode deliberately withholds the roster from the prompt,
+            // so it was NOT part of this grade even when one was fetched.
+            // Reporting it as present would poison the captured dataset.
+            hasRosterContext: !isLeague && myRoster.length > 0,
+            perspective,
             verdict:  parsed.verdict ?? '',
             analysis: parsed.analysis ?? '',
           });
@@ -768,7 +824,13 @@ ${marketMath}${(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     const give = giving.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(', ');
     const get = getting.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(', ');
-    const msg = `Traded ${give} for ${get} — AIOmni graded it ${youReceiveGrade} for me.\n\n${verdict}\n\nGrade your own trades free: https://apps.apple.com/app/id6760617627`;
+    // League mode has no "me" in it, so the first-person framing would be a
+    // lie. Share the verdict on somebody else's deal instead -- which is
+    // arguably the more shareable of the two, since league-chat arguments
+    // about a lopsided trade are exactly where this gets pasted.
+    const msg = isLeague
+      ? `${give} for ${get} — AIOmni graded it ${youReceiveGrade} / ${youGiveGrade}.\n\n${verdict}\n\nGrade any trade in your league free: https://apps.apple.com/app/id6760617627`
+      : `Traded ${give} for ${get} — AIOmni graded it ${youReceiveGrade} for me.\n\n${verdict}\n\nGrade your own trades free: https://apps.apple.com/app/id6760617627`;
     Share.share({ message: msg }).catch(() => {});
   };
 
@@ -816,6 +878,34 @@ ${marketMath}${(() => {
           ))}
         </View>
 
+        {/* Whose trade this is. 'MY TRADE' recommends accept/decline against
+            your roster; 'LEAGUE TRADE' grades a deal between two other
+            teams neutrally and deliberately ignores your roster. */}
+        <View style={styles.toggle}>
+          {(['mine', 'league'] as Perspective[]).map(item => (
+            <TouchableOpacity
+              key={item}
+              style={[styles.toggleBtn, perspective === item && styles.toggleBtnOn]}
+              onPress={() => {
+                setPerspective(item);
+                // A grade computed under the other framing is no longer
+                // valid -- the roster context and the verdict direction
+                // both change. Clear it rather than leave a stale letter
+                // sitting under new labels.
+                setVerdict('');
+                setAnalysis('');
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Icon name={item === 'mine' ? 'person' : 'trophy'} size={16} color={perspective === item ? '#ffffff' : t.accentText} />
+                <Text style={[styles.toggleTxt, perspective === item && styles.toggleTxtOn]}>
+                  {item === 'mine' ? 'MY TRADE' : 'LEAGUE TRADE'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* League context picker — the roster the grade judges fit against.
             GENERAL grades pure value with no roster bias. */}
         {ctxOptions.length > 0 && (
@@ -852,7 +942,7 @@ ${marketMath}${(() => {
         </TouchableOpacity>
 
         <View style={styles.inputCard}>
-          <Text style={styles.fieldLbl}>YOU ARE GIVING</Text>
+          <Text style={styles.fieldLbl}>{sideALbl}</Text>
           <TextInput
             value={giving}
             onChangeText={text => setGiving(text)}
@@ -888,7 +978,7 @@ ${marketMath}${(() => {
         </View>
 
         <View style={[styles.inputCard, { marginBottom: 12 }]}> 
-          <Text style={styles.fieldLbl}>YOU ARE RECEIVING</Text>
+          <Text style={styles.fieldLbl}>{sideBLbl}</Text>
           <TextInput
             value={getting}
             onChangeText={text => setGetting(text)}
@@ -944,12 +1034,12 @@ ${marketMath}${(() => {
             )}
             <View style={styles.gradeRow}>
               <View style={[styles.gradeBox, { flex: 1 }]}> 
-                <Text style={styles.gradeLbl}>YOU RECEIVE</Text>
+                <Text style={styles.gradeLbl}>{gradeALbl}</Text>
                 <Text style={[styles.grade, { color: GRADE_COLOR[youReceiveGrade] }]}>{youReceiveGrade}</Text>
               </View>
               <Text style={styles.vs}>VS</Text>
               <View style={[styles.gradeBox, { flex: 1 }]}> 
-                <Text style={styles.gradeLbl}>YOU GIVE UP</Text>
+                <Text style={styles.gradeLbl}>{gradeBLbl}</Text>
                 <Text style={[styles.grade, { color: GRADE_COLOR[youGiveGrade] }]}>{youGiveGrade}</Text>
               </View>
             </View>
@@ -963,6 +1053,22 @@ ${marketMath}${(() => {
             {(() => {
               const GRADE_ORDER: Grade[] = ['F', 'D', 'D+', 'C-', 'C', 'C+', 'B-', 'B', 'B+', 'A-', 'A', 'A+'];
               const recommendAccept = GRADE_ORDER.indexOf(youReceiveGrade) >= GRADE_ORDER.indexOf(youGiveGrade);
+              // League mode: ACCEPT/DECLINE is a recommendation, and there is
+              // nothing for the user to accept in someone else's trade.
+              // Same comparison, reframed as the winner.
+              if (isLeague) {
+                const even = youReceiveGrade === youGiveGrade;
+                return (
+                  <View style={styles.ctaRow}>
+                    <TouchableOpacity style={[styles.ctaBtn, styles.acceptBtn, (!recommendAccept || even) && { opacity: 0.4 }]} disabled>
+                      <Text style={styles.ctaTxt}>TEAM A WON</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.ctaBtn, styles.acceptBtn, (recommendAccept || even) && { opacity: 0.4 }]} disabled>
+                      <Text style={styles.ctaTxt}>TEAM B WON</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }
               return (
                 <View style={styles.ctaRow}>
                   <TouchableOpacity style={[styles.ctaBtn, styles.acceptBtn, !recommendAccept && { opacity: 0.4 }]}>
