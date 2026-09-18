@@ -145,9 +145,30 @@ export async function fetchLeagueTrades(
     for (const tx of txs) {
       if (tx.type !== 'trade') continue;
       // 'pending' = proposed, awaiting acceptance. 'failed' = vetoed,
-      // expired or rejected, which is noise nobody wants graded. Taking
-      // pending is the whole point of this pass: a live offer is the one
-      // moment someone actually needs a second opinion.
+      // expired or rejected, which is noise nobody wants graded.
+      //
+      // MEASURED 2026-09-18 -- SLEEPER NEVER SENDS 'pending' HERE, so this
+      // branch is currently dead on Sleeper and a proposed trade CANNOT be
+      // auto-populated. Do not re-attempt it against this endpoint.
+      //
+      // The test: a league with two live outgoing proposals returned 84
+      // transactions across weeks 0-18 and ZERO trades of any status
+      // (74 free_agent/complete, 7 waiver/complete, 3 waiver/failed).
+      // Note waiver/failed IS published -- so non-complete statuses are not
+      // suppressed in general. Sleeper specifically withholds a TRADE until
+      // both managers accept, which is correct: an unaccepted offer is a
+      // private negotiation, not league news. /trades, /transactions/pending
+      // and /trade_offers are all 404. The app's own GraphQL endpoint does
+      // carry them but needs the user's bearer token, and Sleeper publishes
+      // no OAuth flow -- asking people to extract a token is not a product.
+      //
+      // The shipping answer for a pending offer is the screenshot upload on
+      // the Trade tab, which already handles it.
+      //
+      // Kept rather than deleted because it costs nothing (the condition
+      // simply never matches), it is correct the moment any platform does
+      // expose pending trades, and the involvesMe sort below improves the
+      // completed-trade ordering regardless.
       if (tx.status !== 'complete' && tx.status !== 'pending') continue;
       const derived = deriveTradeSides(tx, nameBy, myRosterId);
       if (!derived || seen.has(derived.id)) continue;
