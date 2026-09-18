@@ -980,7 +980,7 @@ ${marketMath}${(() => {
             entry still works everywhere. */}
         {isLeague && (loadingTrades || leagueTrades.length > 0) && (
           <View style={styles.tradeListCard}>
-            <Text style={styles.fieldLbl}>RECENT TRADES IN THIS LEAGUE</Text>
+            <Text style={styles.fieldLbl}>TRADES IN THIS LEAGUE</Text>
             {loadingTrades ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 }}>
                 <ActivityIndicator color={t.accentText} size="small" />
@@ -990,9 +990,15 @@ ${marketMath}${(() => {
               <>
                 {leagueTrades.map(tr => (
                   <TouchableOpacity key={tr.id} style={styles.tradeRow} onPress={() => useLeagueTrade(tr)} activeOpacity={0.7}>
-                    <Text style={styles.tradeTeams} numberOfLines={1}>
-                      {tr.teamA}  ⇄  {tr.teamB}
-                    </Text>
+                    <View style={styles.tradeRowTop}>
+                      <Text
+                        style={[styles.tradeTeams, tr.involvesMe && styles.tradeTeamsMine]}
+                        numberOfLines={1}
+                      >
+                        {tr.teamA}  ⇄  {tr.teamB}
+                      </Text>
+                      {tr.pending && <Text style={styles.tradePill}>PROPOSED</Text>}
+                    </View>
                     <Text style={styles.tradeDetail} numberOfLines={2}>
                       {tr.aSends}  →  {tr.bSends}
                     </Text>
@@ -1239,12 +1245,36 @@ const makeStyles = (t: ThemeTokens) => StyleSheet.create({
     borderTopColor: t.border,
     paddingVertical: 11,
   },
+  tradeRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  // PROPOSED marks a trade that has not been accepted yet. It is the row
+  // most worth grading -- the decision is still open -- so it is the only
+  // thing in this list that gets colour.
+  tradePill: {
+    color: t.accentText,
+    fontFamily: F.mono,
+    fontSize: SZ.xs,
+    letterSpacing: 0.6,
+    borderWidth: 1,
+    borderColor: t.accentText,
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    overflow: 'hidden',
+  },
+  tradeTeamsMine: {
+    color: t.accentText,
+  },
   tradeTeams: {
     color: t.text,
     fontFamily: F.mono,
     fontSize: SZ.sm,
     letterSpacing: 0.3,
     marginBottom: 3,
+    flexShrink: 1,
   },
   tradeDetail: {
     color: t.textMuted,

@@ -28,6 +28,14 @@ export type LeagueTradeOption = {
   bSends: string;
   /** True when the platform reported draft picks moving in this trade. */
   hasPicks: boolean;
+  /**
+   * PROPOSED but not yet accepted. This is the highest-intent row in the
+   * list -- "should I take this?" is a live question, where a completed
+   * trade is already history -- so pending rows sort first and are badged.
+   */
+  pending: boolean;
+  /** One of the two sides is the viewer's own roster. */
+  involvesMe: boolean;
 };
 
 export function isTradeListSupported(platformId: string): boolean {
@@ -53,6 +61,7 @@ const pickText = (season: string, round: number): string =>
 export function deriveTradeSides(
   tx: Transaction,
   teamNameByRosterId: Map<string, string>,
+  myRosterId?: string | null,
 ): LeagueTradeOption | null {
   if (tx.type !== 'trade') return null;
 
@@ -99,6 +108,8 @@ export function deriveTradeSides(
     aSends: aSends.join(', '),
     bSends: bSends.join(', '),
     hasPicks: (tx.picks ?? []).length > 0,
+    pending: tx.status === 'pending',
+    involvesMe: !!myRosterId && (a === myRosterId || b === myRosterId),
   };
 }
 
@@ -126,17 +137,33 @@ export async function fetchLeagueTrades(
       if (r?.rosterId) nameBy.set(String(r.rosterId), r.teamName || `Team ${r.rosterId}`);
     }
 
+    let myRosterId: string | null = null;
+    for (const r of (rosters as any[])) if (r?.isMe && r?.rosterId) myRosterId = String(r.rosterId);
+
     const out: LeagueTradeOption[] = [];
     const seen = new Set<string>();
     for (const tx of txs) {
-      if (tx.type !== 'trade' || tx.status !== 'complete') continue;
-      const derived = deriveTradeSides(tx, nameBy);
+      if (tx.type !== 'trade') continue;
+      // 'pending' = proposed, awaiting acceptance. 'failed' = vetoed,
+      // expired or rejected, which is noise nobody wants graded. Taking
+      // pending is the whole point of this pass: a live offer is the one
+      // moment someone actually needs a second opinion.
+      if (tx.status !== 'complete' && tx.status !== 'pending') continue;
+      const derived = deriveTradeSides(tx, nameBy, myRosterId);
       if (!derived || seen.has(derived.id)) continue;
       seen.add(derived.id);
       out.push(derived);
-      if (out.length >= limit) break;
     }
-    return out;
+
+    // Pending first, then the viewer's own deals, then newest. Sorting here
+    // rather than slicing during the scan so a pending trade from an older
+    // week can still outrank a completed one from today.
+    out.sort((x, y) =>
+      (Number(y.pending) - Number(x.pending)) ||
+      (Number(y.involvesMe) - Number(x.involvesMe)) ||
+      (y.timestamp - x.timestamp)
+    );
+    return out.slice(0, limit);
   } catch {
     return [];
   }
