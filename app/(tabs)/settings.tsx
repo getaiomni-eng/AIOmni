@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../services/supabase';
+import { claimPlatform } from '../../services/platformLinks';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
@@ -305,8 +306,21 @@ export default function SettingsScreen() {
                     const res = await fetch('https://api.sleeper.app/v1/user/' + clean);
                     const data = await res.json();
                     if (data && data.user_id) {
-                      await AsyncStorage.setItem('sleeper_username', clean);
+                      // Store BOTH. The username is what the rest of the app
+                      // reads; sleeper_id is the stable identity that
+                      // platformLinks claims on, and until 2026-09-18 nothing
+                      // wrote it -- so no Sleeper connection had ever been
+                      // recorded server-side. Username is mutable on Sleeper;
+                      // the numeric id is not, which is why the claim uses it.
+                      await AsyncStorage.multiSet([
+                        ['sleeper_username', clean],
+                        ['sleeper_id', String(data.user_id)],
+                      ]);
                       setUsername(clean);
+                      // Claim immediately rather than waiting for the next
+                      // home-screen mount, so the link exists the moment the
+                      // user is told they are connected.
+                      void claimPlatform('sleeper');
                       Alert.alert('Connected', 'Sleeper account @' + clean + ' linked successfully.');
                     } else {
                       Alert.alert('Not Found', 'No Sleeper user found with that username.');

@@ -20,12 +20,55 @@ export type LinkPlatform = 'sleeper' | 'mfl' | 'fleaflicker';
 
 /** AsyncStorage keys that make up each platform's identity. First key is the id. */
 const KEYS: Record<LinkPlatform, { id: string; meta: string[] }> = {
-  sleeper:     { id: 'sleeper_id',            meta: [] },
+  // sleeper_username rides along in meta so a restore on a second device
+  // rehydrates the key the REST of the app actually reads. Restoring only
+  // sleeper_id would record the claim and still show Sleeper as
+  // disconnected everywhere in the UI.
+  sleeper:     { id: 'sleeper_id',            meta: ['sleeper_username'] },
   mfl:         { id: 'mfl_league_id',         meta: ['mfl_franchise_id', 'mfl_host', 'mfl_season'] },
   fleaflicker: { id: 'fleaflicker_league_id', meta: ['fleaflicker_team_id'] },
 };
 
+/**
+ * Resolve and persist the numeric Sleeper user id from the username.
+ *
+ * WHY THIS EXISTS (measured 2026-09-18): connecting Sleeper wrote ONLY
+ * 'sleeper_username'. Nothing has ever written 'sleeper_id', which is the key
+ * this module claims on -- so claimAllLocal() ran on every home-screen load,
+ * read null, and recorded nothing. Every Sleeper connection since launch was
+ * invisible to the backend. Proof: all four rows in user_platform_links are
+ * mfl/fleaflicker, whose adapters DO write their legacy single-league keys
+ * via multiSet. Not one Sleeper row exists.
+ *
+ * The id, not the username, is the identity on purpose: a username can be
+ * changed on Sleeper, and the claim is what the free-trial abuse control
+ * hangs off. An identifier a user can rotate at will is not a fingerprint.
+ *
+ * Self-healing: this runs for everyone already connected, so their link is
+ * claimed on next launch with no migration and no prompt.
+ */
+async function ensureSleeperId(): Promise<string | null> {
+  const existing = await AsyncStorage.getItem('sleeper_id');
+  if (existing) return existing;
+  const username = await AsyncStorage.getItem('sleeper_username');
+  if (!username) return null;
+  try {
+    const res = await fetch('https://api.sleeper.app/v1/user/' + encodeURIComponent(username));
+    if (!res.ok) return null;
+    const data = await res.json();
+    const uid = data?.user_id ? String(data.user_id) : null;
+    if (uid) await AsyncStorage.setItem('sleeper_id', uid);
+    return uid;
+  } catch (e) {
+    // Offline or Sleeper down. Claiming is best-effort and retried on every
+    // launch, so a miss here costs nothing.
+    logCaught('platformLinks.ensureSleeperId', e);
+    return null;
+  }
+}
+
 async function readLocal(p: LinkPlatform) {
+  if (p === 'sleeper') await ensureSleeperId();
   const id = await AsyncStorage.getItem(KEYS[p].id);
   if (!id) return null;
   const meta: Record<string, string> = {};
