@@ -651,6 +651,38 @@ Decide which side is the user's by on-screen labels ("You give"/"You receive"/"Y
           ? (netPct >= 3 ? 'TEAM A WON' : netPct <= -3 ? 'TEAM B WON' : 'EVEN — neither side clearly won on value')
           : (netPct >= 3 ? 'ACCEPT' : netPct <= -3 ? 'DECLINE' : 'TOSS-UP — value is even; let roster fit decide');
 
+      // ── VERDICT VOICE, SCALED TO THE ACTUAL GAP ────────────────────────
+      // Every trade used to be handed the same vocabulary. The prompt seeded
+      // "straight-up fleece" and "robbing you blind" as the examples and then
+      // told the model to be punchy, so a 5% edge got the same language as a
+      // 50% one. A real B+/C trade in testing came back "Team A fleeced Team
+      // B" -- on a modest edge where nobody was fleeced.
+      //
+      // Cutoffs are percentiles of trade_corpus: the gap distribution on
+      // trades two managers actually ACCEPTED (p25 8, median 19, p75 31).
+      // So "fleece" is reserved for the top sliver of lopsidedness that real
+      // managers still agree to -- not for the median trade.
+      //
+      // The top cutoff is 35, not p75's 31, to match FLAG_THRESHOLD_PCT in
+      // judgmentCapture. Two thresholds that both mean "this one is lopsided"
+      // should be the same number, or the app says "fleece" on a trade its own
+      // dataset filed as fine. Move them together.
+      //
+      // The GRADES are untouched. A 19% gap is still A-/C-, because that is
+      // what the value math says. Only the prose scales.
+      const gapAbs = hasMarketData ? Math.abs(netPct) : -1;
+      const band =
+        gapAbs < 0  ? 'unknown' :
+        gapAbs < 8  ? 'even'    :
+        gapAbs < 19 ? 'slight'  :
+        gapAbs < 35 ? 'clear'   : 'lopsided';
+      const BAND_VOICE: Record<string, string> = {
+        even:     'GAP: under 8% — inside the noise. Say it is EVEN. Words like fleece, robbed, heist, smash are FORBIDDEN here; using one is a wrong answer. "Dead even", "coin flip on value", "pick em" are all correct verdicts.',
+        slight:   'GAP: 8-19% — a real but ordinary edge, around the median trade people accept. Say "slight edge" or "modest win". Do NOT say fleece, robbed or heist.',
+        clear:    'GAP: 19-35% — one side clearly did better. "Got the better end", "clear win", "won this comfortably". Still NOT a fleecing; do not use fleece or robbed.',
+        lopsided: 'GAP: 35%+ — the genuinely lopsided tail. Fleecing language is EARNED here: fleece, robbed blind, heist, highway robbery all fit.',
+        unknown:  'GAP: unknown — no market data. Grade on football reasoning and keep the language measured.',
+      };
       const system = `You are The O — AIOmni's AI fantasy coach grading a trade. You're the sharpest, most confident voice in the room: the user's savvy fantasy buddy who's seen it all, not a corporate robot. You have STRONG opinions and you back them. Be decisive, a little cocky, occasionally funny. Talk like a real fantasy player — "smash accept", "hard pass", "that's a fleece", "buy-low", "ship it", "they're robbing you", "ascending", "RB dead zone". NEVER hedge into mush — pick a side and sell it.
 
 Signals per player (use whichever are present): (1) AIOmni's PROPRIETARY rank — a calibrated projection engine, your primary anchor; (2) KTC market value — what the crowd thinks it's worth; (3) live injury status; (4) snap share — role security; (5) Vegas implied team total — offense environment. Your edge is the DISAGREEMENTS: when AIOmni likes a player more than the market, that's a buy-low to pounce on; when the market overprices someone our engine is out on, say so ("the crowd's still paying for last year"). Injuries change everything — flag them. If the user's roster is provided, factor FIT.
@@ -662,11 +694,12 @@ ${isLeague
   ? `- Team A gets: ${lockedReceive}  |  Team B gets: ${lockedGive}`
   : `- You receive: ${lockedReceive}  |  You give up: ${lockedGive}`}
 - Verdict direction: ${lockedCall}
+- ${BAND_VOICE[band]}
 
 Respond with ONLY a single valid JSON object — no markdown, no code fences, no preamble, and do NOT output a second or revised version:
 ${isLeague
-  ? `{"youReceiveGrade":"${lockedReceive}","youGiveGrade":"${lockedGive}","verdict":"<ONE punchy line naming the WINNER and matching the locked verdict direction — e.g. 'Team A robbed him blind' or 'Team B bought low and it will hurt'. Never address the user as a participant and never say accept or decline>","analysis":"<2-3 sentences with conviction: WHY the locked call is right (cite AIOmni ranks + market values). Talk about Team A and Team B, never about the user's roster or needs>"}`
-  : `{"youReceiveGrade":"${lockedReceive}","youGiveGrade":"${lockedGive}","verdict":"<ONE punchy line matching the locked verdict direction — e.g. 'Smash accept — this is a straight-up fleece' or 'Hard pass, they're robbing you blind'>","analysis":"<2-3 sentences with conviction: WHY the locked call is right (cite AIOmni ranks + market values), plus any roster-fit caveat>"}`}
+  ? `{"youReceiveGrade":"${lockedReceive}","youGiveGrade":"${lockedGive}","verdict":"<ONE punchy line matching the locked verdict direction AND the gap band above. Never address the user as a participant and never say accept or decline>","analysis":"<2-3 sentences with conviction: WHY the locked call is right (cite AIOmni ranks + market values). Talk about Team A and Team B, never about the user's roster or needs>"}`
+  : `{"youReceiveGrade":"${lockedReceive}","youGiveGrade":"${lockedGive}","verdict":"<ONE punchy line matching the locked verdict direction AND the gap band above>","analysis":"<2-3 sentences with conviction: WHY the locked call is right (cite AIOmni ranks + market values), plus any roster-fit caveat>"}`}
 
 NUMBERS — non-negotiable:
 - Every rank, tier and market value you cite must be copied VERBATIM from
@@ -685,9 +718,11 @@ VOICE — non-negotiable:
 - If data is genuinely thin, ONE short clause at the END of the analysis —
   "market values aren't loaded for these three, so this is a situational
   read" — never the headline, never the verdict line.
-- Never say "coin flip" or "too close to call" as the whole verdict. Pick the
-  side the reasoning supports and name the condition that would flip it
-  (contending vs rebuilding, for instance).`;
+- Do not hedge into mush — EXCEPT when the gap band above says the trade is
+  EVEN. On an even trade "dead even" IS the decisive answer, and manufacturing
+  a winner to sound sharp is the app being confidently wrong. Outside that
+  band, pick the side the reasoning supports and name the condition that would
+  flip it (contending vs rebuilding, for instance).`;
 
       const prompt = `Format: ${format === 'dynasty' ? 'DYNASTY — value = age + multi-year production' : 'REDRAFT PPR — value = rest-of-season'}
 AIOmni board used: ${engineFmt}
