@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchNewsFeed, FeedByTab, NewsTab, NewsItem as FeedNewsItem } from '../../services/newsFeed';
 import { getNFLSeason, getAvailableSeasons } from '../../services/season';
 import { logCaught, logEmpty } from '../../services/util/logCaught';
-import { pruneRosteredLeagues } from '../../services/rosterSync';
+import { pruneRosteredLeagues, syncRosteredPlayers, leaguesNeedingSync, type RosteredPlayer } from '../../services/rosterSync';
 import { claimAllLocal, restorePlatformLinks } from '../../services/platformLinks';
 import { CoachMarks } from '../components/CoachMarks';
 import { useRouter } from 'expo-router';
@@ -531,6 +531,62 @@ export default function HomeScreen() {
       if (mfl.status         === 'fulfilled') loadedPlatforms.push('mfl');
       if (fleaflicker.status === 'fulfilled') loadedPlatforms.push('fleaflicker');
       void pruneRosteredLeagues(allLeagues.map(l => String(l.id)), loadedPlatforms);
+
+      // Push rosters up for EVERY league, from here.
+      //
+      // This file has always PRUNED user_rostered_players and never filled
+      // it. The only writer was the League tab, per league, as you opened
+      // each one -- so a user who connected a league and never opened that
+      // specific tab had no rows on the server at all.
+      //
+      // That is not cosmetic. FOUR server-side jobs read this table and are
+      // the entire re-engagement path: notification-lineup-check,
+      // notification-news-scanner, notification-heat-alerts and
+      // notification-inactives. None of them could reach a user who had not
+      // browsed the League tab league-by-league -- which is exactly the user
+      // who most needs a reason to come back. Measured 2026-09-18: one user
+      // connected an MFL league on 09-11, never opened that tab, and was
+      // invisible to every notification job from then on.
+      //
+      // Cost is bounded by the same 1h per-league cooldown the sync already
+      // uses: leaguesNeedingSync() is checked FIRST so we never fetch a
+      // roster we would then decline to write. Steady state is zero extra
+      // requests; the first mount of the hour costs one roster fetch per
+      // league, against adapters that all hot-cache.
+      //
+      // Fire-and-forget and per-league isolated: a platform that is down
+      // must not stop the other leagues syncing, and none of it may delay
+      // the home screen rendering.
+      void (async () => {
+        try {
+          const due = await leaguesNeedingSync(allLeagues.map(l => String(l.id)));
+          if (due.length === 0) return;
+          const { getPlatform } = require('../../services/platform');
+          for (const lg of allLeagues) {
+            if (!due.includes(String(lg.id))) continue;
+            try {
+              const plat = getPlatform(lg.platform);
+              if (!plat) continue;
+              const roster = await plat.getMyRoster(String(lg.id));
+              if (!roster) continue;
+              const toRP = (slot: any, isStarter: boolean): RosteredPlayer => ({
+                name:     slot?.player?.name,
+                position: slot?.player?.position,
+                team:     slot?.player?.team,
+                leagueId: String(lg.id),
+                platform: String(lg.platform),
+                isStarter,
+              });
+              const players: RosteredPlayer[] = [
+                ...(roster.starters ?? []).map((x: any) => toRP(x, true)),
+                ...(roster.bench    ?? []).map((x: any) => toRP(x, false)),
+                ...(roster.ir       ?? []).map((x: any) => toRP(x, false)),
+              ].filter(p => p.name);
+              if (players.length) await syncRosteredPlayers(players);
+            } catch (e) { logCaught('home.rosterSync.league', e); }
+          }
+        } catch (e) { logCaught('home.rosterSync', e); }
+      })();
       // Register this account's claim on the league identities it is using.
       // First account to claim one owns the free trial for it.
       void claimAllLocal();

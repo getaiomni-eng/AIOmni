@@ -107,6 +107,27 @@ export async function syncRosteredPlayers(
 }
 
 /**
+ * Which of these leagues are past their sync cooldown.
+ *
+ * Exists so the home screen can skip FETCHING rosters it would then decline
+ * to sync. Without it, wiring home up would pull every league's roster from
+ * every platform on every mount and throw almost all of it away.
+ */
+export async function leaguesNeedingSync(leagueIds: string[]): Promise<string[]> {
+  const now = Date.now();
+  const out: string[] = [];
+  for (const lid of Array.from(new Set(leagueIds.map(String)))) {
+    if (!lid) continue;
+    try {
+      const last = await AsyncStorage.getItem(`${LAST_SYNC_KEY}:${lid}`);
+      if (last && now - parseInt(last, 10) < MIN_INTERVAL_MS) continue;
+    } catch { /* unreadable clock -> sync, the write is idempotent */ }
+    out.push(lid);
+  }
+  return out;
+}
+
+/**
  * Drop server-side roster rows for leagues the user is no longer in.
  *
  * syncRosteredPlayers deliberately only ever touches the leagues it is given,
