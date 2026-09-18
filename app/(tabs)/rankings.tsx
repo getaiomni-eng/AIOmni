@@ -4,9 +4,10 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
-  Image, Modal, ScrollView, StyleSheet,
+  Modal, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -112,15 +113,31 @@ const SEED: RankedPlayer[] = [
 function PlayerPhoto({ playerId, sleeperId, size = 48 }: { playerId: string; sleeperId?: string; size?: number }) {
   const { t } = useTheme();
   const [err, setErr] = useState(false);
-  // Prefer sleeperId (always works with Sleeper CDN). Fall back to playerId
-  // only if it does NOT look like a gsis_id (e.g. "00-0034796"); raw gsis_ids
-  // 404 on Sleeper CDN, so just show the placeholder rather than fail.
-  const looksLikeGsisId = playerId?.startsWith('00-');
-  const effectiveId = sleeperId || (looksLikeGsisId ? null : playerId);
+  // Sleeper's CDN is keyed on the NUMERIC sleeper id. Anything else 404s, so
+  // only a numeric id is worth a request: a gsis_id ("00-0034796") and a
+  // seeded draft-pick id ("2026_pick_003") both go straight to the
+  // placeholder instead of burning a round trip to learn they are wrong.
+  const numericId = (v?: string | null) => (v && /^\d+$/.test(v) ? v : null);
+  const effectiveId = numericId(sleeperId) ?? numericId(playerId);
   if (!err && effectiveId) return (
-    <Image
-      source={{ uri: `https://sleepercdn.com/content/nfl/players/thumb/${effectiveId}.jpg` }}
+    // expo-image, NOT react-native's Image, and the difference is the whole
+    // bug: RN's Image has no persistent cache, so a 230-row board re-fetched
+    // every headshot on every scroll pass. Each "thumb" is 20-110KB (Nabers
+    // is 111KB), so on cellular the rows below the fold render as empty
+    // circles for as long as the fetches take -- which reads as broken, not
+    // as loading. memory-disk caching makes the second pass instant and
+    // survives app restarts.
+    //
+    // recyclingKey matters in a virtualized list: without it a recycled row
+    // shows the PREVIOUS player's face until the new one decodes, which is
+    // worse than a blank -- it is confidently wrong.
+    <ExpoImage
+      source={`https://sleepercdn.com/content/nfl/players/thumb/${effectiveId}.jpg`}
       style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: t.surface, borderWidth: 2, borderColor: t.border }}
+      cachePolicy="memory-disk"
+      recyclingKey={effectiveId}
+      transition={120}
+      contentFit="cover"
       onError={() => setErr(true)}
     />
   );
