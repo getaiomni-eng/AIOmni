@@ -125,10 +125,24 @@ export type TradeCapture = {
 };
 
 // A lopsided trade is the one a commissioner would actually get asked to
-// look at, so that is what 'flag' means here. 25% by KTC consensus is the
-// threshold — wide enough that ordinary value-seeking trades stay
-// 'approve', narrow enough to catch the fleeces.
-const FLAG_THRESHOLD_PCT = 25;
+// look at, so that is what 'flag' means here.
+//
+// 35, raised from 25 on 2026-09-18, and the 25 was a guess. Measured against
+// real ACCEPTED trades harvested into trade_corpus -- deals BOTH managers said
+// yes to -- the gap distribution is:
+//
+//     min 2   p25 8   median 19   p75 31   p90 39   max 100
+//
+// At 25 this flagged 41% of mutually-agreed trades as a fleecing, which makes
+// the label meaningless: it was describing ordinary trading. 35 sits between
+// p75 and p90 and flags roughly the top 18%, which is much closer to "a
+// commissioner would look at this".
+//
+// CAVEAT ON THE EVIDENCE: n=22, all from one social graph of dynasty leagues,
+// priced at today's KTC. Strong enough to say 25 was wrong; not a precise
+// number. Re-derive from trade_corpus once it spans more leagues and more
+// seasons of properly-priced trades -- that is what the corpus is for.
+const FLAG_THRESHOLD_PCT = 35;
 
 /**
  * Record a graded trade. Never awaited, never throws.

@@ -5,10 +5,11 @@
 //   2. a dated snapshot of KeepTradeCut market values
 //
 // Both halves exist to answer one question with data instead of a guess:
-// what value gap do managers ACTUALLY accept? FLAG_THRESHOLD_PCT is 25 today
-// and that number was picked by hand; on 22 real accepted 2026 trades the
-// median gap is 19% and 41% of them sit at or past 25, so the app currently
-// calls ordinary trading a fleecing four times in ten.
+// what value gap do managers ACTUALLY accept? FLAG_THRESHOLD_PCT was 25, a
+// hand-picked number; on 22 real accepted 2026 trades the median gap is 19%
+// and 41% sat at or past 25, so the app was calling ordinary trading a
+// fleecing four times in ten. Raised to 35 (between p75 and p90) on
+// 2026-09-18 -- provisional, pending a bigger corpus.
 //
 // THE SNAPSHOT IS THE TIME-CRITICAL PART. KTC serves only today's market.
 // A trade from 2023 cannot be priced now -- half its players have since
