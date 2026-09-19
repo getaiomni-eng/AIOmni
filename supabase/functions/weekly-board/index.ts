@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
   // ── inputs ────────────────────────────────────────────────────────────
   const [board, sched, dvpRows, players] = await Promise.all([
     j(`nfl_proprietary_rankings_v2?format=eq.PPR&select=rank,name,position,team,score&order=rank.asc&limit=300`),
-    j(`nfl_schedule?season=eq.${season}&week=eq.${week}&select=home_team,away_team`),
+    j(`nfl_schedule?season=eq.${season}&week=eq.${week}&select=home_team,away_team,kickoff_at`),
     // DVP is published per season; before week 1 the only real signal is last
     // year's, so take the newest season present rather than assuming this one.
     j(`nfl_dvp?select=season,team,position,rank_vs_pos&order=season.desc&limit=400`),
@@ -236,17 +236,58 @@ Deno.serve(async (req) => {
     SF:{lat:37.403,lon:-121.970}, TEN:{lat:36.166,lon:-86.771}, JAX:{lat:30.324,lon:-81.637},
   };
   // Keyed by HOME team, since that is where the game is played.
+  //
+  // FORECAST AT KICKOFF, not current conditions. This used to call
+  // /data/2.5/weather, which returns the sky RIGHT NOW. The board runs
+  // Thursday 12:30 UTC and never refreshes, so every reading was a Thursday
+  // MORNING observation applied to a Sunday afternoon game.
+  //
+  // Week 2 is what it cost, measured against the real kickoff forecast:
+  //   CLE @ TB   read 15mph Clear -> docked passers 4 spots for wind that is
+  //              not forecast at kickoff (5mph, definite rain).
+  //   MIN @ CHI  read 2mph -> nothing, when kickoff is forecast at 15mph,
+  //              exactly the threshold that should have fired.
+  // The only weather adjustment on the whole board landed on the wrong game,
+  // and the game that qualified got none. Not inert -- backwards.
+  //
+  // /data/2.5/forecast returns 3-hour blocks out 5 days on the same free key.
+  // We take the block nearest kickoff. Board-to-Sunday is ~3 days, inside the
+  // window; a Monday nighter at ~4.5 days is the tightest case and still fits.
   const wx = new Map<string, { wind: number; cond: string; temp: number }>();
-  let wxCount = 0;
+  let wxCount = 0, wxNoKick = 0;
   if (WEATHER_KEY) {
+    const kickByHome = new Map<string, number>();
+    for (const g of sched) {
+      const k = (g as any).kickoff_at ? Date.parse((g as any).kickoff_at) : NaN;
+      if (!isNaN(k)) kickByHome.set(g.home_team, k);
+    }
     const homes = [...new Set(sched.map((g: any) => g.home_team))].filter(t => STADIUM[t]);
     await Promise.all(homes.map(async (t) => {
       try {
         const st = STADIUM[t];
-        const r = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${st.lat}&lon=${st.lon}&units=imperial&appid=${WEATHER_KEY}`);
+        const kickoff = kickByHome.get(t);
+        const r = await fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${st.lat}&lon=${st.lon}&units=imperial&appid=${WEATHER_KEY}`);
         if (!r.ok) return;
         const d = await r.json();
-        wx.set(t, { wind: Math.round(d.wind?.speed ?? 0), cond: d.weather?.[0]?.main ?? "Clear", temp: Math.round(d.main?.temp ?? 60) });
+        const blocks: any[] = Array.isArray(d?.list) ? d.list : [];
+        if (blocks.length === 0) return;
+        // No kickoff time means no way to choose a block. Skip rather than
+        // guess: a wrong block is what this change exists to stop, and a
+        // missing adjustment is the honest failure mode.
+        if (kickoff == null) { wxNoKick++; return; }
+        let best = blocks[0], bestGap = Infinity;
+        for (const b of blocks) {
+          const gap = Math.abs((Number(b.dt) * 1000) - kickoff);
+          if (gap < bestGap) { bestGap = gap; best = b; }
+        }
+        // Past the 5-day window the nearest block is not a forecast of this
+        // game at all.
+        if (bestGap > 6 * 3600 * 1000) { wxNoKick++; return; }
+        wx.set(t, {
+          wind: Math.round(best.wind?.speed ?? 0),
+          cond: best.weather?.[0]?.main ?? "Clear",
+          temp: Math.round(best.main?.temp ?? 60),
+        });
         wxCount++;
       } catch { /* one stadium missing is not worth failing the board */ }
     }));
