@@ -490,16 +490,35 @@ Deno.serve(async (req) => {
 
   // Enter it in the accuracy comparison as a WEEKLY board, so it is judged on
   // the week rather than on cumulative points.
-  await sb(`ranking_snapshots?season=eq.${season}&week=eq.${week}&source=eq.aiomni_weekly&format=eq.ppr`, { method: "DELETE" });
-  await sb("ranking_snapshots?on_conflict=season,week,source,format,player_name", {
-    method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify(rows.map(r => ({
-      season, week, source: "aiomni_weekly", kind: "weekly", format: "ppr",
-      gsis_id: r.gsis_id, player_name: r.player_name, position: r.position,
-      team: r.team, rank: r.rank, pos_rank: r.pos_rank,
-    }))),
-  });
+  //
+  // WRITE ONCE PER WEEK. This used to DELETE and rewrite on every single
+  // build, which quietly rigged the comparison in our favour: espn_adp and
+  // sleeper_adp are captured once, Thursday 13:00, and frozen. Rebuilding the
+  // board on Saturday or Sunday moved OUR prediction forward with two extra
+  // days of injury news, inactives and depth-chart moves the market snapshots
+  // never saw -- then graded all four side by side as if they were taken at
+  // the same moment. Any win measured that way is an artefact of the clock,
+  // not of the model.
+  //
+  // The first build of a week locks the prediction; later builds refresh what
+  // USERS see and leave the graded record alone. Automatic rather than a flag,
+  // because a flag is something a future cron forgets to pass.
+  const snapExists = await sb(
+    `ranking_snapshots?season=eq.${season}&week=eq.${week}&source=eq.aiomni_weekly&format=eq.ppr&select=player_name&limit=1`,
+    { method: "GET" },
+  ).then(r => r.ok ? r.json() : []).catch(() => []);
+  const alreadyLocked = Array.isArray(snapExists) && snapExists.length > 0;
+  if (!alreadyLocked) {
+    await sb("ranking_snapshots?on_conflict=season,week,source,format,player_name", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify(rows.map(r => ({
+        season, week, source: "aiomni_weekly", kind: "weekly", format: "ppr",
+        gsis_id: r.gsis_id, player_name: r.player_name, position: r.position,
+        team: r.team, rank: r.rank, pos_rank: r.pos_rank,
+      }))),
+    });
+  }
 
   // Store the market projections themselves, keyed by source, so
   // score_projections() can grade them against actuals on Tuesday -- and so
