@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
 
   // ── inputs ────────────────────────────────────────────────────────────
   const [board, sched, dvpRows, players] = await Promise.all([
-    j(`nfl_proprietary_rankings_v2?format=eq.PPR&select=rank,name,position,team,score&order=rank.asc&limit=300`),
+    j(`nfl_proprietary_rankings_v2?format=eq.PPR&select=rank,name,position,team,score,gsis_id&order=rank.asc&limit=300`),
     j(`nfl_schedule?season=eq.${season}&week=eq.${week}&select=home_team,away_team,kickoff_at`),
     // DVP is published per season; before week 1 the only real signal is last
     // year's, so take the newest season present rather than assuming this one.
@@ -88,8 +88,18 @@ Deno.serve(async (req) => {
   const nameToGsis = new Map<string, string>();
   const gsisToSleeper = new Map<string, string>();
   const sleeperToGsis = new Map<string, string>();
+  // A seeded draft-pick id ("2026_pick_003") is a placeholder for a rookie who
+  // has since been given a real gsis_id. Both rows carry the same full_name, so
+  // a last-write-wins name map hands back whichever paginated last -- which put
+  // 27 players on the board under an id that matches no weekly stats and has no
+  // sleeper_id, so no headshot and no accuracy scoring. Real ids always win.
+  const isSynth = (id: string) => /^\d{4}_pick_\d+$/.test(id);
   for (const p of players) {
-    if (p.full_name && p.gsis_id) nameToGsis.set(norm(p.full_name), p.gsis_id);
+    if (p.full_name && p.gsis_id) {
+      const k = norm(p.full_name);
+      const prev = nameToGsis.get(k);
+      if (!prev || (isSynth(prev) && !isSynth(p.gsis_id))) nameToGsis.set(k, p.gsis_id);
+    }
     // The headshot needs a Sleeper id; a gsis id 404s on their CDN.
     if (p.gsis_id && p.sleeper_id) {
       gsisToSleeper.set(p.gsis_id, String(p.sleeper_id));
@@ -347,7 +357,10 @@ Deno.serve(async (req) => {
   const rows: any[] = [];
   for (const p of board) {
     if (!["QB", "RB", "WR", "TE"].includes(p.position)) continue;
-    const gsis = nameToGsis.get(norm(p.name));
+    // The engine already resolved this player's identity; re-deriving it from
+    // a name is how the wrong twin gets picked. Name lookup is now only a
+    // fallback for a ranking row with no id at all.
+    const gsis = (p.gsis_id && !isSynth(p.gsis_id)) ? p.gsis_id : nameToGsis.get(norm(p.name));
     if (!gsis || !p.team) continue;
     const o = opp.get(p.team);
     if (!o) continue;                      // bye week: not startable, so not ranked
