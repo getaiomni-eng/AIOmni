@@ -797,10 +797,25 @@ Respond with ONLY a JSON array of 3 objects, no prose and no code fences. Each o
       : await buildStartSitContext(String(league.id), league.platform, league.week);
 
     if (!ctx) {
+      // Say WHICH failure this is. espnFetch already throws a precise
+      // PlatformAuthError on a 401 ("session expired -- reconnect in
+      // Settings"), and buildStartSitContext's .catch(() => null) flattened it
+      // into "pull to refresh" -- advice that can never fix an expired cookie.
+      // ESPN and Yahoo hold session cookies that DO expire, so this is a dead
+      // end a user can sit in forever, on the platform most of ours use.
+      let expired = false;
+      try {
+        const { getPlatform } = require('../../services/platform');
+        const plat = getPlatform(league.platform);
+        if (plat?.getConnectionStatus) expired = (await plat.getConnectionStatus()) === 'expired';
+      } catch { /* status check must never replace the original failure */ }
+      const label = String(league.platform ?? '').toUpperCase();
       setAiCoachInsight(
-        kind === 'matchup'
-          ? 'Could not load this week\u2019s lineups. Pull to refresh and try again.'
-          : 'Could not load your roster. Pull to refresh and try again.',
+        expired
+          ? `Your ${label} session has expired. Reconnect ${label} in Settings and try again.`
+          : kind === 'matchup'
+            ? 'Could not load this week\u2019s lineups. Pull to refresh and try again.'
+            : 'Could not load your roster. Pull to refresh and try again.',
       );
       return release();
     }
