@@ -285,7 +285,15 @@ export default function LeagueScreen() {
     const creds = await loadESPNCredentials(); if (!creds) return;
     const data  = await getESPNLeague(parseInt(leagueId as string), creds);
     setLeagueSettings(data);
-    const myTeam = findMyESPNTeam(data, creds.swid); if (!myTeam) return;
+    // Not finding your team is a real failure, not an empty roster. This used
+    // to return silently and render "STARTERS 0 / BENCH 0" in a league the app
+    // had just loaded settings, standings and matchups for -- which looks like
+    // the league is empty rather than like something went wrong.
+    const myTeam = findMyESPNTeam(data, creds.swid);
+    if (!myTeam) {
+      setRosterError(`Could not match your ESPN account to a team in this league (${(data.teams || []).length} teams found). If you were invited to this team rather than creating it, reconnect ESPN in Settings.`);
+      return;
+    }
     const roster = myTeam.roster?.entries || [];
     const toPlayer = (entry: any, isStarter: boolean): Player => {
       const p = entry.playerPoolEntry?.player;

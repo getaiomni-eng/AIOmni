@@ -102,7 +102,22 @@ async function espnFetch(path: string, creds: ESPNCredentials): Promise<any> {
 }
 
 function normalizeSwid(swid: string): string {
-  return swid.replace(/[{}]/g, '').toLowerCase();
+  return String(swid ?? '').replace(/[{}]/g, '').toLowerCase();
+}
+
+/**
+ * Does this ESPN team belong to the signed-in user?
+ *
+ * primaryOwner names the team's CREATOR. A co-owner, or anyone invited into an
+ * existing team, is only listed in owners[] -- so matching primaryOwner alone
+ * means getMyRoster returns null in a league the app can otherwise read fully,
+ * and the UI shows 0 starters and 0 bench with no error at all.
+ */
+function teamIsMine(t: any, mySwid: string): boolean {
+  if (!mySwid) return false;
+  if (normalizeSwid(t?.primaryOwner) === mySwid) return true;
+  const owners = Array.isArray(t?.owners) ? t.owners : [];
+  return owners.some((o: any) => normalizeSwid(typeof o === 'string' ? o : o?.id) === mySwid);
 }
 
 function normalizePlayer(raw: any): Player {
@@ -312,7 +327,7 @@ class ESPNPlatform implements FantasyPlatform {
         starters,
         bench,
         ir,
-        isMe: normalizeSwid(t.primaryOwner ?? '') === mySwid,
+        isMe: teamIsMine(t, mySwid),
       };
     });
 

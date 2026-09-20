@@ -203,12 +203,25 @@ export async function discoverESPNLeagues(creds: ESPNCredentials): Promise<ESPNL
   }
 }
 
+/**
+ * Find the signed-in user's team in an ESPN league payload.
+ *
+ * Matches primaryOwner OR any entry in owners[]. primaryOwner alone is not
+ * enough: it names the team's CREATOR, so anyone who was invited into a team
+ * or added as a co-owner never matches, and the app silently shows an empty
+ * roster in a league it can otherwise read perfectly. ESPN has also been
+ * moving toward owners[] generally, and some payloads omit primaryOwner.
+ */
 export function findMyESPNTeam(data: any, swid: string): any {
   const teams = data.teams || [];
-  const normalizedSwid = swid.replace(/[{}]/g, '').toLowerCase();
-  return teams.find((t: any) =>
-    t.primaryOwner?.replace(/[{}]/g, '').toLowerCase() === normalizedSwid
-  );
+  const norm = (v: unknown) => String(v ?? '').replace(/[{}]/g, '').toLowerCase();
+  const me = norm(swid);
+  if (!me) return undefined;
+  return teams.find((t: any) => {
+    if (norm(t.primaryOwner) === me) return true;
+    const owners = Array.isArray(t.owners) ? t.owners : [];
+    return owners.some((o: any) => norm(typeof o === 'string' ? o : o?.id) === me);
+  });
 }
 
 export const ESPN_SLOTS: Record<number, string> = {
