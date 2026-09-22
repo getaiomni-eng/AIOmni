@@ -113,7 +113,23 @@ async function fromEspn(season: number, week: number, ids: Map<string, string>) 
              gsis_id: r.gsis, player_name: r.name, position: r.position, team: null,
              rank: i + 1, pos_rank: seen[r.position] };
   });
-  return { rows, consensus, unmapped };
+  // ESPN also publishes a weekly PROJECTION (statSourceId 1) in the same
+  // payload. Different method, same question, free to take while we are here.
+  const projItems: { gsis: string; name: string; position: string; pts: number }[] = [];
+  for (const pl of (data.players ?? [])) {
+    const p = pl.player;
+    const position = POS[p?.defaultPositionId];
+    if (!position) continue;
+    const st = (p?.stats ?? []).find((x: any) =>
+      Number(x?.statSourceId) === 1 && Number(x?.scoringPeriodId) === week && Number(x?.seasonId) === season);
+    if (!st || st.appliedTotal == null) continue;
+    const gsis = ids.get(`${norm(p.fullName)}|${position}`);
+    if (!gsis) continue;
+    projItems.push({ gsis, name: p.fullName, position, pts: Number(st.appliedTotal) });
+  }
+  const proj = rankByProjection(season, week, 'espn', 'projection', projItems);
+
+  return { rows, consensus, unmapped, projRows: proj.rows, projConsensus: proj.consensus };
 }
 
 async function fromFantasyPros(season: number, week: number, ids: Map<string, string>) {
@@ -155,6 +171,67 @@ async function fromFantasyPros(season: number, week: number, ids: Map<string, st
   return { rows, consensus, unmapped };
 }
 
+/** OUR OWN weekly board, stored beside theirs so one query compares everything.
+ *  Benchmarks kept in a separate place from the thing being benchmarked get
+ *  compared by hand, which is how the horizon and coverage faults survived as
+ *  long as they did. */
+async function fromAiomni(season: number, week: number) {
+  const r = await sb(`nfl_weekly_board?season=eq.${season}&week=eq.${week}&format=eq.ppr&select=gsis_id,player_name,position,team,rank,pos_rank&order=rank.asc`);
+  if (!r.ok) return { rows: [] as Row[], consensus: [] as Row[], error: `board ${r.status}` };
+  const board = await r.json();
+  const rows: Row[] = (board ?? []).map((b: any) => ({
+    season, week, format: 'ppr', provider: 'aiomni', expert_id: 'weekly_board',
+    gsis_id: b.gsis_id, player_name: b.player_name, position: b.position, team: b.team,
+    rank: b.rank, pos_rank: b.pos_rank, n_experts: 1,
+  }));
+  // Already in ranking_snapshots as aiomni_weekly; no consensus row needed.
+  return { rows, consensus: [] as Row[], unmapped: 0 };
+}
+
+/** Rank by projected points. A projection is not an expert opinion, but it IS
+ *  the same weekly question answered by a different method, and both providers
+ *  publish one. Labelled _proj so nobody reads it as an analyst ranking. */
+function rankByProjection(
+  season: number, week: number, provider: string, expertId: string,
+  items: { gsis: string; name: string; position: string; pts: number }[],
+) {
+  items.sort((a, b) => b.pts - a.pts);
+  const seen: Record<string, number> = {};
+  const rows: Row[] = [];
+  const consensus: Row[] = [];
+  items.forEach((it, i) => {
+    seen[it.position] = (seen[it.position] ?? 0) + 1;
+    rows.push({ season, week, format: 'ppr', provider, expert_id: expertId,
+      gsis_id: it.gsis, player_name: it.name, position: it.position, team: null,
+      rank: i + 1, pos_rank: seen[it.position], n_experts: 1 });
+    consensus.push({ season, week, source: `${provider}_proj`, kind: 'weekly', format: 'ppr',
+      gsis_id: it.gsis, player_name: it.name, position: it.position, team: null,
+      rank: i + 1, pos_rank: seen[it.position] });
+  });
+  return { rows, consensus };
+}
+
+async function fromSleeperProj(season: number, week: number, ids: Map<string, string>) {
+  const url = `https://api.sleeper.app/projections/nfl/${season}/${week}?season_type=regular`
+            + `&position[]=QB&position[]=RB&position[]=WR&position[]=TE&order_by=ppr`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+  if (!res.ok) return { rows: [] as Row[], consensus: [] as Row[], error: `sleeper ${res.status}` };
+  const arr = await res.json();
+  const items: { gsis: string; name: string; position: string; pts: number }[] = [];
+  let unmapped = 0;
+  for (const x of (arr ?? [])) {
+    const pts = x?.stats?.pts_ppr;
+    if (pts == null) continue;                       // no projection published
+    const p = x?.player; const position = String(p?.position ?? '');
+    if (!['QB', 'RB', 'WR', 'TE'].includes(position)) continue;
+    const name = `${p?.first_name ?? ''} ${p?.last_name ?? ''}`.trim();
+    const gsis = ids.get(`${norm(name)}|${position}`);
+    if (!gsis) { unmapped++; continue; }
+    items.push({ gsis, name, position, pts: Number(pts) });
+  }
+  return { ...rankByProjection(season, week, 'sleeper', 'projection', items), unmapped };
+}
+
 async function upsert(table: string, conflict: string, rows: Row[]) {
   let written = 0;
   for (let i = 0; i < rows.length; i += 200) {
@@ -180,14 +257,26 @@ Deno.serve(async (req) => {
     if (!week) throw new Error('week is required');
 
     const ids = await playerMap();
-    const [espn, fp] = await Promise.all([fromEspn(season, week, ids), fromFantasyPros(season, week, ids)]);
+    const [espn, fp, slp, mine] = await Promise.all([
+      fromEspn(season, week, ids),
+      fromFantasyPros(season, week, ids),
+      fromSleeperProj(season, week, ids),
+      fromAiomni(season, week),
+    ]);
+    // ESPN's projection is a separate provider row from its analysts.
+    const espnProj = { rows: (espn as any).projRows ?? [], consensus: (espn as any).projConsensus ?? [] };
 
     const out: Record<string, unknown> = { season, week, providers: {} as Record<string, unknown> };
 
-    for (const [name, res] of [['espn', espn], ['fantasypros', fp]] as const) {
+    for (const [name, res] of [
+      ['espn', espn], ['fantasypros', fp], ['sleeper', slp],
+      ['espn_proj', espnProj], ['aiomni', mine],
+    ] as const) {
       if ((res as any).error) { (out.providers as any)[name] = { error: (res as any).error }; continue; }
       // Write once per week: the first capture is the prediction of record.
-      const existing = await sb(`expert_weekly_rankings?season=eq.${season}&week=eq.${week}&provider=eq.${name}&select=gsis_id&limit=1`)
+      const providerCol = name === 'espn_proj' ? 'espn' : name;
+      const expertCol   = name === 'espn_proj' ? 'projection' : null;
+      const existing = await sb(`expert_weekly_rankings?season=eq.${season}&week=eq.${week}&provider=eq.${providerCol}${expertCol ? `&expert_id=eq.${expertCol}` : ''}&select=gsis_id&limit=1`)
         .then(r => r.ok ? r.json() : []).catch(() => []);
       if (Array.isArray(existing) && existing.length > 0 && !force) {
         (out.providers as any)[name] = { skipped: 'already captured' };
