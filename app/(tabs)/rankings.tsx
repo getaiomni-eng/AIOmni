@@ -302,10 +302,28 @@ export default function RankingsScreen() {
   const [weekBoard, setWeekBoard] = useState<WeeklyBoard | null>(null);
   const [weekLoading, setWeekLoading] = useState(false);
 
+  // The board was fetched ONCE and then cached in component state for the
+  // life of the app session -- `weekBoard` being truthy short-circuited every
+  // later attempt. Injury news moves constantly and the board rebuilds three
+  // times a week (Tue 14:00, Thu 12:30, Sun 13:00), so a session left open
+  // kept serving whatever was true when the tab first opened. That is how a
+  // player shows up healthy and highly ranked hours after being ruled out.
+  //
+  // Now refetched whenever the tab is opened and the held copy is older than
+  // 10 minutes. Still cached inside that window, so switching tabs is free.
+  const weekFetchedAt = useRef<number>(0);
+  const STALE_MS = 10 * 60 * 1000;
   useEffect(() => {
-    if (mode !== 'week' || weekBoard || weekLoading) return;
+    if (mode !== 'week' || weekLoading) return;
+    const age = Date.now() - weekFetchedAt.current;
+    if (weekBoard && age < STALE_MS) return;
     setWeekLoading(true);
-    fetchWeeklyBoard().then(b => { setWeekBoard(b); setWeekLoading(false); });
+    fetchWeeklyBoard().then(b => {
+      // Keep the stale copy on a failed refresh: an outdated board beats an
+      // empty screen, and the next open tries again.
+      if (b) { setWeekBoard(b); weekFetchedAt.current = Date.now(); }
+      setWeekLoading(false);
+    });
   }, [mode]);
   const [format, setFormat] = useState<Format>('PPR');
   const [leagueType, setLeagueType] = useState<'redraft' | 'dynasty'>('redraft');
