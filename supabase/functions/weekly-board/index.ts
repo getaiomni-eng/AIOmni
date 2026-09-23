@@ -206,11 +206,33 @@ Deno.serve(async (req) => {
     const r = await fetch("https://api.sleeper.app/v1/players/nfl");
     if (!r.ok) throw new Error(`sleeper players ${r.status}`);
     const db = await r.json();
+    // KEYED ON NAME + POSITION, and that is not a detail.
+    //
+    // Keyed on name alone this map put JUSTIN JEFFERSON (WR, MIN, healthy)
+    // on the board as OUT, because a LINEBACKER of the same name on Cleveland
+    // is out on a coach's decision. Deterministic, not a race: the loop skips
+    // players with no status, so the only "justinjefferson" entry ever written
+    // was the linebacker's. A top-5 WR was therefore buried at 10_000 + rank
+    // and shown unstartable every single build.
+    //
+    // The identical bug was fixed in aiomni-rankings-engine-v2 on 2026-09-16.
+    // The weekly board has its own injury path and never got the fix.
+    //
+    // Sleeper's DB carries 27 same-name collisions where a skill player would
+    // inherit another player's status. Most are free agents with a null team
+    // and never reach our board; Jefferson is the one that does.
+    //
+    // Among same name AND same position, a rostered player (non-null team)
+    // wins over a free agent, so an active starter is never shadowed by a
+    // retired namesake.
     for (const pl of Object.values<any>(db)) {
       const st = pl?.injury_status;
       const nm = pl?.full_name ?? (pl?.first_name && pl?.last_name ? `${pl.first_name} ${pl.last_name}` : null);
-      if (!nm || !st) continue;
-      injury.set(norm(nm), st);
+      const pos = pl?.position;
+      if (!nm || !st || !pos) continue;
+      const key = `${norm(nm)}|${pos}`;
+      if (injury.has(key) && !pl?.team) continue;   // keep the rostered one
+      injury.set(key, st);
       injCount++;
     }
 
@@ -224,7 +246,7 @@ Deno.serve(async (req) => {
     // REMOVE once Sleeper's feed catches up, expected after the Friday
     // practice report.
     const WEEKLY_INJURY_OVERRIDES: Record<string, string> = {
-      [norm('Brock Bowers')]: 'Questionable',
+      [`${norm('Brock Bowers')}|TE`]: 'Questionable',
     };
     for (const [key, status] of Object.entries(WEEKLY_INJURY_OVERRIDES)) {
       injury.set(key, status);
@@ -368,7 +390,7 @@ Deno.serve(async (req) => {
     // Unavailable players are removed, not demoted. Ranking someone 40th who
     // cannot play is a worse answer than omitting him, because appearing on
     // the board implies he is an option.
-    const inj = injury.get(norm(p.name)) ?? null;
+    const inj = injury.get(`${norm(p.name)}|${p.position}`) ?? null;
     if (inj && ROSTER_OUT.has(inj)) continue;
     const weekOut = !!inj && WEEK_OUT.has(inj);
 
