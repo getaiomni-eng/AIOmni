@@ -3800,6 +3800,22 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
         for (const w of rows) {
           const pts = Number((w as any)[ptsCol] ?? 0);
           const car = Number(w.carries ?? 0), tgt = Number(w.targets ?? 0);
+          // WEEK 18 IS NOT PERFORMANCE. Teams with seeding settled rest
+          // starters, so a star plays a series and posts a line that looks
+          // like a collapse. 48 of 251 skill players showed week-18 usage
+          // below 40% of their weeks 10-17 baseline.
+          //
+          // CeeDee Lamb is the case that surfaced it: 2025 wk18 was 1 target,
+          // 4 yards, WOPR 0.081 against a normal ~0.65. That single game
+          // dragged his trailing-5 WOPR to 0.532 and the opportunity pass
+          // demoted him 8 spots for it -- on a board where he has the second
+          // best per-game rate at 24.1 ppg.
+          //
+          // Excluded entirely rather than detected, because almost no fantasy
+          // league plays week 18 anyway, so it is not a week we are ever
+          // asked to predict. Backtested on 2024+2025: WR +0.0016,
+          // RB +0.0026, TE +0.0001.
+          if (Number(w.week ?? 0) === 18) continue;
           // A game with no touches and no points is a DNP, not a bad game.
           // Counting it would punish a returning starter for being absent.
           if (pts === 0 && car === 0 && tgt === 0) continue;
