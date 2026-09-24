@@ -3734,6 +3734,115 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
 
   scored.sort((a, b) => b.score - a.score);
 
+  // ─── v9.2 (2026-09-24): CURRENT-SEASON OPPORTUNITY PASS ────────────
+  // Volume is a better predictor of NEXT week than points are, and until now
+  // nothing in this engine looked at current-season opportunity at all. The
+  // in-season layer above blends current PPG only, and points are
+  // touchdown-noisy in a way that target share is not.
+  //
+  // The failure this fixes, found by Patrick 2026-09-24: Jacksonville's target
+  // share flipped and we never noticed. Through week 2 Parker Washington had
+  // 6 then 12 targets (35.7% share, WOPR 0.889) while Brian Thomas Jr. had 3
+  // then 8 for 7.0 points twice. Thomas still outranked him, because his
+  // baseline is anchored on 2024 first-round draft capital and Washington's
+  // on a 2023 sixth-round pick. Nothing in the pipeline could see that the
+  // depth chart had changed.
+  //
+  // BACKTESTED ON 2025, 16 week-transitions, predicting the FOLLOWING week:
+  //   WR  0.6238 -> 0.6404  at w=0.60   (n=2044 player-weeks)
+  //   RB  0.7175 -> 0.7233  at w=0.40
+  //   TE  0.5929 -> 0.6182  at w=0.70
+  // Opportunity rank ALONE (0.6369 for WR) also beats production rank alone
+  // (0.6238), so this is a real signal rather than a tiebreak. Per-position
+  // weights because the positions genuinely differ: TE gains most, RB least,
+  // which fits -- RB scoring is far more touchdown- and game-script-driven.
+  //
+  // Blending PERCENTILES and interpolating back through the score
+  // distribution is exactly the rank blend that was tested, expressed in score
+  // space so the scale of the board is preserved. Doing it as a naive score
+  // multiplier would not have been the thing that was measured.
+  {
+    const OPP_W: Record<string, number> = { WR: 0.60, RB: 0.40, TE: 0.70 };
+    // No QB entry on purpose: a quarterback's opportunity is his team's pass
+    // volume, which is not a share he competes for, and it was not tested.
+    const byPos: Record<string, RankedRow[]> = {};
+    for (const r of scored) (byPos[r.position] = byPos[r.position] ?? []).push(r);
+
+    for (const [pos, rows] of Object.entries(byPos)) {
+      const W = OPP_W[pos];
+      if (!W || rows.length < 12) continue;
+
+      // Opportunity per game from the CURRENT season only.
+      //   WR/TE -- avgWopr, which already folds target share and air-yards
+      //            share into one number.
+      //   RB    -- carries plus targets per game; a back's role is carries
+      //            first, and WOPR ignores them entirely.
+      const oppOf = (r: RankedRow): number | null => {
+        const a = aggCur.get(r.gsis_id);
+        if (!a || a.games < 1) return null;
+        if (pos === 'RB') {
+          const touches = a.weeks.reduce((s, w) => s + (w.carries ?? 0) + (w.targets ?? 0), 0);
+          return touches / a.games;
+        }
+        return a.avgWopr > 0 ? a.avgWopr : null;
+      };
+
+      const withOpp = rows.filter(r => oppOf(r) != null);
+      // Too few players with current data and the percentile of one of them
+      // says nothing about the position.
+      if (withOpp.length < 8) continue;
+
+      const scoreOrder = [...withOpp].sort((a, b) => b.score - a.score);
+      const oppOrder   = [...withOpp].sort((a, b) => (oppOf(b) as number) - (oppOf(a) as number));
+      const n = withOpp.length;
+      const scoreIdx = new Map(scoreOrder.map((r, i) => [r.gsis_id, i]));
+      const oppIdx   = new Map(oppOrder.map((r, i) => [r.gsis_id, i]));
+      const scoreLadder = scoreOrder.map(r => r.score);
+
+      for (const r of withOpp) {
+        const a = aggCur.get(r.gsis_id)!;
+        // Shrink toward no-op on a small sample, same discipline as the
+        // in-season layer. The backtest optimum was measured on season-to-date
+        // averages spanning ~9 games, so applying the full weight after one
+        // Sunday would be claiming more confidence than was ever tested.
+        const effW = W * (a.games / (a.games + 2));
+        const pScore = scoreIdx.get(r.gsis_id)! / (n - 1);
+        const pOpp   = oppIdx.get(r.gsis_id)!   / (n - 1);
+        const pNew   = pScore + (pOpp - pScore) * effW;
+
+        // Interpolate the score distribution at the blended percentile.
+        const pos2 = pNew * (n - 1);
+        const lo = Math.max(0, Math.min(n - 1, Math.floor(pos2)));
+        const hi = Math.max(0, Math.min(n - 1, Math.ceil(pos2)));
+        const frac = pos2 - lo;
+        const newScore = scoreLadder[lo] + (scoreLadder[hi] - scoreLadder[lo]) * frac;
+
+        // CAP THE SCORE MOVE. The backtest optimised RANK correlation and so
+        // never felt this: at the very top of the board the score ladder falls
+        // off a cliff, so a modest percentile move becomes an enormous score
+        // move. Uncapped, Ja'Marr Chase fell 5 -> 48 on a two-game WOPR
+        // average dragged down by a single 4-target week 1 (0.282, then 0.763
+        // in week 2). One quiet Sunday must not be able to unseat an
+        // established elite.
+        //
+        // Same band as the in-season layer, which caps at [0.75, 1.35] for the
+        // same reason. Displacement still gets through -- Jakobi Meyers, whose
+        // WOPR went 0.227 -> 0.102 as Washington took the role, still falls
+        // hard, because his drop is driven by the low end of the ladder where
+        // the curve is flat.
+        const capped = Math.max(r.score * 0.80, Math.min(r.score * 1.25, newScore));
+        if (Math.abs(capped - r.score) > 0.01) {
+          const moved = scoreIdx.get(r.gsis_id)! - pos2;
+          const hitCap = Math.abs(capped - newScore) > 0.01;
+          r.method += ` · [opportunity-pass ${pos} w=${effW.toFixed(2)} (${a.games}g) ` +
+                      `${moved >= 0 ? '+' : ''}${moved.toFixed(1)} spots${hitCap ? ', capped' : ''}]`;
+          r.score = capped;
+        }
+      }
+    }
+    scored.sort((a, b) => b.score - a.score);
+  }
+
   // ─── Position scarcity pass (v2026-05-07) ──────────────────────────
   // Compute initial pos_rank by score, then multiply each player's score
   // by the scarcity tier for their position-rank. Re-sort after.
