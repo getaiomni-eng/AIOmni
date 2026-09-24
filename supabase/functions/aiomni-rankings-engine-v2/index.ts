@@ -3763,6 +3763,69 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
   // multiplier would not have been the thing that was measured.
   {
     const OPP_W: Record<string, number> = { WR: 0.60, RB: 0.40, TE: 0.70 };
+
+    // ── TRAILING 5 GAMES, ACROSS THE SEASON BOUNDARY ────────────────
+    // The first version of this pass read aggCur -- CURRENT SEASON ONLY -- and
+    // that is blind to the exact case it was built for. Parker Washington's
+    // role changed in week 16 of 2025 and carried straight into 2026:
+    //
+    //   2025 wk11   2 tgt    4.0 pts     <- role not yet his
+    //   2025 wk13   3 tgt    3.6
+    //   2025 wk15   3 tgt    8.3
+    //   2025 wk16  10 tgt   26.5         <- role consolidates
+    //   2025 wk17  10 tgt   19.0
+    //   2025 wk18   9 tgt   19.7
+    //   2026 wk1    6 tgt   19.3
+    //   2026 wk2   12 tgt   16.8
+    //
+    // Over his last 5 he is WR6 at 20.3 ppg, 0.312 share, 0.783 WOPR. Over
+    // full history he is mediocre, because the early-2025 games predate the
+    // change. A current-season window sees 2 games; a full-history window
+    // drowns the signal. Neither can see a role change that straddles a
+    // season, and that is a whole class of player.
+    //
+    // BACKTESTED on 2024+2025 with history strictly prior to each game:
+    //   WR  all-history 0.5809 -> last-5 0.5826
+    //   RB  all-history 0.6556 -> last-5 0.6628
+    //   TE  all-history 0.5674 -> last-5 0.5688
+    // Modest but positive at every position. last-3 was WORSE than
+    // all-history for WR and TE, so the window must not be shortened further.
+    const TRAIL_N = 5;
+    type TrailAgg = { games: number; oppPerGame: number; ppg: number };
+    const trail = new Map<string, TrailAgg>();
+    {
+      // Prior season then current, so a plain concat is already chronological.
+      const perPlayer = new Map<string, { ord: number; pts: number; car: number; tgt: number; wopr: number }[]>();
+      const push = (rows: any[], seasonOrd: number) => {
+        for (const w of rows) {
+          const pts = Number((w as any)[ptsCol] ?? 0);
+          const car = Number(w.carries ?? 0), tgt = Number(w.targets ?? 0);
+          // A game with no touches and no points is a DNP, not a bad game.
+          // Counting it would punish a returning starter for being absent.
+          if (pts === 0 && car === 0 && tgt === 0) continue;
+          const arr = perPlayer.get(w.gsis_id) ?? [];
+          arr.push({ ord: seasonOrd + Number(w.week ?? 0), pts, car, tgt, wopr: Number(w.wopr ?? 0) });
+          perPlayer.set(w.gsis_id, arr);
+        }
+      };
+      push(w2025, 0);
+      push(wCur, 1000);
+      for (const [gsis, games] of perPlayer) {
+        games.sort((x, y) => x.ord - y.ord);
+        const last = games.slice(-TRAIL_N);
+        if (last.length === 0) continue;
+        trail.set(gsis, {
+          games: last.length,
+          ppg: last.reduce((s2, g) => s2 + g.pts, 0) / last.length,
+          // Position-appropriate opportunity is chosen at use site; store both
+          // raw touches and WOPR by packing touches here and reading wopr
+          // separately would split the shape, so compute both now.
+          oppPerGame: last.reduce((s2, g) => s2 + g.car + g.tgt, 0) / last.length,
+        });
+        (trail.get(gsis) as any).woprPerGame =
+          last.reduce((s2, g) => s2 + g.wopr, 0) / last.length;
+      }
+    }
     // No QB entry on purpose: a quarterback's opportunity is his team's pass
     // volume, which is not a share he competes for, and it was not tested.
     const byPos: Record<string, RankedRow[]> = {};
@@ -3778,13 +3841,11 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       //   RB    -- carries plus targets per game; a back's role is carries
       //            first, and WOPR ignores them entirely.
       const oppOf = (r: RankedRow): number | null => {
-        const a = aggCur.get(r.gsis_id);
-        if (!a || a.games < 1) return null;
-        if (pos === 'RB') {
-          const touches = a.weeks.reduce((s, w) => s + (w.carries ?? 0) + (w.targets ?? 0), 0);
-          return touches / a.games;
-        }
-        return a.avgWopr > 0 ? a.avgWopr : null;
+        const t = trail.get(r.gsis_id) as (TrailAgg & { woprPerGame?: number }) | undefined;
+        if (!t || t.games < 1) return null;
+        // RB role is carries first, and WOPR ignores them entirely.
+        if (pos === 'RB') return t.oppPerGame > 0 ? t.oppPerGame : null;
+        return (t.woprPerGame ?? 0) > 0 ? (t.woprPerGame as number) : null;
       };
 
       const withOpp = rows.filter(r => oppOf(r) != null);
@@ -3792,53 +3853,49 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       // says nothing about the position.
       if (withOpp.length < 8) continue;
 
+      // REORDER, DO NOT PERTURB SCORES.
+      //
+      // The first cut of this interpolated a blended PERCENTILE back through
+      // the score ladder. That is not what the backtest measured, and it
+      // distorts badly: at the top of the board the ladder falls off a cliff,
+      // so a small percentile move becomes an enormous score move. Uncapped,
+      // Ja'Marr Chase fell 5 -> 48. Capping it then blunted the mid-board
+      // players the pass exists to help, and widening the cap pushed Chase to
+      // 14 and Nacua to 33. No cap setting fixed both ends, because the
+      // mapping itself was wrong.
+      //
+      // The backtest blended RANKS and scored RANK correlation. So do exactly
+      // that: compute each player's blended rank, sort by it, and reassign the
+      // position's EXISTING score ladder to the new order. The multiset of
+      // scores is untouched -- cross-position comparability and the shape of
+      // the board are preserved exactly -- and the resulting order is the
+      // blend that was actually validated. No cap is needed because nobody can
+      // move further than the blend itself says.
       const scoreOrder = [...withOpp].sort((a, b) => b.score - a.score);
       const oppOrder   = [...withOpp].sort((a, b) => (oppOf(b) as number) - (oppOf(a) as number));
-      const n = withOpp.length;
       const scoreIdx = new Map(scoreOrder.map((r, i) => [r.gsis_id, i]));
       const oppIdx   = new Map(oppOrder.map((r, i) => [r.gsis_id, i]));
-      const scoreLadder = scoreOrder.map(r => r.score);
+      const ladder   = scoreOrder.map(r => r.score);
 
-      for (const r of withOpp) {
-        const a = aggCur.get(r.gsis_id)!;
-        // Shrink toward no-op on a small sample, same discipline as the
-        // in-season layer. The backtest optimum was measured on season-to-date
-        // averages spanning ~9 games, so applying the full weight after one
-        // Sunday would be claiming more confidence than was ever tested.
-        const effW = W * (a.games / (a.games + 2));
-        const pScore = scoreIdx.get(r.gsis_id)! / (n - 1);
-        const pOpp   = oppIdx.get(r.gsis_id)!   / (n - 1);
-        const pNew   = pScore + (pOpp - pScore) * effW;
+      const blended = withOpp.map(r => {
+        const t = trail.get(r.gsis_id)!;
+        // Shrink toward no-op on a thin sample, same discipline as the
+        // in-season layer. The backtest optimum came from windows averaging
+        // ~5 games, so a player with 2 gets proportionally less of it.
+        const effW = W * (t.games / (t.games + 2));
+        const sI = scoreIdx.get(r.gsis_id)!, oI = oppIdx.get(r.gsis_id)!;
+        return { r, effW, from: sI, to: sI + (oI - sI) * effW };
+      }).sort((a, b) => a.to - b.to);
 
-        // Interpolate the score distribution at the blended percentile.
-        const pos2 = pNew * (n - 1);
-        const lo = Math.max(0, Math.min(n - 1, Math.floor(pos2)));
-        const hi = Math.max(0, Math.min(n - 1, Math.ceil(pos2)));
-        const frac = pos2 - lo;
-        const newScore = scoreLadder[lo] + (scoreLadder[hi] - scoreLadder[lo]) * frac;
-
-        // CAP THE SCORE MOVE. The backtest optimised RANK correlation and so
-        // never felt this: at the very top of the board the score ladder falls
-        // off a cliff, so a modest percentile move becomes an enormous score
-        // move. Uncapped, Ja'Marr Chase fell 5 -> 48 on a two-game WOPR
-        // average dragged down by a single 4-target week 1 (0.282, then 0.763
-        // in week 2). One quiet Sunday must not be able to unseat an
-        // established elite.
-        //
-        // Same band as the in-season layer, which caps at [0.75, 1.35] for the
-        // same reason. Displacement still gets through -- Jakobi Meyers, whose
-        // WOPR went 0.227 -> 0.102 as Washington took the role, still falls
-        // hard, because his drop is driven by the low end of the ladder where
-        // the curve is flat.
-        const capped = Math.max(r.score * 0.80, Math.min(r.score * 1.25, newScore));
-        if (Math.abs(capped - r.score) > 0.01) {
-          const moved = scoreIdx.get(r.gsis_id)! - pos2;
-          const hitCap = Math.abs(capped - newScore) > 0.01;
-          r.method += ` · [opportunity-pass ${pos} w=${effW.toFixed(2)} (${a.games}g) ` +
-                      `${moved >= 0 ? '+' : ''}${moved.toFixed(1)} spots${hitCap ? ', capped' : ''}]`;
-          r.score = capped;
+      blended.forEach((b, i) => {
+        const newScore = ladder[i];
+        const moved = b.from - i;
+        if (moved !== 0) {
+          b.r.method += ` · [opportunity-pass ${pos} w=${b.effW.toFixed(2)} ` +
+                        `(${trail.get(b.r.gsis_id)!.games}g) ${moved > 0 ? '+' : ''}${moved} spots]`;
         }
-      }
+        b.r.score = newScore;
+      });
     }
     scored.sort((a, b) => b.score - a.score);
   }
