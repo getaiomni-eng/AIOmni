@@ -75,6 +75,16 @@ export interface StatusRow {
   depth_chart_order: number | null; depth_chart_position: string | null;
 }
 
+// player_status_overrides: a manual call that beats every feed. Keyed by
+// normalised name + position (typed from a news alert, no id lookup). NULL
+// season/week = until removed. 'Active' means "he is playing, rank him as
+// healthy"; Out/Doubtful/IR remove him.
+export interface StatusOverride {
+  norm_name: string; position: string;
+  season: number | null; week: number | null;
+  injury_status: string | null;
+}
+
 export interface Forecast { wind: number | null; temp: number | null; precip: boolean | null }
 
 // One player the models are asked to rank this week. Built once by

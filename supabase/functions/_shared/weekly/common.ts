@@ -1,7 +1,7 @@
 // Helpers every weekly model shares. Pure; no I/O.
 
 import type {
-  DepthRow, Forecast, GameRow, InjuryRow, PoolPlayer, Pos, SnapRow, StatRow, StatusRow, WeekInput,
+  DepthRow, Forecast, GameRow, InjuryRow, PoolPlayer, Pos, SnapRow, StatRow, StatusOverride, StatusRow, WeekInput,
 } from './types.ts';
 import { isBanned } from './banned.ts';
 
@@ -78,6 +78,7 @@ export function buildPool(args: {
   season: number; week: number;
   stats: StatRow[]; games: GameRow[]; injuries: InjuryRow[]; depth: DepthRow[];
   status?: StatusRow[];
+  overrides?: StatusOverride[];
   draft?: Record<string, { draft_round: number | null; draft_pick: number | null; rookie_season: number | null }>;
 }): PoolPlayer[] {
   const { season, week } = args;
@@ -117,6 +118,16 @@ export function buildPool(args: {
   // trim(): Sleeper pads some gsis ids with a leading space.
   for (const s of args.status ?? []) if (s.gsis_id?.trim()) sleeper.set(s.gsis_id.trim(), s);
 
+  // Manual calls (the /rank injury desk, or a SQL insert) beat every feed. A
+  // week-specific row beats an until-removed (NULL week) row.
+  const override = new Map<string, StatusOverride>();
+  for (const o of args.overrides ?? []) {
+    if ((o.season != null && o.season !== season) || (o.week != null && o.week !== week)) continue;
+    const k = `${o.norm_name}|${o.position}`;
+    const prev = override.get(k);
+    if (!prev || (prev.week == null && o.week != null)) override.set(k, o);
+  }
+
   const ids = new Set([...latest.keys(), ...depthRank.keys()]);
   const pool: PoolPlayer[] = [];
   for (const id of ids) {
@@ -131,14 +142,22 @@ export function buildPool(args: {
     if (!g) continue; // bye
     const rep = report.get(id);
     const sl = sleeper.get(id);
-    const inj = rep?.report_status ?? sl?.injury_status ?? null;
+    const name = last?.player_name ?? dr!.name;
+    const position = last?.position ?? dr!.pos;
+    const ov = override.get(`${normName(name)}|${position}`);
+    let inj = rep?.report_status ?? sl?.injury_status ?? null;
+    if (ov) {
+      // 'Active' = the owner says he plays: healthy, whatever the feeds say.
+      if (ov.injury_status === 'Active') inj = null;
+      else if (ov.injury_status) inj = ov.injury_status;
+    }
     if (inj && WILL_NOT_PLAY.has(inj)) continue;
-    if (sl?.status && WILL_NOT_PLAY.has(sl.status)) continue;
+    if (ov?.injury_status !== 'Active' && sl?.status && WILL_NOT_PLAY.has(sl.status)) continue;
     const dft = args.draft?.[id];
     pool.push({
       gsis_id: id,
-      player_name: last?.player_name ?? dr!.name,
-      position: last?.position ?? dr!.pos,
+      player_name: name,
+      position,
       team, opponent: g.opponent, game_id: g.game.game_id, home: g.home,
       injury_status: inj, practice_status: rep?.practice_status ?? sl?.practice_participation ?? null,
       depth_rank: dr?.rank ?? null,
@@ -153,7 +172,7 @@ export function buildPool(args: {
 // leakage rule is enforced, used by both the edge function and the backtest.
 export function assembleInput(raw: {
   stats: StatRow[]; games: GameRow[]; snaps: SnapRow[]; injuries: InjuryRow[]; depth: DepthRow[];
-  status?: StatusRow[]; forecast?: Record<string, Forecast>;
+  status?: StatusRow[]; forecast?: Record<string, Forecast>; overrides?: StatusOverride[];
   draft?: Record<string, { draft_round: number | null; draft_pick: number | null; rookie_season: number | null }>;
 }, season: number, week: number): WeekInput {
   const stats = raw.stats.filter(r => before(r.season, r.week, season, week));
@@ -165,7 +184,7 @@ export function assembleInput(raw: {
   const games = raw.games
     .filter(g => g.season <= season)
     .map(g => (g.season === season && g.week >= week) ? { ...g, home_score: null, away_score: null } : g);
-  const pool = buildPool({ season, week, stats, games, injuries, depth, status: raw.status, draft: raw.draft });
+  const pool = buildPool({ season, week, stats, games, injuries, depth, status: raw.status, overrides: raw.overrides, draft: raw.draft });
   return { season, week, stats, games, snaps, injuries, depth, status: raw.status, forecast: raw.forecast, pool };
 }
 

@@ -25,7 +25,7 @@
 // SHADOW. The app still reads nfl_weekly_board. Switch only after this beats
 // it on graded live weeks.
 //
-// Body / query: { season?, week?, dry_run? }. Week defaults to the next
+// Body / query: { season?, week?, dry_run?, refresh_status? }. Week defaults to the next
 // unplayed week, derived the same way the board crons derive it.
 
 import { assembleInput, positionRanks } from '../_shared/weekly/common.ts';
@@ -34,7 +34,7 @@ import { modelContext } from '../_shared/weekly/context.ts';
 import { modelMatchup } from '../_shared/weekly/matchup.ts';
 import { modelRecency } from '../_shared/weekly/recency.ts';
 import { STADIUMS } from '../_shared/weekly/stadiums.ts';
-import type { Forecast, GameRow, ModelRow, WeeklyModel } from '../_shared/weekly/types.ts';
+import type { Forecast, GameRow, ModelRow, StatusOverride, WeeklyModel } from '../_shared/weekly/types.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -179,7 +179,20 @@ Deno.serve(async (req) => {
     }
     const prev = season - 1;
 
-    const [stats, games, snaps, injuries, depth, status, players, manualRows] = await Promise.all([
+    // refresh_status: pull Sleeper's injury feed first, so a scratch announced
+    // minutes ago is in this build. Used by the post-inactives crons and the
+    // "Rebuild rankings now" button on the /rank injury desk.
+    let statusRefresh: unknown = null;
+    if (body?.refresh_status === true) {
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/player-status-sync`, {
+        method: 'POST',
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
+        body: '{}',
+      }).catch((e) => ({ ok: false, text: async () => String(e) } as any));
+      statusRefresh = r.ok ? await r.json().catch(() => ({ ok: true })) : { ok: false, error: (await r.text()).slice(0, 200) };
+    }
+
+    const [stats, games, snaps, injuries, depth, status, players, manualRows, overrides] = await Promise.all([
       all(`weekly_model_stats?select=*&season=gte.${prev}`),
       all<GameRow>(`nfl_games?select=*&season=gte.${prev}`),
       all(`nfl_snap_counts?select=*&season=gte.${prev}`),
@@ -189,6 +202,7 @@ Deno.serve(async (req) => {
       all(`nfl_players?select=gsis_id,draft_round,draft_pick,rookie_year,position&position=in.(QB,RB,WR,TE,FB)`),
       all<ManualRow & { season: number; week: number }>(`manual_weekly_rankings?select=position,rank,gsis_id&season=eq.${season}&week=eq.${week}`)
         .catch(() => []),
+      all<StatusOverride>(`player_status_overrides?select=norm_name,position,season,week,injury_status`).catch(() => []),
     ]);
 
     const target = (games as GameRow[]).filter(g => g.season === season && g.week === week);
@@ -200,7 +214,7 @@ Deno.serve(async (req) => {
 
     const input = assembleInput({
       stats: stats as any, games: games as GameRow[], snaps: snaps as any, injuries: injuries as any,
-      depth: depth as any, status: status as any, forecast: wx.out, draft,
+      depth: depth as any, status: status as any, forecast: wx.out, draft, overrides,
     }, season, week);
 
     const outputs: Record<string, ModelRow[]> = {};
@@ -279,6 +293,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       ok: true, season, week, dry_run: dryRun,
       pool: input.pool.length, models: Object.keys(outputs), model_errors: modelErrors,
+      status_refresh: statusRefresh, overrides_loaded: (overrides as StatusOverride[]).length,
       manual_positions: [...new Set((manualRows as ManualRow[]).map(m => m.position))],
       vegas_live_games: vegas.updated, vegas_error: vegas.error,
       forecasts: Object.keys(wx.out).length, weather_error: wx.error,

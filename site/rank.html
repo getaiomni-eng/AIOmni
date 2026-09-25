@@ -95,6 +95,66 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
 .mockflag{font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:1.2px;padding:3px 7px;border-radius:4px;background:rgba(27,231,255,.13);color:var(--aqua);}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
 
+.vw{display:flex;gap:6px;margin:18px 0 0;padding:4px;border:1px solid var(--line2);border-radius:10px;background:var(--panel);}
+.vw button{flex:1 1 0;font:inherit;font-weight:700;font-size:15px;min-height:46px;border-radius:7px;border:none;background:transparent;color:var(--mute);cursor:pointer;}
+.vw button[aria-selected="true"]{background:var(--raise);color:var(--ink);}
+.vw .cnt{font-family:'Space Mono',monospace;font-size:11px;font-weight:700;margin-left:6px;padding:1px 6px;border-radius:9px;background:rgba(255,34,85,.18);color:var(--red);}
+.vw .cnt:empty{display:none;}
+
+.dk-head{display:flex;flex-direction:column;gap:10px;padding:18px 0 6px;}
+.dk-title{font-family:'Audiowide',cursive;font-size:22px;margin:0;}
+.dk-rebuilt{font-family:'Space Mono',monospace;font-size:12px;color:var(--dim);}
+.dk-rebuilt b{color:var(--ink);}
+.dk-rebuild{width:100%;min-height:52px;font-size:16px;display:flex;align-items:center;justify-content:center;gap:10px;}
+.spin{width:16px;height:16px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spinO .8s linear infinite;display:inline-block;}
+.dk-result{border:1px solid var(--line2);border-radius:10px;background:var(--panel);padding:12px 14px;font-size:14px;}
+.dk-result[hidden]{display:none;}
+.dk-result.err{border-color:rgba(255,34,85,.5);color:var(--red);}
+.dk-result h3{font-family:'Space Mono',monospace;font-size:11.5px;letter-spacing:1.2px;color:var(--mute);margin:0 0 8px;font-weight:700;}
+.dk-top{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;}
+.dk-top div b{font-family:'Space Mono',monospace;font-size:12px;display:block;margin-bottom:2px;}
+.dk-top ol{margin:0;padding-left:18px;font-size:13px;color:var(--dim);}
+.dk-help{font-size:13px;color:var(--mute);margin:4px 0 12px;line-height:1.45;}
+.dk-help b{color:var(--dim);}
+
+.dk-filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 12px;}
+.chipb{font-family:'Space Mono',monospace;font-size:12.5px;font-weight:700;min-height:40px;min-width:48px;padding:6px 12px;border-radius:20px;
+  border:1px solid var(--line2);background:transparent;color:var(--dim);cursor:pointer;}
+.chipb[aria-pressed="true"]{background:var(--raise);color:var(--ink);border-color:var(--dim);}
+.dk-und{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--dim);min-height:40px;margin-left:auto;cursor:pointer;}
+.dk-und input{width:20px;height:20px;accent-color:var(--volt);}
+
+.dk-group{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:1.3px;color:var(--mute);margin:18px 0 8px;font-weight:700;}
+.dk-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:13px 14px;margin:0 0 10px;}
+.dk-card.dec{border-color:var(--line2);}
+.dk-r1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+.dk-r1 .nm{font-size:17px;display:inline;white-space:normal;}
+.dk-r1 .mu{font-size:13px;color:var(--mute);}
+.dk-chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 6px;}
+.chip{font-family:'Space Mono',monospace;font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;background:var(--raise);color:var(--dim);}
+.chip.q{background:rgba(255,170,0,.16);color:var(--te);}
+.chip.o{background:rgba(255,34,85,.16);color:var(--red);}
+.chip.a{background:rgba(110,235,131,.16);color:var(--wr);}
+.chip.ov{outline:1px solid currentColor;}
+.dk-line{font-size:13.5px;color:var(--dim);margin:2px 0;}
+.dk-line.miss{color:var(--te);}
+.dk-ranks{font-family:'Space Mono',monospace;font-size:12.5px;color:var(--ink);margin:6px 0 4px;}
+.dk-heads{list-style:none;margin:6px 0 0;padding:0;}
+.dk-heads li{font-size:13px;color:var(--dim);padding:5px 0;border-top:1px solid rgba(28,43,46,.6);line-height:1.35;}
+.dk-heads li span{display:block;font-family:'Space Mono',monospace;font-size:10.5px;color:var(--mute);margin-top:2px;}
+.dk-acts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px;}
+.dk-acts button{font:inherit;font-weight:700;font-size:15px;min-height:48px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--ink);cursor:pointer;}
+.dk-acts button:disabled{opacity:.35;cursor:default;}
+.dk-acts button[data-s="Out"][aria-pressed="true"]{background:var(--red);border-color:var(--red);color:#fff;}
+.dk-acts button[data-s="Active"][aria-pressed="true"]{background:var(--wr);border-color:var(--wr);color:#070D0E;}
+.dk-acts button.busy{opacity:.6;}
+.dk-empty{color:var(--mute);text-align:center;padding:30px 10px;border:1px dashed var(--line2);border-radius:12px;}
+.dk-bar{position:sticky;bottom:0;margin:14px -4px 0;padding:10px 4px calc(10px + env(safe-area-inset-bottom));
+  background:linear-gradient(180deg,rgba(7,13,14,0),var(--bg,#070D0E) 30%);display:flex;gap:10px;align-items:center;}
+.dk-bar[hidden]{display:none;}
+.dk-bar span{flex:1 1 auto;font-size:13px;color:var(--dim);}
+.dk-bar .b{min-height:48px;}
+
 @media (max-width:860px){
   .rk-grid{grid-template-columns:1fr;}
   .rk-pool{max-height:none;}
@@ -136,6 +196,12 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
   </section>
 
   <div id="appView" hidden>
+    <div class="vw" role="tablist" aria-label="Tool">
+      <button type="button" role="tab" data-v="rank" aria-selected="true">Rankings</button>
+      <button type="button" role="tab" data-v="desk" aria-selected="false">Injury desk<span class="cnt" id="deskCount"></span></button>
+    </div>
+
+    <div id="rankView">
     <div class="rk-top">
       <h1 class="rk-title">Weekly ranks</h1>
       <span class="sp"></span>
@@ -178,6 +244,32 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
         <label class="sr" for="search">Search players</label>
         <input id="search" class="rk-search" type="search" placeholder="Search name or team" autocomplete="off">
         <ul class="rk-pool" id="pool" aria-label="Available players"></ul>
+      </div>
+    </div>
+    </div>
+
+    <div id="deskView" hidden role="region" aria-label="Injury desk">
+      <div class="dk-head">
+        <h1 class="dk-title" id="dkTitle">Injury desk</h1>
+        <div class="dk-rebuilt" id="dkRebuilt">Loading…</div>
+        <button class="b v dk-rebuild" id="dkRebuild" type="button">Rebuild rankings now</button>
+        <div class="dk-result" id="dkResult" hidden role="status" aria-live="polite"></div>
+      </div>
+      <p class="dk-help"><b>Out</b> removes him from the rankings. <b>Playing</b> ranks him as healthy, with no injury discount.
+        <b>Clear</b> goes back to the injury feed. Changes reach the app on the next rebuild: tap the button, or wait for the next automatic run.</p>
+      <p id="dkStatus" class="rk-status" role="status" aria-live="polite"></p>
+      <div class="dk-filters" role="group" aria-label="Filter">
+        <button class="chipb" type="button" data-f="ALL" aria-pressed="true">All</button>
+        <button class="chipb" type="button" data-f="QB" aria-pressed="false">QB</button>
+        <button class="chipb" type="button" data-f="RB" aria-pressed="false">RB</button>
+        <button class="chipb" type="button" data-f="WR" aria-pressed="false">WR</button>
+        <button class="chipb" type="button" data-f="TE" aria-pressed="false">TE</button>
+        <label class="dk-und"><input type="checkbox" id="dkUndecided"> Only undecided</label>
+      </div>
+      <div id="dkList"></div>
+      <div class="dk-bar" id="dkBar" hidden>
+        <span id="dkPending"></span>
+        <button class="b v" id="dkRebuild2" type="button">Rebuild now</button>
       </div>
     </div>
   </div>
@@ -245,7 +337,10 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
   async function api(method, params, body) {
     if (MOCK) {
       await new Promise(r => setTimeout(r, 250));
+      if (method === 'GET' && params.view === 'desk') return mockDesk.get();
       if (method === 'GET') return mockGet(params.season || 2026, params.week || 3);
+      if (body && body.action === 'override') return mockDesk.override(body);
+      if (body && body.action === 'rebuild') return mockDesk.rebuild();
       const k = `${body.season}-${body.week}`;
       mockDb.saved[k] = mockDb.saved[k] || { QB: [], RB: [], WR: [], TE: [] };
       mockDb.savedAt[k] = mockDb.savedAt[k] || { QB: null, RB: null, WR: null, TE: null };
@@ -255,6 +350,7 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
       return { ok: true, saved: [...body.players], saved_at: at };
     }
     const q = new URLSearchParams();
+    if (params.view) q.set('view', params.view);
     if (params.season) q.set('season', params.season);
     if (params.week) q.set('week', params.week);
     const r = await fetch(`${API}${q.toString() ? '?' + q : ''}`, {
@@ -296,6 +392,7 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
         S.work[p] = [...S.saved[p]];
         S.savedAt[p] = (d.saved_at_by_position || {})[p] || null;
       }
+      S.loaded = true;
       buildWeekSelect();
       status(`Week ${S.week} loaded. ${POS.map(p => `${p} ${S.cand[p].length}`).join(' · ')} candidates.`);
       render();
@@ -512,6 +609,219 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
   });
   window.addEventListener('beforeunload', (e) => { if (anyDirty()) { e.preventDefault(); e.returnValue = ''; } });
 
+  // ── injury desk: mock data (no network) ─────────────────────────────────
+  const mockDesk = (() => {
+    const t0 = Date.now(), ago = (h) => new Date(t0 - h * 3600e3).toISOString();
+    const K1 = '2026-09-27T17:00:00Z', K2 = '2026-09-27T20:25:00Z', K3 = '2026-09-28T00:20:00Z';
+    const DNP = 'Did Not Participate In Practice', LTD = 'Limited Participation in Practice';
+    const mk = (i, pos, team, opp, kick, rank, you, inj, part, prac, heads, ov) => ({
+      gsis_id: `mock-desk-${i}`, name: `Player ${pos}${rank}`, position: pos, team, opp, kickoff: kick,
+      our_rank: rank, a: rank + 1, b: Math.max(1, rank - 2), c: rank + 3, you,
+      sleeper_injury: inj, body_part: part, practice: prac, report: null, override: ov || null,
+      headlines: heads.map((h, j) => ({ title: h, src: ['NBC ProFootballTalk', 'Yahoo Sports NFL', 'Rotowire NFL'][j % 3], at: ago(3 + j * 9) })),
+    });
+    const players = [
+      mk(1, 'WR', 'HOU', 'IND', K1, 8, 14, 'Questionable', 'Hamstring', DNP, ['Player WR8 misses practice again on Thursday', 'Texans list Player WR8 as questionable']),
+      mk(2, 'TE', 'HOU', 'IND', K1, 2, 5, null, null, DNP, []),
+      mk(3, 'RB', 'PIT', 'CIN', K1, 21, null, 'Questionable', 'Undisclosed', LTD, ['Player RB21 limited again']),
+      mk(4, 'WR', 'BUF', 'LAC', K1, 36, null, 'Questionable', 'Shoulder - AC Joint', DNP, ['Player WR36: Downgrades to no participation Thursday', 'Bills WR limited Wednesday', 'Coach: "we’ll see"']),
+      mk(5, 'WR', 'SF', 'ARI', K2, 24, 24, 'Questionable', 'Hip', DNP, ['Player WR24: Another DNP on Thursday']),
+      mk(6, 'TE', 'LV', 'NO', K2, 5, 2, 'Questionable', 'Knee - Meniscus', LTD, ['Player TE5 remains limited'], { status: 'Questionable', week: 3 }),
+      mk(7, 'QB', 'CHI', 'PHI', K2, 22, null, 'Doubtful', 'Concussion', DNP, ['Bears could be down to QB3']),
+      mk(8, 'WR', 'LAR', 'DEN', K3, 5, 10, 'Questionable', 'Groin', DNP, ['Player WR5 sits out practice', 'Player WR5 remains out of practice Thursday']),
+      mk(9, 'RB', 'PHI', 'CHI', K3, 18, 16, 'Questionable', 'Arm', LTD, ['Player RB18 logs limited practice']),
+    ];
+    players[1].name = 'Player TE2 (fails to save)';        // exercises the revert path
+    let rebuilt = ago(4.5);
+    return {
+      get() { return { ok: true, season: 2026, week: 3, rebuilt_at: rebuilt, players: JSON.parse(JSON.stringify(players)) }; },
+      override(b) {
+        if (/fails/.test(b.name)) throw new Error('mock: the server rejected this override');
+        const p = players.find(x => x.gsis_id === b.gsis_id);
+        p.override = b.status ? { status: b.status, week: b.week } : null;
+        return { ok: true, override: p.override };
+      },
+      async rebuild() {
+        await new Promise(r => setTimeout(r, 1400));
+        rebuilt = new Date().toISOString();
+        const top = (p) => [1, 2, 3, 4, 5].map(i => `${i}. Player ${p}${i}`);
+        return { ok: true, season: 2026, week: 3, pool: 480, top5: { QB: top('QB'), RB: top('RB'), WR: top('WR'), TE: top('TE') },
+                 written: { models: 1440, ensemble: 480 }, duration_seconds: 7, rebuilt_at: rebuilt };
+      },
+    };
+  })();
+
+  // ── injury desk ────────────────────────────────────────────────────────
+  const DK = { season: null, week: null, players: [], rebuiltAt: null, filter: 'ALL', undecided: false,
+               loaded: false, loading: false, rebuilding: false, changed: 0, busy: new Set() };
+  const statusOf = (p) => p.report || p.sleeper_injury || null;
+  const missed = (p) => /did not participate/i.test(p.practice || '');
+  const severe = (p) => /^(Out|Doubtful|IR)/i.test(statusOf(p) || '') || (statusOf(p) === 'Questionable' && missed(p));
+  const pracText = (s) => !s ? '' : /did not/i.test(s) ? 'Did not practice' : /limited/i.test(s) ? 'Limited practice' : /full/i.test(s) ? 'Full practice' : s;
+  const ET = (iso) => iso ? new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' }) + ' ET' : 'Kickoff time unknown';
+  function ago(iso) {
+    if (!iso) return 'never';
+    const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m} min ago`;
+    const h = Math.round(m / 60);
+    if (h < 36) return `${h}h ago`;
+    return `${Math.round(h / 24)}d ago`;
+  }
+  function dkStatus(msg, kind) { const el = $('dkStatus'); el.textContent = msg || ''; el.className = 'rk-status' + (kind ? ' ' + kind : ''); }
+
+  async function loadDesk(quiet) {
+    if (DK.loading) return;
+    DK.loading = true;
+    if (!quiet) dkStatus('Loading…');
+    try {
+      const d = await api('GET', { view: 'desk', season: S.season, week: S.week });
+      DK.season = d.season; DK.week = d.week; DK.players = d.players || []; DK.rebuiltAt = d.rebuilt_at || null; DK.loaded = true;
+      if (S.week == null) { S.season = d.season; S.week = d.week; }
+      dkStatus(quiet ? '' : `${DK.players.length} players on the desk for week ${DK.week}.`);
+      renderDesk();
+    } catch (e) {
+      if (e.code === 401) { askKey('That key was not accepted.'); return; }
+      dkStatus(`Could not load the desk: ${e.message}`, 'err');
+    } finally { DK.loading = false; }
+  }
+
+  function renderRebuilt() {
+    const at = DK.rebuiltAt ? new Date(DK.rebuiltAt).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+    $('dkRebuilt').innerHTML = `Rankings last rebuilt <b>${esc(ago(DK.rebuiltAt))}</b>${at ? ' · ' + esc(at) : ''}`;
+  }
+
+  function cardHtml(p) {
+    const st = statusOf(p);
+    const chips = [];
+    if (p.sleeper_injury) chips.push(`<span class="chip ${/^(Out|Doubtful|IR)/i.test(p.sleeper_injury) ? 'o' : 'q'}">${esc(p.sleeper_injury)}${p.body_part ? ' · ' + esc(p.body_part) : ''}</span>`);
+    else if (p.body_part) chips.push(`<span class="chip">${esc(p.body_part)}</span>`);
+    if (p.report) chips.push(`<span class="chip ${/^(Out|Doubtful)/i.test(p.report) ? 'o' : 'q'}">Official: ${esc(p.report)}</span>`);
+    if (!st) chips.push('<span class="chip">No designation</span>');
+    if (p.override) {
+      const s = p.override.status;
+      const label = s === 'Out' ? 'Your call: Out' : s === 'Active' ? 'Your call: Playing' : `Override: ${s ?? 'none'}`;
+      chips.push(`<span class="chip ov ${s === 'Out' ? 'o' : s === 'Active' ? 'a' : 'q'}">${esc(label)}</span>`);
+    }
+    if (p.on_board === false) chips.push('<span class="chip o">Off the board</span>');
+    const ranks = [
+      p.our_rank ? `Ours ${p.position}${p.our_rank}` : 'Ours —',
+      `You ${p.you ?? '—'}`,
+      `A/B/C ${p.a ?? '—'}/${p.b ?? '—'}/${p.c ?? '—'}`,
+    ].join(' · ');
+    const heads = (p.headlines || []).map(h =>
+      `<li>${esc(h.title)}<span>${esc((h.src || '').replace(/ NFL$/, ''))} · ${esc(ago(h.at))}</span></li>`).join('');
+    const cur = p.override ? p.override.status : null;
+    const busy = DK.busy.has(p.gsis_id);
+    const btn = (s, label) => `<button type="button" data-s="${s}" aria-pressed="${cur === s}" ${busy ? 'disabled class="busy"' : ''}>${label}</button>`;
+    return `<article class="dk-card${p.override ? ' dec' : ''}" data-id="${esc(p.gsis_id)}">
+      <div class="dk-r1"><span class="nm">${esc(p.name)}</span><span class="rn r${esc(p.position)}" style="flex:none;text-align:left">${esc(p.position)}</span>
+        <span class="mu">${esc(p.team)}${p.opp ? ' vs ' + esc(p.opp) : ''}</span></div>
+      <div class="dk-chips">${chips.join('')}</div>
+      ${p.practice ? `<div class="dk-line${missed(p) ? ' miss' : ''}">${esc(pracText(p.practice))} (latest report)</div>` : ''}
+      <div class="dk-ranks">${esc(ranks)}</div>
+      ${heads ? `<ul class="dk-heads">${heads}</ul>` : ''}
+      <div class="dk-acts">
+        ${btn('Out', 'Out')}${btn('Active', 'Playing')}
+        <button type="button" data-s="" ${!p.override || busy ? 'disabled' : ''}>Clear</button>
+      </div>
+    </article>`;
+  }
+
+  function renderDesk() {
+    $('dkTitle').textContent = DK.week ? `Injury desk · Week ${DK.week}` : 'Injury desk';
+    renderRebuilt();
+    for (const b of document.querySelectorAll('.chipb')) b.setAttribute('aria-pressed', String(b.dataset.f === DK.filter));
+    $('dkUndecided').checked = DK.undecided;
+    const need = DK.players.filter(p => !p.override && severe(p)).length;
+    $('deskCount').textContent = need ? String(need) : '';
+    const rows = DK.players.filter(p => (DK.filter === 'ALL' || p.position === DK.filter) && (!DK.undecided || !p.override));
+    if (!rows.length) {
+      $('dkList').innerHTML = `<div class="dk-empty">${DK.players.length ? 'Nothing matches this filter.' : 'No injury news on fantasy-relevant players this week.'}</div>`;
+    } else {
+      let html = '', last = null;
+      for (const p of rows) {
+        const g = ET(p.kickoff);
+        if (g !== last) { html += `<h2 class="dk-group">${esc(g.toUpperCase())}</h2>`; last = g; }
+        html += cardHtml(p);
+      }
+      $('dkList').innerHTML = html;
+    }
+    $('dkBar').hidden = DK.changed === 0 && !DK.rebuilding;
+    $('dkPending').textContent = DK.changed ? `${DK.changed} change${DK.changed === 1 ? '' : 's'} not in the rankings yet` : '';
+    for (const b of [$('dkRebuild'), $('dkRebuild2')]) {
+      b.disabled = DK.rebuilding;
+      b.innerHTML = DK.rebuilding ? '<span class="spin" aria-hidden="true"></span> Rebuilding…' : (b.id === 'dkRebuild' ? 'Rebuild rankings now' : 'Rebuild now');
+    }
+  }
+
+  $('dkList').addEventListener('click', async (e) => {
+    const b = e.target.closest('.dk-acts button'); if (!b || b.disabled) return;
+    const card = b.closest('.dk-card'); const p = DK.players.find(x => x.gsis_id === card.dataset.id); if (!p) return;
+    const want = b.dataset.s || null;
+    const prev = p.override;
+    if ((prev ? prev.status : null) === want) return;
+    p.override = want ? { status: want, week: DK.week } : null;        // optimistic
+    DK.busy.add(p.gsis_id); renderDesk();
+    try {
+      const d = await api('POST', {}, { action: 'override', season: DK.season, week: DK.week,
+        gsis_id: p.gsis_id, name: p.name, position: p.position, status: want });
+      p.override = d.override ?? null;
+      DK.changed++;
+      dkStatus(`${p.name}: ${want === 'Out' ? 'marked Out' : want === 'Active' ? 'marked Playing' : 'back to the injury feed'}. Rebuild to apply.`, 'ok');
+    } catch (err) {
+      p.override = prev;                                                  // revert
+      if (err.code === 401) { askKey('That key was not accepted.'); return; }
+      dkStatus(`${p.name} not changed: ${err.message}`, 'err');
+    } finally { DK.busy.delete(p.gsis_id); renderDesk(); }
+  });
+
+  async function rebuildNow() {
+    if (DK.rebuilding) return;
+    DK.rebuilding = true; renderDesk();
+    const box = $('dkResult'); box.hidden = true;
+    try {
+      const d = await api('POST', {}, { action: 'rebuild', season: DK.season, week: DK.week });
+      DK.rebuiltAt = d.rebuilt_at || new Date().toISOString(); DK.changed = 0;
+      const t = d.top5 || {};
+      box.className = 'dk-result';
+      box.innerHTML = `<h3>REBUILT · WEEK ${esc(d.week ?? DK.week)} · ${esc(d.pool ?? '?')} PLAYERS · ${esc(d.duration_seconds ?? '?')}S</h3>
+        <div class="dk-top">${['QB', 'RB', 'WR', 'TE'].map(pos => `<div><b class="r${pos}">${pos}</b><ol>${(t[pos] || []).map(x =>
+          `<li>${esc(String(x).replace(/^\d+\.\s*/, '').replace(/\s*\(.*\)$/, ''))}</li>`).join('')}</ol></div>`).join('')}</div>`;
+      box.hidden = false;
+      await loadDesk(true);
+    } catch (err) {
+      if (err.code === 401) { DK.rebuilding = false; askKey('That key was not accepted.'); return; }
+      box.className = 'dk-result err'; box.textContent = `Rebuild failed: ${err.message}`; box.hidden = false;
+    } finally {
+      DK.rebuilding = false; renderDesk();
+      box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+  $('dkRebuild').addEventListener('click', rebuildNow);
+  $('dkRebuild2').addEventListener('click', rebuildNow);
+  for (const b of document.querySelectorAll('.chipb')) b.addEventListener('click', () => { DK.filter = b.dataset.f; renderDesk(); });
+  $('dkUndecided').addEventListener('change', () => { DK.undecided = $('dkUndecided').checked; renderDesk(); });
+  setInterval(() => { const dv = $('deskView'); if (dv && !dv.hidden && DK.loaded) renderRebuilt(); }, 30000);
+
+  // ── view switch: Rankings | Injury desk ────────────────────────────────
+  const VIEW_STORE = 'aiomni.rankView';
+  const viewBtns = [...document.querySelectorAll('.vw button')];
+  function setView(v) {
+    viewBtns.forEach(b => b.setAttribute('aria-selected', String(b.dataset.v === v)));
+    $('rankView').hidden = v !== 'rank';
+    $('deskView').hidden = v !== 'desk';
+    try { localStorage.setItem(VIEW_STORE, v); } catch {}
+    if (v === 'rank' && !S.loaded) load(S.week);
+    if (v === 'desk' && (!DK.loaded || (S.week != null && DK.week !== S.week))) loadDesk();
+  }
+  viewBtns.forEach(b => b.addEventListener('click', () => setView(b.dataset.v)));
+  const initialView = (() => {
+    const q = new URLSearchParams(location.search).get('view');
+    if (q === 'desk' || q === 'rank') return q;
+    try { return localStorage.getItem(VIEW_STORE) === 'desk' ? 'desk' : 'rank'; } catch { return 'rank'; }
+  })();
+
   // ── key handling ───────────────────────────────────────────────────────
   function askKey(msg) {
     $('appView').hidden = true; $('keyView').hidden = false;
@@ -532,7 +842,8 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
 
   function start() {
     $('keyView').hidden = true; $('appView').hidden = false;
-    load(S.week);
+    S.loaded = false; DK.loaded = false;
+    setView(initialView);
   }
 
   if (MOCK) { $('mockflag').hidden = false; $('changeKey').hidden = true; start(); }

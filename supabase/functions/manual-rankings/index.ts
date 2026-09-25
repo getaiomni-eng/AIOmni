@@ -18,6 +18,20 @@
 //                        -> replaces that position via replace_manual_rankings(),
 //                           one transaction, so a failure never leaves it empty
 //
+// INJURY DESK (the same page, run from a phone on Sunday morning):
+//   GET  ?view=desk&season=&week=
+//        -> every fantasy-relevant player (QB24/RB40/WR50/TE20 on the weekly
+//           board) with an injury designation, a non-full practice, or an
+//           override, plus overridden players the board has already removed.
+//           Each carries the feeds (Sleeper, official report, practice), our
+//           ranks, and up to 3 headlines from the content pipeline.
+//   POST {action:'override', season, week, gsis_id, name, position, status}
+//        status 'Out' | 'Active' | null -> writes player_status_overrides for
+//        that week (null clears it). 'Active' means "rank him as healthy".
+//   POST {action:'rebuild', season, week}
+//        -> runs weekly-rankings now (refresh_status: true) and returns its
+//           summary, so a decision reaches the board without waiting for cron.
+//
 // CANDIDATES. Rostered skill players from the live Sleeper mirror
 // (nfl_player_status), minus anyone on IR/Out/PUP/suspended, ordered by the
 // market so the list starts close to done: FantasyPros ECR first, then ESPN's
@@ -237,6 +251,210 @@ async function loadSaved(season: number, week: number) {
   return { saved, savedAt };
 }
 
+// ── injury desk ────────────────────────────────────────────────────────────
+const DESK_CUT: Record<Pos, number> = { QB: 24, RB: 40, WR: 50, TE: 20 };
+const OVERRIDE_STATUSES = new Set(['Out', 'Active']);
+const FULL_PRACTICE = 'Full Participation in Practice';
+const DNP = /did not participate/i;
+
+// Headlines arrive HTML-escaped from RSS ("Jets&#39; ...", "&amp;").
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+const decode = (s: string) => s
+  .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+  .replace(/&([a-z]+);/gi, (m, n) => ENTITIES[n.toLowerCase()] ?? m);
+
+interface Override { season: number | null; week: number | null; norm_name: string; position: string; injury_status: string | null }
+
+// The most specific override wins: this exact week, then this season, then
+// "until removed" (both null). Same precedence weekly-board applies.
+function overrideMap(rows: Override[], season: number, week: number) {
+  const spec = (o: Override) => (o.week != null ? 2 : 0) + (o.season != null ? 1 : 0);
+  const out = new Map<string, Override>();
+  for (const o of rows) {
+    if (o.season != null && o.season !== season) continue;
+    if (o.week != null && o.week !== week) continue;
+    const k = `${o.norm_name}|${o.position}`;
+    const prev = out.get(k);
+    if (!prev || spec(o) > spec(prev)) out.set(k, o);
+  }
+  return out;
+}
+
+// Lower is more urgent: ruled out, then questionable with a missed practice,
+// then questionable, then everything else (limited practice, overrides only).
+function severity(status: string | null, practice: string | null) {
+  if (status && /^(Out|Doubtful|IR|Injured Reserve|PUP|Sus)/i.test(status)) return 0;
+  if (status === 'Questionable' && practice && DNP.test(practice)) return 1;
+  if (status === 'Questionable') return 2;
+  return 3;
+}
+
+async function buildDesk(season: number, week: number) {
+  const since = new Date(Date.now() - 96 * 3600_000).toISOString();
+  const [board, status, reports, overrides, sched, sources, items] = await Promise.all([
+    all<any>(`weekly_rankings?select=gsis_id,player_name,position,team,opponent,pos_rank,rank_recency,rank_matchup,rank_context,rank_manual,injury_status,computed_at&season=eq.${season}&week=eq.${week}`),
+    all<any>('nfl_player_status?select=gsis_id,player_name,position,team,status,injury_status,injury_body_part,practice_participation&position=in.(QB,RB,WR,TE)'),
+    all<any>(`nfl_injury_reports?select=gsis_id,player_name,position,report_status,report_primary_injury,practice_status&season=eq.${season}&week=eq.${week}`),
+    all<Override>('player_status_overrides?select=season,week,norm_name,position,injury_status'),
+    all<any>(`nfl_schedule?select=home_team,away_team,kickoff_at&season=eq.${season}&week=eq.${week}`),
+    all<any>('content_sources?select=id,name'),
+    all<any>(`content_items?select=title,published_at,source_id&published_at=gte.${encodeURIComponent(since)}&title=not.is.null&order=published_at.desc`),
+  ]);
+
+  const game = new Map<string, { opp: string; kickoff: string | null }>();
+  for (const g of sched) {
+    const h = team(g.home_team), a = team(g.away_team);
+    game.set(h, { opp: a, kickoff: g.kickoff_at ?? null });
+    game.set(a, { opp: h, kickoff: g.kickoff_at ?? null });
+  }
+  const statusById = new Map<string, any>(), statusByName = new Map<string, any>();
+  for (const s of status) {
+    const id = cleanId(s.gsis_id);
+    if (id) statusById.set(id, s);
+    if (s.player_name) statusByName.set(`${norm(s.player_name)}|${s.position}`, s);
+  }
+  const repById = new Map<string, any>();
+  for (const r of reports) if (r.gsis_id) repById.set(cleanId(r.gsis_id), r);
+  const ovr = overrideMap(overrides, season, week);
+  const srcName = new Map<number | string, string>(sources.map((s: any) => [s.id, s.name]));
+  const heads = items.map((i: any) => {
+    const title = decode(String(i.title));
+    return { title, lower: title.toLowerCase(), src: srcName.get(i.source_id) ?? '', at: i.published_at };
+  });
+  // "Kenneth Walker III" is usually "Kenneth Walker" in a headline.
+  const headlinesFor = (name: string) => {
+    const full = name.toLowerCase();
+    const bare = full.replace(/\s+(jr\.?|sr\.?|ii|iii|iv|v)$/i, '');
+    return heads.filter(h => h.lower.includes(full) || h.lower.includes(bare)).slice(0, 3)
+      .map(h => ({ title: h.title, src: h.src, at: h.at }));
+  };
+
+  const players: any[] = [];
+  const seen = new Set<string>();
+  let rebuiltAt: string | null = null;
+  const card = (base: { gsis_id: string; name: string; position: Pos; team: string }, row: any | null) => {
+    const sl = statusById.get(base.gsis_id) ?? statusByName.get(`${norm(base.name)}|${base.position}`) ?? null;
+    const rep = repById.get(base.gsis_id) ?? null;
+    const ov = ovr.get(`${norm(base.name)}|${base.position}`) ?? null;
+    const g = game.get(base.team);
+    return {
+      gsis_id: base.gsis_id, name: base.name, position: base.position, team: base.team,
+      opp: row?.opponent ?? g?.opp ?? null, kickoff: g?.kickoff ?? null,
+      our_rank: row?.pos_rank ?? null,
+      a: row?.rank_recency ?? null, b: row?.rank_matchup ?? null, c: row?.rank_context ?? null,
+      you: row?.rank_manual ?? null,
+      sleeper_injury: sl?.injury_status ?? null, body_part: sl?.injury_body_part ?? rep?.report_primary_injury ?? null,
+      practice: rep?.practice_status ?? sl?.practice_participation ?? null,
+      report: rep?.report_status ?? null,
+      override: ov ? { status: ov.injury_status, week: ov.week } : null,
+      headlines: headlinesFor(base.name),
+      on_board: !!row,
+    };
+  };
+
+  for (const row of board) {
+    if (row.computed_at && (!rebuiltAt || row.computed_at > rebuiltAt)) rebuiltAt = row.computed_at;
+    const pos = row.position as Pos;
+    if (!POSITIONS.includes(pos)) continue;
+    const id = cleanId(row.gsis_id);
+    const sl = statusById.get(id);
+    const rep = repById.get(id);
+    const ov = ovr.get(`${norm(row.player_name)}|${pos}`);
+    const flagged = !!sl?.injury_status || !!rep?.report_status
+      || (!!rep?.practice_status && rep.practice_status !== FULL_PRACTICE);
+    // Anyone with an override stays visible whatever his rank -- it is a
+    // decision already made and must be undoable from here.
+    if (!ov && !(flagged && row.pos_rank != null && row.pos_rank <= DESK_CUT[pos])) continue;
+    seen.add(`${norm(row.player_name)}|${pos}`);
+    players.push(card({ gsis_id: id, name: row.player_name, position: pos, team: team(row.team) }, row));
+  }
+
+  // Overridden players the board no longer carries (marked Out, then rebuilt).
+  for (const [k, o] of ovr) {
+    if (seen.has(k) || !POSITIONS.includes(o.position as Pos)) continue;
+    const s = statusByName.get(k);
+    if (!s?.team) continue;
+    const id = cleanId(s.gsis_id);
+    if (isBanned(id)) continue;
+    players.push(card({ gsis_id: id, name: s.player_name, position: o.position as Pos, team: team(s.team) }, null));
+  }
+
+  const status0 = (p: any) => p.report ?? p.sleeper_injury;
+  players.sort((x, y) => {
+    const kx = x.kickoff ? Date.parse(x.kickoff) : Infinity, ky = y.kickoff ? Date.parse(y.kickoff) : Infinity;
+    if (kx !== ky) return kx - ky;
+    const sx = severity(status0(x), x.practice), sy = severity(status0(y), y.practice);
+    if (sx !== sy) return sx - sy;
+    return (x.our_rank ?? 999) - (y.our_rank ?? 999);
+  });
+  return { rebuilt_at: rebuiltAt, players };
+}
+
+async function saveOverride(b: any) {
+  const { season, week } = parseSeasonWeek(b.season, b.week);
+  const position = b.position as Pos;
+  const name = String(b.name ?? '').trim();
+  const status = b.status === null || b.status === '' ? null : String(b.status);
+  if (season == null || week == null) return { code: 400, body: { ok: false, error: 'season and week are required' } };
+  if (!POSITIONS.includes(position)) return { code: 400, body: { ok: false, error: 'position must be QB, RB, WR or TE' } };
+  if (!name) return { code: 400, body: { ok: false, error: 'name is required' } };
+  if (status !== null && !OVERRIDE_STATUSES.has(status)) return { code: 400, body: { ok: false, error: "status must be 'Out', 'Active' or null" } };
+  const nn = norm(name);
+
+  // The unique index is on COALESCE(season,0)/COALESCE(week,0), which
+  // PostgREST's on_conflict cannot target, so replace by delete + insert.
+  const key = `norm_name=eq.${encodeURIComponent(nn)}&position=eq.${position}&season=eq.${season}&week=eq.${week}`;
+  const d = await sb(`player_status_overrides?${key}`, { method: 'DELETE' });
+  if (!d.ok) return { code: 502, body: { ok: false, error: `could not clear the old override (${d.status}); nothing changed`, detail: (await d.text()).slice(0, 200) } };
+  if (status === null) return { code: 200, body: { ok: true, override: null } };
+
+  const ins = await sb('player_status_overrides', {
+    method: 'POST', headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({ season, week, norm_name: nn, position, injury_status: status, reason: 'set from /rank desk' }),
+  });
+  if (!ins.ok) {
+    const detail = (await ins.text()).slice(0, 200);
+    console.log('[manual-rankings] override insert failed:', ins.status, detail);
+    return { code: 502, body: { ok: false, error: `override not saved (${ins.status}); the previous one was cleared, tap again`, detail } };
+  }
+  const [row] = await ins.json();
+  return { code: 200, body: { ok: true, override: { status: row.injury_status, week: row.week } } };
+}
+
+async function rebuild(b: any) {
+  const { season, week } = parseSeasonWeek(b.season, b.week);
+  if (season == null || week == null) return { code: 400, body: { ok: false, error: 'season and week are required' } };
+  // A full run is ~5-30s; well under the edge wall clock, but a phone on
+  // cellular should get a clear error rather than hang forever.
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 120_000);
+  try {
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/weekly-rankings`, {
+      method: 'POST', signal: ctl.signal,
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ season, week, refresh_status: true }),
+    });
+    const text = await r.text();
+    let data: any = null;
+    try { data = JSON.parse(text); } catch { /* not JSON */ }
+    if (!r.ok || !data || data.ok === false) {
+      return { code: 502, body: { ok: false, error: `rebuild failed: ${data?.error ?? `weekly-rankings ${r.status}`}`, detail: data ?? text.slice(0, 300) } };
+    }
+    return {
+      code: 200,
+      body: {
+        ok: true, season: data.season, week: data.week, pool: data.pool, top5: data.top5,
+        written: data.written, model_errors: data.model_errors ?? {}, duration_seconds: data.duration_seconds,
+        rebuilt_at: new Date().toISOString(),
+      },
+    };
+  } catch (e) {
+    const aborted = (e as Error)?.name === 'AbortError';
+    return { code: 504, body: { ok: false, error: aborted ? 'rebuild timed out after 120s; it may still finish, reload in a minute' : `rebuild failed: ${(e as Error)?.message ?? e}` } };
+  } finally { clearTimeout(t); }
+}
+
 function parseSeasonWeek(season: unknown, week: unknown) {
   const s = Number(season), w = Number(week);
   return {
@@ -256,6 +474,11 @@ Deno.serve(async (req) => {
       const p = parseSeasonWeek(url.searchParams.get('season'), url.searchParams.get('week'));
       const season = p.season ?? nflSeason();
       const week = p.week ?? await defaultWeek(season);
+
+      if (url.searchParams.get('view') === 'desk') {
+        const desk = await buildDesk(season, week);
+        return json(req, { ok: true, season, week, ...desk });
+      }
 
       const [{ byPos, byId, kickoffs }, { saved, savedAt }] = await Promise.all([
         buildCandidates(season, week), loadSaved(season, week),
@@ -289,6 +512,9 @@ Deno.serve(async (req) => {
     if (req.method === 'POST') {
       const body = await req.json().catch(() => null);
       if (!body || typeof body !== 'object') return json(req, { ok: false, error: 'body must be JSON' }, 400);
+      if (body.action === 'override') { const r = await saveOverride(body); return json(req, r.body, r.code); }
+      if (body.action === 'rebuild') { const r = await rebuild(body); return json(req, r.body, r.code); }
+      if (body.action != null) return json(req, { ok: false, error: `unknown action ${String(body.action).slice(0, 30)}` }, 400);
       const { season, week } = parseSeasonWeek(body.season, body.week);
       const position = body.position as Pos;
       const players: unknown = body.players;
