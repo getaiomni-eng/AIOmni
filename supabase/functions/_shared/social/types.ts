@@ -5,7 +5,8 @@
 export type Network = 'bluesky' | 'threads' | 'facebook' | 'instagram' | 'x' | 'youtube' | 'tiktok' | 'reddit';
 export type Mode = 'auto' | 'semi' | 'manual';
 export type Status = 'queued' | 'held' | 'publishing' | 'posted' | 'failed' | 'ready' | 'done' | 'skipped';
-export type Theme = 'hits' | 'report_card' | 'rankings' | 'tnf' | 'injuries' | 'disagree' | 'final_calls';
+export type Theme = 'hits' | 'report_card' | 'rankings' | 'tnf' | 'injuries' | 'disagree' | 'final_calls'
+  | 'weather' | 'waivers' | 'next_man_up' | 'shootout' | 'usage';
 
 export const MODE: Record<Network, Mode> = {
   bluesky: 'auto', threads: 'auto', facebook: 'auto', instagram: 'auto', x: 'auto',
@@ -76,7 +77,23 @@ export type ThemeData =
   | { theme: 'report_card'; season: number; week: number;
       ours: { top12_hits: number; top12_total: number };                       // across QB/RB/WR/TE
       consensus: { top12_hits: number; top12_total: number };
-      best_call: PlayerLine & { ours: number; consensus: number; finish: number } | null };
+      best_call: PlayerLine & { ours: number; consensus: number; finish: number } | null }
+  | { theme: 'weather'; season: number; week: number;
+      games: { away: string; home: string; kickoff_et: string;
+               wind: number; cond: string;                          // mph, e.g. 'Rain'
+               impact: 'high' | 'moderate';                         // high = wind >= 15
+               pass_hit_pct: number;                                // e.g. 13 = passing ~13% lower
+               players: PlayerLine[] }[] }                          // <= 4 games, <= 4 players each
+  | { theme: 'waivers'; season: number; week: number;
+      players: (PlayerLine & { owned: number })[] }                // rostered % in ESPN leagues, <= 8
+  | { theme: 'next_man_up'; season: number; week: number;
+      pairs: { out: PlayerLine & { status: string }; up: PlayerLine & { note: string } }[] }  // <= 5
+  | { theme: 'shootout'; season: number; week: number;
+      games: { away: string; home: string; kickoff_et: string; total: number;
+               favorite: string; spread: number; players: PlayerLine[] }[] }   // top 3 totals
+  | { theme: 'usage'; season: number; week: number;                // week = last week played
+      risers: (PlayerLine & { stat: string; before: number; after: number })[];   // <= 5
+      fallers: (PlayerLine & { stat: string; before: number; after: number })[] };
 
 // What the renderer returns for one ThemeData: local file paths.
 export interface RenderedSet {

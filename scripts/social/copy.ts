@@ -28,7 +28,8 @@ const link = (network: Network, d: ThemeData) =>
 const who = (p: PlayerLine) => `${p.name} (${p.pos}${p.rank ?? ''}, ${p.team})`;
 const tags = (d: ThemeData) => ['#FantasyFootball', '#NFL', '#FantasyFootballAdvice',
   ...({ rankings: ['#StartSit'], final_calls: ['#StartSit'], injuries: ['#InjuryReport'], tnf: ['#TNF'],
-    disagree: ['#StartSit'], hits: [], report_card: [] } as Record<string, string[]>)[d.theme]];
+    disagree: ['#StartSit'], hits: [], report_card: [], weather: ['#StartSit'], waivers: ['#WaiverWire'],
+    next_man_up: ['#WaiverWire'], shootout: ['#DFS', '#StartSit'], usage: ['#WaiverWire'] } as Record<string, string[]>)[d.theme] ?? []];
 
 // Headline + fact lines, shared by every network; trimmed per network below.
 function lines(d: ThemeData): { head: string; facts: string[]; long: string[] } {
@@ -68,6 +69,29 @@ function lines(d: ThemeData): { head: string; facts: string[]; long: string[] } 
       const s = d.sleepers.map(p => `${p.name}: we had ${p.pos}${p.rank}, finished ${p.pos}${p.finish}`);
       return { head: `Week ${d.week}: the calls that hit.`, facts: [...h.slice(0, 3), ...(s[0] ? [`Ahead of the consensus: ${s[0]}`] : [])],
         long: [...h, ...s.map(x => `Ahead of the consensus: ${x}`)] };
+    }
+    case 'weather': {
+      const f = d.games.map(g => `${g.away} at ${g.home}: ${g.wind} mph${/rain|snow|storm/i.test(g.cond) ? ` and ${g.cond.toLowerCase()}` : ''}, passing about ${g.pass_hit_pct}% lower. ${g.players.slice(0, 2).map(p => `${p.name} (${p.pos}${p.rank})`).join(', ')}`);
+      return { head: `Week ${d.week} weather watch: the games where the forecast matters.`, facts: f.slice(0, 2), long: f };
+    }
+    case 'waivers': {
+      const f = d.players.map(p => `${p.name} (${p.pos}${p.rank}, ${p.team}): rostered in ${p.owned}% of leagues`);
+      return { head: `Week ${d.week} waiver wire: players we rank as starters who are still out there.`, facts: f.slice(0, 3), long: f };
+    }
+    case 'next_man_up': {
+      const f = d.pairs.map(x => `${x.out.name} (${x.out.team}) ${x.out.status.toLowerCase()}: ${x.up.name} steps in, ${x.up.note}`);
+      return { head: `Week ${d.week} next man up: starters ruled out, and who inherits the work.`, facts: f.slice(0, 2), long: f };
+    }
+    case 'shootout': {
+      const f = d.games.map(g => `${g.away} at ${g.home}: total ${g.total}, ${g.favorite} by ${g.spread}. ${g.players.slice(0, 2).map(p => p.name).join(', ')}`);
+      return { head: `Week ${d.week} shootout alert: the highest Vegas totals on the slate.`, facts: f.slice(0, 2), long: f };
+    }
+    case 'usage': {
+      const r = d.risers.map(p => `${p.name} (${p.pos}, ${p.team}): ${p.stat} ${p.before}% to ${p.after}%`);
+      const l = d.fallers.map(p => `${p.name} (${p.pos}, ${p.team}): ${p.stat} ${p.before}% to ${p.after}%`);
+      return { head: `Usage risers and fallers after Week ${d.week}.`,
+        facts: [...r.slice(0, 2).map(x => `Up: ${x}`), ...l.slice(0, 1).map(x => `Down: ${x}`)],
+        long: [...r.map(x => `Up: ${x}`), ...l.map(x => `Down: ${x}`)] };
     }
     case 'report_card': {
       const b = d.best_call;

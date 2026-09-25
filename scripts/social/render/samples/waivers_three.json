@@ -1,0 +1,4 @@
+{"_sample":"SAMPLE DATA edge case: three players","theme":"waivers","season":2026,"week":4,"players":[
+{"name":"Denzel Boston","pos":"WR","team":"CLE","opp":"PIT","rank":22,"owned":23.4},
+{"name":"RJ Harvey","pos":"RB","team":"DEN","opp":"KC","rank":27,"owned":41.2},
+{"name":"Harold Fannin Jr.","pos":"TE","team":"CLE","opp":"PIT","rank":13,"owned":8.6}]}

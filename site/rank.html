@@ -947,7 +947,9 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
   const NET = { x: ['X', 'X'], threads: ['Threads', '@'], bluesky: ['Bluesky', 'Bs'], instagram: ['Instagram', 'IG'],
     facebook: ['Facebook', 'f'], youtube: ['YouTube Shorts', '▶'], tiktok: ['TikTok', '♪'], reddit: ['Reddit', 'r/'] };
   const THEME = { hits: "Sunday's hits", report_card: 'Report card', rankings: 'New week rankings', tnf: 'TNF spotlight',
-    injuries: 'Injury watch', disagree: 'Where we disagree', final_calls: 'Final calls' };
+    injuries: 'Injury watch', disagree: 'Where we disagree', final_calls: 'Final calls',
+    weather: 'Weather watch', waivers: 'Waiver wire', next_man_up: 'Next man up', shootout: 'Shootout alert',
+    usage: 'Usage risers & fallers' };
   const MODE = { auto: 'Automatic', semi: 'Upload + tap Public', manual: 'Copy-paste' };
   function psStatus(msg, kind) { const el = $('psStatus'); el.textContent = msg || ''; el.className = 'rk-status' + (kind ? ' ' + kind : ''); }
   const allPosts = () => PS.days.flatMap(d => d.posts);
@@ -1064,7 +1066,7 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
       const isYesterday = d.date < PS.today;
       const shown = isYesterday ? d.posts.filter(todo) : d.posts;          // yesterday: only what is still undone
       if (isYesterday && !shown.length) continue;
-      const theme = d.posts[0] ? THEME[d.posts[0].theme] || d.posts[0].theme : '';
+      const theme = [...new Set(d.posts.map(p => p.theme))].map(t => THEME[t] || t).join(' · ');
       html += `<h2 class="ps-day">${esc(dayLabel(d.date))}${theme ? ` · <b>${esc(theme.toUpperCase())}</b>` : ''}</h2>`;
       html += shown.length ? shown.map(cardPost).join('') : '<div class="ps-empty">Nothing scheduled yet. Posts are built each morning.</div>';
     }

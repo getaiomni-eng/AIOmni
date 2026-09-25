@@ -15,15 +15,28 @@
 // or done, are never overwritten by a re-run.
 
 import { basename, extname, join } from 'node:path';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { buildTheme, restDb } from './data.ts';
 import { copyFor } from './copy.ts';
 import { MODE, type Media, type Network, type RenderedSet, type SocialPost, type Theme } from '../../supabase/functions/_shared/social/types.ts';
 
-// US/Eastern weekday -> theme. Sunday runs after the 13:45 UTC rankings build.
-const DAY_THEME: Theme[] = ['final_calls', 'hits', 'report_card', 'rankings', 'tnf', 'injuries', 'disagree'];
+// US/Eastern weekday -> themes, in posting order. The second theme of a day
+// publishes 4 hours after the first. Sunday runs after the 13:45 UTC rankings
+// build; Tuesday after the 14:15 UTC harvest (waivers needs fresh roster %).
+// "disagree" sits on Wednesday because the expert consensus is harvested on
+// Tuesday: by Saturday it predates the injury news and the gaps go stale.
+const DAY_THEMES: Theme[][] = [
+  ['final_calls'],             // Sun
+  ['hits', 'usage'],           // Mon
+  ['waivers', 'report_card'],  // Tue
+  ['rankings', 'disagree'],    // Wed
+  ['tnf', 'shootout'],         // Thu
+  ['injuries', 'next_man_up'], // Fri
+  ['weather'],                 // Sat
+];
+const STAGGER_MS = 4 * 3600_000;
 const NETWORKS: Network[] = ['x', 'threads', 'bluesky', 'instagram', 'facebook', 'youtube', 'tiktok', 'reddit'];
 // Reddit only where a data post is welcome; daily brand posts get accounts banned.
 const REDDIT_THEMES: Theme[] = ['rankings', 'report_card'];
@@ -66,7 +79,14 @@ function mediaFor(network: Network, r: { portrait: Media[]; landscape: Media[]; 
 
 async function main() {
   const now = etNow();
-  const theme = (arg('theme') as Theme) ?? DAY_THEME[now.dow];
+  const themes: Theme[] = arg('theme') ? [arg('theme') as Theme] : DAY_THEMES[now.dow];
+  for (const [i, theme] of themes.entries()) {
+    try { await runTheme(theme, i, now); }
+    catch (e) { console.error(`[social] ${theme} failed:`, (e as Error)?.message ?? e); process.exitCode = 1; }
+  }
+}
+
+async function runTheme(theme: Theme, slot: number, now: ReturnType<typeof etNow>) {
   const date = arg('date') ?? now.date;
   const season = Number(arg('season')) || (now.month >= 3 ? now.year : now.year - 1);
   const dry = flag('dry-run');
@@ -78,7 +98,8 @@ async function main() {
   const data = await buildTheme(db, theme, season);
   if (!data) { console.log(`[social] ${date} ${theme}: nothing to post (no data yet)`); return; }
 
-  const out = arg('out') ?? mkdtempSync(join(tmpdir(), 'social-'));
+  const out = arg('out') ? join(arg('out')!, theme) : mkdtempSync(join(tmpdir(), 'social-'));
+  mkdirSync(out, { recursive: true });
   const { render } = await import('./render/render.ts') as { render: (d: typeof data, o: string) => Promise<RenderedSet> };
   const set = await render(data, out);
   // Instagram's publishing API takes JPEG only (it rejects PNG), so the
@@ -101,7 +122,7 @@ async function main() {
   const coverMedia: Media[] = cover ? [{ kind: 'image', url: cover, width: 1080, height: 1920, alt: `Cover: ${alt(0)}` }] : [];
 
   const windowMs = (now.dow === 0 ? 90 : 180) * 60_000;
-  const publishAt = new Date(Date.now() + windowMs).toISOString();
+  const publishAt = new Date(Date.now() + windowMs + slot * STAGGER_MS).toISOString();
 
   const rows: SocialPost[] = [];
   for (const network of NETWORKS) {

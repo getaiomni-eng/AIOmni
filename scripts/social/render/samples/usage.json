@@ -1,0 +1,10 @@
+{"_sample":"SAMPLE DATA for render testing only","theme":"usage","season":2026,"week":2,"risers":[
+{"name":"Parker Washington","pos":"WR","team":"JAX","stat":"target share","before":0.14,"after":0.29},
+{"name":"Denzel Boston","pos":"WR","team":"CLE","stat":"target share","before":0.11,"after":0.24},
+{"name":"RJ Harvey","pos":"RB","team":"DEN","stat":"opportunity share","before":0.28,"after":0.47},
+{"name":"Harold Fannin Jr.","pos":"TE","team":"CLE","stat":"targets/game","before":3.0,"after":7.5}],
+"fallers":[
+{"name":"Brian Thomas Jr.","pos":"WR","team":"JAX","stat":"target share","before":0.27,"after":0.16},
+{"name":"J.K. Dobbins","pos":"RB","team":"DEN","stat":"opportunity share","before":0.55,"after":0.33},
+{"name":"Tee Higgins","pos":"WR","team":"CIN","stat":"target share","before":0.31,"after":0.22},
+{"name":"Mark Andrews","pos":"TE","team":"BAL","stat":"targets/game","before":6.5,"after":3.0}]}

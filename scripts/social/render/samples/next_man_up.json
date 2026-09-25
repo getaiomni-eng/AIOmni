@@ -1,0 +1,6 @@
+{"_sample":"SAMPLE DATA for render testing only","theme":"next_man_up","season":2026,"week":3,"pairs":[
+{"out":{"name":"Nico Collins","pos":"WR","team":"HOU","status":"Out"},"up":{"name":"Xavier Hutchinson","pos":"WR","team":"HOU","rank":39,"note":"6.5 targets/game as a starter"}},
+{"out":{"name":"Puka Nacua","pos":"WR","team":"LAR","status":"Doubtful"},"up":{"name":"Davante Adams","pos":"WR","team":"LAR","rank":8,"note":"27% target share without Nacua"}},
+{"out":{"name":"Rico Dowdle","pos":"RB","team":"PIT","status":"Out"},"up":{"name":"Jaylen Warren","pos":"RB","team":"PIT","rank":21,"note":"18 touches/game when leading"}},
+{"out":{"name":"Chig Okonkwo","pos":"TE","team":"WAS","status":"Out"},"up":{"name":"Ben Sinnott","pos":"TE","team":"WAS","rank":24,"note":"Next on the depth chart"}},
+{"out":{"name":"Caleb Williams","pos":"QB","team":"CHI","status":"Doubtful"},"up":{"name":"Case Keenum","pos":"QB","team":"CHI","rank":30,"note":"Projected starter"}}]}

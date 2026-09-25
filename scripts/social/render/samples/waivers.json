@@ -1,0 +1,9 @@
+{"_sample":"SAMPLE DATA for render testing only","theme":"waivers","season":2026,"week":4,"players":[
+{"name":"Denzel Boston","pos":"WR","team":"CLE","opp":"PIT","rank":22,"owned":23.4},
+{"name":"RJ Harvey","pos":"RB","team":"DEN","opp":"KC","rank":27,"owned":41.2},
+{"name":"Tre Tucker","pos":"WR","team":"LV","opp":"CHI","rank":33,"owned":12.8},
+{"name":"Harold Fannin Jr.","pos":"TE","team":"CLE","opp":"PIT","rank":13,"owned":8.6},
+{"name":"Wan'Dale Robinson","pos":"WR","team":"TEN","opp":"HOU","rank":35,"owned":31.0},
+{"name":"Tyjae Spears","pos":"RB","team":"TEN","opp":"HOU","rank":34,"owned":46.5},
+{"name":"Tyler Shough","pos":"QB","team":"NO","opp":"ATL","rank":11,"owned":38.9},
+{"name":"Xavier Hutchinson","pos":"WR","team":"HOU","opp":"TEN","rank":39,"owned":4.1}]}

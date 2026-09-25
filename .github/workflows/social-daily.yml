@@ -4,16 +4,19 @@ name: Social posts (daily)
 # social-publisher (Supabase, every 10 min) publishes the automatic ones after
 # the veto window; the /rank Posts tab shows the copy-paste ones.
 #
-# Theme by US/Eastern weekday (scripts/social/generate.ts):
-#   Sun final_calls  Mon hits  Tue report_card  Wed rankings
-#   Thu tnf          Fri injuries  Sat disagree
+# Themes by US/Eastern weekday (scripts/social/generate.ts; the second of a
+# day publishes 4 hours after the first):
+#   Sun final_calls       Mon hits, usage          Tue waivers, report_card
+#   Wed rankings, disagree  Thu tnf, shootout      Fri injuries, next_man_up
+#   Sat weather
 #
 # Repo secrets (Settings > Secrets and variables > Actions):
 #   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 on:
   schedule:
-    - cron: '0 11 * * 1-6'   # 7:00 ET (6:00 after the November clock change)
+    - cron: '0 11 * * 1,3-6' # 7:00 ET (6:00 after the November clock change)
+    - cron: '0 15 * * 2'     # Tuesday 11:00 ET, after the 14:15 UTC harvest (fresh roster %)
     - cron: '5 14 * * 0'     # Sunday 10:05 ET, after the 13:45 UTC rankings build
   workflow_dispatch:
     inputs:
@@ -21,7 +24,7 @@ on:
         description: 'Theme (blank = today''s)'
         required: false
         type: choice
-        options: ['', rankings, injuries, disagree, tnf, final_calls, hits, report_card]
+        options: ['', rankings, injuries, disagree, tnf, final_calls, hits, report_card, weather, waivers, next_man_up, shootout, usage]
 
 concurrency:
   group: social-daily

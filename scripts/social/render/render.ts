@@ -488,8 +488,285 @@ function reportFrames(d: Extract<ThemeData, { theme: 'report_card' }>) {
   return { portrait, landscape, vertical };
 }
 
+// ── weather ────────────────────────────────────────────────────────────────
+// Glyphs drawn in SVG so they render the same on every runner (no emoji font).
+function wxIcon(cond: string, px: number) {
+  const c = cond.toLowerCase();
+  const cloud = `<path d="M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7.1 9.2 4.5 4.5 0 0 0 7 18z" fill="none" stroke="#95A9AC" stroke-width="1.6" stroke-linejoin="round"/>`;
+  const drops = `<path d="M9 20.5l-1 2M13 20.5l-1 2M17 20.5l-1 2" stroke="#33DDFF" stroke-width="1.6" stroke-linecap="round"/>`;
+  const flakes = `<path d="M9 21.5h.01M13 22.5h.01M17 21.5h.01" stroke="#E9F1F1" stroke-width="2.4" stroke-linecap="round"/>`;
+  const wind = `<path d="M3 9h11a3 3 0 1 0-3-3M3 13h15a3 3 0 1 1-3 3M3 17h7" fill="none" stroke="#D4FF00" stroke-width="1.7" stroke-linecap="round"/>`;
+  const inner = /snow/.test(c) ? cloud + flakes : /rain|drizzle|storm|thunder/.test(c) ? cloud + drops : /cloud/.test(c) ? cloud : wind;
+  return `<svg width="${px}" height="${px}" viewBox="0 0 24 26" style="flex:none;display:block">${inner}</svg>`;
+}
+const impactChip = (i: 'high' | 'moderate') =>
+  i === 'high' ? `<span class="chip out">HIGH IMPACT</span>` : `<span class="chip q">MODERATE</span>`;
+
+function weatherFrames(d: Extract<ThemeData, { theme: 'weather' }>) {
+  const games = d.games.slice(0, 4);
+  const n = Math.max(games.length, 1);
+  // m scales a card up when there are few games, so 1-3 cards fill the page
+  // instead of floating in empty space.
+  const card = (g: (typeof games)[number], big: boolean, m = 1) => {
+    const pl = g.players.slice(0, big && n <= 3 ? 4 : 3);
+    const z = (v: number) => Math.round(v * m);
+    return `
+    <div class="card" style="padding:${z(big ? 16 : 12)}px ${z(big ? 22 : 18)}px;display:flex;flex-direction:column;gap:${z(big ? 10 : 6)}px;min-height:0">
+      <div style="display:flex;align-items:center;gap:${z(big ? 18 : 14)}px">
+        ${wxIcon(g.cond, z(big ? 58 : 46))}
+        <span style="flex:1;min-width:0">
+          <span style="display:block;font-weight:800;font-size:${z(big ? 36 : 30)}px;line-height:1.05">${esc(g.away)} @ ${esc(g.home)}</span>
+          <span style="display:block;font-family:'Space Mono',monospace;font-weight:700;font-size:${z(big ? 19 : 16)}px;color:var(--dim);margin-top:4px">${esc(g.kickoff_et)}</span></span>
+        <span style="text-align:right;flex:none">
+          <span style="display:block;font-weight:800;font-size:${z(big ? 44 : 36)}px;line-height:1;color:var(--volt)">${g.wind}<span style="font-size:.5em;color:var(--dim);font-weight:600"> mph</span></span>
+          <span style="display:block;font-weight:600;font-size:${z(big ? 21 : 18)}px;color:var(--dim);margin-top:2px">${esc(g.cond)}</span></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;font-size:${z(big ? 24 : 21)}px">${impactChip(g.impact)}
+        <span style="font-weight:600;color:var(--ink)">Passing ~${g.pass_hit_pct}% lower</span></div>
+      ${pl.length ? `<div style="display:flex;flex-wrap:wrap;gap:${z(big ? 6 : 4)}px ${z(big ? 22 : 16)}px">${pl.map(p =>
+        `<span style="font-size:${z(big ? 23 : 20)}px;white-space:nowrap"><span class="pos ${p.pos}">${p.pos}${p.rank ?? ''}</span> <span style="font-weight:600">${esc(p.name)}</span></span>`).join('')}</div>` : ''}
+    </div>`;
+  };
+  const sub = 'Outdoor games with wind or rain in the forecast';
+  const title = 'Weather <span class="acc">watch</span>';
+  const empty = `<div style="flex:1;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:34px;color:var(--dim)">Clear skies: no weather concerns this week.</div>`;
+  const portrait: Frame[] = [{
+    kind: 'portrait',
+    html: page('portrait', d.week, games.length
+      ? `<div style="display:flex;flex-direction:column;gap:${n >= 4 ? 12 : 24}px;flex:1;justify-content:${n >= 4 ? 'space-between' : 'center'}">${games.map(g => card(g, true, n === 1 ? 1.65 : n === 2 ? 1.35 : n === 3 ? 1.15 : 1)).join('')}</div>`
+      : empty, { title, sub, accent: '#33DDFF' }),
+    alt: `AIOmni week ${d.week} weather watch. ` + (games.length ? games.map(g =>
+      `${g.away} at ${g.home}, ${g.kickoff_et}: ${g.wind} mph, ${g.cond}, ${g.impact} impact, passing about ${g.pass_hit_pct}% lower. Players affected: ${g.players.slice(0, 4).map(p => `${p.name} (${p.pos}${p.rank ?? ''})`).join(', ') || 'none listed'}.`).join(' ')
+      : 'No weather concerns this week.'),
+  }];
+  const half = Math.ceil(games.length / 2);
+  const landscape: Frame[] = [{
+    kind: 'landscape',
+    html: page('landscape', d.week, games.length
+      ? (games.length <= 3
+        ? `<div style="display:flex;flex-direction:column;gap:14px;flex:1;justify-content:center;${games.length === 1 ? 'padding:0 15%;' : ''}">${games.map(g => card(g, false, games.length === 1 ? 1.25 : 1)).join('')}</div>`
+        : `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 24px;flex:1;align-content:space-between">${games.map(g => card(g, false)).join('')}</div>`)
+      : empty, { title, sub, accent: '#33DDFF' }),
+  }];
+  const vertical: Frame[] = [
+    { kind: 'vertical', html: titleCard(d.week, `Weather<br><span style="color:#33DDFF">watch</span>`, 'Wind and rain in the forecast,<br>and who it hits.', '#33DDFF') },
+    ...games.map(g => ({ kind: 'vertical' as Kind, html: page('vertical', d.week, `
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:300px">
+        <div style="display:flex;align-items:center;gap:30px">${wxIcon(g.cond, 130)}
+          <span><span style="display:block;font-weight:800;font-size:92px;line-height:1">${esc(g.away)} @ ${esc(g.home)}</span>
+          <span style="display:block;font-family:'Space Mono',monospace;font-weight:700;font-size:32px;color:var(--dim);margin-top:12px">${esc(g.kickoff_et)}</span></span></div>
+        <div style="display:flex;align-items:baseline;gap:24px;margin-top:48px">
+          <span style="font-weight:800;font-size:150px;line-height:1;color:var(--volt)">${g.wind}</span>
+          <span style="font-weight:700;font-size:56px;color:var(--dim)">mph · ${esc(g.cond)}</span></div>
+        <div style="margin-top:34px;font-size:44px;display:flex;align-items:center;gap:22px">${impactChip(g.impact)}<span style="font-weight:700">Passing ~${g.pass_hit_pct}% lower</span></div>
+        <div style="display:flex;flex-direction:column;gap:18px;margin-top:44px">${g.players.slice(0, 4).map(p =>
+          `<div class="card" style="padding:22px 30px;display:flex;align-items:center;gap:26px"><span class="pos ${p.pos}" style="font-size:40px;min-width:130px">${p.pos}${p.rank ?? ''}</span><span style="font-weight:700;font-size:46px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</span><span style="margin-left:auto;font-weight:600;font-size:32px;color:var(--dim)">${esc(p.team)}</span></div>`).join('')}</div>
+      </div>`, { accent: '#33DDFF' }) })),
+    { kind: 'vertical', html: endCard(d.week) },
+  ];
+  return { portrait, landscape, vertical };
+}
+
+// ── waivers ────────────────────────────────────────────────────────────────
+function ownedPill(owned: number, px: number) {
+  const pct = Math.round(owned);
+  const col = pct < 25 ? '#00FFAA' : pct < 50 ? '#D4FF00' : '#FFB800';
+  return `<span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;border-radius:${px * 0.5}px;border:2px solid ${col};
+    background:rgba(0,0,0,.25);padding:${px * 0.18}px ${px * 0.45}px;min-width:${px * 3.2}px;flex:none">
+    <span style="font-family:'Space Mono',monospace;font-weight:700;font-size:${px * 0.42}px;letter-spacing:.12em;color:var(--dim)">ROSTERED</span>
+    <span style="font-weight:800;font-size:${px}px;line-height:1;color:${col}">${pct}%</span></span>`;
+}
+
+function waiversFrames(d: Extract<ThemeData, { theme: 'waivers' }>) {
+  const list = d.players.slice(0, 8);
+  // zoom: few rows are drawn bigger so the page never looks half empty.
+  const row = (p: (typeof list)[number], big: boolean, zoom = 1) => `
+    <div class="card" style="zoom:${zoom};padding:${big ? '12px 20px' : '10px 16px'};display:flex;align-items:center;gap:${big ? 20 : 16}px">
+      <span class="pos ${p.pos}" style="font-size:${big ? 30 : 26}px;flex:none;min-width:${big ? 90 : 78}px">${p.pos}${p.rank ?? ''}</span>
+      <span style="flex:1;min-width:0"><span style="display:block;font-weight:700;font-size:${big ? 36 : 30}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</span>
+        <span style="display:block;font-weight:500;font-size:${big ? 23 : 20}px;color:var(--dim);margin-top:2px">${matchup(p)}</span></span>
+      ${ownedPill(p.owned, big ? 38 : 32)}
+    </div>`;
+  const sub = 'Our weekly ranks, rostered in under half of ESPN leagues';
+  const title = 'Waiver <span class="acc">wire</span>';
+  const portrait: Frame[] = [{
+    kind: 'portrait',
+    html: page('portrait', d.week, `<div style="display:flex;flex-direction:column;gap:${list.length > 6 ? 10 : 18}px;flex:1;justify-content:${list.length <= 5 ? 'center' : 'space-between'}">${list.map(p => row(p, true, list.length <= 3 ? 1.35 : list.length <= 5 ? 1.15 : 1)).join('')}</div>`,
+      { title, sub, accent: '#00FFAA' }),
+    alt: `AIOmni week ${d.week} waiver wire, players rostered in under half of ESPN leagues: ` +
+      list.map(p => `${p.name} (our ${p.pos}${p.rank ?? ''}, ${p.team}${p.opp ? ` vs ${p.opp}` : ''}), rostered ${Math.round(p.owned)}%`).join('; ') + '.',
+  }];
+  const top = list.slice(0, 8);
+  const half = Math.ceil(top.length / 2);
+  const landscape: Frame[] = [{
+    kind: 'landscape',
+    html: page('landscape', d.week, `<div style="display:flex;gap:24px;flex:1;min-height:0">${[top.slice(0, half), top.slice(half)].filter(c => c.length).map(col =>
+      `<div style="flex:1;display:flex;flex-direction:column;gap:18px;min-width:0;justify-content:${col.length <= 2 ? 'center' : 'space-between'}">${col.map(p => row(p, false, col.length <= 2 ? 1.2 : 1)).join('')}</div>`).join('')}</div>`,
+      { title, sub, accent: '#00FFAA' }),
+  }];
+  const chunks: typeof list[] = [];
+  for (let i = 0; i < Math.min(list.length, 8); i += 4) chunks.push(list.slice(i, i + 4));
+  const vertical: Frame[] = [
+    { kind: 'vertical', html: titleCard(d.week, `Waiver<br><span style="color:#00FFAA">wire</span>`, 'Ranked by us.<br>Rostered in under half of leagues.', '#00FFAA') },
+    ...chunks.map((c, i) => ({ kind: 'vertical' as Kind, html: verticalList(d.week, i === 0 ? 'Grab them now' : 'Also available',
+      c.map(p => ({ left: tag(p), name: p.name, right: `${matchup(p)} · <span style="color:#00FFAA;font-weight:700">Rostered ${Math.round(p.owned)}%</span>` })), '#00FFAA') })),
+    { kind: 'vertical', html: endCard(d.week) },
+  ];
+  return { portrait, landscape, vertical };
+}
+
+// ── next man up ────────────────────────────────────────────────────────────
+function nextManFrames(d: Extract<ThemeData, { theme: 'next_man_up' }>) {
+  const pairs = d.pairs.slice(0, 5);
+  const pair = (x: (typeof pairs)[number], big: boolean, zoom = 1) => `
+    <div class="card" style="zoom:${zoom};padding:${big ? '14px 20px' : '10px 16px'};display:flex;align-items:center;gap:${big ? 16 : 12}px">
+      <span style="flex:1;min-width:0">
+        <span style="display:block;font-weight:700;font-size:${big ? 30 : 25}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)">${esc(x.out.name)}</span>
+        <span style="display:flex;align-items:center;gap:10px;margin-top:4px;font-size:${big ? 22 : 19}px"><span class="pos ${x.out.pos}">${x.out.pos}</span><span style="color:var(--mute)">${esc(x.out.team)}</span>${statusChip(x.out.status)}</span></span>
+      <span style="font-size:${big ? 40 : 32}px;color:var(--volt);flex:none">→</span>
+      <span style="flex:1.25;min-width:0">
+        <span style="display:block;font-weight:800;font-size:${big ? 32 : 27}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.up.name)}</span>
+        <span style="display:block;font-weight:500;font-size:${big ? 21 : 18}px;color:var(--dim);margin-top:4px"><span class="pos ${x.up.pos}">${x.up.pos}${x.up.rank ?? ''}</span> · ${esc(x.up.note)}</span></span>
+    </div>`;
+  const sub = 'Starters ruled out, and who inherits the work';
+  const title = 'Next man <span class="acc">up</span>';
+  const portrait: Frame[] = [{
+    kind: 'portrait',
+    html: page('portrait', d.week, `<div style="display:flex;flex-direction:column;gap:${pairs.length >= 5 ? 16 : 22}px;flex:1;justify-content:center">${pairs.map(x => pair(x, true, pairs.length >= 5 ? 1.2 : pairs.length >= 3 ? 1.3 : 1.4)).join('')}</div>`,
+      { title, sub }),
+    alt: `AIOmni week ${d.week} next man up: ` +
+      pairs.map(x => `${x.out.name} (${x.out.pos}, ${x.out.team}) is ${x.out.status}; ${x.up.name} (our ${x.up.pos}${x.up.rank ?? ''}) steps in, ${x.up.note}`).join('; ') + '.',
+  }];
+  const top = pairs.slice(0, 4);
+  const landscape: Frame[] = [{
+    kind: 'landscape',
+    html: page('landscape', d.week, `<div style="display:grid;grid-template-columns:1fr 1fr;gap:30px 24px;flex:1;align-content:center">${top.map(x => pair(x, false, 1.22)).join('')}</div>`,
+      { title, sub }),
+  }];
+  const vertical: Frame[] = [
+    { kind: 'vertical', html: titleCard(d.week, `Next man<br><span style="color:var(--volt)">up</span>`, 'Starters ruled out,<br>and who inherits the work.') },
+    ...pairs.slice(0, 4).map(x => ({ kind: 'vertical' as Kind, html: page('vertical', d.week, `
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:34px;padding-bottom:300px">
+        <div class="card" style="padding:30px 34px">
+          <div style="font-size:40px">${statusChip(x.out.status)}</div>
+          <div style="font-weight:700;font-size:64px;margin-top:18px;color:var(--dim)">${esc(x.out.name)}</div>
+          <div style="font-size:36px;margin-top:8px;color:var(--mute)"><span class="pos ${x.out.pos}">${x.out.pos}</span> · ${esc(x.out.team)}</div></div>
+        <div style="font-size:90px;color:var(--volt);text-align:center;line-height:1">↓</div>
+        <div class="card" style="padding:30px 34px;border-color:rgba(212,255,0,.5)">
+          <div style="font-family:'Space Mono',monospace;font-weight:700;letter-spacing:.2em;font-size:28px;color:var(--volt)">NEXT MAN UP</div>
+          <div style="font-weight:800;font-size:72px;margin-top:14px;line-height:1.05">${esc(x.up.name)}</div>
+          <div style="font-size:36px;margin-top:12px;color:var(--dim)"><span class="pos ${x.up.pos}">${x.up.pos}${x.up.rank ?? ''}</span> · ${esc(x.up.note)}</div></div>
+      </div>`) })),
+    { kind: 'vertical', html: endCard(d.week) },
+  ];
+  return { portrait, landscape, vertical };
+}
+
+// ── shootout ───────────────────────────────────────────────────────────────
+function shootoutFrames(d: Extract<ThemeData, { theme: 'shootout' }>) {
+  const games = d.games.slice(0, 3);
+  const spread = (g: (typeof games)[number]) => `${esc(g.favorite)} -${Math.abs(g.spread)}`;
+  const card = (g: (typeof games)[number], big: boolean, zoom = 1) => `
+    <div class="card" style="zoom:${zoom};padding:${big ? '18px 24px' : '14px 18px'};display:flex;gap:${big ? 24 : 18}px;align-items:center">
+      <span style="flex:none;text-align:center;min-width:${big ? 150 : 120}px">
+        <span style="display:block;font-family:'Space Mono',monospace;font-weight:700;letter-spacing:.16em;font-size:${big ? 18 : 15}px;color:var(--dim)">TOTAL</span>
+        <span style="display:block;font-weight:800;font-size:${big ? 68 : 54}px;line-height:1;color:#FF5714">${g.total}</span></span>
+      <span style="flex:1;min-width:0">
+        <span style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+          <span style="font-weight:800;font-size:${big ? 38 : 30}px">${esc(g.away)} @ ${esc(g.home)}</span>
+          <span style="font-family:'Space Mono',monospace;font-weight:700;font-size:${big ? 19 : 16}px;color:var(--dim);white-space:nowrap">${esc(g.kickoff_et)}</span></span>
+        <span style="display:block;font-weight:600;font-size:${big ? 22 : 19}px;color:var(--dim);margin-top:4px">Favorite: <span style="color:var(--ink)">${spread(g)}</span></span>
+        <span style="display:flex;flex-wrap:wrap;gap:${big ? '6px 20px' : '4px 14px'};margin-top:${big ? 10 : 6}px">${g.players.slice(0, big ? 4 : 3).map(p =>
+          `<span style="font-size:${big ? 22 : 19}px;white-space:nowrap"><span class="pos ${p.pos}">${p.pos}${p.rank ?? ''}</span> <span style="font-weight:600">${esc(p.name)}</span></span>`).join('')}</span>
+      </span>
+    </div>`;
+  const sub = 'Highest Vegas totals this week';
+  const title = 'Shootout <span class="acc">alert</span>';
+  const portrait: Frame[] = [{
+    kind: 'portrait',
+    html: page('portrait', d.week, `<div style="display:flex;flex-direction:column;gap:26px;flex:1;justify-content:center">${games.map(g => card(g, true, games.length <= 2 ? 1.35 : 1.22)).join('')}</div>`,
+      { title, sub, accent: '#FF5714' }),
+    alt: `AIOmni week ${d.week} shootout alert, highest Vegas totals: ` +
+      games.map(g => `${g.away} at ${g.home} (${g.kickoff_et}), total ${g.total}, ${g.favorite} favored by ${Math.abs(g.spread)}; players to start: ${g.players.slice(0, 4).map(p => `${p.name} (${p.pos}${p.rank ?? ''})`).join(', ')}`).join('. ') + '.',
+  }];
+  const landscape: Frame[] = [{
+    kind: 'landscape',
+    html: page('landscape', d.week, `<div style="display:flex;flex-direction:column;gap:18px;flex:1;justify-content:center">${games.map(g => card(g, false, 1.08)).join('')}</div>`,
+      { title, sub, accent: '#FF5714' }),
+  }];
+  const vertical: Frame[] = [
+    { kind: 'vertical', html: titleCard(d.week, `Shootout<br><span style="color:#FF5714">alert</span>`, 'The highest Vegas totals<br>on the board this week.', '#FF5714') },
+    ...games.map(g => ({ kind: 'vertical' as Kind, html: page('vertical', d.week, `
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:300px">
+        <div style="font-weight:800;font-size:96px;line-height:1">${esc(g.away)} @ ${esc(g.home)}</div>
+        <div style="font-family:'Space Mono',monospace;font-weight:700;font-size:32px;color:var(--dim);margin-top:14px">${esc(g.kickoff_et)}</div>
+        <div style="display:flex;align-items:baseline;gap:26px;margin-top:44px">
+          <span style="font-weight:800;font-size:170px;line-height:1;color:#FF5714">${g.total}</span>
+          <span style="font-weight:700;font-size:44px;color:var(--dim)">point total<br><span style="color:var(--ink)">${spread(g)}</span></span></div>
+        <div style="display:flex;flex-direction:column;gap:18px;margin-top:44px">${g.players.slice(0, 4).map(p =>
+          `<div class="card" style="padding:22px 30px;display:flex;align-items:center;gap:26px"><span class="pos ${p.pos}" style="font-size:40px;min-width:130px">${p.pos}${p.rank ?? ''}</span><span style="font-weight:700;font-size:46px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</span><span style="margin-left:auto;font-weight:600;font-size:32px;color:var(--dim)">${esc(p.team)}</span></div>`).join('')}</div>
+      </div>`, { accent: '#FF5714' }) })),
+    { kind: 'vertical', html: endCard(d.week) },
+  ];
+  return { portrait, landscape, vertical };
+}
+
+// ── usage risers & fallers ─────────────────────────────────────────────────
+const usageNum = (stat: string, v: number) => /share/i.test(stat)
+  ? `${Math.round(v <= 1 ? v * 100 : v)}%` : v.toFixed(1);
+const usageLine = (p: { stat: string; before: number; after: number }) =>
+  `${esc(p.stat)} ${usageNum(p.stat, p.before)} → ${usageNum(p.stat, p.after)}`;
+
+function usageFrames(d: Extract<ThemeData, { theme: 'usage' }>) {
+  const up = d.risers.slice(0, 5), dn = d.fallers.slice(0, 5);
+  type U = (typeof up)[number];
+  const item = (p: U, rise: boolean, big: boolean) => `
+    <div class="card" style="padding:${big ? '12px 20px' : '10px 18px'};display:flex;align-items:center;gap:16px">
+      <span style="font-size:${big ? 40 : 34}px;color:${rise ? '#00FFAA' : '#FF4D77'};flex:none;width:${big ? 40 : 34}px;text-align:center">${rise ? '▲' : '▼'}</span>
+      <span style="flex:1;min-width:0"><span style="display:block;font-weight:700;font-size:${big ? 34 : 30}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</span>
+        <span style="display:block;font-weight:500;font-size:${big ? 23 : 21}px;color:var(--dim);margin-top:2px"><span class="pos ${p.pos}">${p.pos}</span> · ${esc(p.team)}</span></span>
+      <span style="text-align:right;flex:none;font-size:${big ? 25 : 22}px;font-weight:700;color:${rise ? '#00FFAA' : '#FF4D77'};white-space:nowrap">${usageLine(p)}</span>
+    </div>`;
+  const section = (label: string, list: U[], rise: boolean, big: boolean) => list.length ? `<div>
+    <div style="font-family:'Space Mono',monospace;font-weight:700;letter-spacing:.18em;font-size:${big ? 22 : 19}px;color:${rise ? '#00FFAA' : '#FF4D77'};margin:${big ? 6 : 2}px 0 ${big ? 10 : 8}px">${label}</div>
+    <div style="display:flex;flex-direction:column;gap:${big ? 10 : 8}px">${list.map(p => item(p, rise, big)).join('')}</div></div>` : '';
+  const sub = `Biggest workload changes, last two games vs. before (through week ${d.week})`;
+  const title = 'Usage <span class="acc">risers</span> & fallers';
+  const portrait: Frame[] = [{
+    kind: 'portrait',
+    // 8 rows under a two-line title overflow at full size (the last card was
+    // clipped), so a full board is drawn at 86%.
+    html: page('portrait', d.week, `<div style="display:flex;flex-direction:column;justify-content:${up.length && dn.length ? 'space-between' : 'center'};flex:1;zoom:${Math.min(up.length, 4) + Math.min(dn.length, 4) > 6 ? 0.86 : 1}">${section('RISING', up.slice(0, 4), true, true)}${section('FALLING', dn.slice(0, 4), false, true)}</div>`,
+      { title, sub }),
+    alt: `AIOmni week ${d.week} usage risers and fallers. Rising: ` +
+      up.slice(0, 4).map(p => `${p.name} (${p.pos}, ${p.team}), ${p.stat} ${usageNum(p.stat, p.before)} to ${usageNum(p.stat, p.after)}`).join('; ') +
+      '. Falling: ' + dn.slice(0, 4).map(p => `${p.name} (${p.pos}, ${p.team}), ${p.stat} ${usageNum(p.stat, p.before)} to ${usageNum(p.stat, p.after)}`).join('; ') + '.',
+  }];
+  const landscape: Frame[] = [{
+    kind: 'landscape',
+    html: page('landscape', d.week, `<div style="display:flex;gap:28px;flex:1;min-height:0">${up.length ? `<div style="flex:1;min-width:0">${section('RISING', up.slice(0, 4), true, false)}</div>` : ''}${dn.length ? `<div style="flex:1;min-width:0">${section('FALLING', dn.slice(0, 4), false, false)}</div>` : ''}</div>`,
+      { title, sub }),
+  }];
+  const vcard = (p: U, rise: boolean) => ({
+    left: `<span style="color:${rise ? '#00FFAA' : '#FF4D77'};font-size:56px">${rise ? '▲' : '▼'}</span>`, name: p.name,
+    right: `<span class="pos ${p.pos}">${p.pos}</span> · ${esc(p.team)} · <span style="color:${rise ? '#00FFAA' : '#FF4D77'};font-weight:700">${usageLine(p)}</span>`,
+  });
+  const vertical: Frame[] = [
+    { kind: 'vertical', html: titleCard(d.week, `Usage<br><span style="color:var(--volt)">risers</span> &amp; fallers`, 'Who is getting more of the ball,<br>and who is losing it.') },
+    ...(up.length ? [{ kind: 'vertical' as Kind, html: verticalList(d.week, '<span style="color:#00FFAA">Rising</span>', up.map(p => vcard(p, true))) }] : []),
+    ...(dn.length ? [{ kind: 'vertical' as Kind, html: verticalList(d.week, '<span style="color:#FF4D77">Falling</span>', dn.map(p => vcard(p, false))) }] : []),
+    { kind: 'vertical', html: endCard(d.week) },
+  ];
+  return { portrait, landscape, vertical };
+}
+
 function frames(d: ThemeData) {
   switch (d.theme) {
+    case 'weather': return weatherFrames(d);
+    case 'waivers': return waiversFrames(d);
+    case 'next_man_up': return nextManFrames(d);
+    case 'shootout': return shootoutFrames(d);
+    case 'usage': return usageFrames(d);
     case 'rankings': return rankingsFrames(d);
     case 'injuries': return injuriesFrames(d);
     case 'disagree': return disagreeFrames(d);
