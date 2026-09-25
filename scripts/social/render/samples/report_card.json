@@ -1,0 +1,22 @@
+{
+ "_sample": "SAMPLE DATA for render testing only, not real rankings or results",
+ "theme": "report_card",
+ "season": 2026,
+ "week": 3,
+ "ours": {
+  "top12_hits": 29,
+  "top12_total": 48
+ },
+ "consensus": {
+  "top12_hits": 27,
+  "top12_total": 48
+ },
+ "best_call": {
+  "name": "Parker Washington",
+  "pos": "WR",
+  "team": "JAX",
+  "ours": 10,
+  "consensus": 24,
+  "finish": 6
+ }
+}

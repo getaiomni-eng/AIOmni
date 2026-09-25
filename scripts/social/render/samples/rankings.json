@@ -1,0 +1,352 @@
+{
+ "_sample": "SAMPLE DATA for render testing only, not real rankings or results",
+ "theme": "rankings",
+ "season": 2026,
+ "week": 3,
+ "lists": {
+  "QB": [
+   {
+    "name": "Josh Allen",
+    "pos": "QB",
+    "team": "BUF",
+    "opp": "LAC",
+    "rank": 1
+   },
+   {
+    "name": "Brock Purdy",
+    "pos": "QB",
+    "team": "SF",
+    "opp": "ARI",
+    "rank": 2
+   },
+   {
+    "name": "Patrick Mahomes",
+    "pos": "QB",
+    "team": "KC",
+    "opp": "MIA",
+    "rank": 3
+   },
+   {
+    "name": "Dak Prescott",
+    "pos": "QB",
+    "team": "DAL",
+    "opp": "BAL",
+    "rank": 4
+   },
+   {
+    "name": "Jalen Hurts",
+    "pos": "QB",
+    "team": "PHI",
+    "opp": "CHI",
+    "rank": 5
+   },
+   {
+    "name": "Lamar Jackson",
+    "pos": "QB",
+    "team": "BAL",
+    "opp": "DAL",
+    "rank": 6
+   },
+   {
+    "name": "Jared Goff",
+    "pos": "QB",
+    "team": "DET",
+    "opp": "NYJ",
+    "rank": 7
+   },
+   {
+    "name": "Tyler Shough",
+    "pos": "QB",
+    "team": "NO",
+    "opp": "LV",
+    "rank": 8
+   },
+   {
+    "name": "Drake Maye",
+    "pos": "QB",
+    "team": "NE",
+    "opp": "JAX",
+    "rank": 9
+   },
+   {
+    "name": "Trevor Lawrence",
+    "pos": "QB",
+    "team": "JAX",
+    "opp": "NE",
+    "rank": 10
+   },
+   {
+    "name": "Bryce Young",
+    "pos": "QB",
+    "team": "CAR",
+    "opp": "CLE",
+    "rank": 11
+   },
+   {
+    "name": "C.J. Stroud",
+    "pos": "QB",
+    "team": "HOU",
+    "opp": "IND",
+    "rank": 12
+   }
+  ],
+  "RB": [
+   {
+    "name": "Jahmyr Gibbs",
+    "pos": "RB",
+    "team": "DET",
+    "opp": "NYJ",
+    "rank": 1
+   },
+   {
+    "name": "Bijan Robinson",
+    "pos": "RB",
+    "team": "ATL",
+    "opp": "GB",
+    "rank": 2
+   },
+   {
+    "name": "Christian McCaffrey",
+    "pos": "RB",
+    "team": "SF",
+    "opp": "ARI",
+    "rank": 3
+   },
+   {
+    "name": "Jonathan Taylor",
+    "pos": "RB",
+    "team": "IND",
+    "opp": "HOU",
+    "rank": 4
+   },
+   {
+    "name": "Derrick Henry",
+    "pos": "RB",
+    "team": "BAL",
+    "opp": "DAL",
+    "rank": 5
+   },
+   {
+    "name": "Kenneth Walker III",
+    "pos": "RB",
+    "team": "KC",
+    "opp": "MIA",
+    "rank": 6
+   },
+   {
+    "name": "James Cook",
+    "pos": "RB",
+    "team": "BUF",
+    "opp": "LAC",
+    "rank": 7
+   },
+   {
+    "name": "Chase Brown",
+    "pos": "RB",
+    "team": "CIN",
+    "opp": "PIT",
+    "rank": 8
+   },
+   {
+    "name": "Ashton Jeanty",
+    "pos": "RB",
+    "team": "LV",
+    "opp": "NO",
+    "rank": 9
+   },
+   {
+    "name": "De'Von Achane",
+    "pos": "RB",
+    "team": "MIA",
+    "opp": "KC",
+    "rank": 10
+   },
+   {
+    "name": "D'Andre Swift",
+    "pos": "RB",
+    "team": "CHI",
+    "opp": "PHI",
+    "rank": 11
+   },
+   {
+    "name": "Kyren Williams",
+    "pos": "RB",
+    "team": "LA",
+    "opp": "DEN",
+    "rank": 12
+   }
+  ],
+  "WR": [
+   {
+    "name": "Jaxon Smith-Njigba",
+    "pos": "WR",
+    "team": "SEA",
+    "opp": "WAS",
+    "rank": 1
+   },
+   {
+    "name": "Amon-Ra St. Brown",
+    "pos": "WR",
+    "team": "DET",
+    "opp": "NYJ",
+    "rank": 2
+   },
+   {
+    "name": "Chris Olave",
+    "pos": "WR",
+    "team": "NO",
+    "opp": "LV",
+    "rank": 3
+   },
+   {
+    "name": "Puka Nacua",
+    "pos": "WR",
+    "team": "LA",
+    "opp": "DEN",
+    "rank": 4
+   },
+   {
+    "name": "CeeDee Lamb",
+    "pos": "WR",
+    "team": "DAL",
+    "opp": "BAL",
+    "rank": 5
+   },
+   {
+    "name": "Ja'Marr Chase",
+    "pos": "WR",
+    "team": "CIN",
+    "opp": "PIT",
+    "rank": 6
+   },
+   {
+    "name": "Nico Collins",
+    "pos": "WR",
+    "team": "HOU",
+    "opp": "IND",
+    "rank": 7
+   },
+   {
+    "name": "Christian Watson",
+    "pos": "WR",
+    "team": "GB",
+    "opp": "ATL",
+    "rank": 8
+   },
+   {
+    "name": "Davante Adams",
+    "pos": "WR",
+    "team": "LA",
+    "opp": "DEN",
+    "rank": 9
+   },
+   {
+    "name": "Parker Washington",
+    "pos": "WR",
+    "team": "JAX",
+    "opp": "NE",
+    "rank": 10
+   },
+   {
+    "name": "DeVonta Smith",
+    "pos": "WR",
+    "team": "PHI",
+    "opp": "CHI",
+    "rank": 11
+   },
+   {
+    "name": "Garrett Wilson",
+    "pos": "WR",
+    "team": "NYJ",
+    "opp": "DET",
+    "rank": 12
+   }
+  ],
+  "TE": [
+   {
+    "name": "Trey McBride",
+    "pos": "TE",
+    "team": "ARI",
+    "opp": "SF",
+    "rank": 1
+   },
+   {
+    "name": "Dalton Schultz",
+    "pos": "TE",
+    "team": "HOU",
+    "opp": "IND",
+    "rank": 2
+   },
+   {
+    "name": "Travis Kelce",
+    "pos": "TE",
+    "team": "KC",
+    "opp": "MIA",
+    "rank": 3
+   },
+   {
+    "name": "Dalton Kincaid",
+    "pos": "TE",
+    "team": "BUF",
+    "opp": "LAC",
+    "rank": 4
+   },
+   {
+    "name": "Brock Bowers",
+    "pos": "TE",
+    "team": "LV",
+    "opp": "NO",
+    "rank": 5
+   },
+   {
+    "name": "George Kittle",
+    "pos": "TE",
+    "team": "SF",
+    "opp": "ARI",
+    "rank": 6
+   },
+   {
+    "name": "Tucker Kraft",
+    "pos": "TE",
+    "team": "GB",
+    "opp": "ATL",
+    "rank": 7
+   },
+   {
+    "name": "Sam LaPorta",
+    "pos": "TE",
+    "team": "DET",
+    "opp": "NYJ",
+    "rank": 8
+   },
+   {
+    "name": "Tyler Warren",
+    "pos": "TE",
+    "team": "IND",
+    "opp": "HOU",
+    "rank": 9
+   },
+   {
+    "name": "Juwan Johnson",
+    "pos": "TE",
+    "team": "NO",
+    "opp": "LV",
+    "rank": 10
+   },
+   {
+    "name": "Harold Fannin Jr.",
+    "pos": "TE",
+    "team": "CLE",
+    "opp": "CAR",
+    "rank": 11
+   },
+   {
+    "name": "Jake Ferguson",
+    "pos": "TE",
+    "team": "DAL",
+    "opp": "BAL",
+    "rank": 12
+   }
+  ]
+ }
+}

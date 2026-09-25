@@ -1,0 +1,51 @@
+name: Social posts (daily)
+
+# Builds the day's social posts and queues them in public.social_posts.
+# social-publisher (Supabase, every 10 min) publishes the automatic ones after
+# the veto window; the /rank Posts tab shows the copy-paste ones.
+#
+# Theme by US/Eastern weekday (scripts/social/generate.ts):
+#   Sun final_calls  Mon hits  Tue report_card  Wed rankings
+#   Thu tnf          Fri injuries  Sat disagree
+#
+# Repo secrets (Settings > Secrets and variables > Actions):
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+
+on:
+  schedule:
+    - cron: '0 11 * * 1-6'   # 7:00 ET (6:00 after the November clock change)
+    - cron: '5 14 * * 0'     # Sunday 10:05 ET, after the 13:45 UTC rankings build
+  workflow_dispatch:
+    inputs:
+      theme:
+        description: 'Theme (blank = today''s)'
+        required: false
+        type: choice
+        options: ['', rankings, injuries, disagree, tnf, final_calls, hits, report_card]
+
+concurrency:
+  group: social-daily
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: ffmpeg
+        run: command -v ffmpeg || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+      - name: Generate and queue
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          export CHROME_PATH="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium)"
+          if [ -n "${{ inputs.theme }}" ]; then
+            node scripts/social/generate.ts --theme "${{ inputs.theme }}"
+          else
+            node scripts/social/generate.ts
+          fi

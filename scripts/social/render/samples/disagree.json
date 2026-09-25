@@ -1,0 +1,90 @@
+{
+ "_sample": "SAMPLE DATA for render testing only, not real rankings or results",
+ "theme": "disagree",
+ "season": 2026,
+ "week": 3,
+ "higher": [
+  {
+   "name": "Tyler Shough",
+   "pos": "QB",
+   "team": "NO",
+   "opp": "LV",
+   "ours": 8,
+   "consensus": 19
+  },
+  {
+   "name": "Parker Washington",
+   "pos": "WR",
+   "team": "JAX",
+   "opp": "NE",
+   "ours": 10,
+   "consensus": 24
+  },
+  {
+   "name": "Christian Watson",
+   "pos": "WR",
+   "team": "GB",
+   "opp": "ATL",
+   "ours": 8,
+   "consensus": 18
+  },
+  {
+   "name": "Dalton Schultz",
+   "pos": "TE",
+   "team": "HOU",
+   "opp": "IND",
+   "ours": 2,
+   "consensus": 9
+  },
+  {
+   "name": "D'Andre Swift",
+   "pos": "RB",
+   "team": "CHI",
+   "opp": "PHI",
+   "ours": 11,
+   "consensus": 20
+  }
+ ],
+ "lower": [
+  {
+   "name": "Ja'Marr Chase",
+   "pos": "WR",
+   "team": "CIN",
+   "opp": "PIT",
+   "ours": 6,
+   "consensus": 2
+  },
+  {
+   "name": "Joe Burrow",
+   "pos": "QB",
+   "team": "CIN",
+   "opp": "PIT",
+   "ours": 18,
+   "consensus": 9
+  },
+  {
+   "name": "Brock Bowers",
+   "pos": "TE",
+   "team": "LV",
+   "opp": "NO",
+   "ours": 5,
+   "consensus": 2
+  },
+  {
+   "name": "Garrett Wilson",
+   "pos": "WR",
+   "team": "NYJ",
+   "opp": "DET",
+   "ours": 12,
+   "consensus": 7
+  },
+  {
+   "name": "Saquon Barkley",
+   "pos": "RB",
+   "team": "PHI",
+   "opp": "CHI",
+   "ours": 18,
+   "consensus": 11
+  }
+ ]
+}

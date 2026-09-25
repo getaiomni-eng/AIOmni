@@ -1,0 +1,74 @@
+{
+ "_sample": "SAMPLE DATA for render testing only, not real rankings or results",
+ "theme": "hits",
+ "season": 2026,
+ "week": 3,
+ "hits": [
+  {
+   "name": "Jahmyr Gibbs",
+   "pos": "RB",
+   "team": "DET",
+   "rank": 1,
+   "finish": 1,
+   "pts": 31.4
+  },
+  {
+   "name": "Josh Allen",
+   "pos": "QB",
+   "team": "BUF",
+   "rank": 1,
+   "finish": 2,
+   "pts": 29.8
+  },
+  {
+   "name": "Jaxon Smith-Njigba",
+   "pos": "WR",
+   "team": "SEA",
+   "rank": 1,
+   "finish": 3,
+   "pts": 27.1
+  },
+  {
+   "name": "Trey McBride",
+   "pos": "TE",
+   "team": "ARI",
+   "rank": 1,
+   "finish": 1,
+   "pts": 22.6
+  },
+  {
+   "name": "Chris Olave",
+   "pos": "WR",
+   "team": "NO",
+   "rank": 3,
+   "finish": 5,
+   "pts": 24.0
+  }
+ ],
+ "sleepers": [
+  {
+   "name": "Parker Washington",
+   "pos": "WR",
+   "team": "JAX",
+   "rank": 10,
+   "finish": 6,
+   "pts": 21.3
+  },
+  {
+   "name": "Tyler Shough",
+   "pos": "QB",
+   "team": "NO",
+   "rank": 8,
+   "finish": 4,
+   "pts": 24.9
+  },
+  {
+   "name": "Dalton Schultz",
+   "pos": "TE",
+   "team": "HOU",
+   "rank": 2,
+   "finish": 3,
+   "pts": 16.2
+  }
+ ]
+}

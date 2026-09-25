@@ -155,6 +155,54 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
 .dk-bar span{flex:1 1 auto;font-size:13px;color:var(--dim);}
 .dk-bar .b{min-height:48px;}
 
+/* ── Posts tab ── */
+.ps-head{display:flex;flex-direction:column;gap:10px;padding:18px 0 6px;}
+.ps-title{font-family:'Audiowide',cursive;font-size:22px;margin:0;}
+.ps-switch{display:flex;align-items:center;gap:12px;border:1px solid var(--line2);border-radius:10px;background:var(--panel);padding:10px 12px;}
+.ps-switch span{flex:1 1 auto;font-size:14px;color:var(--dim);}
+.ps-switch span b{color:var(--ink);}
+.ps-tog{font:inherit;font-weight:700;font-size:14px;min-height:44px;min-width:92px;border-radius:22px;border:1px solid var(--line2);cursor:pointer;padding:0 16px;}
+.ps-tog.on{background:var(--wr);border-color:var(--wr);color:#070D0E;}
+.ps-tog.off{background:rgba(255,34,85,.16);border-color:var(--red);color:var(--red);}
+.ps-confirm{border:1px solid rgba(255,170,0,.4);background:rgba(255,170,0,.08);border-radius:10px;padding:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px;}
+.ps-confirm[hidden]{display:none;}
+.ps-confirm span{flex:1 1 100%;}
+.ps-day{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:1.3px;color:var(--mute);margin:20px 0 8px;font-weight:700;}
+.ps-day b{color:var(--dim);}
+.ps-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:13px 14px;margin:0 0 10px;}
+.ps-card.todo{border-color:rgba(212,255,0,.45);}
+.ps-card.bad{border-color:rgba(255,34,85,.5);}
+.ps-r1{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.ps-net{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:16px;}
+.ps-ico{width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:#fff;flex:none;}
+.ps-ico.x{background:#000;border:1px solid var(--line2);} .ps-ico.threads{background:#000;border:1px solid var(--line2);}
+.ps-ico.bluesky{background:#1185fe;} .ps-ico.instagram{background:linear-gradient(45deg,#f9a825,#e1306c,#833ab4);}
+.ps-ico.facebook{background:#1877f2;} .ps-ico.youtube{background:#ff0000;} .ps-ico.tiktok{background:#000;border:1px solid #fe2c55;color:#25f4ee;}
+.ps-ico.reddit{background:#ff4500;}
+.ps-when{margin-left:auto;font-family:'Space Mono',monospace;font-size:12px;color:var(--dim);text-align:right;}
+.ps-when.soon{color:var(--te);}
+.ps-chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 8px;}
+.chip.ok{background:rgba(110,235,131,.16);color:var(--wr);}
+.chip.m{background:rgba(27,231,255,.13);color:var(--aqua);}
+.ps-title2{font-weight:700;font-size:15px;margin:4px 0;}
+.ps-body{white-space:pre-wrap;font-size:14px;line-height:1.45;color:var(--ink);background:var(--bg,#070D0E);border:1px solid var(--line);border-radius:8px;padding:10px 11px;margin:6px 0;max-height:190px;overflow:auto;}
+.ps-thread{font-size:12.5px;color:var(--mute);margin:4px 0 0;}
+.ps-thread li{margin:3px 0;white-space:pre-wrap;}
+.ps-media{display:flex;gap:8px;overflow-x:auto;margin:8px 0 4px;padding-bottom:4px;}
+.ps-media img,.ps-media video{height:128px;width:auto;border-radius:8px;border:1px solid var(--line2);flex:none;background:#000;}
+.ps-err{font-size:13px;color:var(--red);margin:6px 0 0;}
+.ps-note{font-size:13px;color:var(--dim);margin:6px 0 0;}
+.ps-note b{color:var(--ink);}
+.ps-steps{margin:8px 0 0;padding-left:22px;font-size:14px;line-height:1.5;color:var(--ink);}
+.ps-steps li{margin:3px 0;}
+.ps-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+.ps-acts .b{min-height:50px;font-size:15px;display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;}
+.ps-acts .wide{grid-column:1 / -1;}
+.ps-acts .b.done{background:var(--wr);border-color:var(--wr);color:#070D0E;}
+.ps-acts .b.copied{border-color:var(--wr);color:var(--wr);}
+.ps-hint{font-size:12px;color:var(--mute);margin:6px 0 0;}
+.ps-empty{color:var(--mute);text-align:center;padding:22px 10px;border:1px dashed var(--line2);border-radius:12px;font-size:14px;}
+
 @media (max-width:860px){
   .rk-grid{grid-template-columns:1fr;}
   .rk-pool{max-height:none;}
@@ -199,6 +247,7 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
     <div class="vw" role="tablist" aria-label="Tool">
       <button type="button" role="tab" data-v="rank" aria-selected="true">Rankings</button>
       <button type="button" role="tab" data-v="desk" aria-selected="false">Injury desk<span class="cnt" id="deskCount"></span></button>
+      <button type="button" role="tab" data-v="posts" aria-selected="false">Posts<span class="cnt" id="postsCount"></span></button>
     </div>
 
     <div id="rankView">
@@ -272,6 +321,25 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
         <button class="b v" id="dkRebuild2" type="button">Rebuild now</button>
       </div>
     </div>
+
+    <div id="postsView" hidden role="region" aria-label="Posts">
+      <div class="ps-head">
+        <h1 class="ps-title">Posts</h1>
+        <div class="ps-switch">
+          <span id="psSwitchText">Auto-posting</span>
+          <button type="button" class="ps-tog" id="psTog" aria-pressed="true">ON</button>
+        </div>
+        <div class="ps-confirm" id="psConfirm" hidden>
+          <span id="psConfirmText"></span>
+          <button type="button" class="b v" id="psConfirmYes"></button>
+          <button type="button" class="b q" id="psConfirmNo">Cancel</button>
+        </div>
+      </div>
+      <p class="dk-help"><b>Automatic</b> posts publish on their own when the countdown ends. Tap <b>Hold</b> to stop one.
+        <b>Copy-paste</b> posts are yours: copy, download, follow the steps, then tap <b>Mark as posted</b>.</p>
+      <p id="psStatus" class="rk-status" role="status" aria-live="polite"></p>
+      <div id="psList"></div>
+    </div>
   </div>
 </main>
 
@@ -338,6 +406,9 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
     if (MOCK) {
       await new Promise(r => setTimeout(r, 250));
       if (method === 'GET' && params.view === 'desk') return mockDesk.get();
+      if (method === 'GET' && params.view === 'posts') return mockPosts.get();
+      if (body && /^post_/.test(body.action || '')) return mockPosts.act(body);
+      if (body && body.action === 'autopost') return mockPosts.autopost(body);
       if (method === 'GET') return mockGet(params.season || 2026, params.week || 3);
       if (body && body.action === 'override') return mockDesk.override(body);
       if (body && body.action === 'rebuild') return mockDesk.rebuild();
@@ -361,7 +432,11 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
     let data = null;
     try { data = await r.json(); } catch {}
     if (r.status === 401) { const e = new Error('unauthorized'); e.code = 401; throw e; }
-    if (!r.ok || !data || data.ok === false) throw new Error((data && data.error) || `request failed (${r.status})`);
+    if (!r.ok || !data || data.ok === false) {
+      const e = new Error((data && data.error) || `request failed (${r.status})`);
+      e.data = data; e.status = r.status;
+      throw e;
+    }
     return data;
   }
 
@@ -804,22 +879,286 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
   $('dkUndecided').addEventListener('change', () => { DK.undecided = $('dkUndecided').checked; renderDesk(); });
   setInterval(() => { const dv = $('deskView'); if (dv && !dv.hidden && DK.loaded) renderRebuilt(); }, 30000);
 
-  // ── view switch: Rankings | Injury desk ────────────────────────────────
+
+  // ── posts: mock data (no network) ───────────────────────────────────────
+  const mockPosts = (() => {
+    const now = Date.now(), iso = (ms) => new Date(ms).toISOString();
+    const day = (o) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now + o * 864e5));
+    const img = { kind: 'image', url: '/og.png', width: 1200, height: 630, alt: 'AIOmni week 3 rankings graphic' };
+    const vid = { kind: 'video', url: '/mock-week3.mp4', width: 1080, height: 1920, alt: 'Week 3 rankings video' };
+    const cap = 'Week 3 rankings are live. Our top 3 WRs: Smith-Njigba, St. Brown, Olave.\n\nFull board, updated after every injury report: getaiomni.com/rankings';
+    let id = 100;
+    const P = (o) => ({ id: ++id, post_date: day(0), theme: 'rankings', status: 'queued', publish_at: null, title: null, body: cap,
+      thread: null, media: [img], link: 'https://getaiomni.com/rankings', extra: {}, posted_url: null, posted_at: null, error: null, attempts: 0, ...o });
+    const ttSteps = ['Tap Download video below. On iPhone it opens in a new tab: tap Share, then Save Video.',
+      'Open TikTok and tap +.', 'Tap Upload and pick the video you just saved.', 'Tap Next, then paste the caption (Copy caption below).',
+      'Tap Post.', 'Come back here and tap Mark as posted.'];
+    const rdSteps = ['Tap Open r/fantasyfootball below (or open the Reddit app to that sub).', 'Tap Create post, choose Text.',
+      'Paste the title (Copy title), then the body (Copy post).', 'Pick the flair the sub requires, then Post.', 'Come back here and tap Mark as posted.'];
+    const ytSteps = ['Open the YouTube Studio app.', 'Tap Content, then the newest video (it is Private).', 'Tap the pencil, then Visibility, then Public.',
+      'Tap Save.', 'Come back here and tap Mark as public.'];
+    const rows = [
+      P({ network: 'x', mode: 'auto', publish_at: iso(now + (2 * 60 + 14) * 6e4), thread: ['RBs: Gibbs, Bijan, McCaffrey.', 'Full board: getaiomni.com/rankings'] }),
+      P({ network: 'threads', mode: 'auto', publish_at: iso(now + (2 * 60 + 14) * 6e4) }),
+      P({ network: 'bluesky', mode: 'auto', status: 'posted', publish_at: iso(now - 40 * 6e4), posted_at: iso(now - 38 * 6e4), posted_url: 'https://bsky.app/profile/getaiomni.com' }),
+      P({ network: 'instagram', mode: 'auto', status: 'held', publish_at: iso(now + 50 * 6e4), media: [img, img, img, img] }),
+      P({ network: 'facebook', mode: 'auto', status: 'failed', publish_at: iso(now - 20 * 6e4), attempts: 3, error: 'Facebook: (#200) The page token has expired. Reconnect Facebook in the setup guide.' }),
+      P({ network: 'youtube', mode: 'semi', status: 'posted', title: 'Week 3 Fantasy Football Rankings: Top 12 WRs', media: [vid, img],
+          publish_at: iso(now - 30 * 6e4), posted_at: iso(now - 28 * 6e4), posted_url: 'https://studio.youtube.com/', extra: { steps: ytSteps } }),
+      P({ network: 'tiktok', mode: 'manual', status: 'ready', media: [vid, img], body: cap + '\n\n#fantasyfootball #nfl #fantasyfootballadvice', extra: { steps: ttSteps } }),
+      P({ network: 'reddit', mode: 'manual', status: 'ready', title: 'Week 3: where our rankings disagree with consensus the most', media: [],
+          body: 'We rank a few players well away from the expert consensus this week. Curious where people land on these:\n\n- Player A: our WR6, consensus WR14\n- Player B: our RB18, consensus RB9',
+          extra: { steps: rdSteps, subreddit: 'fantasyfootball', subreddit_note: 'Self-promotion only in the weekly thread; no link in the title.' } }),
+      P({ post_date: day(1), theme: 'disagree', network: 'x', mode: 'auto', publish_at: iso(now + 26 * 36e5) }),
+      P({ post_date: day(1), theme: 'disagree', network: 'tiktok', mode: 'manual', status: 'ready', media: [vid], extra: { steps: ttSteps } }),
+      P({ post_date: day(-1), theme: 'injuries', network: 'tiktok', mode: 'manual', status: 'ready', media: [vid], extra: { steps: ttSteps } }),
+      P({ post_date: day(-1), theme: 'injuries', network: 'x', mode: 'auto', status: 'posted', publish_at: iso(now - 20 * 36e5), posted_url: 'https://x.com/getaiomni' }),
+    ];
+    let autopost = 'on';
+    const clone = (x) => JSON.parse(JSON.stringify(x));
+    const fail = (msg, row) => { const e = new Error(msg); e.data = { ok: false, error: msg, row: clone(row) }; e.status = 409; throw e; };
+    return {
+      get() {
+        const dates = [-1, 0, 1, 2].map(day);
+        const order = ['x', 'threads', 'bluesky', 'instagram', 'facebook', 'youtube', 'tiktok', 'reddit'];
+        return { ok: true, autopost, today: dates[1], days: dates.map(d => ({ date: d,
+          posts: clone(rows.filter(r => r.post_date === d).sort((a, b) => order.indexOf(a.network) - order.indexOf(b.network))) })) };
+      },
+      act(b) {
+        const r = rows.find(x => x.id === b.id); if (!r) fail('not found', {});
+        const auto = r.mode !== 'manual';
+        if (b.action === 'post_hold') { if (!auto || r.status !== 'queued') fail(`cannot hold: it is ${r.status}`, r); r.status = 'held'; }
+        else if (b.action === 'post_release') { if (!auto || r.status !== 'held') fail(`cannot release: it is ${r.status}`, r);
+          r.status = 'queued'; if (Date.parse(r.publish_at) < Date.now()) r.publish_at = iso(Date.now() + 12e4); }
+        else if (b.action === 'post_now') { if (!auto || !['queued', 'held'].includes(r.status)) fail(`cannot post now: it is ${r.status}`, r);
+          r.status = 'queued'; r.publish_at = iso(Date.now()); }
+        else if (b.action === 'post_done') { if (r.mode === 'manual' && r.status === 'ready') { r.status = 'done'; r.posted_at = iso(Date.now()); }
+          else if (r.mode === 'semi' && r.status === 'posted') r.status = 'done'; else fail(`cannot mark done: it is ${r.status}`, r); }
+        else if (b.action === 'post_undo_done') { if (r.status !== 'done') fail(`cannot undo: it is ${r.status}`, r);
+          r.status = r.mode === 'semi' ? 'posted' : 'ready'; if (r.mode === 'manual') r.posted_at = null; }
+        return { ok: true, row: clone(r) };
+      },
+      autopost(b) { autopost = b.value; return { ok: true, autopost }; },
+    };
+  })();
+
+  // ── posts ──────────────────────────────────────────────────────────────
+  const PS = { days: [], today: null, autopost: 'on', loaded: false, loading: false, busy: new Set(), confirming: null };
+  const NET = { x: ['X', 'X'], threads: ['Threads', '@'], bluesky: ['Bluesky', 'Bs'], instagram: ['Instagram', 'IG'],
+    facebook: ['Facebook', 'f'], youtube: ['YouTube Shorts', '▶'], tiktok: ['TikTok', '♪'], reddit: ['Reddit', 'r/'] };
+  const THEME = { hits: "Sunday's hits", report_card: 'Report card', rankings: 'New week rankings', tnf: 'TNF spotlight',
+    injuries: 'Injury watch', disagree: 'Where we disagree', final_calls: 'Final calls' };
+  const MODE = { auto: 'Automatic', semi: 'Upload + tap Public', manual: 'Copy-paste' };
+  function psStatus(msg, kind) { const el = $('psStatus'); el.textContent = msg || ''; el.className = 'rk-status' + (kind ? ' ' + kind : ''); }
+  const allPosts = () => PS.days.flatMap(d => d.posts);
+  const todo = (r) => (r.mode === 'manual' && r.status === 'ready') || (r.mode === 'semi' && r.status === 'posted');
+
+  function countdown(iso) {
+    const ms = Date.parse(iso) - Date.now();
+    if (!isFinite(ms)) return '';
+    if (ms <= 60e3) return 'Publishing any minute';
+    const m = Math.round(ms / 6e4), h = Math.floor(m / 60);
+    return h ? `Publishes in ${h}h ${m % 60}m` : `Publishes in ${m}m`;
+  }
+  const clock = (iso) => iso ? new Date(iso).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+  function dayLabel(date) {
+    const t = PS.today, dd = new Date(date + 'T12:00:00');
+    const pretty = dd.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    const off = Math.round((Date.parse(date + 'T12:00:00') - Date.parse(t + 'T12:00:00')) / 864e5);
+    const rel = off === 0 ? 'TODAY' : off === -1 ? 'YESTERDAY' : off === 1 ? 'TOMORROW' : null;
+    return rel ? `${rel} · ${pretty}` : pretty.toUpperCase();
+  }
+
+  async function loadPosts(quiet) {
+    if (PS.loading) return;
+    PS.loading = true;
+    if (!quiet) psStatus('Loading…');
+    try {
+      const d = await api('GET', { view: 'posts' });
+      PS.days = d.days || []; PS.today = d.today; PS.autopost = d.autopost === 'off' ? 'off' : 'on'; PS.loaded = true;
+      if (!quiet) psStatus('');
+      renderPosts();
+    } catch (e) {
+      if (e.code === 401) { askKey('That key was not accepted.'); return; }
+      if (!quiet) psStatus(`Could not load posts: ${e.message}`, 'err');
+    } finally { PS.loading = false; }
+  }
+
+  function chipsFor(r) {
+    const c = [`<span class="chip m">${esc(MODE[r.mode] || r.mode)}</span>`];
+    const st = r.status;
+    if (st === 'queued') c.push(`<span class="chip">Queued</span>`);
+    else if (st === 'held') c.push(`<span class="chip q">Held</span>`);
+    else if (st === 'publishing') c.push(`<span class="chip">Publishing…</span>`);
+    else if (st === 'posted') c.push(r.mode === 'semi' ? `<span class="chip q">Uploaded · Private</span>` : `<span class="chip ok">Posted ✓</span>`);
+    else if (st === 'failed') c.push(`<span class="chip o">Failed</span>`);
+    else if (st === 'ready') c.push(`<span class="chip q">To post</span>`);
+    else if (st === 'done') c.push(`<span class="chip ok">${r.mode === 'semi' ? 'Public ✓' : 'Posted ✓'}</span>`);
+    else if (st === 'skipped') c.push(`<span class="chip">Skipped</span>`);
+    return c.join('');
+  }
+
+  function whenFor(r) {
+    if (r.status === 'queued' && r.publish_at) { const t = countdown(r.publish_at); return { txt: t, soon: Date.parse(r.publish_at) - Date.now() < 30 * 6e4 }; }
+    if (r.status === 'held' && r.publish_at) return { txt: `Held · was set for ${clock(r.publish_at)}` };
+    if ((r.status === 'posted' || r.status === 'done') && r.posted_at) return { txt: clock(r.posted_at) };
+    return { txt: '' };
+  }
+
+  function fileName(r, m, i) {
+    const ext = (m.url.split('?')[0].match(/\.(\w+)$/) || [, m.kind === 'video' ? 'mp4' : 'png'])[1];
+    return `aiomni-${r.post_date}-${r.theme}-${r.network}${i ? '-' + (i + 1) : ''}.${ext}`;
+  }
+
+  function cardPost(r) {
+    const [name, ico] = NET[r.network] || [r.network, '?'];
+    const w = whenFor(r);
+    const busy = PS.busy.has(r.id) ? 'disabled' : '';
+    const cover = (r.media || []).find(m => m.kind === 'image');
+    const media = (r.media || []).map((m, i) => m.kind === 'video'
+      ? `<video src="${esc(m.url)}#t=0.1" ${cover ? `poster="${esc(cover.url)}"` : ''} preload="metadata" muted playsinline controls aria-label="${esc(m.alt || 'video')}"></video>`
+      : `<img src="${esc(m.url)}" alt="${esc(m.alt || '')}" loading="lazy">`).join('');
+    const handsOn = r.mode === 'manual' || (r.mode === 'semi' && (r.status === 'posted' || r.status === 'done'));
+    const acts = [];
+    if (r.mode !== 'manual' && r.status === 'queued') acts.push(`<button class="b" data-a="post_hold" ${busy}>Hold</button>`, `<button class="b v" data-a="post_now" ${busy}>Post now</button>`);
+    if (r.mode !== 'manual' && r.status === 'held') acts.push(`<button class="b v" data-a="post_release" ${busy}>Release</button>`, `<button class="b" data-a="post_now" ${busy}>Post now</button>`);
+    if (handsOn && r.status !== 'done') {
+      if (r.title) acts.push(`<button class="b${r.network === 'reddit' || r.network === 'youtube' ? '' : ' wide'}" data-copy="title">Copy title</button>`);
+      if (r.mode === 'manual') acts.push(`<button class="b${r.title ? '' : ' wide'}" data-copy="body">${r.network === 'reddit' ? 'Copy post' : 'Copy caption'}</button>`);
+      (r.media || []).forEach((m, i) => acts.push(`<a class="b" href="${esc(m.url)}" download="${esc(fileName(r, m, i))}" target="_blank" rel="noopener">Download ${m.kind === 'video' ? 'video' : (r.media.filter(x => x.kind === 'image').length > 1 ? 'image ' + (i + 1) : 'image')}</a>`));
+      if (r.network === 'reddit' && r.extra && r.extra.subreddit) acts.push(`<a class="b wide" href="https://www.reddit.com/r/${encodeURIComponent(r.extra.subreddit)}/submit" target="_blank" rel="noopener">Open r/${esc(r.extra.subreddit)}</a>`);
+      if (r.mode === 'semi' && r.posted_url) acts.push(`<a class="b wide" href="${esc(r.posted_url)}" target="_blank" rel="noopener">Open in YouTube Studio</a>`);
+      acts.push(`<button class="b v wide" data-a="post_done" ${busy}>${r.mode === 'semi' ? 'Mark as public' : 'Mark as posted'}</button>`);
+    }
+    if (r.status === 'done') acts.push(`<button class="b q wide" data-a="post_undo_done" ${busy}>Undo</button>`);
+    if (r.mode === 'auto' && r.status === 'posted' && r.posted_url) acts.push(`<a class="b wide" href="${esc(r.posted_url)}" target="_blank" rel="noopener">View post</a>`);
+    const steps = handsOn && r.status !== 'done' && r.extra && Array.isArray(r.extra.steps) && r.extra.steps.length
+      ? `<ol class="ps-steps">${r.extra.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : '';
+    const hasMedia = (r.media || []).length > 0;
+    return `<article class="ps-card${handsOn && r.status !== 'done' ? ' todo' : ''}${r.status === 'failed' ? ' bad' : ''}" data-id="${r.id}">
+      <div class="ps-r1"><span class="ps-net"><span class="ps-ico ${esc(r.network)}" aria-hidden="true">${esc(ico)}</span>${esc(name)}</span>
+        <span class="ps-when${w.soon ? ' soon' : ''}" data-when="${r.id}">${esc(w.txt)}</span></div>
+      <div class="ps-chips">${chipsFor(r)}</div>
+      ${r.network === 'reddit' && r.extra && r.extra.subreddit ? `<p class="ps-note"><b>r/${esc(r.extra.subreddit)}</b>${r.extra.subreddit_note ? ' · ' + esc(r.extra.subreddit_note) : ''}</p>` : ''}
+      ${r.title ? `<div class="ps-title2">${esc(r.title)}</div>` : ''}
+      <div class="ps-body">${esc(r.body)}</div>
+      ${r.thread && r.thread.length ? `<ol class="ps-thread">${r.thread.map(t => `<li>${esc(t)}</li>`).join('')}</ol>` : ''}
+      ${hasMedia ? `<div class="ps-media">${media}</div>` : ''}
+      ${r.status === 'failed' && r.error ? `<p class="ps-err">${esc(r.error)}${r.attempts ? ` (tried ${r.attempts}×)` : ''}</p>` : ''}
+      ${steps}
+      ${handsOn && r.status !== 'done' && (r.media || []).some(m => m.kind === 'video') ? '<p class="ps-hint">On iPhone the video opens in a new tab: tap Share, then Save Video.</p>' : ''}
+      ${acts.length ? `<div class="ps-acts">${acts.join('')}</div>` : ''}
+    </article>`;
+  }
+
+  function renderPosts() {
+    const on = PS.autopost === 'on';
+    const t = $('psTog'); t.textContent = on ? 'ON' : 'OFF'; t.className = 'ps-tog ' + (on ? 'on' : 'off'); t.setAttribute('aria-pressed', String(on));
+    $('psSwitchText').innerHTML = on ? 'Auto-posting is <b>on</b>. Queued posts publish when their countdown ends.'
+                                     : 'Auto-posting is <b>off</b>. Nothing publishes until you turn it back on.';
+    const today = PS.days.find(d => d.date === PS.today);
+    const n = today ? today.posts.filter(r => r.mode === 'manual' && r.status === 'ready').length : 0;
+    $('postsCount').textContent = n ? String(n) : '';
+    let html = '';
+    for (const d of PS.days) {
+      const isYesterday = d.date < PS.today;
+      const shown = isYesterday ? d.posts.filter(todo) : d.posts;          // yesterday: only what is still undone
+      if (isYesterday && !shown.length) continue;
+      const theme = d.posts[0] ? THEME[d.posts[0].theme] || d.posts[0].theme : '';
+      html += `<h2 class="ps-day">${esc(dayLabel(d.date))}${theme ? ` · <b>${esc(theme.toUpperCase())}</b>` : ''}</h2>`;
+      html += shown.length ? shown.map(cardPost).join('') : '<div class="ps-empty">Nothing scheduled yet. Posts are built each morning.</div>';
+    }
+    $('psList').innerHTML = html || '<div class="ps-empty">No posts yet.</div>';
+  }
+
+  function tickPosts() {
+    for (const r of allPosts()) {
+      const el = document.querySelector(`[data-when="${r.id}"]`); if (!el) continue;
+      const w = whenFor(r); el.textContent = w.txt; el.classList.toggle('soon', !!w.soon);
+    }
+  }
+
+  async function copyText(text) {
+    try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; } } catch { /* fall through */ }
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+    let ok = false; try { ok = document.execCommand('copy'); } catch { ok = false; }
+    ta.remove(); return ok;
+  }
+
+  $('psList').addEventListener('click', async (e) => {
+    const card = e.target.closest('.ps-card'); if (!card) return;
+    const r = allPosts().find(x => x.id === Number(card.dataset.id)); if (!r) return;
+    const cp = e.target.closest('[data-copy]');
+    if (cp) {
+      const text = cp.dataset.copy === 'title' ? (r.title || '') : r.body;
+      const ok = await copyText(text);
+      const label = cp.textContent;
+      cp.textContent = ok ? 'Copied ✓' : 'Copy failed: select the text above';
+      cp.classList.toggle('copied', ok);
+      setTimeout(() => { cp.textContent = label; cp.classList.remove('copied'); }, 2200);
+      return;
+    }
+    const b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
+    const action = b.dataset.a;
+    PS.busy.add(r.id); renderPosts();
+    try {
+      const d = await api('POST', {}, { action, id: r.id });
+      Object.assign(r, d.row);
+      const said = { post_hold: 'held: it will not publish until you release it', post_release: 'released: back in the queue',
+        post_now: 'publishing within a few minutes', post_done: r.mode === 'semi' ? 'marked public' : 'marked as posted', post_undo_done: 'back to your to-do list' }[action];
+      psStatus(`${(NET[r.network] || [r.network])[0]} ${said}.`, 'ok');
+    } catch (err) {
+      if (err.code === 401) { askKey('That key was not accepted.'); return; }
+      if (err.data && err.data.row) Object.assign(r, err.data.row);            // lost a race: show the real state
+      psStatus(`${(NET[r.network] || [r.network])[0]}: ${err.message}`, 'err');
+    } finally { PS.busy.delete(r.id); renderPosts(); }
+  });
+
+  $('psTog').addEventListener('click', () => {
+    const turningOff = PS.autopost === 'on';
+    $('psConfirmText').textContent = turningOff
+      ? 'Turn auto-posting OFF? Queued posts will wait until you turn it back on.'
+      : 'Turn auto-posting ON? Queued posts whose countdown has ended will publish within about 10 minutes.';
+    $('psConfirmYes').textContent = turningOff ? 'Turn off' : 'Turn on';
+    PS.confirming = turningOff ? 'off' : 'on';
+    $('psConfirm').hidden = false;
+  });
+  $('psConfirmNo').addEventListener('click', () => { $('psConfirm').hidden = true; PS.confirming = null; });
+  $('psConfirmYes').addEventListener('click', async () => {
+    const value = PS.confirming; if (!value) return;
+    $('psConfirmYes').disabled = true;
+    try {
+      const d = await api('POST', {}, { action: 'autopost', value });
+      PS.autopost = d.autopost; $('psConfirm').hidden = true; PS.confirming = null;
+      psStatus(`Auto-posting ${d.autopost === 'on' ? 'on' : 'off'}.`, 'ok'); renderPosts();
+    } catch (err) {
+      if (err.code === 401) { askKey('That key was not accepted.'); return; }
+      psStatus(`Switch not changed: ${err.message}`, 'err');
+    } finally { $('psConfirmYes').disabled = false; }
+  });
+  setInterval(() => { const v = $('postsView'); if (v && !v.hidden && PS.loaded) tickPosts(); }, 30000);
+  setInterval(() => { const v = $('postsView'); if (v && !v.hidden && PS.loaded && !PS.busy.size) loadPosts(true); }, 90000);
+
+  // ── view switch: Rankings | Injury desk | Posts ────────────────────────
   const VIEW_STORE = 'aiomni.rankView';
   const viewBtns = [...document.querySelectorAll('.vw button')];
   function setView(v) {
     viewBtns.forEach(b => b.setAttribute('aria-selected', String(b.dataset.v === v)));
     $('rankView').hidden = v !== 'rank';
     $('deskView').hidden = v !== 'desk';
+    $('postsView').hidden = v !== 'posts';
     try { localStorage.setItem(VIEW_STORE, v); } catch {}
+    if (v === 'posts') { if (!PS.loaded) loadPosts(); else renderPosts(); }
     if (v === 'rank' && !S.loaded) load(S.week);
     if (v === 'desk' && (!DK.loaded || (S.week != null && DK.week !== S.week))) loadDesk();
   }
   viewBtns.forEach(b => b.addEventListener('click', () => setView(b.dataset.v)));
   const initialView = (() => {
     const q = new URLSearchParams(location.search).get('view');
-    if (q === 'desk' || q === 'rank') return q;
-    try { return localStorage.getItem(VIEW_STORE) === 'desk' ? 'desk' : 'rank'; } catch { return 'rank'; }
+    if (q === 'desk' || q === 'rank' || q === 'posts') return q;
+    try { const v = localStorage.getItem(VIEW_STORE); return v === 'desk' || v === 'posts' ? v : 'rank'; } catch { return 'rank'; }
   })();
 
   // ── key handling ───────────────────────────────────────────────────────
@@ -842,8 +1181,9 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outl
 
   function start() {
     $('keyView').hidden = true; $('appView').hidden = false;
-    S.loaded = false; DK.loaded = false;
+    S.loaded = false; DK.loaded = false; PS.loaded = false;
     setView(initialView);
+    if (initialView !== 'posts') loadPosts(true);           // quietly, so the Posts badge shows
   }
 
   if (MOCK) { $('mockflag').hidden = false; $('changeKey').hidden = true; start(); }

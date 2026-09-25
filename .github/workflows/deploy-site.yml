@@ -4,8 +4,8 @@ name: Deploy marketing site
 # main changes anything under site/. Replaces manual `netlify deploy` runs and
 # removes the drag-a-single-file footgun (that replaces the whole site).
 #
-# Deploys from INSIDE site/ so Netlify reads site/netlify.toml (command = no
-# build, publish = .) and never tries to build the Expo app at the repo root.
+# --no-build: site/ is static. Without it the CLI finds the repo-root
+# netlify.toml and builds the Expo app first (seen on manual deploys 2026-09-24).
 #
 # Requires two repo secrets (Settings → Secrets and variables → Actions):
 #   NETLIFY_AUTH_TOKEN  — a Netlify personal access token
@@ -31,4 +31,4 @@ jobs:
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-        run: npx --yes netlify-cli@latest deploy --prod --dir=. --site="$NETLIFY_SITE_ID"
+        run: npx --yes netlify-cli@latest deploy --prod --no-build --dir=. --site="$NETLIFY_SITE_ID"

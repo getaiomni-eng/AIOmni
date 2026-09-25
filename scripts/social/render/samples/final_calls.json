@@ -1,0 +1,179 @@
+{
+ "_sample": "SAMPLE DATA for render testing only, not real rankings or results",
+ "theme": "final_calls",
+ "season": 2026,
+ "week": 3,
+ "top5": {
+  "QB": [
+   {
+    "name": "Josh Allen",
+    "pos": "QB",
+    "team": "BUF",
+    "opp": "LAC",
+    "rank": 1
+   },
+   {
+    "name": "Brock Purdy",
+    "pos": "QB",
+    "team": "SF",
+    "opp": "ARI",
+    "rank": 2
+   },
+   {
+    "name": "Patrick Mahomes",
+    "pos": "QB",
+    "team": "KC",
+    "opp": "MIA",
+    "rank": 3
+   },
+   {
+    "name": "Dak Prescott",
+    "pos": "QB",
+    "team": "DAL",
+    "opp": "BAL",
+    "rank": 4
+   },
+   {
+    "name": "Jalen Hurts",
+    "pos": "QB",
+    "team": "PHI",
+    "opp": "CHI",
+    "rank": 5
+   }
+  ],
+  "RB": [
+   {
+    "name": "Jahmyr Gibbs",
+    "pos": "RB",
+    "team": "DET",
+    "opp": "NYJ",
+    "rank": 1
+   },
+   {
+    "name": "Bijan Robinson",
+    "pos": "RB",
+    "team": "ATL",
+    "opp": "GB",
+    "rank": 2
+   },
+   {
+    "name": "Christian McCaffrey",
+    "pos": "RB",
+    "team": "SF",
+    "opp": "ARI",
+    "rank": 3
+   },
+   {
+    "name": "Jonathan Taylor",
+    "pos": "RB",
+    "team": "IND",
+    "opp": "HOU",
+    "rank": 4
+   },
+   {
+    "name": "Derrick Henry",
+    "pos": "RB",
+    "team": "BAL",
+    "opp": "DAL",
+    "rank": 5
+   }
+  ],
+  "WR": [
+   {
+    "name": "Jaxon Smith-Njigba",
+    "pos": "WR",
+    "team": "SEA",
+    "opp": "WAS",
+    "rank": 1
+   },
+   {
+    "name": "Amon-Ra St. Brown",
+    "pos": "WR",
+    "team": "DET",
+    "opp": "NYJ",
+    "rank": 2
+   },
+   {
+    "name": "Chris Olave",
+    "pos": "WR",
+    "team": "NO",
+    "opp": "LV",
+    "rank": 3
+   },
+   {
+    "name": "Puka Nacua",
+    "pos": "WR",
+    "team": "LA",
+    "opp": "DEN",
+    "rank": 4
+   },
+   {
+    "name": "CeeDee Lamb",
+    "pos": "WR",
+    "team": "DAL",
+    "opp": "BAL",
+    "rank": 5
+   }
+  ],
+  "TE": [
+   {
+    "name": "Trey McBride",
+    "pos": "TE",
+    "team": "ARI",
+    "opp": "SF",
+    "rank": 1
+   },
+   {
+    "name": "Dalton Schultz",
+    "pos": "TE",
+    "team": "HOU",
+    "opp": "IND",
+    "rank": 2
+   },
+   {
+    "name": "Travis Kelce",
+    "pos": "TE",
+    "team": "KC",
+    "opp": "MIA",
+    "rank": 3
+   },
+   {
+    "name": "Dalton Kincaid",
+    "pos": "TE",
+    "team": "BUF",
+    "opp": "LAC",
+    "rank": 4
+   },
+   {
+    "name": "Brock Bowers",
+    "pos": "TE",
+    "team": "LV",
+    "opp": "NO",
+    "rank": 5
+   }
+  ]
+ },
+ "calls": [
+  {
+   "name": "Puka Nacua",
+   "pos": "WR",
+   "team": "LA",
+   "opp": "DEN",
+   "call": "Playing"
+  },
+  {
+   "name": "Nico Collins",
+   "pos": "WR",
+   "team": "HOU",
+   "opp": "IND",
+   "call": "Out"
+  },
+  {
+   "name": "Brock Bowers",
+   "pos": "TE",
+   "team": "LV",
+   "opp": "NO",
+   "call": "Playing"
+  }
+ ]
+}

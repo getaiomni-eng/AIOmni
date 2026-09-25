@@ -1,0 +1,73 @@
+{
+ "_sample": "SAMPLE DATA for render testing only, not real rankings or results",
+ "theme": "tnf",
+ "season": 2026,
+ "week": 3,
+ "game": {
+  "away": "ATL",
+  "home": "GB",
+  "kickoff_et": "Thu 8:15 PM ET"
+ },
+ "players": [
+  {
+   "name": "Bijan Robinson",
+   "pos": "RB",
+   "team": "ATL",
+   "rank": 2
+  },
+  {
+   "name": "Christian Watson",
+   "pos": "WR",
+   "team": "GB",
+   "rank": 8
+  },
+  {
+   "name": "Tucker Kraft",
+   "pos": "TE",
+   "team": "GB",
+   "rank": 7
+  },
+  {
+   "name": "Drake London",
+   "pos": "WR",
+   "team": "ATL",
+   "rank": 15
+  },
+  {
+   "name": "Jordan Love",
+   "pos": "QB",
+   "team": "GB",
+   "rank": 14
+  },
+  {
+   "name": "Kyle Pitts",
+   "pos": "TE",
+   "team": "ATL",
+   "rank": 18
+  },
+  {
+   "name": "Michael Penix Jr.",
+   "pos": "QB",
+   "team": "ATL",
+   "rank": 22
+  },
+  {
+   "name": "MarShawn Lloyd",
+   "pos": "RB",
+   "team": "GB",
+   "rank": 35
+  },
+  {
+   "name": "Romeo Doubs",
+   "pos": "WR",
+   "team": "GB",
+   "rank": 41
+  },
+  {
+   "name": "Darnell Mooney",
+   "pos": "WR",
+   "team": "ATL",
+   "rank": 48
+  }
+ ]
+}

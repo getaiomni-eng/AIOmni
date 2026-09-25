@@ -32,6 +32,23 @@
 //        -> runs weekly-rankings now (refresh_status: true) and returns its
 //           summary, so a decision reaches the board without waiting for cron.
 //
+// POSTS (daily social queue, public.social_posts; the Posts tab):
+//   GET  ?view=posts
+//        -> { autopost: 'on'|'off', today, days: [{date, posts}] } for yesterday
+//           (a missed copy-paste post stays visible), today and the next 2 days.
+//   POST {action:'post_hold', id}      queued -> held        (auto/semi)
+//        {action:'post_release', id}   held -> queued; a publish_at already in
+//                                      the past becomes now + 2 min
+//        {action:'post_now', id}       queued|held -> queued, publish_at = now
+//        {action:'post_done', id}      manual: ready -> done; semi: posted -> done
+//                                      ("I made the YouTube upload public")
+//        {action:'post_undo_done', id} done -> ready (manual) | posted (semi)
+//        {action:'autopost', value}    'on' | 'off': app_settings.social_autopost,
+//                                      the publisher's master switch
+//   Every transition is a conditional PATCH on the status the row had when it
+//   was read, so a tap can never overwrite what the publisher did a second
+//   earlier: a lost race returns 409 with the row as it is now.
+//
 // CANDIDATES. Rostered skill players from the live Sleeper mirror
 // (nfl_player_status), minus anyone on IR/Out/PUP/suspended, ordered by the
 // market so the list starts close to done: FantasyPros ECR first, then ESPN's
@@ -455,6 +472,115 @@ async function rebuild(b: any) {
   } finally { clearTimeout(t); }
 }
 
+// ── posts: daily social queue ─────────────────────────────────────────────
+const NETWORK_ORDER = ['x', 'threads', 'bluesky', 'instagram', 'facebook', 'youtube', 'tiktok', 'reddit'];
+const POST_ACTIONS = new Set(['post_hold', 'post_release', 'post_now', 'post_done', 'post_undo_done']);
+
+// Calendar day in US/Eastern, the day a post is "for".
+function etDate(offsetDays = 0, now = Date.now()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date(now + offsetDays * 86_400_000));
+}
+
+async function autopostSetting(): Promise<'on' | 'off'> {
+  const r = await sb('app_settings?select=value&key=eq.social_autopost');
+  const rows = r.ok ? await r.json() : [];
+  return Array.isArray(rows) && rows[0]?.value === 'off' ? 'off' : 'on';
+}
+
+async function buildPosts() {
+  const dates = [-1, 0, 1, 2].map(d => etDate(d));
+  const [rows, autopost] = await Promise.all([
+    all<any>(`social_posts?select=*&post_date=gte.${dates[0]}&post_date=lte.${dates[3]}&order=post_date.asc,id.asc`),
+    autopostSetting(),
+  ]);
+  const rank = (n: string) => { const i = NETWORK_ORDER.indexOf(n); return i < 0 ? 99 : i; };
+  const days = dates.map(date => ({
+    date,
+    posts: rows.filter(r => r.post_date === date)
+      .sort((a, b) => rank(a.network) - rank(b.network) || String(a.theme).localeCompare(String(b.theme)) || a.id - b.id),
+  }));
+  return { autopost, today: dates[1], days };
+}
+
+async function postAction(b: any) {
+  const id = Number(b.id);
+  if (!Number.isInteger(id) || id <= 0) return { code: 400, body: { ok: false, error: 'id must be a positive integer' } };
+  const r = await sb(`social_posts?select=*&id=eq.${id}`);
+  const [row] = r.ok ? await r.json() : [];
+  if (!row) return { code: 404, body: { ok: false, error: `post ${id} not found` } };
+
+  const now = new Date().toISOString();
+  const auto = row.mode === 'auto' || row.mode === 'semi';
+  let patch: Record<string, unknown> | null = null;
+  let why = '';
+  switch (b.action) {
+    case 'post_hold':
+      if (!auto) why = 'only automatic posts can be held';
+      else if (row.status !== 'queued') why = `it is ${row.status}, not queued`;
+      else patch = { status: 'held' };
+      break;
+    case 'post_release': {
+      if (!auto) why = 'only automatic posts can be released';
+      else if (row.status !== 'held') why = `it is ${row.status}, not held`;
+      else {
+        const past = !row.publish_at || Date.parse(row.publish_at) < Date.now();
+        patch = { status: 'queued', publish_at: past ? new Date(Date.now() + 120_000).toISOString() : row.publish_at };
+      }
+      break;
+    }
+    case 'post_now':
+      if (!auto) why = 'copy-paste posts are published by hand';
+      else if (row.status !== 'queued' && row.status !== 'held') why = `it is ${row.status}`;
+      else patch = { status: 'queued', publish_at: now };
+      break;
+    case 'post_done':
+      if (row.mode === 'manual' && row.status === 'ready') patch = { status: 'done', posted_at: now };
+      else if (row.mode === 'semi' && row.status === 'posted') patch = { status: 'done' };
+      else why = row.mode === 'auto' ? 'automatic posts are marked posted by the publisher' : `it is ${row.status}`;
+      break;
+    case 'post_undo_done':
+      if (row.status !== 'done') why = `it is ${row.status}, not done`;
+      else if (row.mode === 'manual') patch = { status: 'ready', posted_at: null };
+      else if (row.mode === 'semi') patch = { status: 'posted' };
+      else why = 'automatic posts cannot be un-done';
+      break;
+  }
+  if (!patch) return { code: 409, body: { ok: false, error: `cannot ${String(b.action).replace('post_', '').replace(/_/g, ' ')}: ${why}`, row } };
+
+  // Conditional on the status we just read: the publisher may have moved it.
+  const u = await sb(`social_posts?id=eq.${id}&status=eq.${encodeURIComponent(row.status)}`, {
+    method: 'PATCH', headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({ ...patch, updated_at: now }),
+  });
+  if (!u.ok) return { code: 502, body: { ok: false, error: `update failed (${u.status})`, detail: (await u.text()).slice(0, 200) } };
+  const [updated] = await u.json();
+  if (!updated) {
+    const f = await sb(`social_posts?select=*&id=eq.${id}`);
+    const [fresh] = f.ok ? await f.json() : [];
+    return { code: 409, body: { ok: false, error: `it changed to ${fresh?.status ?? 'something else'} a moment ago; nothing was changed`, row: fresh ?? row } };
+  }
+  return { code: 200, body: { ok: true, row: updated } };
+}
+
+async function setAutopost(b: any) {
+  const value = b.value === 'on' || b.value === 'off' ? b.value : null;
+  if (!value) return { code: 400, body: { ok: false, error: "value must be 'on' or 'off'" } };
+  const now = new Date().toISOString();
+  const u = await sb('app_settings?key=eq.social_autopost', {
+    method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ value, updated_at: now }),
+  });
+  if (!u.ok) return { code: 502, body: { ok: false, error: `could not save the switch (${u.status})` } };
+  const rows = await u.json();
+  if (!Array.isArray(rows) || rows.length === 0) {
+    const i = await sb('app_settings', {
+      method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ key: 'social_autopost', value, updated_at: now }),
+    });
+    if (!i.ok) return { code: 502, body: { ok: false, error: `could not save the switch (${i.status})` } };
+  }
+  return { code: 200, body: { ok: true, autopost: value } };
+}
+
 function parseSeasonWeek(season: unknown, week: unknown) {
   const s = Number(season), w = Number(week);
   return {
@@ -471,6 +597,9 @@ Deno.serve(async (req) => {
   try {
     if (req.method === 'GET') {
       const url = new URL(req.url);
+      // Posts are keyed by calendar day, not NFL week: answer before the
+      // week lookup so the tab loads even when that query is slow.
+      if (url.searchParams.get('view') === 'posts') return json(req, { ok: true, ...(await buildPosts()) });
       const p = parseSeasonWeek(url.searchParams.get('season'), url.searchParams.get('week'));
       const season = p.season ?? nflSeason();
       const week = p.week ?? await defaultWeek(season);
@@ -514,6 +643,8 @@ Deno.serve(async (req) => {
       if (!body || typeof body !== 'object') return json(req, { ok: false, error: 'body must be JSON' }, 400);
       if (body.action === 'override') { const r = await saveOverride(body); return json(req, r.body, r.code); }
       if (body.action === 'rebuild') { const r = await rebuild(body); return json(req, r.body, r.code); }
+      if (POST_ACTIONS.has(body.action)) { const r = await postAction(body); return json(req, r.body, r.code); }
+      if (body.action === 'autopost') { const r = await setAutopost(body); return json(req, r.body, r.code); }
       if (body.action != null) return json(req, { ok: false, error: `unknown action ${String(body.action).slice(0, 30)}` }, 400);
       const { season, week } = parseSeasonWeek(body.season, body.week);
       const position = body.position as Pos;

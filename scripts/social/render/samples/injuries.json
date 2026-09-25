@@ -1,0 +1,98 @@
+{
+ "_sample": "SAMPLE DATA for render testing only, not real rankings or results",
+ "theme": "injuries",
+ "season": 2026,
+ "week": 3,
+ "players": [
+  {
+   "name": "Puka Nacua",
+   "pos": "WR",
+   "team": "LA",
+   "opp": "DEN",
+   "rank": 4,
+   "status": "Questionable",
+   "practice": "Did Not Participate In Practice"
+  },
+  {
+   "name": "Nico Collins",
+   "pos": "WR",
+   "team": "HOU",
+   "opp": "IND",
+   "rank": 7,
+   "status": "Questionable",
+   "practice": "Did Not Participate In Practice"
+  },
+  {
+   "name": "Brock Bowers",
+   "pos": "TE",
+   "team": "LV",
+   "opp": "NO",
+   "rank": 5,
+   "status": "Questionable",
+   "practice": "Limited Participation in Practice"
+  },
+  {
+   "name": "DeVonta Smith",
+   "pos": "WR",
+   "team": "PHI",
+   "opp": "CHI",
+   "rank": 11,
+   "status": "Questionable",
+   "practice": "Did Not Participate In Practice"
+  },
+  {
+   "name": "Zay Flowers",
+   "pos": "WR",
+   "team": "BAL",
+   "opp": "DAL",
+   "rank": 16,
+   "status": "Questionable",
+   "practice": "Did Not Participate In Practice"
+  },
+  {
+   "name": "Saquon Barkley",
+   "pos": "RB",
+   "team": "PHI",
+   "opp": "CHI",
+   "rank": 18,
+   "status": "Questionable",
+   "practice": "Limited Participation in Practice"
+  },
+  {
+   "name": "Travis Etienne Jr.",
+   "pos": "RB",
+   "team": "NO",
+   "opp": "LV",
+   "rank": 20,
+   "status": "Questionable",
+   "practice": "Limited Participation in Practice"
+  },
+  {
+   "name": "Mike Evans",
+   "pos": "WR",
+   "team": "SF",
+   "opp": "ARI",
+   "rank": 24,
+   "status": "Questionable",
+   "practice": "Did Not Participate In Practice"
+  },
+  {
+   "name": "Aaron Jones",
+   "pos": "RB",
+   "team": "MIN",
+   "opp": "TB",
+   "rank": 27,
+   "status": "Questionable",
+   "practice": "Limited Participation in Practice"
+  },
+  {
+   "name": "DJ Moore",
+   "pos": "WR",
+   "team": "BUF",
+   "opp": "LAC",
+   "rank": 36,
+   "status": "Doubtful",
+   "practice": "Did Not Participate In Practice"
+  }
+ ]
+}
