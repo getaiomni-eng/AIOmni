@@ -1022,7 +1022,11 @@ export default function RankingsScreen() {
         {cardPlayer && (
           <PlayerCardModal
             visible={cardVisible}
-            player={{ id: cardPlayer.id, name: cardPlayer.name, position: cardPlayer.position, team: cardPlayer.team }}
+            // The card looks the player up and builds its headshot from a SLEEPER
+            // id. THIS WEEK rows are keyed on gsis_id and carry the sleeper id
+            // separately, so passing .id alone gave every weekly card a blank
+            // photo -- the same rule PlayerPhoto already applies to the rows.
+            player={{ id: (cardPlayer as any).sleeperId ?? cardPlayer.id, name: cardPlayer.name, position: cardPlayer.position, team: cardPlayer.team }}
             platform={'sleeper'}
             onClose={() => setCardVisible(false)}
             onAskAI={() => {
