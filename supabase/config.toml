@@ -71,3 +71,10 @@ verify_jwt = false
 # the dashboard -- config that is not in the repo is config nobody can check.
 [functions.revenuecat-webhook]
 verify_jwt = false
+
+# getaiomni.com/rank is a static page with no Supabase session, so it cannot
+# send a JWT. The function authenticates every request itself with the
+# x-rank-key header against the RANK_TOOL_KEY secret, and refuses everything
+# when that secret is unset. verify_jwt stays false or the page 401s.
+[functions.manual-rankings]
+verify_jwt = false

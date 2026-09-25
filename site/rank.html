@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weekly Ranks · AIOmni</title>
+<!-- Hidden tool: not linked, not in sitemap.xml. Saving needs the rank key. -->
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="/favicon.png" type="image/png">
+<meta name="theme-color" content="#070D0E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Barlow:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/site.css">
+<style>
+.wm{display:inline-flex;align-items:center;font-family:'Audiowide',cursive;color:var(--ink);letter-spacing:.5px;line-height:1;white-space:nowrap;}
+.wmt{position:relative;z-index:2;}
+.wmo{position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;}
+.wmo svg{display:block;overflow:visible;}
+.spinO{animation:spinO 11s linear infinite;}
+
+.rk-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:22px 0 14px;}
+.rk-title{font-family:'Audiowide',cursive;font-size:22px;margin:0;}
+.rk-week{display:flex;align-items:center;gap:8px;}
+.rk-week label{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:1.4px;color:var(--mute);}
+select,input[type=search],input[type=password],input[type=text]{font:inherit;font-size:15px;color:var(--ink);
+  background:var(--panel);border:1px solid var(--line2);border-radius:7px;padding:9px 11px;min-height:42px;}
+select:focus,input:focus,button:focus-visible{outline:2px solid var(--aqua);outline-offset:1px;}
+.b{font:inherit;font-weight:700;font-size:14px;border-radius:7px;padding:9px 14px;min-height:42px;cursor:pointer;
+  border:1px solid var(--line2);background:transparent;color:var(--ink);}
+.b:hover{border-color:var(--dim);}
+.b:disabled{opacity:.4;cursor:default;}
+.b.v{background:var(--volt);border-color:var(--volt);color:#070D0E;}
+.b.q{font-weight:500;color:var(--dim);}
+.lnk{background:none;border:none;color:var(--mute);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer;padding:6px 2px;}
+.lnk:hover{color:var(--ink);}
+
+.rk-status{font-family:'Space Mono',monospace;font-size:11.5px;color:var(--mute);min-height:18px;margin:0 0 12px;}
+.rk-status.err{color:var(--red);} .rk-status.ok{color:var(--wr);}
+.rk-banner{border:1px solid rgba(255,170,0,.4);background:rgba(255,170,0,.08);border-radius:8px;padding:12px 14px;
+  margin:0 0 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14.5px;}
+.rk-banner[hidden]{display:none;}
+.rk-banner span{flex:1 1 220px;}
+
+.rk-tabs{display:flex;gap:6px;margin:0 0 14px;}
+.rk-tab{flex:1 1 0;font-family:'Space Mono',monospace;font-size:13px;font-weight:700;padding:10px 6px;min-height:46px;border-radius:7px;
+  border:1px solid var(--line2);background:transparent;color:var(--dim);cursor:pointer;position:relative;}
+.rk-tab small{display:block;font-weight:400;font-size:10.5px;color:var(--mute);margin-top:1px;}
+.rk-tab[aria-selected="true"]{background:var(--raise);color:var(--ink);border-color:var(--dim);}
+.rk-tab[aria-selected="true"][data-p=QB]{border-color:var(--qb);color:var(--qb);}
+.rk-tab[aria-selected="true"][data-p=RB]{border-color:var(--rb);color:var(--rb);}
+.rk-tab[aria-selected="true"][data-p=WR]{border-color:var(--wr);color:var(--wr);}
+.rk-tab[aria-selected="true"][data-p=TE]{border-color:var(--te);color:var(--te);}
+.rk-tab .dirty{position:absolute;top:6px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--te);}
+
+.rk-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;align-items:start;padding-bottom:60px;}
+.rk-col{min-width:0;}
+.rk-colh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;}
+.rk-colh h2{font-size:15px;font-family:'Space Mono',monospace;letter-spacing:1.2px;margin:0;flex:1 1 auto;color:var(--dim);font-weight:700;}
+.rk-colh .b{min-height:38px;padding:7px 11px;font-size:13px;}
+
+.rk-list,.rk-pool{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden;}
+.rk-list li,.rk-pool li{display:flex;align-items:center;gap:8px;padding:6px 8px 6px 6px;min-height:54px;border-bottom:1px solid rgba(28,43,46,.6);}
+.rk-list li:last-child,.rk-pool li:last-child{border-bottom:none;}
+.rk-list li.empty{color:var(--mute);font-size:13.5px;justify-content:center;min-height:70px;}
+.drag{flex:0 0 34px;height:42px;display:flex;align-items:center;justify-content:center;color:var(--mute);cursor:grab;touch-action:none;border-radius:6px;}
+.drag:hover{background:var(--raise);color:var(--ink);}
+.drag svg{display:block;}
+.rn{flex:0 0 30px;font-family:'Space Mono',monospace;font-weight:700;font-size:13px;text-align:right;}
+.who{flex:1 1 auto;min-width:0;}
+.nm{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
+.meta{display:block;font-size:12px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.inj{display:inline-block;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:6px;vertical-align:2px;
+  background:rgba(255,170,0,.16);color:var(--te);}
+.inj.D{background:rgba(255,34,85,.16);color:var(--red);}
+.mk{flex:0 0 auto;font-family:'Space Mono',monospace;font-size:11px;color:var(--mute);white-space:nowrap;}
+.ib{flex:0 0 38px;height:40px;border:1px solid var(--line2);border-radius:6px;background:transparent;color:var(--dim);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:15px;padding:0;}
+.ib:hover{color:var(--ink);border-color:var(--dim);}
+.ib:disabled{opacity:.3;cursor:default;}
+.ib.x:hover{color:var(--red);border-color:var(--red);}
+.sortable-ghost{opacity:.35;}
+.sortable-chosen{background:var(--raise);}
+
+.rk-pool{max-height:70vh;overflow-y:auto;}
+.rk-pool li{cursor:pointer;}
+.rk-pool li:hover{background:var(--raise);}
+.rk-pool li.full{cursor:default;opacity:.55;}
+.rk-pool li.full:hover{background:transparent;}
+.add{flex:0 0 38px;height:40px;border-radius:6px;border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;color:var(--wr);font-size:19px;}
+.rk-search{width:100%;margin:0 0 10px;}
+
+.rk-key{max-width:440px;margin:40px auto;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:22px;}
+.rk-key h2{font-size:20px;}
+.rk-key p{color:var(--dim);font-size:14.5px;margin:0 0 14px;}
+.rk-key form{display:flex;gap:8px;flex-wrap:wrap;}
+.rk-key input{flex:1 1 200px;}
+.mockflag{font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:1.2px;padding:3px 7px;border-radius:4px;background:rgba(27,231,255,.13);color:var(--aqua);}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+
+@media (max-width:860px){
+  .rk-grid{grid-template-columns:1fr;}
+  .rk-pool{max-height:none;}
+}
+@media (max-width:420px){
+  .wrap{padding:0 14px;}
+  .mk{display:none;}
+  .rk-list .ib.up,.rk-list .ib.dn{flex-basis:36px;}
+  .ib{height:44px;}
+  .rk-colh .b{min-height:42px;}
+  .rn{flex-basis:24px;}
+}
+</style>
+</head>
+<body>
+<nav><div class="wrap nv">
+  <a class="lg" href="/" aria-label="AIOmni home"><span class="wm" style="font-size:19px"><span class="wmt">AI</span><span class="wmo" style="width:21.85px;height:21.85px;margin:0 -3.9px"><svg width="21.85" height="21.85" viewBox="0 0 21.85 21.85" role="img" aria-label="AIOmni">
+<defs><linearGradient id="gN" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0%" stop-color="#1be7ff"/><stop offset="25%" stop-color="#6eeb83"/>
+<stop offset="50%" stop-color="#e4ff1a"/><stop offset="75%" stop-color="#ffb800"/>
+<stop offset="100%" stop-color="#ff5714"/></linearGradient></defs>
+<circle class="spinO" cx="10.925" cy="10.925" r="8.30" fill="none" stroke="url(#gN)" stroke-width="1.97" stroke-linecap="round"
+ stroke-dasharray="44.34 7.83" stroke-dashoffset="32.61" style="transform-origin:10.925px 10.925px"/></svg></span><span class="wmt" style="opacity:.45">MNI</span></span></a>
+  <span class="sp"></span>
+  <span id="mockflag" class="mockflag" hidden>MOCK DATA</span>
+  <button class="lnk" id="changeKey" type="button">Change key</button>
+</div></nav>
+
+<main class="wrap">
+  <section id="keyView" class="rk-key" hidden style="padding:22px">
+    <h2>Rank key</h2>
+    <p>Enter the rank key once. It stays in this browser only.</p>
+    <form id="keyForm">
+      <label class="sr" for="keyInput">Rank key</label>
+      <input id="keyInput" type="password" autocomplete="current-password" placeholder="Rank key" required>
+      <button class="b v" type="submit">Continue</button>
+    </form>
+    <p id="keyErr" class="rk-status err" style="margin-top:10px"></p>
+  </section>
+
+  <div id="appView" hidden>
+    <div class="rk-top">
+      <h1 class="rk-title">Weekly ranks</h1>
+      <span class="sp"></span>
+      <div class="rk-week">
+        <label for="weekSel">WEEK</label>
+        <select id="weekSel" aria-label="Week"></select>
+      </div>
+      <button class="b v" id="saveAll" type="button" disabled>Save all</button>
+    </div>
+    <p id="status" class="rk-status" role="status" aria-live="polite"></p>
+
+    <div id="leaveBanner" class="rk-banner" hidden>
+      <span id="leaveText">Unsaved changes.</span>
+      <button class="b" id="leaveSave" type="button">Save all first</button>
+      <button class="b q" id="leaveDiscard" type="button">Discard and switch</button>
+      <button class="b q" id="leaveCancel" type="button">Cancel</button>
+    </div>
+
+    <div class="rk-tabs" role="tablist" aria-label="Position">
+      <button class="rk-tab" role="tab" data-p="QB" type="button">QB<small></small></button>
+      <button class="rk-tab" role="tab" data-p="RB" type="button">RB<small></small></button>
+      <button class="rk-tab" role="tab" data-p="WR" type="button">WR<small></small></button>
+      <button class="rk-tab" role="tab" data-p="TE" type="button">TE<small></small></button>
+    </div>
+
+    <div class="rk-grid">
+      <div class="rk-col">
+        <div class="rk-colh">
+          <h2 id="listHead">YOUR TOP 25</h2>
+          <button class="b" id="fillMarket" type="button">Fill from market</button>
+          <button class="b q" id="revert" type="button">Revert</button>
+          <button class="b q" id="clearList" type="button">Clear</button>
+          <button class="b v" id="savePos" type="button">Save</button>
+        </div>
+        <ol class="rk-list" id="list" aria-label="Your ranking"></ol>
+        <p class="tiny" id="savedAt" style="margin:8px 2px 0"></p>
+      </div>
+      <div class="rk-col">
+        <div class="rk-colh"><h2>PLAYERS</h2></div>
+        <label class="sr" for="search">Search players</label>
+        <input id="search" class="rk-search" type="search" placeholder="Search name or team" autocomplete="off">
+        <ul class="rk-pool" id="pool" aria-label="Available players"></ul>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<script>
+(() => {
+  const API = 'https://khoruzvsprxyocisuhet.supabase.co/functions/v1/manual-rankings';
+  const KEY_STORE = 'aiomni.rankKey';
+  const POS = ['QB', 'RB', 'WR', 'TE'];
+  const MAX = 25;
+  const MOCK = new URLSearchParams(location.search).get('mock') === '1';
+
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get() { try { return localStorage.getItem(KEY_STORE) || ''; } catch { return ''; } },
+    set(v) { try { localStorage.setItem(KEY_STORE, v); } catch { /* private mode: key lives for this page only */ } },
+    clear() { try { localStorage.removeItem(KEY_STORE); } catch {} },
+  };
+  let memKey = store.get();
+
+  // ── state ──────────────────────────────────────────────────────────────
+  const S = {
+    season: null, week: null, pos: 'QB',
+    cand: { QB: [], RB: [], WR: [], TE: [] },      // candidate objects in market order
+    byId: new Map(),
+    saved: { QB: [], RB: [], WR: [], TE: [] },     // ids as last saved
+    work: { QB: [], RB: [], WR: [], TE: [] },      // ids being edited
+    savedAt: { QB: null, RB: null, WR: null, TE: null },
+    busy: false,
+  };
+  const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  const dirty = (p) => !same(S.work[p], S.saved[p]);
+  const anyDirty = () => POS.some(dirty);
+
+  // ── mock data (no network) ─────────────────────────────────────────────
+  const TEAMS = ['ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','DET','GB','HOU','IND','JAX','KC',
+                 'LAC','LAR','LV','MIA','MIN','NE','NO','NYG','NYJ','PHI','PIT','SEA','SF','TB','TEN','WAS'];
+  const mockDb = { saved: {}, savedAt: {} };
+  function mockGet(season, week) {
+    const counts = { QB: 40, RB: 70, WR: 90, TE: 40 };
+    const cands = {};
+    for (const p of POS) {
+      cands[p] = Array.from({ length: counts[p] }, (_, i) => {
+        const t = TEAMS[(i * 7 + p.length) % 32], o = TEAMS[(i * 7 + p.length + 16) % 32];
+        const src = i < 30 ? 'FP' : i < 45 ? 'ESPN' : i < 55 ? 'SLP' : null;
+        return {
+          gsis_id: `mock-${p}-${i + 1}`, name: `Player ${p}${i + 1}`, position: p, team: t,
+          opp: o, home: i % 2 === 0, kickoff: `2026-09-${27 + (i % 3 === 0 ? 1 : 0)}T17:00:00Z`,
+          injury: i % 11 === 4 ? 'Questionable' : i % 17 === 9 ? 'Doubtful' : null,
+          market: src ? { src, rank: src === 'FP' ? i + 1 : i + 1 - (src === 'ESPN' ? 0 : 3) } : null,
+        };
+      });
+    }
+    const k = `${season}-${week}`;
+    return {
+      ok: true, season, week, kickoffs: {}, candidates: cands,
+      saved: mockDb.saved[k] || { QB: [], RB: [], WR: [], TE: [] },
+      saved_at_by_position: mockDb.savedAt[k] || { QB: null, RB: null, WR: null, TE: null },
+    };
+  }
+
+  // ── network ────────────────────────────────────────────────────────────
+  async function api(method, params, body) {
+    if (MOCK) {
+      await new Promise(r => setTimeout(r, 250));
+      if (method === 'GET') return mockGet(params.season || 2026, params.week || 3);
+      const k = `${body.season}-${body.week}`;
+      mockDb.saved[k] = mockDb.saved[k] || { QB: [], RB: [], WR: [], TE: [] };
+      mockDb.savedAt[k] = mockDb.savedAt[k] || { QB: null, RB: null, WR: null, TE: null };
+      mockDb.saved[k][body.position] = [...body.players];
+      const at = new Date().toISOString();
+      mockDb.savedAt[k][body.position] = at;
+      return { ok: true, saved: [...body.players], saved_at: at };
+    }
+    const q = new URLSearchParams();
+    if (params.season) q.set('season', params.season);
+    if (params.week) q.set('week', params.week);
+    const r = await fetch(`${API}${q.toString() ? '?' + q : ''}`, {
+      method,
+      headers: { 'x-rank-key': memKey, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    let data = null;
+    try { data = await r.json(); } catch {}
+    if (r.status === 401) { const e = new Error('unauthorized'); e.code = 401; throw e; }
+    if (!r.ok || !data || data.ok === false) throw new Error((data && data.error) || `request failed (${r.status})`);
+    return data;
+  }
+
+  // ── status line ────────────────────────────────────────────────────────
+  function status(msg, kind) {
+    const el = $('status');
+    el.textContent = msg || '';
+    el.className = 'rk-status' + (kind ? ' ' + kind : '');
+  }
+  const fmtTime = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+  };
+  const dayOf = (iso) => iso ? new Date(iso).toLocaleDateString([], { weekday: 'short' }) : '';
+
+  // ── load a week ────────────────────────────────────────────────────────
+  async function load(week) {
+    S.busy = true; status('Loading…');
+    try {
+      const d = await api('GET', { season: S.season, week });
+      S.season = d.season; S.week = d.week;
+      S.byId = new Map();
+      for (const p of POS) {
+        S.cand[p] = d.candidates[p] || [];
+        for (const c of S.cand[p]) S.byId.set(c.gsis_id, c);
+        S.saved[p] = [...(d.saved[p] || [])];
+        S.work[p] = [...S.saved[p]];
+        S.savedAt[p] = (d.saved_at_by_position || {})[p] || null;
+      }
+      buildWeekSelect();
+      status(`Week ${S.week} loaded. ${POS.map(p => `${p} ${S.cand[p].length}`).join(' · ')} candidates.`);
+      render();
+    } catch (e) {
+      if (e.code === 401) { askKey('That key was not accepted.'); return; }
+      status(`Could not load: ${e.message}`, 'err');
+    } finally { S.busy = false; }
+  }
+
+  function buildWeekSelect() {
+    const sel = $('weekSel');
+    if (sel.options.length !== 18) {
+      sel.innerHTML = '';
+      for (let w = 1; w <= 18; w++) sel.add(new Option(`${w}`, `${w}`));
+    }
+    sel.value = String(S.week);
+  }
+
+  // ── render ─────────────────────────────────────────────────────────────
+  const grip = '<svg width="14" height="18" viewBox="0 0 14 18" aria-hidden="true"><g fill="currentColor"><circle cx="4" cy="3" r="1.6"/><circle cx="10" cy="3" r="1.6"/><circle cx="4" cy="9" r="1.6"/><circle cx="10" cy="9" r="1.6"/><circle cx="4" cy="15" r="1.6"/><circle cx="10" cy="15" r="1.6"/></g></svg>';
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const injBadge = (c) => {
+    if (!c.injury) return '';
+    const k = c.injury[0].toUpperCase();
+    return `<span class="inj ${k === 'D' ? 'D' : ''}" title="${esc(c.injury)}">${esc(k)}</span>`;
+  };
+  const matchup = (c) => c.opp ? `${c.team} ${c.home ? 'vs' : '@'} ${c.opp}${c.kickoff ? ' · ' + dayOf(c.kickoff) : ''}` : `${c.team} · bye`;
+  const mkHint = (c) => c.market ? `${c.market.src} ${Math.round(c.market.rank)}` : '';
+  const cOf = (id) => S.byId.get(id) || { gsis_id: id, name: id, team: '', opp: null, market: null };
+
+  function renderTabs() {
+    for (const b of document.querySelectorAll('.rk-tab')) {
+      const p = b.dataset.p;
+      b.setAttribute('aria-selected', String(p === S.pos));
+      b.tabIndex = p === S.pos ? 0 : -1;
+      b.querySelector('small').textContent = `${S.work[p].length}/${MAX}`;
+      let dot = b.querySelector('.dirty');
+      if (dirty(p) && !dot) { dot = document.createElement('span'); dot.className = 'dirty'; dot.title = 'Unsaved'; b.appendChild(dot); }
+      if (!dirty(p) && dot) dot.remove();
+    }
+  }
+
+  function renderList() {
+    const p = S.pos, ids = S.work[p], ol = $('list');
+    $('listHead').textContent = `YOUR TOP ${MAX} · ${p}`;
+    if (!ids.length) {
+      ol.innerHTML = `<li class="empty">Nothing ranked yet. Tap players to add them, or fill from market.</li>`;
+    } else {
+      ol.innerHTML = ids.map((id, i) => {
+        const c = cOf(id);
+        return `<li data-id="${esc(id)}">
+          <span class="drag" title="Drag to reorder" aria-hidden="true">${grip}</span>
+          <span class="rn r${p}">${i + 1}</span>
+          <span class="who"><span class="nm">${esc(c.name)}${injBadge(c)}</span><span class="meta">${esc(matchup(c))}</span></span>
+          <span class="mk">${esc(mkHint(c))}</span>
+          <button class="ib up" type="button" data-act="up" aria-label="Move ${esc(c.name)} up" ${i === 0 ? 'disabled' : ''}>↑</button>
+          <button class="ib dn" type="button" data-act="dn" aria-label="Move ${esc(c.name)} down" ${i === ids.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="ib x" type="button" data-act="rm" aria-label="Remove ${esc(c.name)}">×</button>
+        </li>`;
+      }).join('');
+    }
+    $('savedAt').textContent = S.savedAt[p]
+      ? `Saved ${fmtTime(S.savedAt[p])}${dirty(p) ? ' · unsaved changes' : ''}`
+      : (dirty(p) ? 'Not saved yet' : 'Nothing saved for this week');
+    $('savePos').textContent = `Save ${p}`;
+    $('savePos').disabled = !dirty(p);
+    $('revert').disabled = !dirty(p);
+    $('clearList').disabled = !ids.length;
+    $('fillMarket').disabled = ids.length >= MAX;
+    $('saveAll').disabled = !anyDirty();
+  }
+
+  function renderPool() {
+    const p = S.pos, q = $('search').value.trim().toLowerCase();
+    const inList = new Set(S.work[p]);
+    const full = S.work[p].length >= MAX;
+    const rows = S.cand[p].filter(c => !inList.has(c.gsis_id) &&
+      (!q || c.name.toLowerCase().includes(q) || (c.team || '').toLowerCase() === q || (c.opp || '').toLowerCase() === q));
+    $('pool').innerHTML = rows.length ? rows.map(c => `
+      <li data-id="${esc(c.gsis_id)}" class="${full ? 'full' : ''}" ${full ? '' : 'tabindex="0" role="button"'} aria-label="Add ${esc(c.name)}">
+        <span class="who"><span class="nm">${esc(c.name)}${injBadge(c)}</span><span class="meta">${esc(matchup(c))}</span></span>
+        <span class="mk">${esc(mkHint(c))}</span>
+        ${full ? '' : '<span class="add" aria-hidden="true">+</span>'}
+      </li>`).join('') : `<li class="empty" style="color:var(--mute);justify-content:center">No players match.</li>`;
+  }
+
+  function render() { renderTabs(); renderList(); renderPool(); }
+
+  // ── editing ────────────────────────────────────────────────────────────
+  function add(id) {
+    const w = S.work[S.pos];
+    if (w.length >= MAX || w.includes(id)) return;
+    w.push(id); render();
+    status(`Added ${cOf(id).name} at ${w.length}.`);
+  }
+  function move(i, d) {
+    const w = S.work[S.pos], j = i + d;
+    if (j < 0 || j >= w.length) return;
+    [w[i], w[j]] = [w[j], w[i]];
+    render();
+    const btn = $('list').children[j]?.querySelector(d < 0 ? '[data-act=up]' : '[data-act=dn]');
+    (btn && !btn.disabled ? btn : $('list').children[j]?.querySelector('[data-act=rm]'))?.focus();
+  }
+  function remove(i) {
+    const [id] = S.work[S.pos].splice(i, 1);
+    render(); status(`Removed ${cOf(id).name}.`);
+  }
+
+  $('list').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    const li = b.closest('li'); const i = [...$('list').children].indexOf(li);
+    if (b.dataset.act === 'up') move(i, -1);
+    else if (b.dataset.act === 'dn') move(i, 1);
+    else if (b.dataset.act === 'rm') remove(i);
+  });
+  $('pool').addEventListener('click', (e) => {
+    const li = e.target.closest('li[data-id]'); if (!li || li.classList.contains('full')) return;
+    add(li.dataset.id);
+  });
+  $('pool').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const li = e.target.closest('li[data-id]'); if (!li || li.classList.contains('full')) return;
+    e.preventDefault(); add(li.dataset.id);
+  });
+  $('search').addEventListener('input', renderPool);
+
+  if (window.Sortable) {
+    Sortable.create($('list'), {
+      // forceFallback: pointer-driven dragging on desktop too, the same code
+      // path touch uses, instead of native HTML5 drag-and-drop.
+      handle: '.drag', animation: 150, forceFallback: true, fallbackTolerance: 3,
+      filter: '.empty', ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen',
+      onEnd: (ev) => {
+        if (ev.oldIndex === ev.newIndex) return;
+        const w = S.work[S.pos];
+        const [id] = w.splice(ev.oldIndex, 1);
+        w.splice(ev.newIndex, 0, id);
+        render();
+      },
+    });
+  } else {
+    status('Drag library did not load; use the arrow buttons to reorder.', 'err');
+  }
+
+  $('fillMarket').addEventListener('click', () => {
+    const w = S.work[S.pos], have = new Set(w);
+    for (const c of S.cand[S.pos]) {
+      if (w.length >= MAX) break;
+      if (!c.market) break;                // only market-ranked players, in market order
+      if (!have.has(c.gsis_id)) w.push(c.gsis_id);
+    }
+    render(); status(`Filled ${S.pos} to ${w.length} from the market order.`);
+  });
+  $('revert').addEventListener('click', () => { S.work[S.pos] = [...S.saved[S.pos]]; render(); status(`${S.pos} reverted to last save.`); });
+  $('clearList').addEventListener('click', () => { S.work[S.pos] = []; render(); status(`${S.pos} cleared (not saved yet).`); });
+
+  // ── saving ─────────────────────────────────────────────────────────────
+  async function save(p) {
+    const d = await api('POST', {}, { season: S.season, week: S.week, position: p, players: S.work[p] });
+    S.saved[p] = [...d.saved];
+    S.work[p] = [...d.saved];
+    S.savedAt[p] = d.saved_at || null;
+  }
+  async function saveMany(list) {
+    if (S.busy || !list.length) return true;
+    S.busy = true; $('saveAll').disabled = true; $('savePos').disabled = true;
+    status(`Saving ${list.join(', ')}…`);
+    const failed = [];
+    for (const p of list) {
+      try { await save(p); }
+      catch (e) {
+        if (e.code === 401) { S.busy = false; askKey('That key was not accepted. Your changes are still here.'); return false; }
+        failed.push(`${p}: ${e.message}`);
+      }
+    }
+    S.busy = false; render();
+    if (failed.length) { status(`Not saved. ${failed.join(' · ')}`, 'err'); return false; }
+    status(`Saved ${list.join(', ')} for week ${S.week}.`, 'ok');
+    return true;
+  }
+  $('savePos').addEventListener('click', () => saveMany([S.pos]));
+  $('saveAll').addEventListener('click', () => saveMany(POS.filter(dirty)));
+
+  // ── tabs ───────────────────────────────────────────────────────────────
+  const tabs = [...document.querySelectorAll('.rk-tab')];
+  tabs.forEach(b => b.addEventListener('click', () => { S.pos = b.dataset.p; $('search').value = ''; render(); }));
+  $('appView').querySelector('.rk-tabs').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const i = POS.indexOf(S.pos) + (e.key === 'ArrowRight' ? 1 : -1);
+    S.pos = POS[(i + POS.length) % POS.length]; render();
+    tabs[POS.indexOf(S.pos)].focus();
+  });
+
+  // ── week switching, guarded ────────────────────────────────────────────
+  let pendingWeek = null;
+  $('weekSel').addEventListener('change', () => {
+    const w = Number($('weekSel').value);
+    if (w === S.week) return;
+    if (anyDirty()) {
+      pendingWeek = w;
+      $('weekSel').value = String(S.week);
+      $('leaveText').textContent = `Unsaved changes in week ${S.week} (${POS.filter(dirty).join(', ')}).`;
+      $('leaveBanner').hidden = false;
+      return;
+    }
+    load(w);
+  });
+  $('leaveCancel').addEventListener('click', () => { pendingWeek = null; $('leaveBanner').hidden = true; });
+  $('leaveDiscard').addEventListener('click', () => { $('leaveBanner').hidden = true; const w = pendingWeek; pendingWeek = null; if (w) load(w); });
+  $('leaveSave').addEventListener('click', async () => {
+    const ok = await saveMany(POS.filter(dirty));
+    if (!ok) return;
+    $('leaveBanner').hidden = true; const w = pendingWeek; pendingWeek = null; if (w) load(w);
+  });
+  window.addEventListener('beforeunload', (e) => { if (anyDirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+  // ── key handling ───────────────────────────────────────────────────────
+  function askKey(msg) {
+    $('appView').hidden = true; $('keyView').hidden = false;
+    $('keyErr').textContent = msg || '';
+    $('keyInput').value = ''; $('keyInput').focus();
+  }
+  $('keyForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    memKey = $('keyInput').value.trim();
+    if (!memKey) return;
+    store.set(memKey);
+    start();
+  });
+  $('changeKey').addEventListener('click', () => {
+    if (anyDirty()) { status('Save or revert your changes before changing the key.', 'err'); return; }
+    store.clear(); memKey = ''; askKey('');
+  });
+
+  function start() {
+    $('keyView').hidden = true; $('appView').hidden = false;
+    load(S.week);
+  }
+
+  if (MOCK) { $('mockflag').hidden = false; $('changeKey').hidden = true; start(); }
+  else if (memKey) start();
+  else askKey('');
+})();
+</script>
+</body>
+</html>
