@@ -14,6 +14,7 @@
 // outrank a great matchup for a replacement one, which is how real lineup
 // decisions actually go.
 
+import { isBanned } from '../_shared/weekly/banned.ts';
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -63,7 +64,7 @@ Deno.serve(async (req) => {
 
   // ── inputs ────────────────────────────────────────────────────────────
   const [board, sched, dvpRows, players] = await Promise.all([
-    j(`nfl_proprietary_rankings_v2?format=eq.PPR&select=rank,name,position,team,score,gsis_id&order=rank.asc&limit=300`),
+    j(`nfl_proprietary_rankings_v2?format=eq.PPR&select=rank,name,position,team,score,gsis_id,proj_ppg&order=rank.asc&limit=300`),
     j(`nfl_schedule?season=eq.${season}&week=eq.${week}&select=home_team,away_team,kickoff_at`),
     // DVP is published per season; before week 1 the only real signal is last
     // year's, so take the newest season present rather than assuming this one.
@@ -112,6 +113,34 @@ Deno.serve(async (req) => {
   for (const g of sched) { opp.set(g.home_team, g.away_team); opp.set(g.away_team, g.home_team); }
 
   // Bounded so no matchup can outweigh talent by more than a tier or two.
+// Matchup shift, per position, measured rather than assumed.
+//
+// Every position used to carry the same +/-12. Re-ranking the played weeks of
+// 2026 with and without the shift shows it does not earn that anywhere except
+// RB, and is actively harmful at QB and TE:
+//
+//               wk1     wk2     verdict
+//   QB        -0.133  -0.045    hurts both weeks
+//   TE        -0.043  -0.028    hurts both weeks
+//   RB        +0.059  +0.038    helps both weeks
+//   WR        -0.035  +0.038    flips sign -- no signal
+//
+// (spearman gain from applying the shift, vs the same board without it)
+//
+// QB and TE go to zero: the harm is consistent across both weeks and in the
+// same direction, which is the one pattern two weeks can actually establish.
+// RB keeps the full 12, earned on the same evidence. WR drops to 5 rather than
+// 0 -- its two weeks disagree, so there is no measured benefit to defend 12,
+// but a real matchup mechanism and a thin sample argue against zeroing it.
+//
+// This is NOT a small-sample artefact of early-season defensive data: nfl_dvp
+// is published per season and dvpSeason resolves to 2025, a full prior year.
+// Last season's defensive rank simply does not carry to this season's QB and
+// TE outcomes.
+//
+// Re-derive these from the same query as weeks accumulate -- they are fitted
+// on two weeks and should not survive on that evidence indefinitely.
+const MAX_DVP_SHIFT_BY_POS: Record<string, number> = { QB: 0, RB: 12, WR: 5, TE: 0 };
   const MAX_DVP_SHIFT = 12;
   const MAX_TOTAL_SHIFT = 6;
 
@@ -196,6 +225,7 @@ Deno.serve(async (req) => {
   // worst possible answer to "who should I start" -- worse than omitting him,
   // because it implies he is an option.
   const injury = new Map<string, string>();
+  let ovrCount = 0;
   let injCount = 0, injErr: string | null = null;
   try {
     // Sleeper, not ESPN. ESPN's site.api returns 200 from a laptop and 403
@@ -245,11 +275,33 @@ Deno.serve(async (req) => {
     // the right amount of caution for a real-but-uncertain game-time call.
     // REMOVE once Sleeper's feed catches up, expected after the Friday
     // practice report.
-    const WEEKLY_INJURY_OVERRIDES: Record<string, string> = {
-      [`${norm('Brock Bowers')}|TE`]: 'Questionable',
-    };
-    for (const [key, status] of Object.entries(WEEKLY_INJURY_OVERRIDES)) {
-      injury.set(key, status);
+    // Overrides now live in player_status_overrides, not in this file. They
+    // used to be a hardcoded map, which meant a wrong injury status could only
+    // be corrected by editing this function and redeploying it -- a code change
+    // and a deploy to act on a Friday practice report. One INSERT now does it:
+    //
+    //   insert into player_status_overrides
+    //     (season, week, norm_name, position, injury_status, reason)
+    //   values (2026, 4, 'brock bowers', 'TE', 'Questionable', 'practice report');
+    //
+    // A NULL week applies until the row is removed; a set week applies only to
+    // that week. Keyed on name+position because same-name collisions across
+    // positions are real here and a name-only join has already put a
+    // linebacker's "Out" on Justin Jefferson.
+    try {
+      const ovr = await sb(
+        `player_status_overrides?select=norm_name,position,injury_status`
+        + `&or=(season.is.null,season.eq.${season})`
+        + `&or=(week.is.null,week.eq.${week})`,
+        { method: "GET" },
+      ).then(r => r.ok ? r.json() : []).catch(() => []);
+      for (const o of (Array.isArray(ovr) ? ovr : [])) {
+        if (!o?.norm_name || !o?.position || !o?.injury_status) continue;
+        injury.set(`${norm(o.norm_name)}|${o.position}`, o.injury_status);
+        ovrCount++;
+      }
+    } catch (e) {
+      console.log('[weekly-board] override read failed:', (e as any)?.message);
     }
   } catch (e) { injErr = String((e as any)?.message ?? e); }
 
@@ -375,6 +427,29 @@ Deno.serve(async (req) => {
 
   const avgTotal = totals.size ? [...totals.values()].reduce((a, b) => a + b, 0) / totals.size : null;
 
+  // ── RANK ON RATE, NOT SEASON TOTAL ────────────────────────────────────
+  // The engine's `rank` is a SEASON ranking: rate x expected games. For a
+  // season that is right -- a player who misses two games really does score
+  // less over the year. For ONE Sunday it is wrong, because he either plays or
+  // he does not, and if he plays only the rate matters. The games multiplier
+  // is noise on a weekly board.
+  //
+  // Measured on 2024+2025, 99 week-samples, predicting a single week:
+  //   rank by RATE   0.5903
+  //   rank by TOTAL  0.5671
+  // CeeDee Lamb was the visible case: second-best per-game rate on the board
+  // at 24.1 ppg, ranked WR8 because 24.1 x 15.0 expected games loses to worse
+  // rates on fuller schedules.
+  //
+  // Falls back to the season rank for any player without a rate, so a missing
+  // proj_ppg degrades to today's behaviour rather than dropping the player.
+  const rateRanked = [...board]
+    .filter((p: any) => Number(p.proj_ppg) > 0)
+    .sort((a: any, b: any) => Number(b.proj_ppg) - Number(a.proj_ppg));
+  const rateRank = new Map<string, number>();
+  rateRanked.forEach((p: any, i: number) => rateRank.set(p.gsis_id, i + 1));
+  const baseRankOf = (p: any) => rateRank.get(p.gsis_id) ?? p.rank;
+
   // ── adjust ────────────────────────────────────────────────────────────
   const rows: any[] = [];
   for (const p of board) {
@@ -384,6 +459,7 @@ Deno.serve(async (req) => {
     // fallback for a ranking row with no id at all.
     const gsis = (p.gsis_id && !isSynth(p.gsis_id)) ? p.gsis_id : nameToGsis.get(norm(p.name));
     if (!gsis || !p.team) continue;
+    if (isBanned(gsis)) continue;          // owner's rule: _shared/weekly/banned.ts
     const o = opp.get(p.team);
     if (!o) continue;                      // bye week: not startable, so not ranked
 
@@ -407,7 +483,7 @@ Deno.serve(async (req) => {
     // defence is worth about a dozen places, the toughest costs about the
     // same, and nothing in between can produce a 147-place swing.
     const dr = dvp.get(`${o}:${p.position}`) ?? null;
-    const dvpShift = dr ? ((dr - 16.5) / 15.5) * MAX_DVP_SHIFT : 0;
+    const dvpShift = dr ? ((dr - 16.5) / 15.5) * (MAX_DVP_SHIFT_BY_POS[p.position] ?? MAX_DVP_SHIFT) : 0;
 
     // Vegas nudges in the same currency. Neutral when the feed is absent.
     const it = totals.get(p.team) ?? null;
@@ -443,8 +519,8 @@ Deno.serve(async (req) => {
     // list still reads sensibly, but no adjustment can lift one back into a
     // startable slot.
     const effective = weekOut
-      ? 10_000 + p.rank
-      : p.rank - dvpShift - totalShift - injShift - wxShift;
+      ? 10_000 + baseRankOf(p)
+      : baseRankOf(p) - dvpShift - totalShift - injShift - wxShift;
 
     rows.push({
       season, week, format: "ppr", gsis_id: gsis,
@@ -542,6 +618,85 @@ Deno.serve(async (req) => {
     });
   }
 
+  // ── SHADOW: aiomni_blend ───────────────────────────────────────────
+  // Our board loses to the market on the fair comparison. On the 97 players
+  // every source ranks, week 1 went FantasyPros 0.607 / ESPN proj 0.597 /
+  // ours 0.432, and week 2 Sleeper proj 0.406 / ours 0.246. We are last or
+  // next-to-last in both weeks. That is the number worth acting on.
+  //
+  // Sweeping a single blend weight over weeks 1-2 (369 player-weeks) gives a
+  // smooth curve with an INTERIOR maximum: pure market 0.6188, pure us
+  // 0.5312, best 0.6374 at 30% us. An interior peak is the useful result --
+  // it says our board carries information the market lacks, while the market
+  // is the better base. Per position the gain is consistent for WR (both
+  // weeks) and mild for RB; QB and TE contradict each other week to week on
+  // ~30 players, which is noise, so one global weight is used rather than
+  // four fitted ones.
+  //
+  // WHY THIS IS A SHADOW AND NOT THE BOARD. A 6-way ensemble backtested at
+  // 0.6120 earlier this month and then scored 0.2163 -- dead last -- on the
+  // week it had not seen. Two weeks of fit is not evidence. This writes a
+  // second snapshot so score_ranking_week grades blend and live board side by
+  // side on week 3; the app keeps reading aiomni_weekly until the blend wins
+  // on a week nobody tuned against.
+  //
+  // The floor is what makes it worth running: at 30% even a worthless
+  // contribution from us lands near the market, which is above where we are.
+  const BLEND_W = 0.30;
+  const MKT_SOURCES = ['fantasypros_ecr','espn_proj','sleeper_proj','espn_expert'];
+  const blendExists = await sb(
+    `ranking_snapshots?season=eq.${season}&week=eq.${week}&source=eq.aiomni_blend&format=eq.ppr&select=player_name&limit=1`,
+    { method: "GET" },
+  ).then(r => r.ok ? r.json() : []).catch(() => []);
+  if (!(Array.isArray(blendExists) && blendExists.length > 0)) {
+    const mk = await sb(
+      `ranking_snapshots?season=eq.${season}&week=eq.${week}&format=eq.ppr`
+      + `&source=in.(${MKT_SOURCES.join(',')})&pos_rank=not.is.null`
+      + `&select=gsis_id,position,pos_rank&limit=5000`,
+      { method: "GET" },
+    ).then(r => r.ok ? r.json() : []).catch(() => []);
+
+    const agg = new Map<string, { sum: number; n: number }>();
+    for (const m of (Array.isArray(mk) ? mk : [])) {
+      const k = `${m.gsis_id}|${m.position}`;
+      const a = agg.get(k) ?? { sum: 0, n: 0 };
+      a.sum += Number(m.pos_rank); a.n++; agg.set(k, a);
+    }
+
+    // A player the market does not rank keeps our rank unblended. Substituting
+    // a default would invent an opinion no source actually holds.
+    let covered = 0;
+    const scored = rows.map(r => {
+      const a = agg.get(`${r.gsis_id}|${r.position}`);
+      if (!a || !a.n) return { ...r, _b: r.pos_rank };
+      covered++;
+      return { ...r, _b: BLEND_W * r.pos_rank + (1 - BLEND_W) * (a.sum / a.n) };
+    });
+
+    if (covered > 0) {
+      const posSeen: Record<string, number> = {};
+      const ordered = [...scored].sort((x, y) => x._b - y._b);
+      const out = ordered.map((r, i) => {
+        posSeen[r.position] = (posSeen[r.position] ?? 0) + 1;
+        return {
+          season, week, source: "aiomni_blend", kind: "weekly", format: "ppr",
+          gsis_id: r.gsis_id, player_name: r.player_name, position: r.position,
+          team: r.team, rank: i + 1, pos_rank: posSeen[r.position],
+        };
+      });
+      for (let i = 0; i < out.length; i += 200) {
+        await sb("ranking_snapshots?on_conflict=season,week,source,format,player_name", {
+          method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify(out.slice(i, i + 200)),
+        });
+      }
+      console.log(`[weekly-board] blend shadow: ${out.length} rows, ${covered} market-covered`);
+    } else {
+      console.log('[weekly-board] blend shadow skipped: no market ranks for week', week);
+    }
+  }
+
   // Store the market projections themselves, keyed by source, so
   // score_projections() can grade them against actuals on Tuesday -- and so
   // an AIOmni model later lands in the same table and the same harness.
@@ -571,7 +726,7 @@ Deno.serve(async (req) => {
     with_photo: rows.filter((r: any) => r.sleeper_id).length,
     dvp_season_used: dvpSeason,
     vegas_totals: totals.size, odds_games: oddsGames, odds_error: oddsErr,
-    injuries_listed: injCount, injuries_error: injErr, stadiums_with_weather: wxCount,
+    injuries_listed: injCount, injuries_error: injErr, manual_overrides: ovrCount, stadiums_with_weather: wxCount,
     top10: rows.slice(0, 10).map(r =>
       `${r.rank}. ${r.player_name} ${r.position}${r.pos_rank} vs ${r.opponent} (dvp ${r.dvp_rank ?? "-"}, shift ${r.dvp_shift > 0 ? "+" : ""}${r.dvp_shift})`),
   }, null, 2), { headers: CORS });

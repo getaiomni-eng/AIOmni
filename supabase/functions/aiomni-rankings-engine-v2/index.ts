@@ -21,6 +21,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { isBanned } from '../_shared/weekly/banned.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -711,6 +712,12 @@ interface RankedRow {
   floor_protected: boolean;
   method: string;
   computed_at: string;
+  // Expected games for the SEASON projection. Kept on the row so the final
+  // per-game rate can be recovered AFTER every later pass has mutated score
+  // -- the in-season layer, the opportunity reorder and scarcity all run
+  // after the row is built, so rate cannot be computed at push time.
+  games_est?: number;
+  proj_ppg?: number;
 }
 
 // ─── INJURY DATA (ESPN feed) ──────────────────────────────────────────
@@ -3131,9 +3138,33 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
     if (isRookie) { effectiveCastMult = 1.0; effectiveCastNote = ''; }
 
     // ── Depth chart multiplier (v2026-05-09, production only) ──
-    // Sleeper depth_chart_order indicates current playing role. Softer
-    // for WR/TE (multiple slot starters per team) than RB/QB (one
-    // starter usually). Disabled in backtest (depth chart not historical).
+    // Sleeper depth_chart_order indicates current playing role.
+    //
+    // v8.6: TE NO LONGER SHARES WR's CURVE. The old branch charged a team's
+    // TE2 0.98 -- a 2% penalty -- on the reasoning that WR and TE both field
+    // multiple starters. That is true of WR, where three-receiver sets are
+    // standard, and false of TE, where one man plays and the backup blocks.
+    // Measured on 2025 production, ranking each team's players by targets:
+    //
+    //            rank2   rank3   rank4
+    //   TE        44%     24%     18%
+    //   WR        69%     44%     34%
+    //   RB        57%     25%     10%
+    //
+    // Every coefficient was far too soft, which is how a doubtful TE4
+    // (Goedert), two backup tight ends and a third-string QB reached our
+    // week-3 top 25.
+    //
+    // The new values sit roughly HALFWAY to those ratios, not on them. The
+    // table is descriptive, not causal -- depth rank and production feed each
+    // other -- and the engine's baseline already reflects a player's own
+    // production history, so charging the full ratio would count the same fact
+    // twice. Halfway is the shrinkage a descriptive estimate earns.
+    //
+    // Still disabled in backtest (depth chart not historical), which is why
+    // these are reasoned rather than fitted. nfl_player_status_weekly now
+    // archives depth charts every week; once it holds a season these become
+    // measurable and should be re-derived from it rather than argued.
     let depthMult = 1.0;
     let depthNote = '';
     if (DEPTH_CHART_MULTIPLIER_ENABLED && !isBacktest) {
@@ -3146,10 +3177,14 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
           if (dco === 2)      depthMult = 0.92;
           else if (dco === 3) depthMult = 0.80;
           else if (dco >= 4)  depthMult = 0.65;
-        } else if (p.position === 'WR' || p.position === 'TE') {
-          if (dco === 2)      depthMult = 0.98;
-          else if (dco === 3) depthMult = 0.93;
-          else if (dco >= 4)  depthMult = 0.85;
+        } else if (p.position === 'WR') {
+          if (dco === 2)      depthMult = 0.85;
+          else if (dco === 3) depthMult = 0.70;
+          else if (dco >= 4)  depthMult = 0.58;
+        } else if (p.position === 'TE') {
+          if (dco === 2)      depthMult = 0.70;
+          else if (dco === 3) depthMult = 0.50;
+          else if (dco >= 4)  depthMult = 0.38;
         }
         if (depthMult < 1.0) {
           depthNote = `depth ${(p as any).depth_chart_position ?? p.position}${dco} (${depthMult.toFixed(2)}x)`;
@@ -3512,7 +3547,17 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       ]);
       if (mlPpg != null && gamesEst.games > 0) {
         const wMl = 0.50; // sophomores only now — always the balanced blend
-        const mlSeasonTotal = mlPpg * gamesEst.games;
+        // v8.6: the ML side must carry the ROLE layer. mlProjectPpg answers
+        // "what is this player worth per game", from his own history and draft
+        // capital -- it has no depth-chart input and cannot know he is no
+        // longer the starter. Blending its raw output against a finalSeasonTotal
+        // that HAS been role-adjusted let the ML undo the adjustment entirely:
+        // J.J. McCarthy, QB3 in Minnesota, was correctly cut to 2.0 ppg / 29
+        // fpts by the 0.20x depth multiplier and then blended back up to 130
+        // fpts at 15.3 ML ppg -- 8.7 ppg, which is what put him inside our
+        // week-3 top 25 QBs. Talent comes from the model; whether he plays
+        // does not.
+        const mlSeasonTotal = mlPpg * gamesEst.games * layer2_roleShare;
         const blended = wMl * mlSeasonTotal + (1 - wMl) * finalSeasonTotal;
         hybridNote = `[hybrid ${(wMl * 100).toFixed(0)}% ML ${mlPpg.toFixed(1)}ppg → ${blended.toFixed(0)} fpts (eng was ${finalSeasonTotal.toFixed(0)})]`;
         finalSeasonTotal = blended;
@@ -3623,6 +3668,10 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       }
     }
     // Layer 2: role/share
+    // depthNote was constructed and then never pushed, so the depth multiplier
+    // was invisible in the method string and every diagnosis of a mis-ranked
+    // backup had to be done by reading the source instead of the output.
+    if (depthNote) parts.push('[' + depthNote + ']');
     if (sysCtxNote || Math.abs(layer2_roleShare - 1.0) >= 0.04) {
       const tag = sysCtxNote ? sysCtxNote.split('(')[0].trim() : 'role';
       parts.push(`[role/share ${layer2_roleShare.toFixed(2)}x] ${tag}`);
@@ -3693,6 +3742,17 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       floor_protected: false,
       method: parts.join(' · '),
       computed_at: computedAt,
+      games_est: gamesEst.games,
+      // Rate captured HERE, before VBD. VBD subtracts replacement level and
+      // sends most scores negative (146 of 250 on the first attempt), and
+      // dividing a NEGATIVE season total by expected games inverts the sign:
+      // fewer games makes the rate MORE negative, which ranks a part-time
+      // player lower rather than higher -- the opposite of the intent. VBD and
+      // scarcity are season/draft concepts regardless; on a weekly board you
+      // start a TE no matter how scarce the position is.
+      proj_ppg: gamesEst.games > 0
+        ? Number((finalSeasonTotal / gamesEst.games).toFixed(3))
+        : undefined,
     });
   }
 
@@ -3892,6 +3952,11 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
       const scoreIdx = new Map(scoreOrder.map((r, i) => [r.gsis_id, i]));
       const oppIdx   = new Map(oppOrder.map((r, i) => [r.gsis_id, i]));
       const ladder   = scoreOrder.map(r => r.score);
+      // The rate ladder is reassigned in the SAME order, so score and proj_ppg
+      // keep telling one story. Reordering one without the other is how the
+      // weekly board and the season board start disagreeing about who is
+      // better.
+      const ppgLadder = [...withOpp].map(r => r.proj_ppg ?? 0).sort((a, b) => b - a);
 
       const blended = withOpp.map(r => {
         const t = trail.get(r.gsis_id)!;
@@ -3911,6 +3976,7 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
                         `(${trail.get(b.r.gsis_id)!.games}g) ${moved > 0 ? '+' : ''}${moved} spots]`;
         }
         b.r.score = newScore;
+        b.r.proj_ppg = ppgLadder[i];
       });
     }
     scored.sort((a, b) => b.score - a.score);
@@ -3979,7 +4045,9 @@ async function buildFormat(format: Format, supabase: any, asOfSeason: number = 2
   // Final ranking + tier assignment
   const finalRows: RankedRow[] = [];
   const posCounter: Record<string, number> = {};
-  scored.slice(0, 250).forEach((r, i) => {
+  // Banned players (_shared/weekly/banned.ts) come out BEFORE numbering, so
+  // the players behind them close up instead of leaving a gap.
+  scored.filter(r => !isBanned(r.gsis_id)).slice(0, 250).forEach((r, i) => {
     posCounter[r.position] = (posCounter[r.position] ?? 0) + 1;
     finalRows.push({
       ...r,
@@ -4044,7 +4112,14 @@ serve(async (req) => {
 
         const CHUNK = 100;
         for (let i = 0; i < rows.length; i += CHUNK) {
-          const batch = rows.slice(i, i + CHUNK);
+          // games_est is an internal working field used to derive proj_ppg
+          // after the pass chain. It is not a column on the table, and
+          // PostgREST rejects the whole batch on an unknown key -- which,
+          // because this writer DELETEs before inserting, empties the table.
+          const batch = rows.slice(i, i + CHUNK).map((r: any) => {
+            const { games_est: _drop, ...rest } = r;
+            return rest;
+          });
           const { error: insErr } = await supabase
             .from('nfl_proprietary_rankings_v2')
             .insert(batch);

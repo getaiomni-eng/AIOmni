@@ -129,7 +129,31 @@ async function fromEspn(season: number, week: number, ids: Map<string, string>) 
   }
   const proj = rankByProjection(season, week, 'espn', 'projection', projItems);
 
-  return { rows, consensus, unmapped, projRows: proj.rows, projConsensus: proj.consensus };
+  // ── CROWD OWNERSHIP ────────────────────────────────────────────────
+  // player.ownership.percentStarted is the share of ESPN leagues that START
+  // this player -- millions of teams answering the same weekly question our
+  // board answers. There is no history endpoint, so a week not captured is
+  // gone. Collected now, read later.
+  const ownership: Row[] = [];
+  for (const pl of (data.players ?? [])) {
+    const p = pl.player;
+    const position = POS[p?.defaultPositionId];
+    if (!position) continue;
+    const o = p?.ownership;
+    if (!o || (o.percentOwned == null && o.percentStarted == null)) continue;
+    const gsis = ids.get(`${norm(p.fullName)}|${position}`);
+    if (!gsis) continue;
+    ownership.push({
+      season, week, provider: 'espn', gsis_id: gsis,
+      player_name: p.fullName, position,
+      percent_owned:   o.percentOwned   ?? null,
+      percent_started: o.percentStarted ?? null,
+      percent_change:  o.percentChange  ?? null,
+      adp:             o.averageDraftPosition ?? null,
+    });
+  }
+
+  return { rows, consensus, unmapped, projRows: proj.rows, projConsensus: proj.consensus, ownership };
 }
 
 async function fromFantasyPros(season: number, week: number, ids: Map<string, string>) {
@@ -176,7 +200,9 @@ async function fromFantasyPros(season: number, week: number, ids: Map<string, st
  *  compared by hand, which is how the horizon and coverage faults survived as
  *  long as they did. */
 async function fromAiomni(season: number, week: number) {
-  const r = await sb(`nfl_weekly_board?season=eq.${season}&week=eq.${week}&format=eq.ppr&select=gsis_id,player_name,position,team,rank,pos_rank&order=rank.asc`);
+  // What users SEE (public_weekly_board serves the blend since 2026-09-25),
+  // not the old board table -- grading the table would grade a board nobody saw.
+  const r = await sb(`public_weekly_board?season=eq.${season}&week=eq.${week}&format=eq.ppr&select=gsis_id,player_name,position,team,rank,pos_rank&order=rank.asc`);
   if (!r.ok) return { rows: [] as Row[], consensus: [] as Row[], error: `board ${r.status}` };
   const board = await r.json();
   const rows: Row[] = (board ?? []).map((b: any) => ({
@@ -266,6 +292,16 @@ Deno.serve(async (req) => {
     // ESPN's projection is a separate provider row from its analysts.
     const espnProj = { rows: (espn as any).projRows ?? [], consensus: (espn as any).projConsensus ?? [] };
 
+    // Ownership is its own table, captured every run regardless of the
+    // write-once rule on rankings -- it is a measurement of the crowd at a
+    // moment, not a prediction of record.
+    const own = (espn as any).ownership ?? [];
+    let ownWritten = 0;
+    if (own.length) {
+      ownWritten = await upsert('player_ownership_snapshots',
+        'season,week,provider,gsis_id', own);
+    }
+
     const out: Record<string, unknown> = { season, week, providers: {} as Record<string, unknown> };
 
     for (const [name, res] of [
@@ -293,6 +329,7 @@ Deno.serve(async (req) => {
       };
     }
 
+    (out as any).ownership_rows = ownWritten;
     out.ok = true;
     out.duration_seconds = Math.round((Date.now() - started) / 1000);
     return new Response(JSON.stringify(out), { headers: { 'Content-Type': 'application/json' } });
